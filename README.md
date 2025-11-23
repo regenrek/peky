@@ -1,9 +1,10 @@
 # tmuxman
 
-`tmuxman` is a Charm-powered Go CLI that scaffolds tmux workspaces as deterministic grids. Run it with no flags for an interactive prompt, or pass flags for automation-friendly flows. The default layout is a 2x2 grid rooted in your current directory.
+`tmuxman` is a Charm-powered Go CLI that scaffolds tmux workspaces as deterministic grids. Run it with no flags to open a Bubble Tea form (navbar + pane inputs + shortcut footer), or pass flags for automation-friendly flows. The default layout is a 2x2 grid rooted in your current directory.
 
 ## Features
-- Interactive terminal form (built with [`huh`](https://github.com/charmbracelet/huh)) that collects the session name and grid layout.
+- Interactive terminal form (Bubble Tea + `?` help pane) that collects the session name and grid layout.
+- Overlay help: press `?` to toggle a modal explaining navigation keys; `q`/`esc` exit without creating a session.
 - Fast flag-driven mode for scripts: `tmuxman -d` uses the defaults immediately, while `--session`, `--layout`, and `-C` let you specify everything up front.
 - Resume helper: `tmuxman --resume` lists current tmux sessions so you can switch without remembering names.
 - Deterministic pane creation that works for any layout up to 12 panes (e.g. 2x2, 2x3, 3x3). Every pane starts in the same directory so project tooling is ready to go.
@@ -23,6 +24,8 @@ tmuxman --session dev --layout 2x3   # non-interactive custom grid
 tmuxman --session web --layout 3x2 -C ~/projects/webapp   # custom start dir
 tmuxman -d --no-attach     # provision the session without stealing focus
 tmuxman --resume           # pick an existing tmux session to attach to
+
+Inside the interactive form: `tab`/`shift+tab` move between inputs, `enter` submits, `?` toggles help, `q` aborts.
 ```
 
 ### Flags

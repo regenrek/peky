@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/huh"
-
 	"github.com/kregenrek/tmuxman/internal/layout"
 	"github.com/kregenrek/tmuxman/internal/tmuxctl"
+	"github.com/kregenrek/tmuxman/internal/tui/create"
+	"github.com/kregenrek/tmuxman/internal/tui/resume"
 )
 
 const (
@@ -41,6 +41,18 @@ func main() {
 
 	cfg := cliConfig{attach: !*noAttach}
 
+	client, err := tmuxctl.NewClient(*tmuxBin)
+	if err != nil {
+		exitWithErr(err)
+	}
+
+	if *resumeFlag {
+		if err := resumeExisting(client, strings.TrimSpace(*sessionFlag)); err != nil {
+			exitWithErr(err)
+		}
+		return
+	}
+
 	session := strings.TrimSpace(*sessionFlag)
 	layoutSpec := strings.TrimSpace(*layoutFlag)
 	startDir := strings.TrimSpace(*dirFlag)
@@ -55,7 +67,9 @@ func main() {
 	}
 
 	if session == "" || layoutSpec == "" {
-		if err := runInteractive(&session, &layoutSpec, session == "", layoutSpec == ""); err != nil {
+		var err error
+		session, layoutSpec, err = runInteractive(session, layoutSpec)
+		if err != nil {
 			exitWithErr(err)
 		}
 	}
@@ -68,18 +82,6 @@ func main() {
 	cfg.session = session
 	cfg.layout = grid
 	cfg.dir = startDir
-
-	client, err := tmuxctl.NewClient(*tmuxBin)
-	if err != nil {
-		exitWithErr(err)
-	}
-
-	if *resumeFlag {
-		if err := resumeExisting(client, strings.TrimSpace(*sessionFlag)); err != nil {
-			exitWithErr(err)
-		}
-		return
-	}
 
 	ctx := context.Background()
 	result, err := client.EnsureSession(ctx, tmuxctl.Options{
@@ -103,51 +105,17 @@ func main() {
 	}
 }
 
-func runInteractive(session *string, layoutSpec *string, needsSession, needsLayout bool) error {
-	if !needsSession && !needsLayout {
-		return nil
-	}
-
-	var fields []huh.Field
-
-	if needsSession {
-		if strings.TrimSpace(*session) == "" {
-			*session = defaultSession
+func runInteractive(session, layoutSpec string) (string, string, error) {
+	session = strings.TrimSpace(session)
+	layoutSpec = strings.TrimSpace(layoutSpec)
+	valSession, valLayout, err := create.Prompt(session, layoutSpec)
+	if err != nil {
+		if errors.Is(err, create.ErrAborted) {
+			return "", "", fmt.Errorf("aborted by user")
 		}
-		fields = append(fields,
-			huh.NewInput().Title("Session name").Value(session).Validate(func(v string) error {
-				v = strings.TrimSpace(v)
-				if v == "" {
-					return errors.New("session name cannot be empty")
-				}
-				if strings.ContainsAny(v, " :") {
-					return errors.New("session names cannot contain spaces or colons")
-				}
-				return nil
-			}),
-		)
+		return "", "", err
 	}
-
-	if needsLayout {
-		if strings.TrimSpace(*layoutSpec) == "" {
-			*layoutSpec = layout.Default.String()
-		}
-		fields = append(fields,
-			huh.NewInput().Title("Layout (rows x columns)").Description("Examples: 2x2, 2x3, 3x3").Value(layoutSpec).Validate(func(v string) error {
-				_, err := layout.Parse(v)
-				return err
-			}),
-		)
-	}
-
-	form := huh.NewForm(huh.NewGroup(fields...))
-	if err := form.Run(); err != nil {
-		if errors.Is(err, huh.ErrUserAborted) {
-			return fmt.Errorf("aborted by user")
-		}
-		return err
-	}
-	return nil
+	return valSession, valLayout, nil
 }
 
 func resumeExisting(client *tmuxctl.Client, requested string) error {
@@ -162,18 +130,14 @@ func resumeExisting(client *tmuxctl.Client, requested string) error {
 		if len(sessions) == 0 {
 			return errors.New("no tmux sessions are currently running to resume")
 		}
-		options := make([]huh.Option[string], 0, len(sessions))
-		for _, name := range sessions {
-			options = append(options, huh.NewOption(name, name))
-		}
-		selectField := huh.NewSelect[string]().Title("Resume tmux session").Options(options...).Value(&session)
-		form := huh.NewForm(huh.NewGroup(selectField))
-		if err := form.Run(); err != nil {
-			if errors.Is(err, huh.ErrUserAborted) {
+		choice, err := resume.SelectSession(sessions)
+		if err != nil {
+			if errors.Is(err, resume.ErrAborted) {
 				return fmt.Errorf("aborted by user")
 			}
 			return err
 		}
+		session = choice
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

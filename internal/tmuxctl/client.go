@@ -133,6 +133,18 @@ func (c *Client) ListSessions(ctx context.Context) ([]string, error) {
 	return sessions, nil
 }
 
+// SourceFile loads tmux commands from the provided file path.
+func (c *Client) SourceFile(ctx context.Context, path string) error {
+	if strings.TrimSpace(path) == "" {
+		return errors.New("tmux config path cannot be empty")
+	}
+	cmd := c.run(ctx, c.bin, "source-file", path)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return wrapTmuxErr("source-file", err, out)
+	}
+	return nil
+}
+
 // AttachExisting switches/attaches to an existing session, returning an error
 // if the session is missing.
 func (c *Client) AttachExisting(ctx context.Context, session string) error {
@@ -147,6 +159,110 @@ func (c *Client) AttachExisting(ctx context.Context, session string) error {
 		return fmt.Errorf("tmux session %q not found", session)
 	}
 	return c.attach(context.Background(), session)
+}
+
+// CurrentSession returns the name of the currently attached tmux session, if any.
+// When no tmux server is running, an empty string is returned and the error is nil.
+func (c *Client) CurrentSession(ctx context.Context) (string, error) {
+	cmd := c.run(ctx, c.bin, "display-message", "-p", "#S")
+	out, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			msg := strings.ToLower(strings.TrimSpace(string(exitErr.Stderr)))
+			if strings.Contains(msg, "no server") || strings.Contains(msg, "failed to connect") {
+				return "", nil
+			}
+		}
+		return "", wrapTmuxErr("display-message", err, nil)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// KillSession terminates a tmux session by name.
+func (c *Client) KillSession(ctx context.Context, session string) error {
+	if session == "" {
+		return errors.New("session name is required")
+	}
+	cmd := c.run(ctx, c.bin, "kill-session", "-t", session)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return wrapTmuxErr("kill-session", err, out)
+	}
+	return nil
+}
+
+// NewWindow creates a new tmux window in the given session. If windowName is
+// non-empty, the window will be renamed accordingly. If startDir is non-empty,
+// tmux will start the window in that directory. command, when non-empty, is
+// passed as a single tmux "shell-command" argument, so it may contain spaces.
+func (c *Client) NewWindow(ctx context.Context, session, windowName, startDir, command string) error {
+	if session == "" {
+		return errors.New("session name is required")
+	}
+	args := []string{"new-window", "-t", session}
+	if windowName != "" {
+		args = append(args, "-n", windowName)
+	}
+	if startDir != "" {
+		args = append(args, "-c", startDir)
+	}
+	if command != "" {
+		args = append(args, command)
+	}
+	cmd := c.run(ctx, c.bin, args...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return wrapTmuxErr("new-window", err, out)
+	}
+	return nil
+}
+
+// KillWindow removes a window named windowName from the given session. If the
+// window does not exist, the error is ignored so callers can treat the operation
+// as idempotent.
+func (c *Client) KillWindow(ctx context.Context, session, windowName string) error {
+	if session == "" {
+		return errors.New("session name is required")
+	}
+	if windowName == "" {
+		return errors.New("window name is required")
+	}
+	target := fmt.Sprintf("%s:%s", session, windowName)
+	cmd := c.run(ctx, c.bin, "kill-window", "-t", target)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			msg := strings.ToLower(strings.TrimSpace(string(out)))
+			if strings.Contains(msg, "can't find window") {
+				return nil
+			}
+		}
+		return wrapTmuxErr("kill-window", err, out)
+	}
+	return nil
+}
+
+// SplitWindow splits the target pane or window. If vertical is true, a vertical
+// split is created (top/bottom panes); otherwise a horizontal split (left/right).
+// When percent is greater than zero, it is passed to tmux via -p to control pane size.
+func (c *Client) SplitWindow(ctx context.Context, target, startDir string, vertical bool, percent int) error {
+	if target == "" {
+		return errors.New("split target cannot be empty")
+	}
+	orientation := "-h"
+	if vertical {
+		orientation = "-v"
+	}
+	args := []string{"split-window", orientation, "-t", target}
+	if startDir != "" {
+		args = append(args, "-c", startDir)
+	}
+	if percent > 0 {
+		args = append(args, "-p", fmt.Sprintf("%d", percent))
+	}
+	cmd := c.run(ctx, c.bin, args...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return wrapTmuxErr("split-window", err, out)
+	}
+	return nil
 }
 
 func (c *Client) sessionExists(ctx context.Context, session string) (bool, error) {
@@ -229,8 +345,11 @@ func (c *Client) splitPane(ctx context.Context, target, startDir, orientation st
 }
 
 func (c *Client) equalize(ctx context.Context, session string) error {
-	window := fmt.Sprintf("%s:0", session)
-	cmd := c.run(ctx, c.bin, "select-layout", "-t", window, "tiled")
+	target := session
+	if strings.TrimSpace(target) == "" {
+		return errors.New("session cannot be empty for select-layout")
+	}
+	cmd := c.run(ctx, c.bin, "select-layout", "-t", target, "tiled")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return wrapTmuxErr("select-layout", err, out)
 	}
