@@ -1,0 +1,54 @@
+name: tauri-debug
+description: "Tauri/Rust development with codex agents, logs, and debug tools"
+
+vars:
+  rust_log: "${HOME}/Library/Logs/${PROJECT_NAME}/rust.log"
+  codex_log: "${HOME}/.spezi/codex/log/app-server.log"
+
+settings:
+  width: 240
+  height: 84
+  bind_keys:
+    - key: "S-Left"
+      action: "previous-window"
+    - key: "S-Right"
+      action: "next-window"
+
+windows:
+  - name: codex
+    layout: tiled
+    panes:
+      - title: codex-0
+        cmd: "codex 2>/dev/null || echo 'codex not installed'"
+      - title: codex-1
+        cmd: "codex 2>/dev/null || echo 'codex not installed'"
+      - title: codex-2
+        cmd: "codex 2>/dev/null || echo 'codex not installed'"
+      - title: codex-3
+        cmd: "codex 2>/dev/null || echo 'codex not installed'"
+      - title: cursor-agent
+        cmd: "echo '[ready] cursor-agent shell'"
+      - title: cursor-agent-2
+        cmd: "echo '[ready] cursor-agent shell'"
+      - title: free-shell
+        cmd: ""
+
+  - name: logs
+    layout: even-horizontal
+    panes:
+      - title: rust-log
+        cmd: "tail -F ${rust_log} 2>/dev/null | grep -Ev 'sha256-|Content Security Policy' || echo 'Log file not found: ${rust_log}'"
+      - title: codex-log
+        cmd: "tail -F ${codex_log} 2>/dev/null | grep -Ev '\\bINFO\\b' || echo 'Log file not found: ${codex_log}'"
+
+  - name: dev
+    layout: tiled
+    panes:
+      - title: lldb
+        cmd: ""
+      - title: bun-dev
+        cmd: "bun run dev 2>/dev/null || npm run dev 2>/dev/null || echo 'No dev script found'"
+      - title: bun-test
+        cmd: "bun run test:coverage 2>/dev/null || npm run test 2>/dev/null || echo 'No test script found'"
+      - title: cov-llvm
+        cmd: "cargo watch -x 'llvm-cov run' 2>/dev/null || cargo run 2>/dev/null || echo 'No Cargo.toml found'"

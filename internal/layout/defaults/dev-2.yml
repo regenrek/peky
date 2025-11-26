@@ -1,0 +1,12 @@
+name: dev-2
+description: "Simple two-pane layout: editor left, terminal right"
+
+windows:
+  - name: dev
+    layout: even-horizontal
+    panes:
+      - title: editor
+        cmd: "${EDITOR:-}"
+        size: "60%"
+      - title: shell
+        cmd: ""

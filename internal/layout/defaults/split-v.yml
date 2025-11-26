@@ -1,0 +1,11 @@
+name: split-v
+description: "Two vertical panes (left/right)"
+
+windows:
+  - name: dev
+    layout: even-horizontal
+    panes:
+      - title: left
+        cmd: ""
+      - title: right
+        cmd: ""

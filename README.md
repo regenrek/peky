@@ -1,46 +1,174 @@
-# tmuxman
+# 🎩 Peaky Panes
 
-`tmuxman` is a Charm-powered Go CLI that scaffolds tmux workspaces as deterministic grids. Run it with no flags to open a Bubble Tea form (navbar + pane inputs + shortcut footer), or pass flags for automation-friendly flows. The default layout is a 2x2 grid rooted in your current directory.
+**Tmux layout manager with YAML-based configuration.**
+
+Define your tmux layouts in YAML, share them with your team via git, and get consistent development environments everywhere.
 
 ## Features
-- Interactive terminal form (Bubble Tea + `?` help pane) that collects the session name and grid layout.
-- Overlay help: press `?` to toggle a modal explaining navigation keys; `q`/`esc` exit without creating a session.
-- Fast flag-driven mode for scripts: `tmuxman -d` uses the defaults immediately, while `--session`, `--layout`, and `-C` let you specify everything up front.
-- Resume helper: `tmuxman --resume` lists current tmux sessions so you can switch without remembering names.
-- Deterministic pane creation that works for any layout up to 12 panes (e.g. 2x2, 2x3, 3x3). Every pane starts in the same directory so project tooling is ready to go.
-- Smart attach behaviour: outside tmux it runs `tmux attach-session`; inside tmux it switches your client, so keyboard focus stays intact.
 
-## Installation
-```
-go install github.com/kregenrek/tmuxman/cmd/tmuxman@latest
-```
-Ensure `$GOBIN` (or `$HOME/go/bin`) is on your `PATH` so you can run `tmuxman` from any shell.
+- 📦 **Built-in layouts** - Works out of the box with sensible defaults
+- 📁 **Project-local config** - Commit `.peakypanes.yml` to git for team sharing
+- 🏠 **Global config** - Define layouts once, use everywhere
+- 🔄 **Variable expansion** - Use `${EDITOR}`, `${PROJECT_PATH}`, etc.
+- 🎯 **Zero config** - Just run `peakypanes` in any directory
 
-## Usage
-```
-tmuxman                    # interactive prompts for session + layout
-tmuxman -d                 # quick defaults: session "grid", layout 2x2
-tmuxman --session dev --layout 2x3   # non-interactive custom grid
-tmuxman --session web --layout 3x2 -C ~/projects/webapp   # custom start dir
-tmuxman -d --no-attach     # provision the session without stealing focus
-tmuxman --resume           # pick an existing tmux session to attach to
+## Quick Start
 
-Inside the interactive form: `tab`/`shift+tab` move between inputs, `enter` submits, `?` toggles help, `q` aborts.
+### Install
+
+```bash
+go install github.com/kregenrek/tmuxman/cmd/peakypanes@latest
 ```
 
-### Flags
-- `-d`: skip prompts and fall back to `grid` + `2x2` unless overridden by other flags.
-- `--session`: set the tmux session name. If the session already exists, tmuxman simply attaches/switches to it.
-- `--layout`: grid definition formatted as `<rows>x<columns>` (e.g. `2x3`). Layouts are capped at 12 panes to keep tmux usable.
-- `-C`: directory that each pane should start in (defaults to the current working directory).
-- `--tmux`: optional path to the tmux binary (falls back to `$PATH`).
-- `--timeout`: deadline for tmux commands (default `5s`).
-- `--no-attach`: create/configure the session but do not attach or switch to it.
-- `--resume`: skip layout creation and interactively choose (or directly specify with `--session`) an existing tmux session to attach.
+### Usage
 
-## Development
+**Just run it:**
+```bash
+cd your-project
+peakypanes
 ```
-go test ./...
-go run ./cmd/tmuxman --session scratch --layout 2x3 --no-attach
+
+**Use a specific layout:**
+```bash
+peakypanes start --layout dev-3
+peakypanes start --layout fullstack
 ```
-The tmux orchestration lives in `internal/tmuxctl`, while layout parsing and validation live in `internal/layout` (with table-driven tests).
+
+**Create project-local config (recommended for teams):**
+```bash
+cd your-project
+peakypanes init --local
+# Edit .peakypanes.yml
+git add .peakypanes.yml  # Share with team
+```
+
+## Built-in Layouts
+
+| Layout | Description |
+|--------|-------------|
+| `simple` | Single window, one pane |
+| `split-v` | Two vertical panes (left/right) |
+| `split-h` | Two horizontal panes (top/bottom) |
+| `dev-2` | Editor + terminal |
+| `dev-3` | Editor + server + shell (default) |
+| `fullstack` | Editor + dev server + logs window |
+| `go-dev` | Editor + run + tests + lazygit |
+| `tauri-debug` | Complex Tauri/Rust development layout |
+
+```bash
+# List all layouts
+peakypanes layouts
+
+# Export a layout to customize
+peakypanes layouts export dev-3 > .peakypanes.yml
+```
+
+## Configuration
+
+### Project-Local (`.peakypanes.yml`)
+
+Create in your project root for team-shared layouts:
+
+```yaml
+# .peakypanes.yml
+session: my-project
+
+layout:
+  windows:
+    - name: dev
+      panes:
+        - title: editor
+          cmd: "${EDITOR:-}"
+          size: "60%"
+        - title: server
+          cmd: "npm run dev"
+          split: horizontal
+        - title: shell
+          cmd: ""
+          split: vertical
+
+    - name: logs
+      panes:
+        - title: docker
+          cmd: "docker compose logs -f"
+```
+
+### Global Config (`~/.config/peakypanes/config.yml`)
+
+For personal layouts and multi-project management:
+
+```yaml
+# Global settings
+tmux:
+  config: ~/.config/tmux/tmux.conf
+
+# Custom layouts
+layouts:
+  my-custom:
+    windows:
+      - name: main
+        panes:
+          - title: code
+            cmd: nvim
+          - title: term
+            cmd: ""
+
+# Projects for quick switching
+projects:
+  - name: webapp
+    session: webapp
+    path: ~/projects/webapp
+    layout: fullstack
+```
+
+## Variable Expansion
+
+Use variables in your layouts:
+
+| Variable | Description |
+|----------|-------------|
+| `${PROJECT_PATH}` | Absolute path to project |
+| `${PROJECT_NAME}` | Directory name |
+| `${EDITOR}` | Your $EDITOR |
+| `${VAR:-default}` | Env var with default |
+
+```yaml
+layout:
+  vars:
+    log_file: "${HOME}/logs/${PROJECT_NAME}.log"
+  windows:
+    - name: dev
+      panes:
+        - cmd: "tail -f ${log_file}"
+```
+
+## Commands
+
+```bash
+peakypanes                     # Start session (auto-detect layout)
+peakypanes start               # Same as above
+peakypanes start --layout X    # Use specific layout
+peakypanes init                # Create global config
+peakypanes init --local        # Create .peakypanes.yml
+peakypanes layouts             # List available layouts
+peakypanes layouts export X    # Export layout YAML
+peakypanes version             # Show version
+```
+
+## How Layout Detection Works
+
+1. `--layout` flag (highest priority)
+2. `.peakypanes.yml` in current directory
+3. Project entry in `~/.config/peakypanes/config.yml`
+4. Built-in `dev-3` layout (fallback)
+
+## For Teams
+
+1. Run `peakypanes init --local` in your project
+2. Customize `.peakypanes.yml` for your stack
+3. Commit to git
+4. Teammates install peakypanes and run `peakypanes` - done!
+
+## License
+
+MIT

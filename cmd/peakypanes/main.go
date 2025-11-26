@@ -1,0 +1,887 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"text/tabwriter"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/kregenrek/tmuxman/internal/layout"
+	"github.com/kregenrek/tmuxman/internal/tmuxctl"
+	"github.com/kregenrek/tmuxman/internal/tui/peakypanes"
+)
+
+const version = "0.1.0"
+
+const helpText = `🎩 Peaky Panes - Tmux Layout Manager
+
+Usage:
+  peakypanes [command] [options]
+
+Commands:
+  (no command)     Open interactive project manager
+  open             Start/attach session in current directory
+  start            Start/attach session (same as open)
+  kill             Kill a tmux session
+  init             Initialize configuration
+  layouts          List and manage layouts
+  clone            Clone from GitHub and open
+  version          Show version
+
+Examples:
+  peakypanes                          # Open project manager TUI
+  peakypanes open                     # Start/attach session in current directory
+  peakypanes open --layout dev-3      # Start with specific layout
+  peakypanes kill                     # Kill session for current directory
+  peakypanes kill myapp               # Kill specific session
+  peakypanes init                     # Create global config
+  peakypanes init --local             # Create .peakypanes.yml in current dir
+  peakypanes layouts                  # List available layouts
+  peakypanes layouts export dev-3     # Export layout YAML to stdout
+  peakypanes clone user/repo          # Clone from GitHub and start session
+
+Run 'peakypanes <command> --help' for more information.
+`
+
+const initHelpText = `Initialize Peaky Panes configuration.
+
+Usage:
+  peakypanes init [options]
+
+Options:
+  --local              Create .peakypanes.yml in current directory
+  --layout <name>      Start from a template layout (default: dev-3)
+  --force              Overwrite existing config
+  -h, --help           Show this help
+
+Examples:
+  peakypanes init                     # Create ~/.config/peakypanes/
+  peakypanes init --local             # Create .peakypanes.yml here
+  peakypanes init --local --layout tauri-debug
+`
+
+const layoutsHelpText = `List and manage layouts.
+
+Usage:
+  peakypanes layouts [subcommand]
+
+Subcommands:
+  (none)               List all available layouts
+  export <name>        Print layout YAML to stdout
+  
+Options:
+  -h, --help           Show this help
+
+Examples:
+  peakypanes layouts                  # List all layouts
+  peakypanes layouts export dev-3     # Print dev-3 layout YAML
+  peakypanes layouts export dev-3 > .peakypanes.yml
+`
+
+const startHelpText = `Start or attach to a tmux session.
+
+Usage:
+  peakypanes start [options]
+
+Options:
+  --layout <name>      Use specific layout (default: auto-detect)
+  --session <name>     Override session name (default: directory name)
+  --path <dir>         Project directory (default: current directory)
+  -h, --help           Show this help
+
+Layout Detection (in order):
+  1. --layout flag
+  2. .peakypanes.yml in project directory
+  3. Project entry in ~/.config/peakypanes/config.yml
+  4. Builtin 'dev-3' layout
+
+Examples:
+  peakypanes start                    # Auto-detect layout
+  peakypanes start --layout fullstack
+  peakypanes start --session myapp --layout go-dev
+`
+
+const killHelpText = `Kill a tmux session.
+
+Usage:
+  peakypanes kill [session-name]
+
+Arguments:
+  session-name         Session to kill (default: current directory name)
+
+Options:
+  -h, --help           Show this help
+
+Examples:
+  peakypanes kill                     # Kill session for current directory
+  peakypanes kill myapp               # Kill session named 'myapp'
+`
+
+func main() {
+	if len(os.Args) < 2 {
+		// Default: open project manager
+		runMenu()
+		return
+	}
+
+	switch os.Args[1] {
+	case "open", "o", "start":
+		runStart(os.Args[2:])
+	case "kill", "k":
+		runKill(os.Args[2:])
+	case "init":
+		runInit(os.Args[2:])
+	case "layouts":
+		runLayouts(os.Args[2:])
+	case "clone", "c":
+		runClone(os.Args[2:])
+	case "version", "-v", "--version":
+		fmt.Printf("peakypanes %s\n", version)
+	case "help", "-h", "--help":
+		fmt.Print(helpText)
+	default:
+		// Unknown command, could be a layout name shortcut for open
+		if !strings.HasPrefix(os.Args[1], "-") {
+			runStart(os.Args[1:])
+		} else {
+			fmt.Print(helpText)
+		}
+	}
+}
+
+func runMenu() {
+	client, err := tmuxctl.NewClient("")
+	if err != nil {
+		fatal("tmux not found: %v", err)
+	}
+
+	model, err := peakypanes.NewModel(client)
+	if err != nil {
+		fatal("failed to initialize: %v", err)
+	}
+
+	p := tea.NewProgram(model, tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		fatal("TUI error: %v", err)
+	}
+}
+
+func runClone(args []string) {
+	if len(args) == 0 {
+		fatal("usage: peakypanes clone <url|user/repo>")
+	}
+
+	url := args[0]
+	// Expand shorthand (user/repo -> https://github.com/user/repo)
+	if !strings.Contains(url, "://") && !strings.HasPrefix(url, "git@") {
+		url = "https://github.com/" + url
+	}
+
+	// Extract repo name for directory
+	repoName := extractRepoName(url)
+	if repoName == "" {
+		repoName = "repo"
+	}
+
+	// Clone to ~/projects/<repo>
+	home, _ := os.UserHomeDir()
+	targetDir := filepath.Join(home, "projects", repoName)
+
+	// Check if directory already exists
+	if _, err := os.Stat(targetDir); err == nil {
+		fmt.Printf("📁 Directory exists: %s\n", targetDir)
+		fmt.Printf("   Starting session...\n\n")
+		// Just start the session
+		runStartWithPath(targetDir)
+		return
+	}
+
+	fmt.Printf("🔄 Cloning %s...\n", url)
+
+	// Clone the repository
+	cmd := exec.Command("git", "clone", url, targetDir)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		fatal("clone failed: %v", err)
+	}
+
+	fmt.Printf("\n✅ Cloned to %s\n\n", targetDir)
+
+	// Start session in the cloned directory
+	runStartWithPath(targetDir)
+}
+
+func runStartWithPath(projectPath string) {
+	// Change to the project directory and run start
+	origArgs := os.Args
+	os.Args = []string{"peakypanes", "start", "--path", projectPath}
+	runStart([]string{"--path", projectPath})
+	os.Args = origArgs
+}
+
+func extractRepoName(url string) string {
+	// Handle various URL formats
+	url = strings.TrimSuffix(url, ".git")
+	url = strings.TrimSuffix(url, "/")
+
+	parts := strings.Split(url, "/")
+	if len(parts) > 0 {
+		return parts[len(parts)-1]
+	}
+	return ""
+}
+
+func runInit(args []string) {
+	local := false
+	layoutName := "dev-3"
+	force := false
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--local", "-l":
+			local = true
+		case "--layout":
+			if i+1 < len(args) {
+				layoutName = args[i+1]
+				i++
+			}
+		case "--force", "-f":
+			force = true
+		case "-h", "--help":
+			fmt.Print(initHelpText)
+			return
+		}
+	}
+
+	if local {
+		initLocal(layoutName, force)
+	} else {
+		initGlobal(layoutName, force)
+	}
+}
+
+func initLocal(layoutName string, force bool) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		fatal("cannot determine current directory: %v", err)
+	}
+
+	configPath := filepath.Join(cwd, ".peakypanes.yml")
+	if !force {
+		if _, err := os.Stat(configPath); err == nil {
+			fatal(".peakypanes.yml already exists (use --force to overwrite)")
+		}
+	}
+
+	// Get the template layout
+	baseLayout, err := layout.GetBuiltinLayout(layoutName)
+	if err != nil {
+		fatal("layout %q not found", layoutName)
+	}
+
+	// Create project config
+	projectName := filepath.Base(cwd)
+	content := fmt.Sprintf(`# Peaky Panes - Project Layout Configuration
+# This file defines the tmux layout for this project.
+# Teammates with peakypanes installed will get this layout automatically.
+#
+# Variables: ${PROJECT_NAME}, ${PROJECT_PATH}, ${EDITOR}, or any env var
+# Use ${VAR:-default} for defaults
+
+session: %s
+
+layout:
+`, projectName)
+
+	// Add the layout content (indented)
+	yamlContent, err := baseLayout.ToYAML()
+	if err != nil {
+		fatal("failed to serialize layout: %v", err)
+	}
+
+	// Parse and re-marshal just the relevant parts
+	lines := strings.Split(yamlContent, "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "name:") || strings.HasPrefix(line, "description:") {
+			continue
+		}
+		if line != "" {
+			content += "  " + line + "\n"
+		}
+	}
+
+	if err := os.WriteFile(configPath, []byte(content), 0o644); err != nil {
+		fatal("failed to write %s: %v", configPath, err)
+	}
+
+	fmt.Printf("✨ Created %s\n", configPath)
+	fmt.Printf("   Based on layout: %s\n", layoutName)
+	fmt.Printf("\n   Edit it to customize, then:\n")
+	fmt.Printf("   • Run 'peakypanes' to start the session\n")
+	fmt.Printf("   • Commit to git so teammates get the same layout\n")
+}
+
+func initGlobal(layoutName string, force bool) {
+	configPath, err := layout.DefaultConfigPath()
+	if err != nil {
+		fatal("cannot determine config path: %v", err)
+	}
+
+	layoutsDir, err := layout.DefaultLayoutsDir()
+	if err != nil {
+		fatal("cannot determine layouts dir: %v", err)
+	}
+
+	// Create directories
+	configDir := filepath.Dir(configPath)
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		fatal("failed to create config dir: %v", err)
+	}
+	if err := os.MkdirAll(layoutsDir, 0o755); err != nil {
+		fatal("failed to create layouts dir: %v", err)
+	}
+
+	// Create config file
+	if !force {
+		if _, err := os.Stat(configPath); err == nil {
+			fmt.Printf("Config already exists: %s\n", configPath)
+			fmt.Printf("Use --force to overwrite\n")
+			return
+		}
+	}
+
+	configContent := `# Peaky Panes - Global Configuration
+# https://github.com/kregenrek/peakypanes
+
+tmux:
+  config: ~/.config/tmux/tmux.conf
+
+ghostty:
+  config: ~/.config/ghostty/config
+
+# Load additional layouts from this directory
+layout_dirs:
+  - ~/.config/peakypanes/layouts
+
+# Define projects for quick access
+# projects:
+#   - name: my-project
+#     session: myproj
+#     path: ~/projects/my-project
+#     layout: dev-3
+#     vars:
+#       CUSTOM_VAR: value
+
+# Define custom layouts inline (or put in layouts/ directory)
+# layouts:
+#   my-custom:
+#     windows:
+#       - name: dev
+#         panes:
+#           - title: editor
+#             cmd: "${EDITOR:-}"
+#           - title: shell
+#             cmd: ""
+
+tools:
+  cursor_agent:
+    window_name: cursor
+    cmd: ""
+  codex_new:
+    window_name: codex
+    cmd: ""
+`
+
+	if err := os.WriteFile(configPath, []byte(configContent), 0o644); err != nil {
+		fatal("failed to write config: %v", err)
+	}
+
+	fmt.Printf("✨ Initialized Peaky Panes!\n\n")
+	fmt.Printf("   Config: %s\n", configPath)
+	fmt.Printf("   Layouts: %s\n\n", layoutsDir)
+	fmt.Printf("   Next steps:\n")
+	fmt.Printf("   • Run 'peakypanes layouts' to see available layouts\n")
+	fmt.Printf("   • Run 'peakypanes init --local' in a project to create .peakypanes.yml\n")
+	fmt.Printf("   • Run 'peakypanes' in any directory to start a session\n")
+}
+
+func runLayouts(args []string) {
+	if len(args) > 0 {
+		switch args[0] {
+		case "export":
+			if len(args) < 2 {
+				fatal("usage: peakypanes layouts export <name>")
+			}
+			exportLayout(args[1])
+			return
+		case "-h", "--help":
+			fmt.Print(layoutsHelpText)
+			return
+		}
+	}
+
+	listLayouts()
+}
+
+func listLayouts() {
+	loader, err := layout.NewLoader()
+	if err != nil {
+		fatal("failed to create loader: %v", err)
+	}
+
+	cwd, _ := os.Getwd()
+	loader.SetProjectDir(cwd)
+
+	if err := loader.LoadAll(); err != nil {
+		fatal("failed to load layouts: %v", err)
+	}
+
+	layouts := loader.ListLayouts()
+	if len(layouts) == 0 {
+		fmt.Println("No layouts found.")
+		return
+	}
+
+	fmt.Println("🎩 Available Layouts")
+	fmt.Println()
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "NAME\tSOURCE\tDESCRIPTION")
+	fmt.Fprintln(w, "----\t------\t-----------")
+
+	for _, l := range layouts {
+		source := l.Source
+		switch source {
+		case "builtin":
+			source = "📦 builtin"
+		case "global":
+			source = "🏠 global"
+		case "project":
+			source = "📁 project"
+		}
+		desc := l.Description
+		if len(desc) > 50 {
+			desc = desc[:47] + "..."
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\n", l.Name, source, desc)
+	}
+	w.Flush()
+
+	fmt.Println()
+	fmt.Println("Use 'peakypanes layouts export <name>' to view layout YAML")
+}
+
+func exportLayout(name string) {
+	loader, err := layout.NewLoader()
+	if err != nil {
+		fatal("failed to create loader: %v", err)
+	}
+
+	if err := loader.LoadAll(); err != nil {
+		fatal("failed to load layouts: %v", err)
+	}
+
+	yaml, err := loader.ExportLayout(name)
+	if err != nil {
+		fatal("layout %q not found", name)
+	}
+
+	// Add header comment for project-local use
+	fmt.Printf("# Peaky Panes Layout: %s\n", name)
+	fmt.Printf("# Save as .peakypanes.yml in your project root\n")
+	fmt.Printf("# session: your-session-name  # uncomment to set session name\n\n")
+	fmt.Print(yaml)
+}
+
+func runKill(args []string) {
+	sessionName := ""
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "-h", "--help":
+			fmt.Print(killHelpText)
+			return
+		default:
+			if !strings.HasPrefix(args[i], "-") && sessionName == "" {
+				sessionName = args[i]
+			}
+		}
+	}
+
+	// Default session name to current directory name
+	if sessionName == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			fatal("cannot determine current directory: %v", err)
+		}
+		sessionName = sanitizeSessionName(filepath.Base(cwd))
+	}
+
+	// Create tmux client
+	client, err := tmuxctl.NewClient("")
+	if err != nil {
+		fatal("tmux not found: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Check if session exists
+	sessions, err := client.ListSessions(ctx)
+	if err != nil {
+		fatal("failed to list sessions: %v", err)
+	}
+
+	found := false
+	for _, s := range sessions {
+		if s == sessionName {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		fmt.Printf("❌ Session '%s' not found\n", sessionName)
+		if len(sessions) > 0 {
+			fmt.Printf("\n   Running sessions:\n")
+			for _, s := range sessions {
+				fmt.Printf("   • %s\n", s)
+			}
+		}
+		return
+	}
+
+	// Kill the session
+	if err := client.KillSession(ctx, sessionName); err != nil {
+		fatal("failed to kill session: %v", err)
+	}
+
+	fmt.Printf("✅ Killed session '%s'\n", sessionName)
+}
+
+func runStart(args []string) {
+	layoutName := ""
+	sessionName := ""
+	projectPath := ""
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--layout", "-l":
+			if i+1 < len(args) {
+				layoutName = args[i+1]
+				i++
+			}
+		case "--session", "-s":
+			if i+1 < len(args) {
+				sessionName = args[i+1]
+				i++
+			}
+		case "--path", "-p":
+			if i+1 < len(args) {
+				projectPath = args[i+1]
+				i++
+			}
+		case "-h", "--help":
+			fmt.Print(startHelpText)
+			return
+		default:
+			// Treat as layout name shortcut if not a flag
+			if !strings.HasPrefix(args[i], "-") && layoutName == "" {
+				layoutName = args[i]
+			}
+		}
+	}
+
+	// Default to current directory
+	if projectPath == "" {
+		var err error
+		projectPath, err = os.Getwd()
+		if err != nil {
+			fatal("cannot determine current directory: %v", err)
+		}
+	}
+
+	// Default session name to directory name
+	if sessionName == "" {
+		sessionName = sanitizeSessionName(filepath.Base(projectPath))
+	}
+
+	// Load layouts
+	loader, err := layout.NewLoader()
+	if err != nil {
+		fatal("failed to create loader: %v", err)
+	}
+	loader.SetProjectDir(projectPath)
+
+	if err := loader.LoadAll(); err != nil {
+		fatal("failed to load layouts: %v", err)
+	}
+
+	// Determine which layout to use
+	var selectedLayout *layout.LayoutConfig
+	var source string
+
+	if layoutName != "" {
+		// Explicit layout requested
+		selectedLayout, source, err = loader.GetLayout(layoutName)
+		if err != nil {
+			fatal("layout %q not found. Run 'peakypanes layouts' to see available layouts.", layoutName)
+		}
+	} else if loader.HasProjectConfig() {
+		// Use project-local config
+		selectedLayout = loader.GetProjectLayout()
+		source = "project"
+		if selectedLayout == nil {
+			// Project config exists but no layout defined, use default
+			selectedLayout, source, _ = loader.GetLayout("dev-3")
+		}
+	} else {
+		// Fall back to default
+		selectedLayout, source, _ = loader.GetLayout("dev-3")
+	}
+
+	if selectedLayout == nil {
+		fatal("no layout found")
+	}
+
+	// Create tmux client
+	client, err := tmuxctl.NewClient("")
+	if err != nil {
+		fatal("tmux not found: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Check if session already exists
+	sessions, err := client.ListSessions(ctx)
+	if err != nil {
+		fatal("failed to list sessions: %v", err)
+	}
+
+	sessionExists := false
+	for _, s := range sessions {
+		if s == sessionName {
+			sessionExists = true
+			break
+		}
+	}
+
+	fmt.Printf("🎩 Peaky Panes\n")
+	fmt.Printf("   Session: %s\n", sessionName)
+	fmt.Printf("   Layout:  %s (%s)\n", selectedLayout.Name, source)
+	fmt.Printf("   Path:    %s\n", projectPath)
+	fmt.Println()
+
+	// Expand variables
+	projectName := filepath.Base(projectPath)
+	expandedLayout := layout.ExpandLayoutVars(selectedLayout, nil, projectPath, projectName)
+
+	if sessionExists {
+		fmt.Printf("   Session already exists, attaching...\n\n")
+		attachToSession(client, sessionName)
+		return
+	}
+
+	// Create the session with layout
+	fmt.Println("   Creating windows:")
+	if err := createSessionWithLayout(ctx, client, sessionName, projectPath, expandedLayout); err != nil {
+		fatal("failed to create session: %v", err)
+	}
+
+	fmt.Println()
+	fmt.Printf("   ✅ Session created!\n\n")
+
+	// Attach to session
+	attachToSession(client, sessionName)
+}
+
+func createSessionWithLayout(ctx context.Context, client *tmuxctl.Client, session, projectPath string, layoutCfg *layout.LayoutConfig) error {
+	if len(layoutCfg.Windows) == 0 {
+		return fmt.Errorf("layout has no windows defined")
+	}
+
+	// Create first window with session
+	firstWindow := layoutCfg.Windows[0]
+	firstCmd := ""
+	if len(firstWindow.Panes) > 0 && firstWindow.Panes[0].Cmd != "" {
+		firstCmd = firstWindow.Panes[0].Cmd
+	}
+
+	firstPaneID, err := client.NewSessionWithCmd(ctx, session, projectPath, firstWindow.Name, firstCmd)
+	if err != nil {
+		return fmt.Errorf("create session: %w", err)
+	}
+
+	// Set title for first pane
+	if len(firstWindow.Panes) > 0 && firstWindow.Panes[0].Title != "" {
+		_ = client.SelectPane(ctx, firstPaneID, firstWindow.Panes[0].Title)
+	}
+
+	fmt.Printf("   • %s ", firstWindow.Name)
+
+	// Create additional panes in first window
+	currentPaneID := firstPaneID
+	for i := 1; i < len(firstWindow.Panes); i++ {
+		pane := firstWindow.Panes[i]
+		vertical := pane.Split == "vertical" || pane.Split == "v"
+		
+		// Parse size percentage
+		percent := 0
+		if pane.Size != "" {
+			sizeStr := strings.TrimSuffix(pane.Size, "%")
+			if p, err := strconv.Atoi(sizeStr); err == nil {
+				percent = p
+			}
+		}
+
+		newPaneID, err := client.SplitWindowWithCmd(ctx, currentPaneID, projectPath, vertical, percent, pane.Cmd)
+		if err != nil {
+			return fmt.Errorf("split pane: %w", err)
+		}
+
+		if pane.Title != "" {
+			_ = client.SelectPane(ctx, newPaneID, pane.Title)
+		}
+
+		currentPaneID = newPaneID
+	}
+
+	fmt.Printf("(%d panes)\n", len(firstWindow.Panes))
+
+	// Apply layout if specified (after all panes are created)
+	if firstWindow.Layout != "" {
+		windowTarget := fmt.Sprintf("%s:%s", session, firstWindow.Name)
+		if err := client.SelectLayout(ctx, windowTarget, firstWindow.Layout); err != nil {
+			fmt.Printf("   ⚠ Layout %s: %v\n", firstWindow.Layout, err)
+		}
+	}
+
+	// Create additional windows
+	for _, win := range layoutCfg.Windows[1:] {
+		firstCmd := ""
+		if len(win.Panes) > 0 && win.Panes[0].Cmd != "" {
+			firstCmd = win.Panes[0].Cmd
+		}
+
+		firstPaneID, err := client.NewWindowWithCmd(ctx, session, win.Name, projectPath, firstCmd)
+		if err != nil {
+			return fmt.Errorf("create window %s: %w", win.Name, err)
+		}
+
+		if len(win.Panes) > 0 && win.Panes[0].Title != "" {
+			_ = client.SelectPane(ctx, firstPaneID, win.Panes[0].Title)
+		}
+
+		fmt.Printf("   • %s ", win.Name)
+
+		// Create additional panes
+		currentPaneID := firstPaneID
+		for i := 1; i < len(win.Panes); i++ {
+			pane := win.Panes[i]
+			vertical := pane.Split == "vertical" || pane.Split == "v"
+
+			percent := 0
+			if pane.Size != "" {
+				sizeStr := strings.TrimSuffix(pane.Size, "%")
+				if p, err := strconv.Atoi(sizeStr); err == nil {
+					percent = p
+				}
+			}
+
+			newPaneID, err := client.SplitWindowWithCmd(ctx, currentPaneID, projectPath, vertical, percent, pane.Cmd)
+			if err != nil {
+				return fmt.Errorf("split pane in %s: %w", win.Name, err)
+			}
+
+			if pane.Title != "" {
+				_ = client.SelectPane(ctx, newPaneID, pane.Title)
+			}
+
+			currentPaneID = newPaneID
+		}
+
+		// Apply layout if specified
+		if win.Layout != "" {
+			windowTarget := fmt.Sprintf("%s:%s", session, win.Name)
+			_ = client.SelectLayout(ctx, windowTarget, win.Layout)
+		}
+
+		fmt.Printf("(%d panes)\n", len(win.Panes))
+	}
+
+	// Select first window and first pane
+	if len(layoutCfg.Windows) > 0 {
+		windowTarget := fmt.Sprintf("%s:%s", session, layoutCfg.Windows[0].Name)
+		// Select window
+		_ = exec.CommandContext(ctx, "tmux", "select-window", "-t", windowTarget).Run()
+		// Select first pane
+		_ = exec.CommandContext(ctx, "tmux", "select-pane", "-t", windowTarget+".0").Run()
+	}
+
+	return nil
+}
+
+func attachToSession(client *tmuxctl.Client, session string) {
+	// Check if we're inside tmux
+	if os.Getenv("TMUX") != "" {
+		// Switch client
+		cmd := exec.Command("tmux", "switch-client", "-t", session)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Stdin = os.Stdin
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("   Run: tmux switch-client -t %s\n", session)
+		}
+	} else {
+		// Attach session
+		cmd := exec.Command("tmux", "attach-session", "-t", session)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Stdin = os.Stdin
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("   Run: tmux attach -t %s\n", session)
+		}
+	}
+}
+
+func sanitizeSessionName(name string) string {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if name == "" {
+		return "session"
+	}
+	var b strings.Builder
+	lastDash := false
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+			lastDash = false
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+			lastDash = false
+		case r == '-' || r == '_' || r == ' ':
+			if !lastDash {
+				b.WriteRune('-')
+				lastDash = true
+			}
+		}
+	}
+	result := strings.Trim(b.String(), "-")
+	if result == "" {
+		return "session"
+	}
+	return result
+}
+
+func fatal(format string, args ...interface{}) {
+	fmt.Fprintf(os.Stderr, "peakypanes: "+format+"\n", args...)
+	os.Exit(1)
+}

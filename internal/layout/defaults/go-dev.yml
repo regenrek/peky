@@ -1,0 +1,20 @@
+name: go-dev
+description: "Go development: editor, run, and tests"
+
+windows:
+  - name: code
+    panes:
+      - title: editor
+        cmd: "${EDITOR:-}"
+        size: "60%"
+      - title: run
+        cmd: ""
+        split: horizontal
+      - title: test
+        cmd: ""
+        split: vertical
+
+  - name: git
+    panes:
+      - title: lazygit
+        cmd: "lazygit 2>/dev/null || git status"

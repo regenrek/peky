@@ -1,0 +1,11 @@
+name: split-h
+description: "Two horizontal panes (top/bottom)"
+
+windows:
+  - name: dev
+    layout: even-vertical
+    panes:
+      - title: top
+        cmd: ""
+      - title: bottom
+        cmd: ""

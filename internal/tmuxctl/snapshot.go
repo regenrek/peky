@@ -3,6 +3,7 @@ package tmuxctl
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"strings"
 )
 
@@ -36,6 +37,9 @@ func (c *Client) SessionSnapshot(ctx context.Context, session string) (SessionSn
 	cmd := c.run(ctx, c.bin, "list-windows", "-t", session, "-F", "#{window_index}\t#{window_name}\t#{window_active}")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return SessionSnapshot{Session: session}, nil
+		}
 		return SessionSnapshot{}, wrapTmuxErr("list-windows", err, out)
 	}
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
@@ -68,6 +72,9 @@ func (c *Client) listPanes(ctx context.Context, target string) ([]PaneSnapshot, 
 	cmd := c.run(ctx, c.bin, "list-panes", "-t", target, "-F", "#{pane_index}\t#{pane_active}\t#{pane_title}\t#{pane_current_command}")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return nil, nil
+		}
 		return nil, wrapTmuxErr("list-panes", err, out)
 	}
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")

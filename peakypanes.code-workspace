@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../external-codebase/bubbletea"
+		},
+		{
+			"path": "../external-codebase/bubbles"
+		}
+	],
+	"settings": {}
+}

@@ -114,11 +114,16 @@ func (c *Client) ListSessions(ctx context.Context) ([]string, error) {
 	cmd := c.run(ctx, c.bin, "list-sessions", "-F", "#{session_name}")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
-			msg := strings.ToLower(strings.TrimSpace(string(exitErr.Stderr)))
-			if strings.Contains(msg, "no server") || strings.Contains(msg, "failed to connect") {
-				return nil, nil
-			}
+		// Check tmux output and the error message for benign "no server" cases.
+		msg := strings.ToLower(strings.TrimSpace(string(out)))
+		if msg == "" {
+			msg = strings.ToLower(strings.TrimSpace(err.Error()))
+		}
+		if strings.Contains(msg, "no server") ||
+			strings.Contains(msg, "no such file") ||
+			strings.Contains(msg, "failed to connect") ||
+			strings.Contains(msg, "no sessions") {
+			return nil, nil
 		}
 		return nil, wrapTmuxErr("list-sessions", err, out)
 	}
@@ -417,4 +422,117 @@ func isNestedTmuxErr(err error) bool {
 	}
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "nested")
+}
+
+// SendKeys sends keystrokes to a target pane.
+func (c *Client) SendKeys(ctx context.Context, target string, keys ...string) error {
+	if target == "" {
+		return errors.New("send-keys target cannot be empty")
+	}
+	args := []string{"send-keys", "-t", target}
+	args = append(args, keys...)
+	cmd := c.run(ctx, c.bin, args...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return wrapTmuxErr("send-keys", err, out)
+	}
+	return nil
+}
+
+// SelectPane sets the title of a pane.
+func (c *Client) SelectPane(ctx context.Context, target, title string) error {
+	if target == "" {
+		return errors.New("select-pane target cannot be empty")
+	}
+	args := []string{"select-pane", "-t", target, "-T", title}
+	cmd := c.run(ctx, c.bin, args...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return wrapTmuxErr("select-pane", err, out)
+	}
+	return nil
+}
+
+// SelectLayout applies a tmux layout to a window.
+func (c *Client) SelectLayout(ctx context.Context, target, layoutName string) error {
+	if target == "" {
+		return errors.New("select-layout target cannot be empty")
+	}
+	args := []string{"select-layout", "-t", target, layoutName}
+	cmd := c.run(ctx, c.bin, args...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return wrapTmuxErr("select-layout", err, out)
+	}
+	return nil
+}
+
+// SplitWindowWithCmd splits a pane and optionally runs a command.
+func (c *Client) SplitWindowWithCmd(ctx context.Context, target, startDir string, vertical bool, percent int, command string) (string, error) {
+	if target == "" {
+		return "", errors.New("split target cannot be empty")
+	}
+	orientation := "-h"
+	if vertical {
+		orientation = "-v"
+	}
+	args := []string{"split-window", orientation, "-t", target, "-P", "-F", "#{pane_id}"}
+	if startDir != "" {
+		args = append(args, "-c", startDir)
+	}
+	if percent > 0 {
+		args = append(args, "-p", fmt.Sprintf("%d", percent))
+	}
+	if command != "" {
+		args = append(args, command)
+	}
+	cmd := c.run(ctx, c.bin, args...)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", wrapTmuxErr("split-window", err, nil)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// NewSessionWithCmd creates a new session and returns the first pane ID.
+func (c *Client) NewSessionWithCmd(ctx context.Context, session, startDir, windowName, command string) (string, error) {
+	if session == "" {
+		return "", errors.New("session name is required")
+	}
+	args := []string{"new-session", "-d", "-s", session, "-P", "-F", "#{pane_id}"}
+	if windowName != "" {
+		args = append(args, "-n", windowName)
+	}
+	if startDir != "" {
+		args = append(args, "-c", startDir)
+	}
+	if command != "" {
+		args = append(args, command)
+	}
+	cmd := c.run(ctx, c.bin, args...)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", wrapTmuxErr("new-session", err, nil)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// NewWindowWithCmd creates a window and returns the pane ID.
+func (c *Client) NewWindowWithCmd(ctx context.Context, session, windowName, startDir, command string) (string, error) {
+	if session == "" {
+		return "", errors.New("session name is required")
+	}
+	args := []string{"new-window", "-t", session, "-P", "-F", "#{pane_id}"}
+	if windowName != "" {
+		args = append(args, "-n", windowName)
+	}
+	if startDir != "" {
+		args = append(args, "-c", startDir)
+	}
+	if command != "" {
+		args = append(args, command)
+	}
+	cmd := c.run(ctx, c.bin, args...)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", wrapTmuxErr("new-window", err, nil)
+	}
+	return strings.TrimSpace(string(out)), nil
 }
