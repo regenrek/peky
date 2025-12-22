@@ -47,13 +47,13 @@ npm run build:npm-packages
 
 6) Publish npm packages (platform packages first, then the meta package):
 
+Note: Windows npm packages are currently disabled due to npm spam-detection blocks.
+
 ```bash
 cd packages/peakypanes-darwin-arm64 && npm publish --access public
 cd ../peakypanes-darwin-x64 && npm publish --access public
 cd ../peakypanes-linux-arm64 && npm publish --access public
 cd ../peakypanes-linux-x64 && npm publish --access public
-cd ../peakypanes-win32-arm64 && npm publish --access public
-cd ../peakypanes-win32-x64 && npm publish --access public
 cd ../peakypanes && npm publish --access public
 ```
 

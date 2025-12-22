@@ -36,6 +36,9 @@ npm i -g peakypanes
 peakypanes setup
 ```
 
+> npm packages are currently published for macOS and Linux.  
+> Windows users should install from the GitHub release or build with Go.
+
 Run once with npx
 
 ```bash

@@ -109,9 +109,17 @@ function detectVersion() {
 }
 
 function findBuildDir(goos, goarch) {
-  const dirName = PROJECT + '_' + goos + '_' + goarch;
-  const candidate = path.join(DIST_DIR, dirName);
-  if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) return candidate;
+  const prefix = PROJECT + '_' + goos + '_' + goarch;
+  const direct = path.join(DIST_DIR, prefix);
+  if (fs.existsSync(direct) && fs.statSync(direct).isDirectory()) return direct;
+
+  const entries = fs.readdirSync(DIST_DIR, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name.startsWith(prefix + '_')) {
+      return path.join(DIST_DIR, entry.name);
+    }
+  }
   return '';
 }
 
@@ -209,9 +217,7 @@ function build() {
     { npmPlatform: 'darwin', npmArch: 'x64', goos: 'darwin', goarch: 'amd64' },
     { npmPlatform: 'darwin', npmArch: 'arm64', goos: 'darwin', goarch: 'arm64' },
     { npmPlatform: 'linux', npmArch: 'x64', goos: 'linux', goarch: 'amd64' },
-    { npmPlatform: 'linux', npmArch: 'arm64', goos: 'linux', goarch: 'arm64' },
-    { npmPlatform: 'win32', npmArch: 'x64', goos: 'windows', goarch: 'amd64' },
-    { npmPlatform: 'win32', npmArch: 'arm64', goos: 'windows', goarch: 'arm64' }
+    { npmPlatform: 'linux', npmArch: 'arm64', goos: 'linux', goarch: 'arm64' }
   ];
 
   rmrf(PACKAGES_DIR);

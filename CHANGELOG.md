@@ -5,6 +5,9 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Changed
+- npm Windows packages are temporarily disabled due to npm spam-detection blocks.
+
 ## 0.0.1 - 2025-12-22
 
 ### Added

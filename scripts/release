@@ -107,6 +107,16 @@ run() {
   "$@"
 }
 
+run_in_dir() {
+  local dir=$1
+  shift
+  if [[ $dry_run == true ]]; then
+    echo "+ (cd \"$dir\" && $*)"
+    return 0
+  fi
+  (cd "$dir" && "$@")
+}
+
 printf "Running tests...\n"
 go test ./...
 
@@ -145,11 +155,11 @@ fi
 if [[ ${#platform_dirs[@]} -gt 0 ]]; then
   for dir in "${platform_dirs[@]}"; do
     echo "Publishing $dir"
-    run npm publish --access public "$dir"
+    run_in_dir "$dir" npm publish --access public
   done
 fi
 
 printf "Publishing meta package...\n"
-run npm publish --access public packages/peakypanes
+run_in_dir packages/peakypanes npm publish --access public
 
 printf "Release complete: %s\n" "$tag"
