@@ -209,9 +209,10 @@ func (m Model) viewPreview(width, height int) string {
 	lines = append(lines, windowBar)
 
 	infoLine := fmt.Sprintf("Path: %s  •  Layout: %s", pathOrDash(path), layoutOrDash(layoutName))
-	mode := "outside tmux"
-	if m.insideTmux {
-		mode = "inside tmux"
+	muxName := m.muxClient.Type().String()
+	mode := "outside " + muxName
+	if m.insideMux {
+		mode = "inside " + muxName
 	}
 	statusLine := fmt.Sprintf("Status: %s  •  Panes: %d  •  %s", statusBadge, paneCount, mode)
 	lines = append(lines, fitLine(infoLine, width))

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/regenrek/peakypanes/internal/layout"
-	"github.com/regenrek/peakypanes/internal/tmuxctl"
+	"github.com/regenrek/peakypanes/internal/mux"
 	"gopkg.in/yaml.v3"
 )
 
@@ -159,8 +159,8 @@ func loadConfig(path string) (*layout.Config, error) {
 	return &cfg, nil
 }
 
-func buildDashboardData(ctx context.Context, client *tmuxctl.Client, input tmuxSnapshotInput) tmuxSnapshotResult {
-	result := tmuxSnapshotResult{Settings: input.Settings, RawConfig: input.Config, Version: input.Version}
+func buildDashboardData(ctx context.Context, client mux.Client, input muxSnapshotInput) muxSnapshotResult {
+	result := muxSnapshotResult{Settings: input.Settings, RawConfig: input.Config, Version: input.Version}
 	cfg := input.Config
 	settings := input.Settings
 	matcher := settings.StatusMatcher
@@ -381,7 +381,7 @@ func findSessionByName(groups []ProjectGroup, name string) *SessionItem {
 	return nil
 }
 
-func windowsToItems(windows []tmuxctl.WindowInfo) []WindowItem {
+func windowsToItems(windows []mux.WindowInfo) []WindowItem {
 	items := make([]WindowItem, len(windows))
 	for i, w := range windows {
 		items[i] = WindowItem{Index: w.Index, Name: w.Name, Active: w.Active}
@@ -398,7 +398,7 @@ func windowExists(windows []WindowItem, index string) bool {
 	return false
 }
 
-func activeWindowIndex(windows []tmuxctl.WindowInfo) string {
+func activeWindowIndex(windows []mux.WindowInfo) string {
 	for _, w := range windows {
 		if w.Active {
 			return w.Index
@@ -410,7 +410,7 @@ func activeWindowIndex(windows []tmuxctl.WindowInfo) string {
 	return ""
 }
 
-func sessionWindowPanes(ctx context.Context, client *tmuxctl.Client, session, window string, lines int) ([]PaneItem, error) {
+func sessionWindowPanes(ctx context.Context, client mux.Client, session, window string, lines int) ([]PaneItem, error) {
 	target := fmt.Sprintf("%s:%s", session, window)
 	panes, err := client.ListPanesDetailed(ctx, target)
 	if err != nil {
@@ -418,7 +418,7 @@ func sessionWindowPanes(ctx context.Context, client *tmuxctl.Client, session, wi
 	}
 	items := make([]PaneItem, len(panes))
 	for i, p := range panes {
-		item := paneFromTmux(p)
+		item := paneFromMux(p)
 		if lines > 0 {
 			captureLines := captureLinesForPreview(p.Height, lines)
 			preview, err := client.CapturePaneLines(ctx, fmt.Sprintf("%s.%s", target, p.Index), captureLines)
@@ -448,7 +448,7 @@ func captureLinesForPreview(paneHeight, previewLines int) int {
 	return lines
 }
 
-func sessionThumbnail(ctx context.Context, client *tmuxctl.Client, session SessionItem, settings DashboardConfig, matcher statusMatcher) (PaneSummary, error) {
+func sessionThumbnail(ctx context.Context, client mux.Client, session SessionItem, settings DashboardConfig, matcher statusMatcher) (PaneSummary, error) {
 	if session.Name == "" || session.ActiveWindow == "" {
 		return PaneSummary{}, nil
 	}
@@ -465,11 +465,11 @@ func sessionThumbnail(ctx context.Context, client *tmuxctl.Client, session Sessi
 	if err != nil {
 		return PaneSummary{}, err
 	}
-	status := classifyPane(paneFromTmux(*active), lines, matcher, settings.IdleThreshold, time.Now())
+	status := classifyPane(paneFromMux(*active), lines, matcher, settings.IdleThreshold, time.Now())
 	return PaneSummary{Line: lastNonEmpty(lines), Status: status}, nil
 }
 
-func pickActivePane(panes []tmuxctl.PaneInfo) *tmuxctl.PaneInfo {
+func pickActivePane(panes []mux.PaneInfo) *mux.PaneInfo {
 	for i := range panes {
 		if panes[i].Active {
 			return &panes[i]

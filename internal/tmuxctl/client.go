@@ -443,6 +443,16 @@ func (c *Client) attach(ctx context.Context, session string) error {
 	return nil
 }
 
+// AttachSession attaches to a tmux session.
+func (c *Client) AttachSession(ctx context.Context, session string) error {
+	return c.attachSession(ctx, session)
+}
+
+// SwitchClient switches the active tmux client to a session.
+func (c *Client) SwitchClient(ctx context.Context, session string) error {
+	return c.switchClient(ctx, session)
+}
+
 func (c *Client) attachSession(ctx context.Context, session string) error {
 	cmd := c.run(ctx, c.bin, "attach-session", "-t", session)
 	cmd.Stdout = os.Stdout

@@ -6,7 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/regenrek/peakypanes/internal/layout"
-	"github.com/regenrek/peakypanes/internal/tmuxctl"
+	"github.com/regenrek/peakypanes/internal/mux"
 )
 
 // ViewState represents the current UI view.
@@ -25,7 +25,7 @@ const (
 	StateProjectRootSetup
 )
 
-// Status describes the tmux lifecycle state of a session.
+// Status describes the multiplexer lifecycle state of a session.
 type Status int
 
 const (
@@ -58,7 +58,7 @@ type ProjectGroup struct {
 	Sessions   []SessionItem
 }
 
-// SessionItem represents a tmux session in the dashboard.
+// SessionItem represents a multiplexer session in the dashboard.
 type SessionItem struct {
 	Name         string
 	Path         string
@@ -71,7 +71,7 @@ type SessionItem struct {
 	Config       *layout.ProjectConfig
 }
 
-// WindowItem represents a tmux window.
+// WindowItem represents a multiplexer window/tab.
 type WindowItem struct {
 	Index  string
 	Name   string
@@ -79,7 +79,7 @@ type WindowItem struct {
 	Panes  []PaneItem
 }
 
-// PaneItem represents a tmux pane with preview content.
+// PaneItem represents a multiplexer pane with preview content.
 type PaneItem struct {
 	ID         string
 	Index      string
@@ -123,16 +123,16 @@ type selectionState struct {
 	Window  string
 }
 
-// tmuxSnapshotInput carries the state needed for refresh.
-type tmuxSnapshotInput struct {
+// muxSnapshotInput carries the state needed for refresh.
+type muxSnapshotInput struct {
 	Selection selectionState
 	Version   uint64
 	Config    *layout.Config
 	Settings  DashboardConfig
 }
 
-// tmuxSnapshotResult is returned by a refresh.
-type tmuxSnapshotResult struct {
+// muxSnapshotResult is returned by a refresh.
+type muxSnapshotResult struct {
 	Data      DashboardData
 	Resolved  selectionState
 	Err       error
@@ -142,9 +142,9 @@ type tmuxSnapshotResult struct {
 	Version   uint64
 }
 
-// tmuxSnapshotMsg is sent back to the model.
-type tmuxSnapshotMsg struct {
-	Result tmuxSnapshotResult
+// muxSnapshotMsg is sent back to the model.
+type muxSnapshotMsg struct {
+	Result muxSnapshotResult
 }
 
 // refreshTickMsg triggers the next refresh.
@@ -155,7 +155,7 @@ type selectionRefreshMsg struct {
 	Version uint64
 }
 
-// exitAfterAttachMsg exits the dashboard after a tmux attach returns.
+// exitAfterAttachMsg exits the dashboard after an attach returns.
 type exitAfterAttachMsg struct{}
 
 // GitProject represents a project directory with .git.
@@ -190,8 +190,8 @@ func (c CommandItem) Title() string       { return c.Label }
 func (c CommandItem) Description() string { return c.Desc }
 func (c CommandItem) FilterValue() string { return strings.ToLower(c.Label + " " + c.Desc) }
 
-// paneFromTmux converts tmux pane info to dashboard pane item.
-func paneFromTmux(p tmuxctl.PaneInfo) PaneItem {
+// paneFromMux converts pane info to dashboard pane item.
+func paneFromMux(p mux.PaneInfo) PaneItem {
 	return PaneItem{
 		ID:         p.ID,
 		Index:      p.Index,

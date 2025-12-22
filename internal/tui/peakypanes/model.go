@@ -16,7 +16,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/regenrek/peakypanes/internal/layout"
-	"github.com/regenrek/peakypanes/internal/tmuxctl"
+	"github.com/regenrek/peakypanes/internal/mux"
 	"github.com/regenrek/peakypanes/internal/tui/theme"
 )
 
@@ -77,13 +77,13 @@ func newDashboardKeyMap() *dashboardKeyMap {
 
 // Model implements tea.Model for peakypanes TUI.
 type Model struct {
-	tmux   *tmuxctl.Client
-	state  ViewState
-	width  int
-	height int
+	muxClient mux.Client
+	state     ViewState
+	width     int
+	height    int
 
 	configPath string
-	insideTmux bool
+	insideMux  bool
 
 	data      DashboardData
 	selection selectionState
@@ -121,9 +121,9 @@ type Model struct {
 }
 
 // NewModel creates a new peakypanes TUI model.
-func NewModel(client *tmuxctl.Client) (*Model, error) {
+func NewModel(client mux.Client) (*Model, error) {
 	if client == nil {
-		return nil, fmt.Errorf("tmux client is required")
+		return nil, fmt.Errorf("multiplexer client is required")
 	}
 
 	configPath, err := layout.DefaultConfigPath()
@@ -132,9 +132,9 @@ func NewModel(client *tmuxctl.Client) (*Model, error) {
 	}
 
 	m := &Model{
-		tmux:             client,
+		muxClient:        client,
 		state:            StateDashboard,
-		insideTmux:       os.Getenv("TMUX") != "" || os.Getenv("TMUX_PANE") != "",
+		insideMux:        client.IsInside(),
 		configPath:       configPath,
 		keys:             newDashboardKeyMap(),
 		expandedSessions: make(map[string]bool),
@@ -223,9 +223,9 @@ func (m Model) refreshCmd() tea.Cmd {
 			warning += "dashboard: " + err.Error()
 			settings, _ = defaultDashboardConfig(layout.DashboardConfig{})
 		}
-		result := buildDashboardData(ctx, m.tmux, tmuxSnapshotInput{Selection: selection, Version: version, Config: cfg, Settings: settings})
+		result := buildDashboardData(ctx, m.muxClient, muxSnapshotInput{Selection: selection, Version: version, Config: cfg, Settings: settings})
 		result.Warning = warning
-		return tmuxSnapshotMsg{Result: result}
+		return muxSnapshotMsg{Result: result}
 	}
 }
 
@@ -250,7 +250,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.beginRefresh()
 		return m, m.refreshCmd()
-	case tmuxSnapshotMsg:
+	case muxSnapshotMsg:
 		m.endRefresh()
 		if msg.Result.Err != nil {
 			m.setToast("Refresh failed: "+msg.Result.Err.Error(), toastError)
@@ -588,7 +588,7 @@ func (m *Model) applyRename() tea.Cmd {
 			m.setToast("Session name unchanged", toastInfo)
 			return nil
 		}
-		if err := m.tmux.RenameSession(ctx, m.renameSession, newName); err != nil {
+		if err := m.muxClient.RenameSession(ctx, m.renameSession, newName); err != nil {
 			m.setToast("Rename failed: "+err.Error(), toastError)
 			return nil
 		}
@@ -609,7 +609,7 @@ func (m *Model) applyRename() tea.Cmd {
 			m.setToast("Window name unchanged", toastInfo)
 			return nil
 		}
-		if err := m.tmux.RenameWindow(ctx, m.renameSession, m.renameWindowIndex, newName); err != nil {
+		if err := m.muxClient.RenameWindow(ctx, m.renameSession, m.renameWindowIndex, newName); err != nil {
 			m.setToast("Rename failed: "+err.Error(), toastError)
 			return nil
 		}
@@ -750,7 +750,7 @@ func (m *Model) updateConfirmKill(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.confirmSession != "" {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
-			if err := m.tmux.KillSession(ctx, m.confirmSession); err != nil {
+			if err := m.muxClient.KillSession(ctx, m.confirmSession); err != nil {
 				m.setToast("Kill failed: "+err.Error(), toastError)
 				m.state = StateDashboard
 				return m, nil
@@ -878,8 +878,6 @@ func (m *Model) openSessionInNewTerminal() tea.Cmd {
 	if session == nil {
 		return nil
 	}
-	tmuxEnv := strings.TrimSpace(os.Getenv("TMUX"))
-	tmuxSocket := tmuxSocketFromEnv(tmuxEnv)
 
 	if session.Status == StatusStopped {
 		project := m.selectedProject()
@@ -895,22 +893,24 @@ func (m *Model) openSessionInNewTerminal() tea.Cmd {
 			m.setToast("Start failed: "+err.Error(), toastError)
 			return nil
 		}
-		args := []string{"start", "--session", session.Name, "--path", path}
+		args := []string{"start", "--session", session.Name, "--path", path, "--mux", m.muxClient.Type().String()}
 		if session.LayoutName != "" {
 			args = append(args, "--layout", session.LayoutName)
 		}
 		command := selfExecutable()
-		if tmuxEnv != "" {
-			envArgs := []string{fmt.Sprintf("TMUX=%s", tmuxEnv), command}
-			command = "/usr/bin/env"
-			args = append(envArgs, args...)
+		if m.muxClient.Type() == mux.Tmux {
+			if tmuxEnv := strings.TrimSpace(os.Getenv("TMUX")); tmuxEnv != "" {
+				envArgs := []string{fmt.Sprintf("TMUX=%s", tmuxEnv), command}
+				command = "/usr/bin/env"
+				args = append(envArgs, args...)
+			}
 		}
 		return m.openNewTerminal(command, args, "Session started in new terminal")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	attached, err := m.tmux.SessionHasClients(ctx, session.Name)
+	attached, err := m.muxClient.SessionHasClients(ctx, session.Name)
 	if err != nil {
 		m.setToast("Check clients failed: "+err.Error(), toastError)
 		return nil
@@ -923,16 +923,8 @@ func (m *Model) openSessionInNewTerminal() tea.Cmd {
 	if m.selection.Window != "" {
 		target = fmt.Sprintf("%s:%s", session.Name, m.selection.Window)
 	}
-	tmuxPath := m.tmux.Binary()
-	if tmuxPath == "" {
-		tmuxPath = "tmux"
-	}
-	attachArgs := []string{}
-	if tmuxSocket != "" {
-		attachArgs = append(attachArgs, "-S", tmuxSocket)
-	}
-	attachArgs = append(attachArgs, "attach-session", "-t", target)
-	return m.openNewTerminal(tmuxPath, attachArgs, "Opened session in new terminal")
+	command, attachArgs, _ := m.muxClient.AttachCommand(target, m.insideMux)
+	return m.openNewTerminal(command, attachArgs, "Opened session in new terminal")
 }
 
 func (m *Model) openNewTerminal(command string, args []string, successMsg string) tea.Cmd {
@@ -990,14 +982,6 @@ func (m *Model) focusTerminalCommand() *exec.Cmd {
 	}
 }
 
-func tmuxSocketFromEnv(env string) string {
-	if env == "" {
-		return ""
-	}
-	parts := strings.SplitN(env, ",", 2)
-	return strings.TrimSpace(parts[0])
-}
-
 func (m *Model) startNewSessionWithLayout(layoutName string) tea.Cmd {
 	project := m.selectedProject()
 	session := m.selectedSession()
@@ -1032,14 +1016,14 @@ func (m *Model) startNewSessionWithLayout(layoutName string) tea.Cmd {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	existing, err := m.tmux.ListSessions(ctx)
+	existing, err := m.muxClient.ListSessions(ctx)
 	if err != nil {
 		m.setToast("Start failed: "+err.Error(), toastError)
 		return nil
 	}
 	newName := nextSessionName(base, existing)
 
-	args := []string{"start", "--session", newName, "--path", path}
+	args := []string{"start", "--session", newName, "--path", path, "--mux", m.muxClient.Type().String()}
 	if strings.TrimSpace(layoutName) != "" {
 		args = append(args, "--layout", layoutName)
 	}
@@ -1056,27 +1040,19 @@ func (m *Model) attachSession(session SessionItem) tea.Cmd {
 	if m.selection.Window != "" {
 		target = fmt.Sprintf("%s:%s", session.Name, m.selection.Window)
 	}
-	if m.insideTmux {
-		return tea.ExecProcess(exec.Command("tmux", "switch-client", "-t", target), func(error) tea.Msg { return nil })
-	}
 	return func() tea.Msg {
-		tmuxPath := m.tmux.Binary()
-		if tmuxPath == "" {
-			tmuxPath = "tmux"
-		}
-		cmd := exec.Command(tmuxPath, "attach-session", "-t", target)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Stdin = os.Stdin
-		if err := cmd.Run(); err != nil {
+		if err := m.muxClient.Attach(context.Background(), target, m.insideMux); err != nil {
 			return ErrorMsg{Err: err, Context: "attach"}
+		}
+		if m.insideMux {
+			return nil
 		}
 		return exitAfterAttachMsg{}
 	}
 }
 
 func (m *Model) startProject(session SessionItem) tea.Cmd {
-	args := []string{"start", "--session", session.Name}
+	args := []string{"start", "--session", session.Name, "--mux", m.muxClient.Type().String()}
 	if session.Path != "" {
 		if err := validateProjectPath(session.Path); err != nil {
 			m.setToast("Start failed: "+err.Error(), toastError)
@@ -1100,7 +1076,8 @@ func (m *Model) startSessionAtPathDetached(path string) tea.Cmd {
 		m.setToast("Start failed: "+err.Error(), toastError)
 		return nil
 	}
-	return tea.ExecProcess(exec.Command(selfExecutable(), "start", "--path", path, "--detach"), func(err error) tea.Msg {
+	args := []string{"start", "--path", path, "--detach", "--mux", m.muxClient.Type().String()}
+	return tea.ExecProcess(exec.Command(selfExecutable(), args...), func(err error) tea.Msg {
 		if err != nil {
 			return WarningMsg{Message: "Start failed: " + err.Error()}
 		}
@@ -1168,7 +1145,7 @@ func (m *Model) updateConfirmCloseProject(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		defer cancel()
 		var failed []string
 		for _, s := range running {
-			if err := m.tmux.KillSession(ctx, s.Name); err != nil {
+			if err := m.muxClient.KillSession(ctx, s.Name); err != nil {
 				failed = append(failed, s.Name)
 			}
 		}

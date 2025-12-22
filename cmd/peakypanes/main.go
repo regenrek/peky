@@ -16,8 +16,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/mux"
 	"github.com/regenrek/peakypanes/internal/tmuxctl"
 	"github.com/regenrek/peakypanes/internal/tui/peakypanes"
+	"github.com/regenrek/peakypanes/internal/zellijctl"
 )
 
 var version = "dev"
@@ -27,7 +29,7 @@ const (
 	defaultDashboardWindow  = "peakypanes-dashboard"
 )
 
-const helpText = `🎩 Peaky Panes - Tmux Layout Manager
+const helpText = `🎩 Peaky Panes - Tmux/Zellij Layout Manager
 
 Usage:
   peakypanes [command] [options]
@@ -35,10 +37,10 @@ Usage:
 Commands:
   (no command)     Open interactive dashboard (direct)
   dashboard        Open dashboard UI
-  popup            Open dashboard as a tmux popup (if available)
+  popup            Open dashboard as a popup (tmux/zellij)
   open             Start/attach session in current directory
   start            Start/attach session (same as open)
-  kill             Kill a tmux session
+  kill             Kill a tmux/zellij session
   init             Initialize configuration
   layouts          List and manage layouts
   clone            Clone from GitHub and open
@@ -49,7 +51,7 @@ Examples:
   peakypanes                          # Open dashboard
   peakypanes dashboard                # Open dashboard (direct)
   peakypanes dashboard --tmux-session # Host dashboard in tmux session
-  peakypanes popup                    # Open dashboard popup (tmux)
+  peakypanes popup                    # Open dashboard popup (tmux/zellij)
   peakypanes open                     # Start/attach session in current directory
   peakypanes open --layout dev-3      # Start with specific layout
   peakypanes kill                     # Kill session for current directory
@@ -70,9 +72,10 @@ Usage:
   peakypanes dashboard [options]
 
 Options:
-  --tmux-session       Host the dashboard in a dedicated tmux session
+  --tmux-session       Host the dashboard in a dedicated tmux/zellij session
   --session <name>     Session name for --tmux-session (default: peakypanes-dashboard)
-  --popup              Open the dashboard as a tmux popup when supported
+  --popup              Open the dashboard as a popup when supported
+  --mux <name>         Multiplexer to target (tmux or zellij)
   -h, --help           Show this help
 
 Examples:
@@ -82,10 +85,10 @@ Examples:
   peakypanes dashboard --popup
 `
 
-const popupHelpText = `Open the dashboard as a tmux popup (fallbacks to direct UI).
+const popupHelpText = `Open the dashboard as a popup (fallbacks to direct UI).
 
 Usage:
-  peakypanes popup
+  peakypanes popup [--mux tmux|zellij]
 `
 
 const initHelpText = `Initialize Peaky Panes configuration.
@@ -115,6 +118,7 @@ Subcommands:
   export <name>        Print layout YAML to stdout
   
 Options:
+  --mux <name>         Multiplexer to target (tmux or zellij)
   -h, --help           Show this help
 
 Examples:
@@ -123,7 +127,7 @@ Examples:
   peakypanes layouts export dev-3 > .peakypanes.yml
 `
 
-const startHelpText = `Start or attach to a tmux session.
+const startHelpText = `Start or attach to a tmux/zellij session.
 
 Usage:
   peakypanes start [options]
@@ -133,6 +137,7 @@ Options:
   --session <name>     Override session name (default: directory name)
   --path <dir>         Project directory (default: current directory)
   -d, --detach         Create session but do not attach
+  --mux <name>         Multiplexer to use (tmux or zellij)
   -h, --help           Show this help
 
 Layout Detection (in order):
@@ -143,12 +148,13 @@ Layout Detection (in order):
 
 Examples:
   peakypanes start                    # Auto-detect layout
+  peakypanes start --mux zellij       # Use zellij backend
   peakypanes start --layout fullstack
   peakypanes start --session myapp --layout go-dev
   peakypanes start --detach
 `
 
-const killHelpText = `Kill a tmux session.
+const killHelpText = `Kill a tmux/zellij session.
 
 Usage:
   peakypanes kill [session-name]
@@ -167,10 +173,10 @@ Examples:
 const setupHelpText = `Check external dependencies.
 
 Usage:
-	peakypanes setup
+	peakypanes setup [--mux tmux|zellij]
 
 Checks:
-	tmux is installed and on PATH
+	tmux and/or zellij is installed and on PATH
 
 Examples:
 	peakypanes setup
@@ -215,9 +221,18 @@ func main() {
 }
 
 func runMenu() {
-	client, err := tmuxctl.NewClient("")
+	runMenuWithMux("")
+}
+
+func runMenuWithMux(cliMux string) {
+	cfg, _, err := loadGlobalConfig()
 	if err != nil {
-		fatal("tmux not found: %v", err)
+		fatal("failed to load config: %v", err)
+	}
+	muxType := resolveMuxType(cliMux, cfg, nil, nil)
+	client, err := newMuxClient(muxType, cfg)
+	if err != nil {
+		fatal("failed to initialize %s: %v", muxType, err)
 	}
 
 	model, err := peakypanes.NewModel(client)
@@ -236,6 +251,7 @@ type dashboardOptions struct {
 	tmuxHosted bool
 	session    string
 	showHelp   bool
+	mux        string
 }
 
 func runDashboardCommand(args []string) {
@@ -244,6 +260,11 @@ func runDashboardCommand(args []string) {
 		switch args[i] {
 		case "--tmux-session":
 			opts.tmuxHosted = true
+		case "--mux", "--multiplexer":
+			if i+1 < len(args) {
+				opts.mux = args[i+1]
+				i++
+			}
 		case "--session":
 			if i+1 < len(args) {
 				opts.session = args[i+1]
@@ -264,50 +285,83 @@ func runDashboardCommand(args []string) {
 		fatal("choose either --popup or --tmux-session")
 	}
 	if opts.popup {
-		runDashboardPopup(nil)
+		runDashboardPopupWithMux(opts.mux)
 		return
 	}
 	if opts.tmuxHosted {
-		runDashboardHosted(opts.session)
+		runDashboardHosted(opts.session, opts.mux)
 		return
 	}
-	runMenu()
+	runMenuWithMux(opts.mux)
 }
 
 func runDashboardPopup(args []string) {
-	for _, a := range args {
-		if a == "-h" || a == "--help" {
+	cliMux := ""
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "-h", "--help":
 			fmt.Print(popupHelpText)
 			return
+		case "--mux", "--multiplexer":
+			if i+1 < len(args) {
+				cliMux = args[i+1]
+				i++
+			}
 		}
 	}
-	if !insideTmux() {
-		runMenu()
-		return
-	}
-	client, err := tmuxctl.NewClient("")
+	runDashboardPopupWithMux(cliMux)
+}
+
+func runDashboardPopupWithMux(cliMux string) {
+	cfg, _, err := loadGlobalConfig()
 	if err != nil {
-		fatal("tmux not found: %v", err)
+		fatal("failed to load config: %v", err)
+	}
+	muxType := resolveMuxType(cliMux, cfg, nil, nil)
+	client, err := newMuxClient(muxType, cfg)
+	if err != nil {
+		fatal("failed to initialize %s: %v", muxType, err)
+	}
+	dashboardCmd := []string{selfExecutable(), "dashboard", "--mux", muxType.String()}
+	if !client.IsInside() {
+		runMenuWithMux(cliMux)
+		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if ok := client.SupportsPopup(ctx); ok {
-		err := client.DisplayPopup(ctx, tmuxctl.PopupOptions{
+	if client.SupportsPopup(ctx) {
+		err := client.DisplayPopup(ctx, mux.PopupOptions{
 			Width:    "90%",
 			Height:   "90%",
 			StartDir: currentDir(),
-		}, []string{selfExecutable(), "dashboard"})
+		}, dashboardCmd)
 		if err == nil {
 			return
 		}
 	}
-	if err := openDashboardWindow(ctx, client); err != nil {
+	if err := client.OpenDashboardWindow(ctx, "", defaultDashboardWindow, dashboardCmd); err != nil {
 		fmt.Fprintf(os.Stderr, "peakypanes: popup failed: %v\n", err)
-		runMenu()
+		runMenuWithMux(cliMux)
 	}
 }
 
-func runDashboardHosted(sessionName string) {
+func runDashboardHosted(sessionName, cliMux string) {
+	cfg, _, err := loadGlobalConfig()
+	if err != nil {
+		fatal("failed to load config: %v", err)
+	}
+	muxType := resolveMuxType(cliMux, cfg, nil, nil)
+	switch muxType {
+	case mux.Tmux:
+		runDashboardHostedTmux(sessionName)
+	case mux.Zellij:
+		runDashboardHostedZellij(sessionName, cfg)
+	default:
+		fatal("unsupported multiplexer: %s", muxType)
+	}
+}
+
+func runDashboardHostedTmux(sessionName string) {
 	client, err := tmuxctl.NewClient("")
 	if err != nil {
 		fatal("tmux not found: %v", err)
@@ -318,7 +372,7 @@ func runDashboardHosted(sessionName string) {
 	}
 	exe := selfExecutable()
 	if insideTmux() {
-		cmd := exec.Command(client.Binary(), "new-session", "-Ad", "-s", sessionName, exe, "dashboard")
+		cmd := exec.Command(client.Binary(), "new-session", "-Ad", "-s", sessionName, exe, "dashboard", "--mux", "tmux")
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -334,7 +388,67 @@ func runDashboardHosted(sessionName string) {
 		}
 		return
 	}
-	cmd := exec.Command(client.Binary(), "new-session", "-A", "-s", sessionName, exe, "dashboard")
+	cmd := exec.Command(client.Binary(), "new-session", "-A", "-s", sessionName, exe, "dashboard", "--mux", "tmux")
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		fatal("failed to start dashboard session: %v", err)
+	}
+}
+
+func runDashboardHostedZellij(sessionName string, cfg *layout.Config) {
+	sessionName = sanitizeSessionName(strings.TrimSpace(sessionName))
+	if sessionName == "" {
+		sessionName = defaultDashboardSession
+	}
+	bridgePath := ""
+	if cfg != nil && strings.TrimSpace(cfg.Zellij.BridgePlugin) != "" {
+		bridgePath = expandUserPath(cfg.Zellij.BridgePlugin)
+	}
+	zClient, err := zellijctl.NewClient("", bridgePath)
+	if err != nil {
+		fatal("zellij not found: %v", err)
+	}
+	bridgePath = zClient.BridgePath()
+	configPath, err := ensureZellijConfig(cfg, bridgePath)
+	if err != nil {
+		fatal("failed to build zellij config: %v", err)
+	}
+	layoutCfg := &layout.LayoutConfig{
+		Windows: []layout.WindowDef{{
+			Name: defaultDashboardWindow,
+			Panes: []layout.PaneDef{{
+				Cmd: strings.Join([]string{selfExecutable(), "dashboard", "--mux", "zellij"}, " "),
+			}},
+		}},
+	}
+	layoutContent, err := zellijctl.BuildLayout(layoutCfg, currentDir())
+	if err != nil {
+		fatal("failed to build dashboard layout: %v", err)
+	}
+	layoutDir, err := resolveZellijLayoutDir(cfg)
+	if err != nil {
+		fatal("failed to resolve zellij layout dir: %v", err)
+	}
+	layoutPath, err := zellijctl.WriteLayoutFile(layoutDir, sessionName+"-dashboard", layoutContent)
+	if err != nil {
+		fatal("failed to write zellij layout: %v", err)
+	}
+
+	if insideZellij() {
+		args := []string{"action", "new-tab", "--name", defaultDashboardWindow, "--", selfExecutable(), "dashboard", "--mux", "zellij"}
+		cmd := exec.Command(zClient.Binary(), args...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Stdin = os.Stdin
+		if err := cmd.Run(); err != nil {
+			fatal("failed to open dashboard tab: %v", err)
+		}
+		return
+	}
+
+	cmd := exec.Command(zClient.Binary(), "--session", sessionName, "--layout", layoutPath, "--config", configPath)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -344,37 +458,118 @@ func runDashboardHosted(sessionName string) {
 }
 
 func runSetup(args []string) {
-	for _, a := range args {
-		if a == "-h" || a == "--help" {
-			fmt.Print(setupHelpText)
-			return
+	showHelp := false
+	cliMux := ""
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "-h", "--help":
+			showHelp = true
+		case "--mux", "--multiplexer":
+			if i+1 < len(args) {
+				cliMux = args[i+1]
+				i++
+			}
 		}
+	}
+	if showHelp {
+		fmt.Print(setupHelpText)
+		return
 	}
 
 	fmt.Println("🎩 Peaky Panes setup")
 	fmt.Println()
 
+	cfg, _, err := loadGlobalConfig()
+	if err != nil {
+		fmt.Printf("⚠️  config: %v\n\n", err)
+		cfg = &layout.Config{}
+	}
+
+	configuredMux := ""
+	if cfg != nil {
+		configuredMux = strings.TrimSpace(cfg.Multiplexer)
+	}
+
+	if strings.TrimSpace(cliMux) != "" || configuredMux != "" {
+		muxType := resolveMuxType(cliMux, cfg, nil, nil)
+		ok := checkMuxSetup(muxType)
+		if ok {
+			fmt.Println()
+			fmt.Println("All set.")
+			fmt.Println("Run 'peakypanes' to open the dashboard.")
+			return
+		}
+		os.Exit(1)
+	}
+
+	tmuxOK := checkMuxSetup(mux.Tmux)
+	fmt.Println()
+	zellijOK := checkMuxSetup(mux.Zellij)
+	fmt.Println()
+	if tmuxOK || zellijOK {
+		fmt.Println("All set.")
+		fmt.Println("Set multiplexer in ~/.config/peakypanes/config.yml to choose a default.")
+		fmt.Println("Run 'peakypanes' to open the dashboard.")
+		return
+	}
+
+	fmt.Println("Install tmux or zellij, then rerun 'peakypanes setup'.")
+	os.Exit(1)
+}
+
+func checkMuxSetup(muxType mux.Type) bool {
+	switch muxType {
+	case mux.Tmux:
+		return checkTmuxSetup()
+	case mux.Zellij:
+		return checkZellijSetup()
+	default:
+		fmt.Printf("Unsupported multiplexer: %s\n", muxType)
+		return false
+	}
+}
+
+func checkTmuxSetup() bool {
 	tmuxPath, err := exec.LookPath("tmux")
 	if err == nil && strings.TrimSpace(tmuxPath) != "" {
 		fmt.Printf("✅ tmux found: %s\n", tmuxPath)
-
 		if out, err := exec.Command("tmux", "-V").Output(); err == nil {
 			v := strings.TrimSpace(string(out))
 			if v != "" {
 				fmt.Printf("   %s\n", v)
 			}
 		}
-
-		fmt.Println()
-		fmt.Println("All set.")
-		fmt.Println("Run 'peakypanes' to open the dashboard.")
-		return
+		return true
 	}
 
 	fmt.Println("❌ tmux not found in PATH")
 	fmt.Println()
 	fmt.Println("Install tmux, then rerun 'peakypanes setup'.")
+	printTmuxInstallTips()
+	return false
+}
 
+func checkZellijSetup() bool {
+	zellijPath, err := exec.LookPath("zellij")
+	if err == nil && strings.TrimSpace(zellijPath) != "" {
+		fmt.Printf("✅ zellij found: %s\n", zellijPath)
+		if out, err := exec.Command("zellij", "--version").Output(); err == nil {
+			v := strings.TrimSpace(string(out))
+			if v != "" {
+				fmt.Printf("   %s\n", v)
+			}
+		}
+		return true
+	}
+
+	fmt.Println("❌ zellij not found in PATH")
+	fmt.Println()
+	fmt.Println("Install zellij, then rerun 'peakypanes setup'.")
+	printZellijInstallTips()
+	return false
+}
+
+func printTmuxInstallTips() {
 	switch runtime.GOOS {
 	case "darwin":
 		fmt.Println()
@@ -405,8 +600,31 @@ func runSetup(args []string) {
 		fmt.Println()
 		fmt.Println("Install tmux with your system package manager.")
 	}
+}
 
-	os.Exit(1)
+func printZellijInstallTips() {
+	switch runtime.GOOS {
+	case "darwin":
+		fmt.Println()
+		fmt.Println("macOS")
+		fmt.Println("  brew install zellij")
+		fmt.Println("  or")
+		fmt.Println("  sudo port install zellij")
+	case "linux":
+		fmt.Println()
+		fmt.Println("Arch")
+		fmt.Println("  sudo pacman -S zellij")
+		fmt.Println()
+		fmt.Println("Fedora")
+		fmt.Println("  sudo dnf copr enable varlad/zellij")
+		fmt.Println("  sudo dnf install zellij")
+		fmt.Println()
+		fmt.Println("Void")
+		fmt.Println("  sudo xbps-install zellij")
+	default:
+		fmt.Println()
+		fmt.Println("Install zellij with your system package manager.")
+	}
 }
 
 func runClone(args []string) {
@@ -526,8 +744,10 @@ func initLocal(layoutName string, force bool) {
 	// Create project config
 	projectName := filepath.Base(cwd)
 	content := fmt.Sprintf(`# Peaky Panes - Project Layout Configuration
-# This file defines the tmux layout for this project.
+# This file defines the tmux/zellij layout for this project.
 # Teammates with peakypanes installed will get this layout automatically.
+# Optional: set multiplexer to "tmux" or "zellij".
+# multiplexer: tmux
 #
 # Variables: ${PROJECT_NAME}, ${PROJECT_PATH}, ${EDITOR}, or any env var
 # Use ${VAR:-default} for defaults
@@ -598,8 +818,15 @@ func initGlobal(layoutName string, force bool) {
 	configContent := `# Peaky Panes - Global Configuration
 # https://github.com/regenrek/peakypanes
 
+multiplexer: tmux
+
 tmux:
   config: ~/.config/tmux/tmux.conf
+
+zellij:
+  # config: ~/.config/zellij/config.kdl
+  # layout_dir: ~/.config/zellij/layouts
+  # bridge_plugin: ~/.config/peakypanes/zellij/peakypanes-bridge.wasm
 
 ghostty:
   config: ~/.config/ghostty/config
@@ -757,12 +984,19 @@ func exportLayout(name string) {
 
 func runKill(args []string) {
 	sessionName := ""
+	cliMux := ""
+	var projectPath string
 
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "-h", "--help":
 			fmt.Print(killHelpText)
 			return
+		case "--mux", "--multiplexer":
+			if i+1 < len(args) {
+				cliMux = args[i+1]
+				i++
+			}
 		default:
 			if !strings.HasPrefix(args[i], "-") && sessionName == "" {
 				sessionName = args[i]
@@ -776,13 +1010,31 @@ func runKill(args []string) {
 		if err != nil {
 			fatal("cannot determine current directory: %v", err)
 		}
+		projectPath = cwd
 		sessionName = sanitizeSessionName(filepath.Base(cwd))
+	} else {
+		cwd, err := os.Getwd()
+		if err == nil {
+			projectPath = cwd
+		}
 	}
 
-	// Create tmux client
-	client, err := tmuxctl.NewClient("")
+	cfg, _, err := loadGlobalConfig()
 	if err != nil {
-		fatal("tmux not found: %v", err)
+		fatal("failed to load config: %v", err)
+	}
+
+	var localCfg *layout.ProjectLocalConfig
+	if projectPath != "" {
+		if cfg, err := layout.LoadProjectLocal(projectPath); err == nil {
+			localCfg = cfg
+		}
+	}
+	projectCfg := findProjectConfig(cfg, projectPath, sessionName)
+	muxType := resolveMuxType(cliMux, cfg, projectCfg, localCfg)
+	client, err := newMuxClient(muxType, cfg)
+	if err != nil {
+		fatal("failed to initialize %s: %v", muxType, err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -826,6 +1078,7 @@ func runStart(args []string) {
 	sessionName := ""
 	projectPath := ""
 	detach := false
+	cliMux := ""
 
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
@@ -846,6 +1099,11 @@ func runStart(args []string) {
 			}
 		case "--detach", "-d":
 			detach = true
+		case "--mux", "--multiplexer":
+			if i+1 < len(args) {
+				cliMux = args[i+1]
+				i++
+			}
 		case "-h", "--help":
 			fmt.Print(startHelpText)
 			return
@@ -866,6 +1124,12 @@ func runStart(args []string) {
 		}
 	}
 
+	cfg, _, err := loadGlobalConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "peakypanes: config: %v\n", err)
+		cfg = &layout.Config{}
+	}
+
 	// Load layouts
 	loader, err := layout.NewLoader()
 	if err != nil {
@@ -878,8 +1142,9 @@ func runStart(args []string) {
 	}
 
 	// Load session name from config if not explicitly provided via flag
-	if sessionName == "" && loader.GetProjectConfig() != nil && loader.GetProjectConfig().Session != "" {
-		sessionName = loader.GetProjectConfig().Session
+	localCfg := loader.GetProjectConfig()
+	if sessionName == "" && localCfg != nil && localCfg.Session != "" {
+		sessionName = localCfg.Session
 	}
 
 	// Default to directory name if still empty
@@ -917,11 +1182,24 @@ func runStart(args []string) {
 	// Expand variables
 	projectName := filepath.Base(projectPath)
 	var projectVars map[string]string
-	if loader.GetProjectConfig() != nil {
-		projectVars = loader.GetProjectConfig().Vars
+	if localCfg != nil {
+		projectVars = localCfg.Vars
 	}
 	expandedLayout := layout.ExpandLayoutVars(selectedLayout, projectVars, projectPath, projectName)
 
+	projectCfg := findProjectConfig(cfg, projectPath, sessionName)
+	muxType := resolveMuxType(cliMux, cfg, projectCfg, localCfg)
+	switch muxType {
+	case mux.Tmux:
+		runStartTmux(sessionName, projectPath, expandedLayout, source, detach)
+	case mux.Zellij:
+		runStartZellij(sessionName, projectPath, expandedLayout, source, detach, cfg)
+	default:
+		fatal("unsupported multiplexer: %s", muxType)
+	}
+}
+
+func runStartTmux(sessionName, projectPath string, layoutCfg *layout.LayoutConfig, source string, detach bool) {
 	// Create tmux client
 	client, err := tmuxctl.NewClient("")
 	if err != nil {
@@ -949,12 +1227,12 @@ func runStart(args []string) {
 
 	fmt.Printf("🎩 Peaky Panes\n")
 	fmt.Printf("   Session: %s\n", sessionName)
-	fmt.Printf("   Layout:  %s (%s)\n", selectedLayout.Name, source)
+	fmt.Printf("   Layout:  %s (%s)\n", layoutCfg.Name, source)
 	fmt.Printf("   Path:    %s\n", projectPath)
 	fmt.Println()
 
 	if sessionExists {
-		applyLayoutBindings(ctx, client, expandedLayout)
+		applyLayoutBindings(ctx, client, layoutCfg)
 		if detach {
 			fmt.Printf("   Session already exists.\n\n")
 			fmt.Printf("   Leaving session detached.\n")
@@ -967,11 +1245,11 @@ func runStart(args []string) {
 
 	// Create the session with layout
 	fmt.Println("   Creating windows:")
-	if err := createSessionWithLayout(ctx, client, sessionName, projectPath, expandedLayout); err != nil {
+	if err := createSessionWithLayout(ctx, client, sessionName, projectPath, layoutCfg); err != nil {
 		fatal("failed to create session: %v", err)
 	}
 
-	applyLayoutBindings(ctx, client, expandedLayout)
+	applyLayoutBindings(ctx, client, layoutCfg)
 
 	fmt.Println()
 	fmt.Printf("   ✅ Session created!\n\n")
@@ -982,6 +1260,159 @@ func runStart(args []string) {
 		return
 	}
 	attachToSession(client, sessionName)
+}
+
+func runStartZellij(sessionName, projectPath string, layoutCfg *layout.LayoutConfig, source string, detach bool, cfg *layout.Config) {
+	bridgePath := ""
+	if cfg != nil && strings.TrimSpace(cfg.Zellij.BridgePlugin) != "" {
+		bridgePath = expandUserPath(cfg.Zellij.BridgePlugin)
+	}
+	zClient, err := zellijctl.NewClient("", bridgePath)
+	if err != nil {
+		fatal("zellij not found: %v", err)
+	}
+	bridgePath = zClient.BridgePath()
+	configPath, err := ensureZellijConfig(cfg, bridgePath)
+	if err != nil {
+		fatal("failed to build zellij config: %v", err)
+	}
+
+	layoutContent, err := zellijctl.BuildLayout(layoutCfg, projectPath)
+	if err != nil {
+		fatal("failed to build layout: %v", err)
+	}
+	layoutDir, err := resolveZellijLayoutDir(cfg)
+	if err != nil {
+		fatal("failed to resolve zellij layout dir: %v", err)
+	}
+	layoutPath, err := zellijctl.WriteLayoutFile(layoutDir, sessionName, layoutContent)
+	if err != nil {
+		fatal("failed to write zellij layout: %v", err)
+	}
+	_ = zellijctl.RecordSessionPath(sessionName, projectPath)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	sessions, err := zClient.ListSessions(ctx)
+	if err != nil {
+		fatal("failed to list sessions: %v", err)
+	}
+
+	sessionExists := false
+	for _, s := range sessions {
+		if s == sessionName {
+			sessionExists = true
+			break
+		}
+	}
+
+	fmt.Printf("🎩 Peaky Panes\n")
+	fmt.Printf("   Session: %s\n", sessionName)
+	fmt.Printf("   Layout:  %s (%s)\n", layoutCfg.Name, source)
+	fmt.Printf("   Path:    %s\n", projectPath)
+	fmt.Println()
+
+	if sessionExists {
+		if detach {
+			fmt.Printf("   Session already exists.\n\n")
+			fmt.Printf("   Leaving session detached.\n")
+			return
+		}
+		fmt.Printf("   Session already exists, attaching...\n\n")
+		if insideZellij() {
+			if err := zClient.SwitchSession(ctx, "", sessionName, nil); err != nil {
+				fatal("failed to switch session: %v", err)
+			}
+			return
+		}
+		if err := zClient.AttachSession(ctx, sessionName); err != nil {
+			fatal("failed to attach session: %v", err)
+		}
+		return
+	}
+
+	fmt.Println("   Creating session:")
+	if detach {
+		if err := startZellijDetached(zClient, sessionName, layoutPath, configPath); err != nil {
+			fatal("failed to create session: %v", err)
+		}
+		fmt.Println()
+		fmt.Printf("   ✅ Session created!\n\n")
+		fmt.Printf("   Leaving session detached.\n")
+		return
+	}
+
+	if insideZellij() {
+		if err := startZellijDetached(zClient, sessionName, layoutPath, configPath); err != nil {
+			fatal("failed to create session: %v", err)
+		}
+		if err := waitForZellijSession(ctx, zClient, sessionName); err != nil {
+			fatal("failed to start session: %v", err)
+		}
+		if err := zClient.SwitchSession(ctx, "", sessionName, nil); err != nil {
+			fatal("failed to switch session: %v", err)
+		}
+		return
+	}
+
+	if err := startZellijAttached(zClient, sessionName, layoutPath, configPath); err != nil {
+		fatal("failed to start session: %v", err)
+	}
+}
+
+func startZellijAttached(client *zellijctl.Client, sessionName, layoutPath, configPath string) error {
+	args := []string{}
+	if strings.TrimSpace(configPath) != "" {
+		args = append(args, "--config", configPath)
+	}
+	if strings.TrimSpace(layoutPath) != "" {
+		args = append(args, "--layout", layoutPath)
+	}
+	args = append(args, "--session", sessionName)
+	cmd := exec.Command(client.Binary(), args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func startZellijDetached(client *zellijctl.Client, sessionName, layoutPath, configPath string) error {
+	args := []string{}
+	if strings.TrimSpace(configPath) != "" {
+		args = append(args, "--config", configPath)
+	}
+	if strings.TrimSpace(layoutPath) != "" {
+		args = append(args, "--layout", layoutPath)
+	}
+	args = append(args, "attach", sessionName, "--create-background")
+	cmd := exec.Command(client.Binary(), args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func waitForZellijSession(ctx context.Context, client *zellijctl.Client, sessionName string) error {
+	deadline, hasDeadline := ctx.Deadline()
+	for {
+		sessions, err := client.ListSessions(ctx)
+		if err == nil {
+			for _, s := range sessions {
+				if s == sessionName {
+					return nil
+				}
+			}
+		}
+		if hasDeadline && time.Now().After(deadline) {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
+	return fmt.Errorf("session %q not available yet", sessionName)
 }
 
 func createSessionWithLayout(ctx context.Context, client *tmuxctl.Client, session, projectPath string, layoutCfg *layout.LayoutConfig) error {
@@ -1414,6 +1845,10 @@ func sanitizeSessionName(name string) string {
 
 func insideTmux() bool {
 	return os.Getenv("TMUX") != "" || os.Getenv("TMUX_PANE") != ""
+}
+
+func insideZellij() bool {
+	return strings.TrimSpace(os.Getenv("ZELLIJ")) != "" || strings.TrimSpace(os.Getenv("ZELLIJ_SESSION_NAME")) != ""
 }
 
 func selfExecutable() string {

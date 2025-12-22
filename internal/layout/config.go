@@ -58,9 +58,10 @@ type LayoutConfig struct {
 
 // ProjectConfig represents a project entry in the config file.
 type ProjectConfig struct {
-	Name    string `yaml:"name"`
-	Session string `yaml:"session"`
-	Path    string `yaml:"path"`
+	Name        string `yaml:"name"`
+	Session     string `yaml:"session"`
+	Path        string `yaml:"path"`
+	Multiplexer string `yaml:"multiplexer,omitempty"`
 	// Layout can be a string (reference) or inline LayoutConfig
 	Layout interface{}       `yaml:"layout,omitempty"`
 	Vars   map[string]string `yaml:"vars,omitempty"`
@@ -104,6 +105,13 @@ type TmuxSection struct {
 	Config string `yaml:"config,omitempty"`
 }
 
+// ZellijSection holds zellij-specific config.
+type ZellijSection struct {
+	Config       string `yaml:"config,omitempty"`
+	LayoutDir    string `yaml:"layout_dir,omitempty"`
+	BridgePlugin string `yaml:"bridge_plugin,omitempty"`
+}
+
 // GhosttySection holds ghostty-specific config.
 type GhosttySection struct {
 	Config string `yaml:"config,omitempty"`
@@ -111,21 +119,24 @@ type GhosttySection struct {
 
 // Config is the root configuration structure for Peaky Panes.
 type Config struct {
-	Tmux       TmuxSection              `yaml:"tmux,omitempty"`
-	Ghostty    GhosttySection           `yaml:"ghostty,omitempty"`
-	LayoutDirs []string                 `yaml:"layout_dirs,omitempty"`
-	Layouts    map[string]*LayoutConfig `yaml:"layouts,omitempty"`
-	Projects   []ProjectConfig          `yaml:"projects,omitempty"`
-	Tools      ToolsConfig              `yaml:"tools,omitempty"`
-	Dashboard  DashboardConfig          `yaml:"dashboard,omitempty"`
+	Multiplexer string                   `yaml:"multiplexer,omitempty"`
+	Tmux        TmuxSection              `yaml:"tmux,omitempty"`
+	Zellij      ZellijSection            `yaml:"zellij,omitempty"`
+	Ghostty     GhosttySection           `yaml:"ghostty,omitempty"`
+	LayoutDirs  []string                 `yaml:"layout_dirs,omitempty"`
+	Layouts     map[string]*LayoutConfig `yaml:"layouts,omitempty"`
+	Projects    []ProjectConfig          `yaml:"projects,omitempty"`
+	Tools       ToolsConfig              `yaml:"tools,omitempty"`
+	Dashboard   DashboardConfig          `yaml:"dashboard,omitempty"`
 }
 
 // ProjectLocalConfig is the schema for .peakypanes.yml in project directories.
 type ProjectLocalConfig struct {
-	Session string            `yaml:"session,omitempty"`
-	Layout  *LayoutConfig     `yaml:"layout,omitempty"`
-	Vars    map[string]string `yaml:"vars,omitempty"`
-	Tools   ToolsConfig       `yaml:"tools,omitempty"`
+	Session     string            `yaml:"session,omitempty"`
+	Multiplexer string            `yaml:"multiplexer,omitempty"`
+	Layout      *LayoutConfig     `yaml:"layout,omitempty"`
+	Vars        map[string]string `yaml:"vars,omitempty"`
+	Tools       ToolsConfig       `yaml:"tools,omitempty"`
 }
 
 // LoadConfig reads and parses a YAML config file.
