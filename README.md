@@ -29,20 +29,23 @@ Define your tmux layouts in YAML, share them with your team via git, and get con
 
 ### Install
 
-Using npm
+**Using npm (recommended)**
 
 ```bash
 npm i -g peakypanes
-peakypanes setup
+peakypanes
 ```
+
+> [!TIP]
+> While `peakypanes setup` checks for dependencies, you can run `peakypanes` directly to open the dashboard. We recommend the npm install for the best experience.
 
 > npm packages are currently published for macOS and Linux.  
 > Windows users should install from the GitHub release or build with Go.
 
-Run once with npx
+**Run once with npx**
 
 ```bash
-npx -y peakypanes setup
+npx -y peakypanes
 ```
 
 Using Go
@@ -52,12 +55,6 @@ go install github.com/regenrek/peakypanes/cmd/peakypanes@latest
 ```
 
 ### Usage
-
-**Just run it:**
-```bash
-cd your-project
-peakypanes
-```
 
 **Start a session (auto-detect layout):**
 ```bash
