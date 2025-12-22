@@ -1,6 +1,11 @@
 name: split-v
 description: "Two vertical panes (left/right)"
 
+settings:
+  bind_keys:
+    - key: g
+      action: "switch-client -t peakypanes"
+
 windows:
   - name: dev
     layout: even-horizontal

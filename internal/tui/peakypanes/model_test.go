@@ -119,52 +119,6 @@ func TestSanitizeSessionName(t *testing.T) {
 	}
 }
 
-// TestProjectListItem tests the Project type's list.Item implementation
-func TestProjectListItem(t *testing.T) {
-	p := Project{
-		Name:    "Test Project",
-		Session: "test-session",
-		Path:    "/home/user/projects/test",
-		Layout:  "dev-3",
-		Status:  StatusRunning,
-	}
-
-	// Test Title
-	title := p.Title()
-	if title == "" {
-		t.Error("Project.Title() should not be empty")
-	}
-	if title != "● Test Project" {
-		t.Errorf("Project.Title() = %q, want %q", title, "● Test Project")
-	}
-
-	// Test Description
-	desc := p.Description()
-	if desc == "" {
-		t.Error("Project.Description() should not be empty")
-	}
-
-	// Test FilterValue
-	filter := p.FilterValue()
-	if filter != "Test Project" {
-		t.Errorf("Project.FilterValue() = %q, want %q", filter, "Test Project")
-	}
-}
-
-// TestProjectDescriptionEmpty tests description when path is empty
-func TestProjectDescriptionEmpty(t *testing.T) {
-	p := Project{
-		Name:   "Test",
-		Path:   "",
-		Status: StatusStopped,
-	}
-
-	desc := p.Description()
-	if desc != "No path configured" {
-		t.Errorf("Project.Description() = %q, want %q", desc, "No path configured")
-	}
-}
-
 // TestGitProjectListItem tests the GitProject type's list.Item implementation
 func TestGitProjectListItem(t *testing.T) {
 	gp := GitProject{
@@ -187,91 +141,21 @@ func TestGitProjectListItem(t *testing.T) {
 
 // TestKeyBindings tests key binding creation
 func TestKeyBindings(t *testing.T) {
-	// Test delegate key map
-	dk := newDelegateKeyMap()
-	if dk == nil {
-		t.Fatal("newDelegateKeyMap() returned nil")
+	km := newDashboardKeyMap()
+	if km == nil {
+		t.Fatal("newDashboardKeyMap() returned nil")
 	}
 
-	// Verify choose binding
-	if !key.Matches(tea.KeyMsg{Type: tea.KeyEnter}, dk.choose) {
-		t.Error("choose binding should match Enter key")
+	if !key.Matches(tea.KeyMsg{Type: tea.KeyLeft}, km.projectLeft) {
+		t.Error("projectLeft binding should match left arrow")
 	}
-
-	// Verify kill binding
-	if !key.Matches(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'K'}}, dk.kill) {
-		t.Error("kill binding should match K key")
+	if !key.Matches(tea.KeyMsg{Type: tea.KeyUp}, km.sessionUp) {
+		t.Error("sessionUp binding should match up arrow")
 	}
-
-	// Test list key map
-	lk := newListKeyMap()
-	if lk == nil {
-		t.Fatal("newListKeyMap() returned nil")
+	if !key.Matches(tea.KeyMsg{Type: tea.KeyEnter}, km.attach) {
+		t.Error("attach binding should match Enter key")
 	}
-
-	// Verify refresh binding
-	if !key.Matches(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}, lk.refresh) {
-		t.Error("refresh binding should match r key")
-	}
-
-	// Verify toggle help binding
-	if !key.Matches(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}, lk.toggleHelp) {
-		t.Error("toggleHelp binding should match ? key")
-	}
-}
-
-// TestDelegateKeyMapHelp tests ShortHelp and FullHelp implementations
-func TestDelegateKeyMapHelp(t *testing.T) {
-	dk := newDelegateKeyMap()
-
-	// Test ShortHelp
-	shortHelp := dk.ShortHelp()
-	if len(shortHelp) != 2 {
-		t.Errorf("ShortHelp() returned %d bindings, want 2", len(shortHelp))
-	}
-
-	// Test FullHelp
-	fullHelp := dk.FullHelp()
-	if len(fullHelp) != 1 {
-		t.Errorf("FullHelp() returned %d groups, want 1", len(fullHelp))
-	}
-	if len(fullHelp[0]) != 2 {
-		t.Errorf("FullHelp()[0] has %d bindings, want 2", len(fullHelp[0]))
-	}
-}
-
-// TestViewStateConstants tests view state enum values
-func TestViewStateConstants(t *testing.T) {
-	// Ensure distinct values
-	states := map[ViewState]string{
-		StateHome:          "home",
-		StateProjectPicker: "picker",
-		StateConfirmKill:   "confirm",
-	}
-
-	seen := make(map[ViewState]bool)
-	for state := range states {
-		if seen[state] {
-			t.Errorf("ViewState %d is duplicated", state)
-		}
-		seen[state] = true
-	}
-}
-
-// TestStatusConstants tests status enum values
-func TestStatusConstants(t *testing.T) {
-	// Ensure distinct values
-	statuses := map[Status]string{
-		StatusStopped: "stopped",
-		StatusRunning: "running",
-		StatusCurrent: "current",
-	}
-
-	seen := make(map[Status]bool)
-	for status := range statuses {
-		if seen[status] {
-			t.Errorf("Status %d is duplicated", status)
-		}
-		seen[status] = true
+	if !key.Matches(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}, km.help) {
+		t.Error("help binding should match ? key")
 	}
 }

@@ -1,6 +1,11 @@
 name: fullstack
 description: "Fullstack development: editor, dev server, and logs"
 
+settings:
+  bind_keys:
+    - key: g
+      action: "switch-client -t peakypanes"
+
 windows:
   - name: dev
     panes:

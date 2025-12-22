@@ -1,0 +1,23 @@
+name: 3x4
+description: "Generic 3x4 grid (12 panes)"
+
+settings:
+  bind_keys:
+    - key: g
+      action: "switch-client -t peakypanes"
+
+grid: 3x4
+window: grid
+titles:
+  - pane-1
+  - pane-2
+  - pane-3
+  - pane-4
+  - pane-5
+  - pane-6
+  - pane-7
+  - pane-8
+  - pane-9
+  - pane-10
+  - pane-11
+  - pane-12

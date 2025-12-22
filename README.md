@@ -13,6 +13,7 @@ Define your tmux layouts in YAML, share them with your team via git, and get con
 ## Features
 
 - 📦 **Built-in layouts** - Works out of the box with sensible defaults
+- 🧩 **Exact grids** - Use `grid: 2x3` for consistent rows/columns
 - 📁 **Project-local config** - Commit `.peakypanes.yml` to git for team sharing
 - 🏠 **Global config** - Define layouts once, use everywhere
 - 🔄 **Variable expansion** - Use `${EDITOR}`, `${PROJECT_PATH}`, etc.
@@ -49,27 +50,6 @@ peakypanes init --local
 git add .peakypanes.yml  # Share with team
 ```
 
-## Built-in Layouts
-
-| Layout | Description |
-|--------|-------------|
-| `simple` | Single window, one pane |
-| `split-v` | Two vertical panes (left/right) |
-| `split-h` | Two horizontal panes (top/bottom) |
-| `dev-2` | Editor + terminal |
-| `dev-3` | Editor + server + shell (default) |
-| `fullstack` | Editor + dev server + logs window |
-| `go-dev` | Editor + run + tests + lazygit |
-| `tauri-debug` | Complex Tauri/Rust development layout |
-
-```bash
-# List all layouts
-peakypanes layouts
-
-# Export a layout to customize
-peakypanes layouts export dev-3 > .peakypanes.yml
-```
-
 ## Configuration
 
 > 📖 **[Layout Builder Guide](docs/layout-builder.md)** - Detailed documentation on creating custom layouts, pane arrangements, and tmux options.
@@ -100,6 +80,25 @@ layout:
       panes:
         - title: docker
           cmd: "docker compose logs -f"
+
+# Or use exact grids
+# layout:
+#   grid: 2x3
+#   window: codex
+#   commands:
+#     - "${SHELL:-bash}"
+#     - "codex"
+#     - "codex"
+#     - "codex"
+#     - "codex"
+#     - "codex"
+#   titles:
+#     - shell
+#     - codex-1
+#     - codex-2
+#     - codex-3
+#     - codex-4
+#     - codex-5
 ```
 
 ### Global Config (`~/.config/peakypanes/config.yml`)
@@ -109,6 +108,8 @@ For personal layouts and multi-project management:
 ```yaml
 # Global settings
 tmux:
+  # Optional: source a custom tmux config when starting sessions.
+  # (tmux already reads ~/.tmux.conf or ~/.config/tmux/tmux.conf by default)
   config: ~/.config/tmux/tmux.conf
 
 # Custom layouts
@@ -154,14 +155,111 @@ layout:
 ## Commands
 
 ```bash
-peakypanes                     # Start session (auto-detect layout)
+peakypanes                     # Open dashboard (tmux session: peakypanes)
+peakypanes dashboard           # Open dashboard directly (no tmux wrapper)
 peakypanes start               # Same as above
 peakypanes start --layout X    # Use specific layout
+peakypanes start --detach      # Create session without attaching
 peakypanes init                # Create global config
 peakypanes init --local        # Create .peakypanes.yml
 peakypanes layouts             # List available layouts
 peakypanes layouts export X    # Export layout YAML
 peakypanes version             # Show version
+```
+
+## Built-in Layouts
+
+Core (general) layouts:
+- `auto` (default): no layout flag; auto-detects `.peakypanes.yml` or falls back to `dev-3`
+- `simple`: single pane
+- `split-v`: two vertical panes (left/right)
+- `split-h`: two horizontal panes (top/bottom)
+- `2x2`: 4‑pane grid
+- `3x4`: 12‑pane grid
+- `codex-dev`: 2x3 grid (shell + 5 codex)
+
+Additional built-ins (specialized):
+- `dev-2`: editor + shell
+- `dev-3`: editor + server + shell (default fallback)
+- `fullstack`: dev + logs
+- `go-dev`: code/run/test + git
+- `codex-grid`: 2x4 grid running codex in every pane
+
+```bash
+# List all layouts
+peakypanes layouts
+
+# Export a layout to customize
+peakypanes layouts export codex-dev > .peakypanes.yml
+```
+
+## Dashboard UI
+
+Running `peakypanes` with no subcommand launches the dashboard UI inside a tmux session named `peakypanes`.
+Use `peakypanes dashboard` if you want to run the UI directly (no tmux wrapper).
+
+The dashboard shows:
+- Projects on top (tabs)
+- Sessions on the left (with window counts and expandable windows)
+- Live pane preview on the right (window bar at the bottom)
+- Lightweight session thumbnails at the bottom (last activity per session)
+
+Navigation (always visible):
+- `←/→` project, `↑/↓` session, `⇧↑/⇧↓` window, `?` help
+
+Key bindings (also shown in `?` help):
+
+Project
+- `o` open project picker (creates session detached; stay in dashboard)
+- `c` close project (kills all running sessions in project)
+
+Session
+- `enter` attach/start session
+- `n` new session (pick layout)
+- `t` open in new terminal window
+- `K` kill session
+
+Window
+- `space` toggle window list
+
+Tmux (inside session)
+- `prefix+g` switch to dashboard (tmux prefix is yours)
+
+Other
+- `r` refresh, `e` edit config, `/` filter, `q` quit
+
+### Dashboard Config (optional)
+
+```yaml
+dashboard:
+  refresh_ms: 2000
+  preview_lines: 12
+  preview_compact: true
+  thumbnail_lines: 1
+  idle_seconds: 20
+  show_thumbnails: true
+  preview_mode: grid  # grid | layout
+  status_regex:
+    success: "(?i)done|finished|success|completed|✅"
+    error: "(?i)error|failed|panic|❌"
+    running: "(?i)running|in progress|building|installing|▶"
+```
+
+### Tmux Config & Key Bindings
+
+- PeakyPanes **never edits** your tmux config file.
+- tmux already reads `~/.tmux.conf` or `~/.config/tmux/tmux.conf` by default.
+- If you use a **custom tmux config path**, set `tmux.config` in `~/.config/peakypanes/config.yml`.
+  PeakyPanes will **source** that file when starting sessions (no overwrite).
+- Per-layout tmux options and key bindings are supported:
+
+```yaml
+settings:
+  tmux_options:
+    remain-on-exit: "on"
+  bind_keys:
+    - key: g
+      action: "switch-client -t peakypanes"
 ```
 
 ## How Layout Detection Works

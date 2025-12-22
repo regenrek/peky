@@ -1,6 +1,11 @@
 name: dev-3
 description: "Three-pane layout: large editor left, two stacked panes right"
 
+settings:
+  bind_keys:
+    - key: g
+      action: "switch-client -t peakypanes"
+
 windows:
   - name: dev
     panes:

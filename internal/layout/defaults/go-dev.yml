@@ -1,6 +1,11 @@
 name: go-dev
 description: "Go development: editor, run, and tests"
 
+settings:
+  bind_keys:
+    - key: g
+      action: "switch-client -t peakypanes"
+
 windows:
   - name: code
     panes:

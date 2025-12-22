@@ -47,7 +47,13 @@ type LayoutConfig struct {
 	Description string            `yaml:"description,omitempty"`
 	Vars        map[string]string `yaml:"vars,omitempty"`
 	Settings    LayoutSettings    `yaml:"settings,omitempty"`
-	Windows     []WindowDef       `yaml:"windows"`
+	// Grid layouts (optional). If Grid is set, Windows is ignored.
+	Grid     string   `yaml:"grid,omitempty"`     // e.g., "2x3"
+	Command  string   `yaml:"command,omitempty"`  // run in every pane
+	Commands []string `yaml:"commands,omitempty"` // per-pane commands (row-major)
+	Titles   []string `yaml:"titles,omitempty"`   // optional per-pane titles (row-major)
+	Window   string   `yaml:"window,omitempty"`   // window name for grid layouts
+	Windows  []WindowDef
 }
 
 // ProjectConfig represents a project entry in the config file.
@@ -56,7 +62,7 @@ type ProjectConfig struct {
 	Session string `yaml:"session"`
 	Path    string `yaml:"path"`
 	// Layout can be a string (reference) or inline LayoutConfig
-	Layout interface{} `yaml:"layout,omitempty"`
+	Layout interface{}       `yaml:"layout,omitempty"`
 	Vars   map[string]string `yaml:"vars,omitempty"`
 }
 
@@ -71,6 +77,25 @@ type ToolsConfig struct {
 	CursorAgent ToolConfig `yaml:"cursor_agent,omitempty"`
 	CodexNew    ToolConfig `yaml:"codex_new,omitempty"`
 	CodexResume ToolConfig `yaml:"codex_resume,omitempty"`
+}
+
+// StatusRegexConfig holds regex patterns for dashboard status detection.
+type StatusRegexConfig struct {
+	Success string `yaml:"success,omitempty"`
+	Error   string `yaml:"error,omitempty"`
+	Running string `yaml:"running,omitempty"`
+}
+
+// DashboardConfig configures the Peaky Panes dashboard UI.
+type DashboardConfig struct {
+	RefreshMS      int               `yaml:"refresh_ms,omitempty"`
+	PreviewLines   int               `yaml:"preview_lines,omitempty"`
+	PreviewCompact *bool             `yaml:"preview_compact,omitempty"`
+	ThumbnailLines int               `yaml:"thumbnail_lines,omitempty"`
+	IdleSeconds    int               `yaml:"idle_seconds,omitempty"`
+	ShowThumbnails *bool             `yaml:"show_thumbnails,omitempty"`
+	StatusRegex    StatusRegexConfig `yaml:"status_regex,omitempty"`
+	PreviewMode    string            `yaml:"preview_mode,omitempty"` // grid | layout
 }
 
 // TmuxSection holds tmux-specific config.
@@ -91,14 +116,15 @@ type Config struct {
 	Layouts    map[string]*LayoutConfig `yaml:"layouts,omitempty"`
 	Projects   []ProjectConfig          `yaml:"projects,omitempty"`
 	Tools      ToolsConfig              `yaml:"tools,omitempty"`
+	Dashboard  DashboardConfig          `yaml:"dashboard,omitempty"`
 }
 
 // ProjectLocalConfig is the schema for .peakypanes.yml in project directories.
 type ProjectLocalConfig struct {
-	Session  string            `yaml:"session,omitempty"`
-	Layout   *LayoutConfig     `yaml:"layout,omitempty"`
-	Vars     map[string]string `yaml:"vars,omitempty"`
-	Tools    ToolsConfig       `yaml:"tools,omitempty"`
+	Session string            `yaml:"session,omitempty"`
+	Layout  *LayoutConfig     `yaml:"layout,omitempty"`
+	Vars    map[string]string `yaml:"vars,omitempty"`
+	Tools   ToolsConfig       `yaml:"tools,omitempty"`
 }
 
 // LoadConfig reads and parses a YAML config file.
@@ -146,6 +172,16 @@ func LoadProjectLocal(dir string) (*ProjectLocalConfig, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse %q: %w", path, err)
 	}
+
+	// If layout is nil but we have windows or name at top level,
+	// treat the whole file as a LayoutConfig.
+	if cfg.Layout == nil {
+		var layout LayoutConfig
+		if err := yaml.Unmarshal(data, &layout); err == nil && (len(layout.Windows) > 0 || strings.TrimSpace(layout.Grid) != "") {
+			cfg.Layout = &layout
+		}
+	}
+
 	return &cfg, nil
 }
 
@@ -174,7 +210,7 @@ func ExpandVars(s string, vars map[string]string, projectPath, projectName strin
 
 	// Pattern: ${VAR} or ${VAR:-default}
 	re := regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}`)
-	
+
 	result := re.ReplaceAllStringFunc(s, func(match string) string {
 		parts := re.FindStringSubmatch(match)
 		if len(parts) < 2 {
@@ -227,6 +263,16 @@ func ExpandLayoutVars(layout *LayoutConfig, extraVars map[string]string, project
 		Description: layout.Description,
 		Settings:    layout.Settings,
 		Vars:        vars,
+		Grid:        ExpandVars(layout.Grid, vars, projectPath, projectName),
+		Command:     ExpandVars(layout.Command, vars, projectPath, projectName),
+		Window:      ExpandVars(layout.Window, vars, projectPath, projectName),
+	}
+
+	for _, cmd := range layout.Commands {
+		expanded.Commands = append(expanded.Commands, ExpandVars(cmd, vars, projectPath, projectName))
+	}
+	for _, title := range layout.Titles {
+		expanded.Titles = append(expanded.Titles, ExpandVars(title, vars, projectPath, projectName))
 	}
 
 	for _, win := range layout.Windows {

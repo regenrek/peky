@@ -1,6 +1,11 @@
 name: dev-2
 description: "Simple two-pane layout: editor left, terminal right"
 
+settings:
+  bind_keys:
+    - key: g
+      action: "switch-client -t peakypanes"
+
 windows:
   - name: dev
     layout: even-horizontal

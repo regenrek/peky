@@ -1,0 +1,24 @@
+name: codex-dev
+description: "Codex dev grid (shell + codex panes)"
+
+settings:
+  bind_keys:
+    - key: g
+      action: "switch-client -t peakypanes"
+
+grid: 2x3
+window: codex
+commands:
+  - "${SHELL:-bash}"
+  - "codex"
+  - "codex"
+  - "codex"
+  - "codex"
+  - "codex"
+titles:
+  - shell
+  - codex-1
+  - codex-2
+  - codex-3
+  - codex-4
+  - codex-5

@@ -87,6 +87,8 @@ var StatusWarning = lipgloss.NewStyle().
 var Dialog = lipgloss.NewStyle().
 	Border(lipgloss.RoundedBorder()).
 	BorderForeground(DialogBorderColor).
+	Background(Background).
+	Foreground(TextPrimary).
 	Padding(1, 2)
 
 // DialogTitle for dialog headings
@@ -161,6 +163,64 @@ var ShortcutNote = lipgloss.NewStyle().
 // ShortcutHint for close/action hints
 var ShortcutHint = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("241"))
+
+// ===== Tabs and Sections =====
+
+// TabActive for active tabs (projects/windows).
+var TabActive = lipgloss.NewStyle().
+	Bold(true).
+	Foreground(TextPrimary).
+	Background(Primary).
+	Padding(0, 1)
+
+// TabInactive for inactive tabs.
+var TabInactive = lipgloss.NewStyle().
+	Foreground(TextMuted).
+	Background(Highlight).
+	Padding(0, 1)
+
+// TabAdd for the add/new tab.
+var TabAdd = lipgloss.NewStyle().
+	Bold(true).
+	Foreground(TextPrimary).
+	Background(Secondary).
+	Padding(0, 1)
+
+// SectionTitle for sidebar/panel headers.
+var SectionTitle = lipgloss.NewStyle().
+	Bold(true).
+	Foreground(TextPrimary).
+	Background(Background).
+	Padding(0, 1)
+
+// ===== Status Badges =====
+
+// StatusBadgeRunning for running activity.
+var StatusBadgeRunning = lipgloss.NewStyle().
+	Bold(true).
+	Foreground(lipgloss.Color("229")).
+	Background(lipgloss.Color("60")).
+	Padding(0, 1)
+
+// StatusBadgeDone for successful completion.
+var StatusBadgeDone = lipgloss.NewStyle().
+	Bold(true).
+	Foreground(lipgloss.Color("16")).
+	Background(lipgloss.Color("114")).
+	Padding(0, 1)
+
+// StatusBadgeError for failures.
+var StatusBadgeError = lipgloss.NewStyle().
+	Bold(true).
+	Foreground(lipgloss.Color("15")).
+	Background(lipgloss.Color("160")).
+	Padding(0, 1)
+
+// StatusBadgeIdle for idle/unknown.
+var StatusBadgeIdle = lipgloss.NewStyle().
+	Foreground(TextMuted).
+	Background(Highlight).
+	Padding(0, 1)
 
 // ===== Logo Style =====
 

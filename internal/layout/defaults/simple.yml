@@ -1,6 +1,11 @@
 name: simple
 description: "Single window with one pane - minimal setup"
 
+settings:
+  bind_keys:
+    - key: g
+      action: "switch-client -t peakypanes"
+
 windows:
   - name: main
     panes:

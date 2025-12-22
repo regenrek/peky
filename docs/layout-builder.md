@@ -60,6 +60,9 @@ Use the `layout` field on a window to let tmux arrange panes automatically:
 | `main-horizontal` | Large pane on top, others below |
 | `main-vertical` | Large pane on left, others on right |
 
+For exact row/column grids (like 2x3), use the top-level `grid` configuration
+instead of `layout: tiled`.
+
 ```yaml
 windows:
   - name: dev
@@ -75,23 +78,23 @@ windows:
         cmd: ""
 ```
 
-### 2x2 Grid Example
+### Exact Grid Example (2x2)
 
-The simplest way to get a 2x2 grid:
+Use `grid` when you need predictable rows/columns:
 
 ```yaml
-windows:
-  - name: main
-    layout: tiled
-    panes:
-      - title: codex
-        cmd: "codex"
-      - title: dev
-        cmd: "npm run dev"
-      - title: logs
-        cmd: "tail -f app.log"
-      - title: shell
-        cmd: ""
+grid: 2x2
+window: main
+commands:
+  - "codex"
+  - "npm run dev"
+  - "tail -f app.log"
+  - ""
+titles:
+  - codex
+  - dev
+  - logs
+  - shell
 ```
 
 ---
@@ -407,14 +410,11 @@ Layouts are loaded in this order (first match wins):
 
 ### Keep Crashed Panes Visible
 
-Peaky Panes sets `remain-on-exit: off` by default, so panes close normally when commands exit. Set `remain-on-exit: on` in your layout's `tmux_options` if you want crashed commands to stay visible for debugging.
+Peaky Panes sets `remain-on-exit: on` by default so panes stay open when commands exit. Set `remain-on-exit: off` in your layout's `tmux_options` if you prefer panes to close normally.
 
-### Use `layout: tiled` for Grids
+### Prefer `grid:` for Exact Grids
 
-Don't manually calculate splits for grids. Use `layout: tiled` with the right number of panes:
-- 2 panes → side by side
-- 4 panes → 2x2 grid
-- 6 panes → 2x3 or 3x2 grid
+For predictable rows/columns (2x3, 3x4, etc.), use the top-level `grid` configuration. `layout: tiled` is best-effort and may choose a different shape based on window size.
 
 ### Empty Commands
 

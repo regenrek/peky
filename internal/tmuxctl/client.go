@@ -46,6 +46,11 @@ func NewClient(tmuxPath string) (*Client, error) {
 	return &Client{bin: tmuxPath, run: exec.CommandContext}, nil
 }
 
+// Binary returns the resolved tmux binary path.
+func (c *Client) Binary() string {
+	return c.bin
+}
+
 // WithExec allows tests to override the exec implementation.
 func (c *Client) WithExec(fn func(context.Context, string, ...string) *exec.Cmd) {
 	c.run = fn
@@ -122,6 +127,7 @@ func (c *Client) ListSessions(ctx context.Context) ([]string, error) {
 		if strings.Contains(msg, "no server") ||
 			strings.Contains(msg, "no such file") ||
 			strings.Contains(msg, "failed to connect") ||
+			strings.Contains(msg, "error connecting to") ||
 			strings.Contains(msg, "no sessions") {
 			return nil, nil
 		}
@@ -170,15 +176,19 @@ func (c *Client) AttachExisting(ctx context.Context, session string) error {
 // When no tmux server is running, an empty string is returned and the error is nil.
 func (c *Client) CurrentSession(ctx context.Context) (string, error) {
 	cmd := c.run(ctx, c.bin, "display-message", "-p", "#S")
-	out, err := cmd.Output()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
-			msg := strings.ToLower(strings.TrimSpace(string(exitErr.Stderr)))
-			if strings.Contains(msg, "no server") || strings.Contains(msg, "failed to connect") {
-				return "", nil
-			}
+		msg := strings.ToLower(strings.TrimSpace(string(out)))
+		if msg == "" {
+			msg = strings.ToLower(strings.TrimSpace(err.Error()))
 		}
-		return "", wrapTmuxErr("display-message", err, nil)
+		if strings.Contains(msg, "no server") ||
+			strings.Contains(msg, "failed to connect") ||
+			strings.Contains(msg, "error connecting to") ||
+			strings.Contains(msg, "no current target") {
+			return "", nil
+		}
+		return "", wrapTmuxErr("display-message", err, out)
 	}
 	return strings.TrimSpace(string(out)), nil
 }
@@ -440,6 +450,22 @@ func (c *Client) SetOption(ctx context.Context, session, option, value string) e
 	cmd := c.run(ctx, c.bin, args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return wrapTmuxErr("set-option", err, out)
+	}
+	return nil
+}
+
+// BindKey registers a tmux key binding using the prefix table.
+func (c *Client) BindKey(ctx context.Context, key, action string) error {
+	key = strings.TrimSpace(key)
+	action = strings.TrimSpace(action)
+	if key == "" || action == "" {
+		return errors.New("bind-key requires key and action")
+	}
+	args := []string{"bind-key", key}
+	args = append(args, strings.Fields(action)...)
+	cmd := c.run(ctx, c.bin, args...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return wrapTmuxErr("bind-key", err, out)
 	}
 	return nil
 }

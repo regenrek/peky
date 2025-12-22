@@ -31,7 +31,7 @@ type Loader struct {
 	// Cached layouts
 	builtinLayouts map[string]*LayoutConfig
 	globalLayouts  map[string]*LayoutConfig
-	projectLayout  *LayoutConfig
+	projectConfig  *ProjectLocalConfig
 }
 
 // NewLoader creates a loader with default paths.
@@ -168,7 +168,7 @@ func (l *Loader) LoadProjectLayout() error {
 		return err
 	}
 
-	l.projectLayout = cfg.Layout
+	l.projectConfig = cfg
 	return nil
 }
 
@@ -192,8 +192,8 @@ func (l *Loader) LoadAll() error {
 // 3. Builtin layouts
 func (l *Loader) GetLayout(name string) (*LayoutConfig, string, error) {
 	// Special case: empty name with project layout
-	if name == "" && l.projectLayout != nil {
-		return l.projectLayout, "project", nil
+	if name == "" && l.projectConfig != nil && l.projectConfig.Layout != nil {
+		return l.projectConfig.Layout, "project", nil
 	}
 
 	// Check global layouts first (user can override builtins)
@@ -218,7 +218,15 @@ func (l *Loader) GetLayout(name string) (*LayoutConfig, string, error) {
 
 // GetProjectLayout returns the project-local layout if available.
 func (l *Loader) GetProjectLayout() *LayoutConfig {
-	return l.projectLayout
+	if l.projectConfig == nil {
+		return nil
+	}
+	return l.projectConfig.Layout
+}
+
+// GetProjectConfig returns the project-local config if available.
+func (l *Loader) GetProjectConfig() *ProjectLocalConfig {
+	return l.projectConfig
 }
 
 // ListLayouts returns info about all available layouts.
@@ -227,14 +235,14 @@ func (l *Loader) ListLayouts() []LayoutInfo {
 	var layouts []LayoutInfo
 
 	// Project layout (highest priority)
-	if l.projectLayout != nil {
-		name := l.projectLayout.Name
+	if l.projectConfig != nil && l.projectConfig.Layout != nil {
+		name := l.projectConfig.Layout.Name
 		if name == "" {
 			name = "(project)"
 		}
 		layouts = append(layouts, LayoutInfo{
 			Name:        name,
-			Description: l.projectLayout.Description,
+			Description: l.projectConfig.Layout.Description,
 			Source:      "project",
 			Path:        filepath.Join(l.projectDir, ".peakypanes.yml"),
 		})

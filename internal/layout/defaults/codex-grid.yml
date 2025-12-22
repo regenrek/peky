@@ -1,0 +1,20 @@
+name: codex-grid
+description: "2x4 grid with 8 codex instances for parallel AI coding"
+
+settings:
+  bind_keys:
+    - key: g
+      action: "switch-client -t peakypanes"
+
+grid: 2x4
+window: codex
+command: "codex"
+titles:
+  - codex-1
+  - codex-2
+  - codex-3
+  - codex-4
+  - codex-5
+  - codex-6
+  - codex-7
+  - codex-8
