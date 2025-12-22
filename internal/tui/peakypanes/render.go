@@ -194,8 +194,8 @@ func (m Model) viewPreview(width, height int) string {
 	lines := []string{fitLine(title, width)}
 
 	gridHeight := height - 2
-	if gridHeight < 4 {
-		gridHeight = 4
+	if gridHeight < 1 {
+		gridHeight = 1
 	}
 	gridWidth := width
 	grid := renderPanePreview(panes, gridWidth, gridHeight, m.settings.PreviewMode, m.settings.PreviewCompact, m.selection.Pane)
@@ -286,7 +286,15 @@ func (m Model) viewQuickReply(width int) string {
 	if contentWidth < 10 {
 		contentWidth = 10
 	}
-	inputWidth := clamp(contentWidth-18, 20, contentWidth-6)
+	maxWidth := contentWidth - 6
+	if maxWidth < 0 {
+		maxWidth = 0
+	}
+	minWidth := 20
+	if minWidth > maxWidth {
+		minWidth = maxWidth
+	}
+	inputWidth := clamp(contentWidth-18, minWidth, maxWidth)
 	m.quickReplyInput.Width = inputWidth
 
 	hintText := "press i to reply"

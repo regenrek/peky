@@ -99,6 +99,100 @@ func TestRunLayoutsHelp(t *testing.T) {
 	}
 }
 
+func TestRunDashboardCommandHelp(t *testing.T) {
+	origRunMenu := runMenuFn
+	origPopup := runDashboardPopupFn
+	origHosted := runDashboardHostedFn
+	defer func() {
+		runMenuFn = origRunMenu
+		runDashboardPopupFn = origPopup
+		runDashboardHostedFn = origHosted
+	}()
+
+	var called bool
+	runMenuFn = func() { called = true }
+	runDashboardPopupFn = func(_ []string) { called = true }
+	runDashboardHostedFn = func(_ string) { called = true }
+
+	out := captureStdout(func() {
+		runDashboardCommand([]string{"--help"})
+	})
+	if called {
+		t.Fatalf("runDashboardCommand(--help) should not invoke handlers")
+	}
+	if !strings.Contains(out, "Open the Peaky Panes dashboard UI") {
+		t.Fatalf("runDashboardCommand(--help) output = %q", out)
+	}
+}
+
+func TestRunDashboardCommandPopup(t *testing.T) {
+	origRunMenu := runMenuFn
+	origPopup := runDashboardPopupFn
+	origHosted := runDashboardHostedFn
+	defer func() {
+		runMenuFn = origRunMenu
+		runDashboardPopupFn = origPopup
+		runDashboardHostedFn = origHosted
+	}()
+
+	var called string
+	runMenuFn = func() { called = "menu" }
+	runDashboardPopupFn = func(_ []string) { called = "popup" }
+	runDashboardHostedFn = func(_ string) { called = "hosted" }
+
+	runDashboardCommand([]string{"--popup"})
+	if called != "popup" {
+		t.Fatalf("runDashboardCommand(--popup) called %q", called)
+	}
+}
+
+func TestRunDashboardCommandHostedSession(t *testing.T) {
+	origRunMenu := runMenuFn
+	origPopup := runDashboardPopupFn
+	origHosted := runDashboardHostedFn
+	defer func() {
+		runMenuFn = origRunMenu
+		runDashboardPopupFn = origPopup
+		runDashboardHostedFn = origHosted
+	}()
+
+	var session string
+	runMenuFn = func() {}
+	runDashboardPopupFn = func(_ []string) {}
+	runDashboardHostedFn = func(name string) { session = name }
+
+	runDashboardCommand([]string{"--tmux-session", "--session", "my-dash"})
+	if session != "my-dash" {
+		t.Fatalf("runDashboardCommand(--tmux-session) session = %q", session)
+	}
+}
+
+func TestRunDashboardCommandConflict(t *testing.T) {
+	origFatal := fatalFn
+	origRunMenu := runMenuFn
+	origPopup := runDashboardPopupFn
+	origHosted := runDashboardHostedFn
+	defer func() {
+		fatalFn = origFatal
+		runMenuFn = origRunMenu
+		runDashboardPopupFn = origPopup
+		runDashboardHostedFn = origHosted
+	}()
+
+	var got string
+	fatalFn = func(format string, args ...interface{}) {
+		got = format
+	}
+	runMenuFn = func() {}
+	runDashboardPopupFn = func(_ []string) {}
+	runDashboardHostedFn = func(_ string) {}
+
+	runDashboardCommand([]string{"--popup", "--tmux-session"})
+	if !strings.Contains(got, "choose either --popup or --tmux-session") {
+		t.Fatalf("fatalFn message = %q", got)
+	}
+}
+
 func TestRunInitLocal(t *testing.T) {
 	root := t.TempDir()
 	old, _ := os.Getwd()
@@ -115,6 +209,47 @@ func TestRunInitLocal(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, ".peakypanes.yml")); err != nil {
 		t.Fatalf(".peakypanes.yml missing: %v", err)
+	}
+}
+
+func TestParseInitArgs(t *testing.T) {
+	opts := parseInitArgs([]string{})
+	if opts.layout != "dev-3" {
+		t.Fatalf("parseInitArgs() default layout = %q", opts.layout)
+	}
+	opts = parseInitArgs([]string{"--local", "--layout", "custom", "--force"})
+	if !opts.local || !opts.force || opts.layout != "custom" {
+		t.Fatalf("parseInitArgs() = %#v", opts)
+	}
+	opts = parseInitArgs([]string{"--help"})
+	if !opts.showHelp {
+		t.Fatalf("parseInitArgs(--help) should set showHelp")
+	}
+}
+
+func TestParseKillArgs(t *testing.T) {
+	opts := parseKillArgs([]string{"--help"})
+	if !opts.showHelp {
+		t.Fatalf("parseKillArgs(--help) should set showHelp")
+	}
+	opts = parseKillArgs([]string{"myapp"})
+	if opts.session != "myapp" {
+		t.Fatalf("parseKillArgs(session) = %q", opts.session)
+	}
+}
+
+func TestParseStartArgs(t *testing.T) {
+	opts := parseStartArgs([]string{"--layout", "dev-3", "--session", "sess", "--path", "/tmp", "--detach"})
+	if opts.layoutName != "dev-3" || opts.session != "sess" || opts.path != "/tmp" || !opts.detach {
+		t.Fatalf("parseStartArgs() = %#v", opts)
+	}
+	opts = parseStartArgs([]string{"fullstack"})
+	if opts.layoutName != "fullstack" {
+		t.Fatalf("parseStartArgs(positional) = %#v", opts)
+	}
+	opts = parseStartArgs([]string{"--help"})
+	if !opts.showHelp {
+		t.Fatalf("parseStartArgs(--help) should set showHelp")
 	}
 }
 
