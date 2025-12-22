@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/tmuxctl"
@@ -36,6 +37,8 @@ type dashboardKeyMap struct {
 	sessionDown    key.Binding
 	windowUp       key.Binding
 	windowDown     key.Binding
+	paneNext       key.Binding
+	panePrev       key.Binding
 	attach         key.Binding
 	newSession     key.Binding
 	openTerminal   key.Binding
@@ -46,6 +49,7 @@ type dashboardKeyMap struct {
 	editConfig     key.Binding
 	kill           key.Binding
 	closeProject   key.Binding
+	quickReply     key.Binding
 	help           key.Binding
 	quit           key.Binding
 	filter         key.Binding
@@ -59,6 +63,8 @@ func newDashboardKeyMap() *dashboardKeyMap {
 		sessionDown:    key.NewBinding(key.WithKeys("down"), key.WithHelp("↓", "session")),
 		windowUp:       key.NewBinding(key.WithKeys("shift+up"), key.WithHelp("⇧↑", "window")),
 		windowDown:     key.NewBinding(key.WithKeys("shift+down"), key.WithHelp("⇧↓", "window")),
+		paneNext:       key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "pane")),
+		panePrev:       key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("⇧tab", "pane")),
 		attach:         key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "attach")),
 		newSession:     key.NewBinding(key.WithKeys("n", "s"), key.WithHelp("n", "new session")),
 		openTerminal:   key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "new terminal")),
@@ -69,6 +75,7 @@ func newDashboardKeyMap() *dashboardKeyMap {
 		editConfig:     key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit config")),
 		kill:           key.NewBinding(key.WithKeys("K"), key.WithHelp("K", "kill session")),
 		closeProject:   key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "close project")),
+		quickReply:     key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "reply")),
 		help:           key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 		quit:           key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 		filter:         key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
@@ -96,6 +103,9 @@ type Model struct {
 
 	filterInput  textinput.Model
 	filterActive bool
+
+	quickReplyInput  textinput.Model
+	quickReplyActive bool
 
 	projectPicker  list.Model
 	layoutPicker   list.Model
@@ -144,6 +154,21 @@ func NewModel(client *tmuxctl.Client) (*Model, error) {
 	m.filterInput.Placeholder = "filter sessions"
 	m.filterInput.CharLimit = 80
 	m.filterInput.Width = 28
+
+	m.quickReplyInput = textinput.New()
+	m.quickReplyInput.Placeholder = "send a quick reply…"
+	m.quickReplyInput.CharLimit = 400
+	m.quickReplyInput.Prompt = ""
+	qrStyle := lipgloss.NewStyle().
+		Foreground(theme.TextPrimary).
+		Background(theme.QuickReplyBg)
+	m.quickReplyInput.TextStyle = qrStyle
+	m.quickReplyInput.PlaceholderStyle = lipgloss.NewStyle().
+		Foreground(theme.TextDim).
+		Background(theme.QuickReplyBg)
+	m.quickReplyInput.PromptStyle = qrStyle
+	m.quickReplyInput.CursorStyle = qrStyle.Copy().
+		Reverse(true)
 
 	m.setupProjectPicker()
 	m.setupLayoutPicker()
@@ -237,6 +262,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.projectPicker.SetSize(msg.Width-4, msg.Height-4)
 		m.setLayoutPickerSize()
 		m.setCommandPaletteSize()
+		m.setQuickReplySize()
 		return m, nil
 	case refreshTickMsg:
 		if m.refreshInFlight == 0 {
@@ -283,6 +309,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case exitAfterAttachMsg:
 		return m, tea.Quit
 	case tea.KeyMsg:
+		if m.state == StateDashboard && m.quickReplyActive {
+			return m.updateQuickReply(msg)
+		}
 		switch m.state {
 		case StateDashboard:
 			return m.updateDashboard(msg)
@@ -368,6 +397,12 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.windowDown):
 		m.selectWindow(1)
 		return m, m.selectionRefreshCmd()
+	case key.Matches(msg, m.keys.paneNext):
+		m.selectPane(1)
+		return m, nil
+	case key.Matches(msg, m.keys.panePrev):
+		m.selectPane(-1)
+		return m, nil
 	case key.Matches(msg, m.keys.attach):
 		return m, m.attachOrStart()
 	case key.Matches(msg, m.keys.newSession):
@@ -394,6 +429,8 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.closeProject):
 		m.openCloseProjectConfirm()
 		return m, nil
+	case key.Matches(msg, m.keys.quickReply):
+		return m, m.openQuickReply()
 	case key.Matches(msg, m.keys.filter):
 		m.filterActive = true
 		m.filterInput.Focus()
@@ -431,6 +468,7 @@ func (m *Model) updateProjectPicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selection.Project = item.Name
 			m.selection.Session = ""
 			m.selection.Window = ""
+			m.selection.Pane = ""
 			m.selectionVersion++
 			return m, m.startSessionAtPathDetached(item.Path)
 		}
@@ -819,6 +857,7 @@ func (m *Model) selectProject(delta int) {
 		m.selection.Session = m.data.Projects[idx].Sessions[0].Name
 		m.selection.Window = m.data.Projects[idx].Sessions[0].ActiveWindow
 	}
+	m.selection.Pane = ""
 	m.selectionVersion++
 }
 
@@ -835,6 +874,7 @@ func (m *Model) selectSession(delta int) {
 	idx = wrapIndex(idx+delta, len(filtered))
 	m.selection.Session = filtered[idx].Name
 	m.selection.Window = filtered[idx].ActiveWindow
+	m.selection.Pane = ""
 	m.selectionVersion++
 }
 
@@ -846,7 +886,22 @@ func (m *Model) selectWindow(delta int) {
 	idx := windowIndex(session.Windows, m.selection.Window)
 	idx = wrapIndex(idx+delta, len(session.Windows))
 	m.selection.Window = session.Windows[idx].Index
+	m.selection.Pane = ""
 	m.selectionVersion++
+}
+
+func (m *Model) selectPane(delta int) {
+	session := m.selectedSession()
+	if session == nil {
+		return
+	}
+	window := selectedWindow(session, m.selection.Window)
+	if window == nil || len(window.Panes) == 0 {
+		return
+	}
+	idx := paneIndex(window.Panes, m.selection.Pane)
+	idx = wrapIndex(idx+delta, len(window.Panes))
+	m.selection.Pane = window.Panes[idx].Index
 }
 
 func (m *Model) toggleWindows() {
@@ -1381,6 +1436,24 @@ func (m *Model) setCommandPaletteSize() {
 	m.commandPalette.SetSize(listW, listH)
 }
 
+func (m *Model) setQuickReplySize() {
+	if m.width <= 0 {
+		return
+	}
+	hFrame, _ := appStyle.GetFrameSize()
+	contentWidth := m.width - hFrame
+	if contentWidth <= 0 {
+		contentWidth = m.width
+	}
+	barWidth := clamp(contentWidth-6, 30, 90)
+	labelWidth := len("Quick Reply: ")
+	inputWidth := barWidth - labelWidth - 2
+	if inputWidth < 10 {
+		inputWidth = 10
+	}
+	m.quickReplyInput.Width = inputWidth
+}
+
 func (m *Model) commandPaletteItems() []list.Item {
 	items := []CommandItem{
 		{Label: "Project: Open project picker", Desc: "Scan project roots and create session", Run: func(m *Model) tea.Cmd {
@@ -1408,6 +1481,9 @@ func (m *Model) commandPaletteItems() []list.Item {
 		{Label: "Session: Kill session", Desc: "Kill the selected session", Run: func(m *Model) tea.Cmd {
 			m.openKillConfirm()
 			return nil
+		}},
+		{Label: "Pane: Quick reply", Desc: "Send a short follow-up to the selected pane", Run: func(m *Model) tea.Cmd {
+			return m.openQuickReply()
 		}},
 		{Label: "Session: Rename session", Desc: "Rename the selected session", Run: func(m *Model) tea.Cmd {
 			m.openRenameSession()
@@ -1447,6 +1523,70 @@ func (m *Model) commandPaletteItems() []list.Item {
 		out[i] = item
 	}
 	return out
+}
+
+func (m *Model) openQuickReply() tea.Cmd {
+	if m.selectedPane() == nil {
+		m.setToast("No pane selected", toastWarning)
+		return nil
+	}
+	m.quickReplyActive = true
+	m.quickReplyInput.SetValue("")
+	m.quickReplyInput.Focus()
+	return nil
+}
+
+func (m *Model) updateQuickReply(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.paneNext):
+		m.selectPane(1)
+		return m, nil
+	case key.Matches(msg, m.keys.panePrev):
+		m.selectPane(-1)
+		return m, nil
+	}
+	switch msg.String() {
+	case "enter":
+		m.quickReplyActive = false
+		m.quickReplyInput.Blur()
+		return m, m.sendQuickReply()
+	case "esc":
+		m.quickReplyActive = false
+		m.quickReplyInput.SetValue("")
+		m.quickReplyInput.Blur()
+		return m, nil
+	}
+	var cmd tea.Cmd
+	m.quickReplyInput, cmd = m.quickReplyInput.Update(msg)
+	return m, cmd
+}
+
+func (m *Model) sendQuickReply() tea.Cmd {
+	text := strings.TrimSpace(m.quickReplyInput.Value())
+	if text == "" {
+		return NewInfoCmd("Nothing to send")
+	}
+	m.quickReplyInput.SetValue("")
+	target, label, ok := m.selectedPaneTarget()
+	if !ok {
+		return NewWarningCmd("No pane selected")
+	}
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if err := m.tmux.SendKeysLiteral(ctx, target, text); err != nil {
+			return ErrorMsg{Err: err, Context: "send to pane"}
+		}
+		if err := m.tmux.SendKeys(ctx, target, "Enter"); err != nil {
+			if fallback := m.tmux.SendKeys(ctx, target, "C-m"); fallback != nil {
+				return ErrorMsg{Err: fallback, Context: "send to pane"}
+			}
+		}
+		if label != "" {
+			return SuccessMsg{Message: "Sent to " + label}
+		}
+		return SuccessMsg{Message: "Sent"}
+	}
 }
 
 func (m *Model) loadLayoutChoices(projectPath string) ([]LayoutChoice, error) {
@@ -1536,6 +1676,15 @@ func windowIndex(windows []WindowItem, idx string) int {
 	return 0
 }
 
+func paneIndex(panes []PaneItem, idx string) int {
+	for i := range panes {
+		if panes[i].Index == idx {
+			return i
+		}
+	}
+	return 0
+}
+
 func wrapIndex(idx, total int) int {
 	if total <= 0 {
 		return 0
@@ -1575,6 +1724,58 @@ func (m *Model) selectedSession() *SessionItem {
 		return &project.Sessions[0]
 	}
 	return nil
+}
+
+func (m *Model) selectedPane() *PaneItem {
+	session := m.selectedSession()
+	if session == nil {
+		return nil
+	}
+	window := selectedWindow(session, m.selection.Window)
+	if window == nil || len(window.Panes) == 0 {
+		return nil
+	}
+	if m.selection.Pane != "" {
+		for i := range window.Panes {
+			if window.Panes[i].Index == m.selection.Pane {
+				return &window.Panes[i]
+			}
+		}
+	}
+	for i := range window.Panes {
+		if window.Panes[i].Active {
+			return &window.Panes[i]
+		}
+	}
+	return &window.Panes[0]
+}
+
+func (m *Model) selectedPaneTarget() (string, string, bool) {
+	session := m.selectedSession()
+	if session == nil {
+		return "", "", false
+	}
+	window := selectedWindow(session, m.selection.Window)
+	if window == nil || len(window.Panes) == 0 {
+		return "", "", false
+	}
+	pane := m.selectedPane()
+	if pane == nil {
+		return "", "", false
+	}
+	windowIndex := strings.TrimSpace(window.Index)
+	if windowIndex == "" {
+		windowIndex = strings.TrimSpace(window.Name)
+	}
+	if windowIndex == "" {
+		return "", "", false
+	}
+	target := fmt.Sprintf("%s:%s.%s", session.Name, windowIndex, pane.Index)
+	label := strings.TrimSpace(pane.Title)
+	if label == "" {
+		label = fmt.Sprintf("pane %s", pane.Index)
+	}
+	return target, label, true
 }
 
 func (m *Model) filteredSessions(sessions []SessionItem) []SessionItem {

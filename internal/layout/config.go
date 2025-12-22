@@ -86,17 +86,24 @@ type StatusRegexConfig struct {
 	Running string `yaml:"running,omitempty"`
 }
 
+// AgentDetectionConfig enables agent-specific status detection.
+type AgentDetectionConfig struct {
+	Codex  *bool `yaml:"codex,omitempty"`
+	Claude *bool `yaml:"claude,omitempty"`
+}
+
 // DashboardConfig configures the Peaky Panes dashboard UI.
 type DashboardConfig struct {
-	RefreshMS      int               `yaml:"refresh_ms,omitempty"`
-	PreviewLines   int               `yaml:"preview_lines,omitempty"`
-	PreviewCompact *bool             `yaml:"preview_compact,omitempty"`
-	ThumbnailLines int               `yaml:"thumbnail_lines,omitempty"`
-	IdleSeconds    int               `yaml:"idle_seconds,omitempty"`
-	ShowThumbnails *bool             `yaml:"show_thumbnails,omitempty"`
-	StatusRegex    StatusRegexConfig `yaml:"status_regex,omitempty"`
-	PreviewMode    string            `yaml:"preview_mode,omitempty"` // grid | layout
-	ProjectRoots   []string          `yaml:"project_roots,omitempty"`
+	RefreshMS      int                  `yaml:"refresh_ms,omitempty"`
+	PreviewLines   int                  `yaml:"preview_lines,omitempty"`
+	PreviewCompact *bool                `yaml:"preview_compact,omitempty"`
+	ThumbnailLines int                  `yaml:"thumbnail_lines,omitempty"`
+	IdleSeconds    int                  `yaml:"idle_seconds,omitempty"`
+	ShowThumbnails *bool                `yaml:"show_thumbnails,omitempty"`
+	StatusRegex    StatusRegexConfig    `yaml:"status_regex,omitempty"`
+	PreviewMode    string               `yaml:"preview_mode,omitempty"` // grid | layout
+	ProjectRoots   []string             `yaml:"project_roots,omitempty"`
+	AgentDetection AgentDetectionConfig `yaml:"agent_detection,omitempty"`
 }
 
 // TmuxSection holds tmux-specific config.

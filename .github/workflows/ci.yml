@@ -1,0 +1,48 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Go fmt
+        run: |
+          files=$(git ls-files '*.go')
+          if [ -n "$files" ]; then
+            unformatted=$(gofmt -l $files)
+            if [ -n "$unformatted" ]; then
+              echo "gofmt needed on:"
+              echo "$unformatted"
+              exit 1
+            fi
+          fi
+
+      - name: Go vet
+        run: go vet ./...
+
+      - name: Install tmux
+        run: sudo apt-get update && sudo apt-get install -y tmux
+
+      - name: Go test
+        run: go test ./... -coverprofile=cover.out
+
+      - name: Go test (race)
+        run: go test ./... -race
+
+      - name: Tmux integration tests
+        run: PEAKYPANES_INTEGRATION=1 go test ./internal/tmuxctl -run Integration -count=1
+
+      - name: Coverage summary
+        run: go tool cover -func=cover.out | tail -n 1

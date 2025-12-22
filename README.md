@@ -240,9 +240,10 @@ The dashboard shows:
 - Sessions on the left (with window counts and expandable windows)
 - Live pane preview on the right (window bar at the bottom)
 - Lightweight session thumbnails at the bottom (last activity per session)
+- Quick reply bar (always visible) and target pane highlight for follow-ups
 
 Navigation (always visible):
-- `←/→` project, `↑/↓` session, `⇧↑/⇧↓` window, `?` help
+- `←/→` project, `↑/↓` session, `⇧↑/⇧↓` window, `tab/⇧tab` pane, `?` help
 
 Key bindings (also shown in `?` help):
 
@@ -254,6 +255,7 @@ Session
 - `enter` attach/start session
 - `n` new session (pick layout)
 - `t` open in new terminal window
+- `i` focus quick reply input
 - `K` kill session
 - rename session via command palette (`ctrl+p`)
 
@@ -267,6 +269,8 @@ Tmux (inside session)
 Other
 - `ctrl+p` command palette
 - `r` refresh, `e` edit config, `/` filter, `q` quit
+
+Quick reply details: press `i` to focus the input, type, then `enter` sends to the highlighted pane. Use `esc` to cancel/clear. `tab/⇧tab` still cycles panes while the input is focused.
 
 ### Dashboard Config (optional)
 
@@ -283,6 +287,38 @@ dashboard:
     success: "(?i)done|finished|success|completed|✅"
     error: "(?i)error|failed|panic|❌"
     running: "(?i)running|in progress|building|installing|▶"
+  agent_detection:
+    codex: true
+    claude: true
+```
+
+### Agent Status Detection (Codex & Claude Code)
+
+PeakyPanes can read per-pane JSON state files to show accurate running/idle/done status for Codex CLI and Claude Code TUI sessions. This is **on by default** and falls back to regex/idle detection if no state file is present. You can disable it via `dashboard.agent_detection`.
+
+State files are written under `${XDG_RUNTIME_DIR:-/tmp}/peakypanes/agent-state` and keyed by `TMUX_PANE` (override with `PEAKYPANES_AGENT_STATE_DIR`).
+
+**Codex CLI (TUI)**
+
+Add a `notify` command in your Codex config to call the PeakyPanes hook script (Codex passes one JSON arg):
+
+```toml
+# ~/.codex/config.toml
+notify = ["python3", "/absolute/path/to/peakypanes/scripts/agent-state/codex-notify.py"]
+```
+
+Tip: with `npm i -g peakypanes`, the scripts live under `$(npm root -g)/peakypanes/scripts/agent-state/`.
+Note: Codex `notify` only fires on turn completion, so running state still relies on regex/idle detection between turns.
+
+**Claude Code (TUI)**
+
+Configure hooks to run the PeakyPanes hook script (Claude passes JSON on stdin). Recommended events:
+`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `Stop`, `SessionEnd`.
+
+Example hook command (wire it to each event above in Claude Code):
+
+```bash
+python3 /absolute/path/to/peakypanes/scripts/agent-state/claude-hook.py
 ```
 
 ### Tmux Config & Key Bindings
@@ -308,6 +344,36 @@ settings:
 2. `.peakypanes.yml` in current directory
 3. Project entry in `~/.config/peakypanes/config.yml`
 4. Built-in `dev-3` layout (fallback)
+
+## Testing
+
+Run the unit tests with coverage:
+
+```bash
+go test ./... -coverprofile /tmp/peakypanes.cover
+go tool cover -func /tmp/peakypanes.cover | tail -n 1
+```
+
+Race tests:
+
+```bash
+go test ./... -race
+```
+
+Tmux integration tests (requires tmux; opt-in):
+
+```bash
+PEAKYPANES_INTEGRATION=1 go test ./internal/tmuxctl -run Integration -count=1
+```
+
+Manual npm smoke run (fresh HOME/XDG config):
+
+```bash
+scripts/fresh-run
+scripts/fresh-run 0.0.1 --with-project
+```
+
+GitHub Actions runs gofmt checks, go vet, go test with coverage, race, and tmux integration tests on Linux.
 
 ## Windows
 > npm packages are currently published for macOS and Linux.  

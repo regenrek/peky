@@ -103,6 +103,12 @@ type PaneSummary struct {
 	Status PaneStatus
 }
 
+// AgentDetectionConfig enables agent-specific status detection.
+type AgentDetectionConfig struct {
+	Codex  bool
+	Claude bool
+}
+
 // DashboardConfig wraps dashboard settings after defaults applied.
 type DashboardConfig struct {
 	RefreshInterval time.Duration
@@ -114,6 +120,7 @@ type DashboardConfig struct {
 	StatusMatcher   statusMatcher
 	PreviewMode     string
 	ProjectRoots    []string
+	AgentDetection  AgentDetectionConfig
 }
 
 // selectionState tracks the current selection by name/index.
@@ -121,6 +128,7 @@ type selectionState struct {
 	Project string
 	Session string
 	Window  string
+	Pane    string
 }
 
 // tmuxSnapshotInput carries the state needed for refresh.

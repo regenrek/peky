@@ -619,6 +619,9 @@ ghostty:
 #     success: "(?i)done|finished|success|completed|✅"
 #     error: "(?i)error|failed|panic|❌"
 #     running: "(?i)running|in progress|building|installing|▶"
+#   agent_detection:
+#     codex: true
+#     claude: true
 
 # Load additional layouts from this directory
 layout_dirs:

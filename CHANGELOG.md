@@ -5,8 +5,15 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Added
+- Agent state detection for Codex CLI and Claude Code TUI (optional hook scripts + `dashboard.agent_detection` toggles).
+- CI workflow (gofmt check, go vet, go test + coverage, race, tmux integration tests on Linux).
+- Opt-in tmux integration test (`PEAKYPANES_INTEGRATION=1`) for session lifecycle coverage.
+- Quick reply input can cycle panes with `tab/⇧tab`, and `esc` cancels/clears the input.
+
 ### Changed
 - npm Windows packages are temporarily disabled due to npm spam-detection blocks.
+- Quick reply bar is always visible and the target pane is highlighted in the preview.
 
 ## 0.0.1 - 2025-12-22
 

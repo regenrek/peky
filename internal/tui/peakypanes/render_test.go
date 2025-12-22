@@ -27,3 +27,20 @@ func TestOverlayCenteredBasic(t *testing.T) {
 		t.Fatalf("overlayCentered() missing overlay content: %q", out)
 	}
 }
+
+func TestRenderPaneTileKeepsLastPreviewLine(t *testing.T) {
+	pane := PaneItem{
+		Title:  "t",
+		Status: PaneStatusIdle,
+		Preview: []string{
+			strings.Repeat("a", 40),
+			strings.Repeat("b", 40),
+			"hi",
+		},
+	}
+
+	out := renderPaneTile(pane, 12, 6, false, false)
+	if !strings.Contains(out, "hi") {
+		t.Fatalf("renderPaneTile() missing last preview line: %q", out)
+	}
+}

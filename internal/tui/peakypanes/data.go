@@ -87,6 +87,13 @@ func defaultDashboardConfig(cfg layout.DashboardConfig) (DashboardConfig, error)
 	if cfg.PreviewCompact != nil {
 		previewCompact = *cfg.PreviewCompact
 	}
+	agentDetection := AgentDetectionConfig{Codex: true, Claude: true}
+	if cfg.AgentDetection.Codex != nil {
+		agentDetection.Codex = *cfg.AgentDetection.Codex
+	}
+	if cfg.AgentDetection.Claude != nil {
+		agentDetection.Claude = *cfg.AgentDetection.Claude
+	}
 	previewMode := strings.TrimSpace(cfg.PreviewMode)
 	if previewMode == "" {
 		previewMode = "grid"
@@ -112,6 +119,7 @@ func defaultDashboardConfig(cfg layout.DashboardConfig) (DashboardConfig, error)
 		StatusMatcher:   matcher,
 		PreviewMode:     previewMode,
 		ProjectRoots:    projectRoots,
+		AgentDetection:  agentDetection,
 	}, nil
 }
 
@@ -163,7 +171,6 @@ func buildDashboardData(ctx context.Context, client *tmuxctl.Client, input tmuxS
 	result := tmuxSnapshotResult{Settings: input.Settings, RawConfig: input.Config, Version: input.Version}
 	cfg := input.Config
 	settings := input.Settings
-	matcher := settings.StatusMatcher
 	selected := input.Selection
 
 	currentSession, _ := client.CurrentSession(ctx)
@@ -285,7 +292,7 @@ func buildDashboardData(ctx context.Context, client *tmuxctl.Client, input tmuxS
 				continue
 			}
 			if settings.ShowThumbnails {
-				thumb, err := sessionThumbnail(ctx, client, *session, settings, matcher)
+				thumb, err := sessionThumbnail(ctx, client, *session, settings)
 				if err != nil {
 					result.Err = err
 					return result
@@ -308,9 +315,10 @@ func buildDashboardData(ctx context.Context, client *tmuxctl.Client, input tmuxS
 					return result
 				}
 				for i := range panes {
-					panes[i].Status = classifyPane(panes[i], panes[i].Preview, matcher, settings.IdleThreshold, time.Now())
+					panes[i].Status = classifyPane(panes[i], panes[i].Preview, settings, time.Now())
 				}
 				attachPanesToWindow(groups, resolved.Session, windowIndex, panes)
+				resolved.Pane = resolvePaneSelection(resolved.Pane, panes)
 			}
 		}
 	}
@@ -346,7 +354,21 @@ func resolveSelection(groups []ProjectGroup, desired selectionState) selectionSt
 	if resolved.Window == "" && len(session.Windows) > 0 {
 		resolved.Window = session.Windows[0].Index
 	}
+	resolved.Pane = desired.Pane
 	return resolved
+}
+
+func resolvePaneSelection(desired string, panes []PaneItem) string {
+	if desired != "" && paneExists(panes, desired) {
+		return desired
+	}
+	if active := activePaneIndex(panes); active != "" {
+		return active
+	}
+	if len(panes) > 0 {
+		return panes[0].Index
+	}
+	return ""
 }
 
 func findProject(groups []ProjectGroup, name string) *ProjectGroup {
@@ -398,6 +420,15 @@ func windowExists(windows []WindowItem, index string) bool {
 	return false
 }
 
+func paneExists(panes []PaneItem, index string) bool {
+	for _, p := range panes {
+		if p.Index == index {
+			return true
+		}
+	}
+	return false
+}
+
 func activeWindowIndex(windows []tmuxctl.WindowInfo) string {
 	for _, w := range windows {
 		if w.Active {
@@ -406,6 +437,18 @@ func activeWindowIndex(windows []tmuxctl.WindowInfo) string {
 	}
 	if len(windows) > 0 {
 		return windows[0].Index
+	}
+	return ""
+}
+
+func activePaneIndex(panes []PaneItem) string {
+	for _, p := range panes {
+		if p.Active {
+			return p.Index
+		}
+	}
+	if len(panes) > 0 {
+		return panes[0].Index
 	}
 	return ""
 }
@@ -448,7 +491,7 @@ func captureLinesForPreview(paneHeight, previewLines int) int {
 	return lines
 }
 
-func sessionThumbnail(ctx context.Context, client *tmuxctl.Client, session SessionItem, settings DashboardConfig, matcher statusMatcher) (PaneSummary, error) {
+func sessionThumbnail(ctx context.Context, client *tmuxctl.Client, session SessionItem, settings DashboardConfig) (PaneSummary, error) {
 	if session.Name == "" || session.ActiveWindow == "" {
 		return PaneSummary{}, nil
 	}
@@ -465,7 +508,7 @@ func sessionThumbnail(ctx context.Context, client *tmuxctl.Client, session Sessi
 	if err != nil {
 		return PaneSummary{}, err
 	}
-	status := classifyPane(paneFromTmux(*active), lines, matcher, settings.IdleThreshold, time.Now())
+	status := classifyPane(paneFromTmux(*active), lines, settings, time.Now())
 	return PaneSummary{Line: lastNonEmpty(lines), Status: status}, nil
 }
 
@@ -481,12 +524,23 @@ func pickActivePane(panes []tmuxctl.PaneInfo) *tmuxctl.PaneInfo {
 	return nil
 }
 
-func classifyPane(pane PaneItem, lines []string, matcher statusMatcher, idle time.Duration, now time.Time) PaneStatus {
+func classifyPane(pane PaneItem, lines []string, settings DashboardConfig, now time.Time) PaneStatus {
 	if pane.Dead {
 		if pane.DeadStatus != 0 {
 			return PaneStatusError
 		}
 		return PaneStatusDone
+	}
+	matcher := settings.StatusMatcher
+	if status, ok := classifyAgentState(pane, settings, now); ok {
+		if status != PaneStatusIdle {
+			return status
+		}
+		joined := strings.Join(lines, "\n")
+		if joined != "" && matcher.running != nil && matcher.running.MatchString(joined) {
+			return PaneStatusRunning
+		}
+		return status
 	}
 	joined := strings.Join(lines, "\n")
 	if joined != "" {
@@ -500,7 +554,7 @@ func classifyPane(pane PaneItem, lines []string, matcher statusMatcher, idle tim
 			return PaneStatusRunning
 		}
 	}
-	if !pane.LastActive.IsZero() && now.Sub(pane.LastActive) > idle {
+	if !pane.LastActive.IsZero() && now.Sub(pane.LastActive) > settings.IdleThreshold {
 		return PaneStatusIdle
 	}
 	return PaneStatusRunning
