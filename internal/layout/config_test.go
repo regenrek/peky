@@ -14,7 +14,7 @@ func TestExpandVars(t *testing.T) {
 	t.Setenv("ENV_ONLY", "from-env")
 
 	vars := map[string]string{
-		"FOO": "bar",
+		"FOO":          "bar",
 		"PROJECT_NAME": "ignored",
 	}
 
