@@ -63,6 +63,23 @@ function mkdirp(p) {
   fs.mkdirSync(p, { recursive: true });
 }
 
+function copyDir(src, dest) {
+  if (!fs.existsSync(src)) return;
+  mkdirp(dest);
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      copyDir(srcPath, destPath);
+      continue;
+    }
+    if (entry.isFile()) {
+      fs.copyFileSync(srcPath, destPath);
+      chmodExec(destPath);
+    }
+  }
+}
+
 function writeJSON(filePath, obj) {
   fs.writeFileSync(filePath, JSON.stringify(obj, null, 2) + '\n');
 }
@@ -244,6 +261,10 @@ function build() {
     writeText(path.join(metaDir, 'README.md'), '# ' + PROJECT + '\n');
   }
 
+  const agentScriptsSrc = path.join(ROOT, 'scripts', 'agent-state');
+  const agentScriptsDst = path.join(metaDir, 'scripts', 'agent-state');
+  copyDir(agentScriptsSrc, agentScriptsDst);
+
   writeJSON(path.join(metaDir, 'package.json'), {
     name: PROJECT,
     version,
@@ -263,7 +284,8 @@ function build() {
     },
     files: [
       'bin/' + PROJECT + '.js',
-      'README.md'
+      'README.md',
+      'scripts/agent-state/'
     ],
     publishConfig: {
       access: 'public'

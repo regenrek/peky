@@ -27,6 +27,13 @@ const (
 	defaultDashboardWindow  = "peakypanes-dashboard"
 )
 
+var (
+	runMenuFn            = runMenu
+	runDashboardPopupFn  = runDashboardPopup
+	runDashboardHostedFn = runDashboardHosted
+	fatalFn              = fatal
+)
+
 const helpText = `🎩 Peaky Panes - Tmux Layout Manager
 
 Usage:
@@ -238,6 +245,26 @@ type dashboardOptions struct {
 	showHelp   bool
 }
 
+type startOptions struct {
+	layoutName string
+	session    string
+	path       string
+	detach     bool
+	showHelp   bool
+}
+
+type killOptions struct {
+	session  string
+	showHelp bool
+}
+
+type initOptions struct {
+	local    bool
+	layout   string
+	force    bool
+	showHelp bool
+}
+
 func runDashboardCommand(args []string) {
 	opts := dashboardOptions{session: defaultDashboardSession}
 	for i := 0; i < len(args); i++ {
@@ -261,17 +288,17 @@ func runDashboardCommand(args []string) {
 		return
 	}
 	if opts.popup && opts.tmuxHosted {
-		fatal("choose either --popup or --tmux-session")
+		fatalFn("choose either --popup or --tmux-session")
 	}
 	if opts.popup {
-		runDashboardPopup(nil)
+		runDashboardPopupFn(nil)
 		return
 	}
 	if opts.tmuxHosted {
-		runDashboardHosted(opts.session)
+		runDashboardHostedFn(opts.session)
 		return
 	}
-	runMenu()
+	runMenuFn()
 }
 
 func runDashboardPopup(args []string) {
@@ -476,31 +503,16 @@ func extractRepoName(url string) string {
 }
 
 func runInit(args []string) {
-	local := false
-	layoutName := "dev-3"
-	force := false
-
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "--local", "-l":
-			local = true
-		case "--layout":
-			if i+1 < len(args) {
-				layoutName = args[i+1]
-				i++
-			}
-		case "--force", "-f":
-			force = true
-		case "-h", "--help":
-			fmt.Print(initHelpText)
-			return
-		}
+	opts := parseInitArgs(args)
+	if opts.showHelp {
+		fmt.Print(initHelpText)
+		return
 	}
 
-	if local {
-		initLocal(layoutName, force)
+	if opts.local {
+		initLocal(opts.layout, opts.force)
 	} else {
-		initGlobal(layoutName, force)
+		initGlobal(opts.layout, opts.force)
 	}
 }
 
@@ -619,6 +631,9 @@ ghostty:
 #     success: "(?i)done|finished|success|completed|✅"
 #     error: "(?i)error|failed|panic|❌"
 #     running: "(?i)running|in progress|building|installing|▶"
+#   agent_detection:
+#     codex: true
+#     claude: true
 
 # Load additional layouts from this directory
 layout_dirs:
@@ -756,19 +771,12 @@ func exportLayout(name string) {
 }
 
 func runKill(args []string) {
-	sessionName := ""
-
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "-h", "--help":
-			fmt.Print(killHelpText)
-			return
-		default:
-			if !strings.HasPrefix(args[i], "-") && sessionName == "" {
-				sessionName = args[i]
-			}
-		}
+	opts := parseKillArgs(args)
+	if opts.showHelp {
+		fmt.Print(killHelpText)
+		return
 	}
+	sessionName := opts.session
 
 	// Default session name to current directory name
 	if sessionName == "" {
@@ -822,40 +830,15 @@ func runKill(args []string) {
 }
 
 func runStart(args []string) {
-	layoutName := ""
-	sessionName := ""
-	projectPath := ""
-	detach := false
-
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "--layout", "-l":
-			if i+1 < len(args) {
-				layoutName = args[i+1]
-				i++
-			}
-		case "--session", "-s":
-			if i+1 < len(args) {
-				sessionName = args[i+1]
-				i++
-			}
-		case "--path", "-p":
-			if i+1 < len(args) {
-				projectPath = args[i+1]
-				i++
-			}
-		case "--detach", "-d":
-			detach = true
-		case "-h", "--help":
-			fmt.Print(startHelpText)
-			return
-		default:
-			// Treat as layout name shortcut if not a flag
-			if !strings.HasPrefix(args[i], "-") && layoutName == "" {
-				layoutName = args[i]
-			}
-		}
+	opts := parseStartArgs(args)
+	if opts.showHelp {
+		fmt.Print(startHelpText)
+		return
 	}
+	layoutName := opts.layoutName
+	sessionName := opts.session
+	projectPath := opts.path
+	detach := opts.detach
 
 	// Default to current directory
 	if projectPath == "" {
@@ -982,6 +965,73 @@ func runStart(args []string) {
 		return
 	}
 	attachToSession(client, sessionName)
+}
+
+func parseInitArgs(args []string) initOptions {
+	opts := initOptions{layout: "dev-3"}
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--local", "-l":
+			opts.local = true
+		case "--layout":
+			if i+1 < len(args) {
+				opts.layout = args[i+1]
+				i++
+			}
+		case "--force", "-f":
+			opts.force = true
+		case "-h", "--help":
+			opts.showHelp = true
+		}
+	}
+	return opts
+}
+
+func parseKillArgs(args []string) killOptions {
+	opts := killOptions{}
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "-h", "--help":
+			opts.showHelp = true
+		default:
+			if !strings.HasPrefix(args[i], "-") && opts.session == "" {
+				opts.session = args[i]
+			}
+		}
+	}
+	return opts
+}
+
+func parseStartArgs(args []string) startOptions {
+	opts := startOptions{}
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--layout", "-l":
+			if i+1 < len(args) {
+				opts.layoutName = args[i+1]
+				i++
+			}
+		case "--session", "-s":
+			if i+1 < len(args) {
+				opts.session = args[i+1]
+				i++
+			}
+		case "--path", "-p":
+			if i+1 < len(args) {
+				opts.path = args[i+1]
+				i++
+			}
+		case "--detach", "-d":
+			opts.detach = true
+		case "-h", "--help":
+			opts.showHelp = true
+		default:
+			if !strings.HasPrefix(args[i], "-") && opts.layoutName == "" {
+				opts.layoutName = args[i]
+			}
+		}
+	}
+	return opts
 }
 
 func createSessionWithLayout(ctx context.Context, client *tmuxctl.Client, session, projectPath string, layoutCfg *layout.LayoutConfig) error {

@@ -35,22 +35,31 @@ func (m Model) viewDashboardContent() string {
 	header := m.viewHeader(contentWidth)
 	divider := m.dividerLine(contentWidth)
 	footer := m.viewFooter(contentWidth)
+	quickReply := m.viewQuickReply(contentWidth)
+	quickReplyHeight := lipgloss.Height(quickReply)
+	dividerHeight := lipgloss.Height(divider)
 
-	extraLines := 3 // header + divider + footer
+	headerHeight := lipgloss.Height(header)
+	footerHeight := lipgloss.Height(footer)
+	dividerCount := 1 // footer divider
 	if showThumbs {
-		extraLines += thumbHeight + 2 // divider + thumbnails + divider
+		dividerCount++
+	}
+	extraLines := headerHeight + footerHeight + quickReplyHeight + (dividerCount * dividerHeight)
+	if showThumbs {
+		extraLines += thumbHeight
 	}
 	bodyHeight := contentHeight - extraLines
 	if bodyHeight < 4 {
 		showThumbs = false
 		thumbHeight = 0
-		extraLines = 3
+		dividerCount = 1
+		extraLines = headerHeight + footerHeight + quickReplyHeight + (dividerCount * dividerHeight)
 		bodyHeight = contentHeight - extraLines
 	}
 
 	body := m.viewBody(contentWidth, bodyHeight)
-	sections := []string{header, divider, body}
-
+	sections := []string{header, body, quickReply}
 	if showThumbs {
 		sections = append(sections, divider, m.viewThumbnails(contentWidth))
 	}
@@ -174,48 +183,24 @@ func (m Model) viewPreview(width, height int) string {
 	if session == nil {
 		return padLines(emptyStateMessage(), width, height)
 	}
-	windowName := ""
-	paneCount := 0
-	layoutName := ""
-	path := ""
-	statusBadge := ""
 	var panes []PaneItem
 	if session != nil {
-		layoutName = session.LayoutName
-		path = session.Path
-		statusBadge = renderBadge(sessionBadgeStatus(*session))
 		if window := selectedWindow(session, m.selection.Window); window != nil {
-			windowName = window.Name
 			panes = window.Panes
-			paneCount = len(window.Panes)
 		}
 	}
 
-	title := fmt.Sprintf("Pane Preview (%s)  • refresh: %ds", windowNameOrDash(windowName), int(m.settings.RefreshInterval.Seconds()))
-	if windowName == "" {
-		title = "Pane Preview"
-	}
+	title := fmt.Sprintf("Pane Preview  • refresh: %ds", int(m.settings.RefreshInterval.Seconds()))
 	lines := []string{fitLine(title, width)}
 
-	gridHeight := height - 4
-	if gridHeight < 4 {
-		gridHeight = 4
+	gridHeight := height - 2
+	if gridHeight < 1 {
+		gridHeight = 1
 	}
 	gridWidth := width
-	grid := renderPanePreview(panes, gridWidth, gridHeight, m.settings.PreviewMode, m.settings.PreviewCompact)
+	grid := renderPanePreview(panes, gridWidth, gridHeight, m.settings.PreviewMode, m.settings.PreviewCompact, m.selection.Pane)
 	lines = append(lines, grid)
-
-	windowBar := m.viewWindowBar(width)
-	lines = append(lines, windowBar)
-
-	infoLine := fmt.Sprintf("Path: %s  •  Layout: %s", pathOrDash(path), layoutOrDash(layoutName))
-	mode := "outside tmux"
-	if m.insideTmux {
-		mode = "inside tmux"
-	}
-	statusLine := fmt.Sprintf("Status: %s  •  Panes: %d  •  %s", statusBadge, paneCount, mode)
-	lines = append(lines, fitLine(infoLine, width))
-	lines = append(lines, fitLine(statusLine, width))
+	lines = append(lines, m.dividerLine(width))
 
 	return padLines(strings.Join(lines, "\n"), width, height)
 }
@@ -223,7 +208,10 @@ func (m Model) viewPreview(width, height int) string {
 func (m Model) viewWindowBar(width int) string {
 	session := m.selectedSession()
 	if session == nil || len(session.Windows) == 0 {
-		return fitLine("[ no windows ]", width)
+		return ""
+	}
+	if len(session.Windows) <= 1 {
+		return ""
 	}
 	parts := make([]string, 0, len(session.Windows))
 	for _, w := range session.Windows {
@@ -280,13 +268,70 @@ func (m Model) viewThumbnails(width int) string {
 }
 
 func (m Model) viewFooter(width int) string {
-	base := "←/→ project   ↑/↓ session   ⇧↑/⇧↓ window   ^p commands   t new term   ? help"
+	base := "←/→ project   ↑/↓ session   ⇧↑/⇧↓ window   tab pane   i reply   ^p commands   t new term   ? help"
 	toast := m.toastText()
 	if toast == "" {
 		return fitLine(base, width)
 	}
 	line := fmt.Sprintf("%s   %s", base, toast)
 	return fitLine(line, width)
+}
+
+func (m Model) viewQuickReply(width int) string {
+	if width <= 0 {
+		return ""
+	}
+	barWidth := width
+	contentWidth := barWidth - 4
+	if contentWidth < 10 {
+		contentWidth = 10
+	}
+	maxWidth := contentWidth - 6
+	if maxWidth < 0 {
+		maxWidth = 0
+	}
+	minWidth := 20
+	if minWidth > maxWidth {
+		minWidth = maxWidth
+	}
+	inputWidth := clamp(contentWidth-18, minWidth, maxWidth)
+	m.quickReplyInput.Width = inputWidth
+
+	hintText := "press i to reply"
+	if m.quickReplyActive {
+		hintText = "enter send • esc cancel"
+	}
+
+	base := lipgloss.NewStyle().
+		Foreground(theme.TextPrimary).
+		Background(theme.QuickReplyBg)
+	accent := base.Copy().
+		Foreground(theme.QuickReplyAcc).
+		Render("▌ ")
+	label := base.Copy().
+		Bold(true).
+		Background(theme.QuickReplyTag).
+		Render(" Quick Reply ")
+	hint := base.Copy().
+		Foreground(theme.TextDim).
+		Italic(true).
+		Render(" " + hintText)
+
+	line := accent + label + m.quickReplyInput.View() + hint
+	line = ansi.Truncate(line, contentWidth, "")
+	visible := lipgloss.Width(line)
+	if visible < contentWidth {
+		line += base.Render(strings.Repeat(" ", contentWidth-visible))
+	}
+
+	pad := base.Render(strings.Repeat(" ", 2))
+	blank := base.Render(strings.Repeat(" ", contentWidth))
+	lines := []string{
+		pad + blank + pad,
+		pad + line + pad,
+		pad + blank + pad,
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (m Model) viewConfirmKill() string {
@@ -469,6 +514,7 @@ func (m Model) viewHelp() string {
 	left.WriteString("  ←/→   Switch projects\n")
 	left.WriteString("  ↑/↓   Switch sessions\n")
 	left.WriteString("  ⇧↑/⇧↓ Switch windows\n")
+	left.WriteString("  tab/⇧tab Switch panes\n")
 	left.WriteString("\nProject\n")
 	left.WriteString("  o     Open project picker\n")
 	left.WriteString("  c     Close project\n")
@@ -476,6 +522,7 @@ func (m Model) viewHelp() string {
 	left.WriteString("  enter Attach/start session\n")
 	left.WriteString("  n     New session (pick layout)\n")
 	left.WriteString("  t     Open in new terminal window\n")
+	left.WriteString("  i     Quick reply to selected pane\n")
 	left.WriteString("  K     Kill session\n")
 
 	var right strings.Builder
@@ -578,14 +625,14 @@ func (c *canvas) String() string {
 	return strings.Join(lines, "\n")
 }
 
-func renderPanePreview(panes []PaneItem, width, height int, mode string, compact bool) string {
+func renderPanePreview(panes []PaneItem, width, height int, mode string, compact bool, targetPane string) string {
 	if mode == "layout" {
-		return renderPaneLayout(panes, width, height)
+		return renderPaneLayout(panes, width, height, targetPane)
 	}
-	return renderPaneTiles(panes, width, height, compact)
+	return renderPaneTiles(panes, width, height, compact, targetPane)
 }
 
-func renderPaneLayout(panes []PaneItem, width, height int) string {
+func renderPaneLayout(panes []PaneItem, width, height int, targetPane string) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
@@ -606,6 +653,9 @@ func renderPaneLayout(panes []PaneItem, width, height int) string {
 		}
 		c.drawBox(x1, y1, w, h)
 		title := pane.Title
+		if pane.Index == targetPane {
+			title = "TARGET " + title
+		}
 		if pane.Active {
 			title = "▶ " + title
 		}
@@ -621,7 +671,7 @@ func renderPaneLayout(panes []PaneItem, width, height int) string {
 	return c.String()
 }
 
-func renderPaneTiles(panes []PaneItem, width, height int, compact bool) string {
+func renderPaneTiles(panes []PaneItem, width, height int, compact bool, targetPane string) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
@@ -673,7 +723,7 @@ func renderPaneTiles(panes []PaneItem, width, height int, compact bool) string {
 				tiles = append(tiles, padLines("", tileWidth, rowHeight))
 				continue
 			}
-			tiles = append(tiles, renderPaneTile(panes[idx], tileWidth, rowHeight, compact))
+			tiles = append(tiles, renderPaneTile(panes[idx], tileWidth, rowHeight, compact, panes[idx].Index == targetPane))
 		}
 		row := lipgloss.JoinHorizontal(lipgloss.Top, tiles...)
 		renderedRows = append(renderedRows, row)
@@ -684,24 +734,15 @@ func renderPaneTiles(panes []PaneItem, width, height int, compact bool) string {
 	return padLines(strings.Join(renderedRows, "\n"), width, height)
 }
 
-func renderPaneTile(pane PaneItem, width, height int, compact bool) string {
+func renderPaneTile(pane PaneItem, width, height int, compact bool, target bool) string {
 	title := pane.Title
+	if target {
+		title = "TARGET " + title
+	}
 	if pane.Active {
 		title = "▶ " + title
 	}
-	header := fmt.Sprintf("%s %s", renderBadge(pane.Status), title)
-	lines := []string{header}
-	if strings.TrimSpace(pane.Command) != "" {
-		lines = append(lines, pane.Command)
-	}
-	previewSource := pane.Preview
-	if compact {
-		previewSource = compactPreviewLines(previewSource)
-	}
-	previewLines := tailLines(previewSource, height-3)
-	lines = append(lines, previewLines...)
 
-	content := strings.Join(lines, "\n")
 	style := lipgloss.NewStyle().
 		Width(width).
 		Height(height).
@@ -711,6 +752,40 @@ func renderPaneTile(pane PaneItem, width, height int, compact bool) string {
 	if pane.Active {
 		style = style.BorderForeground(theme.BorderFocused)
 	}
+	if target {
+		style = style.BorderForeground(theme.BorderTarget)
+	}
+
+	frameW, frameH := style.GetFrameSize()
+	contentWidth := width - frameW
+	if contentWidth < 1 {
+		contentWidth = 1
+	}
+	innerHeight := height - frameH
+	if innerHeight < 1 {
+		innerHeight = 1
+	}
+
+	header := fmt.Sprintf("%s %s", renderBadge(pane.Status), title)
+	lines := []string{truncateTileLine(header, contentWidth)}
+	if strings.TrimSpace(pane.Command) != "" {
+		lines = append(lines, truncateTileLine(pane.Command, contentWidth))
+	}
+
+	previewSource := pane.Preview
+	if compact {
+		previewSource = compactPreviewLines(previewSource)
+	}
+	previewSource = trimTrailingBlankLines(previewSource)
+
+	maxPreview := innerHeight - len(lines)
+	if maxPreview < 0 {
+		maxPreview = 0
+	}
+	previewLines := tailLines(previewSource, maxPreview)
+	lines = append(lines, truncateTileLines(previewLines, contentWidth)...)
+
+	content := strings.Join(lines, "\n")
 	return style.Render(content)
 }
 
@@ -802,6 +877,24 @@ func renderBadge(status PaneStatus) string {
 	}
 }
 
+func truncateTileLine(text string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	return ansi.Truncate(text, width, "…")
+}
+
+func truncateTileLines(lines []string, width int) []string {
+	if len(lines) == 0 {
+		return nil
+	}
+	out := make([]string, len(lines))
+	for i, line := range lines {
+		out[i] = truncateTileLine(line, width)
+	}
+	return out
+}
+
 func tailLines(lines []string, max int) []string {
 	if max <= 0 {
 		return nil
@@ -810,6 +903,17 @@ func tailLines(lines []string, max int) []string {
 		return lines
 	}
 	return lines[len(lines)-max:]
+}
+
+func trimTrailingBlankLines(lines []string) []string {
+	end := len(lines)
+	for end > 0 {
+		if strings.TrimSpace(lines[end-1]) != "" {
+			break
+		}
+		end--
+	}
+	return lines[:end]
 }
 
 func compactPreviewLines(lines []string) []string {

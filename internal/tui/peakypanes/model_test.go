@@ -155,6 +155,15 @@ func TestKeyBindings(t *testing.T) {
 	if !key.Matches(tea.KeyMsg{Type: tea.KeyEnter}, km.attach) {
 		t.Error("attach binding should match Enter key")
 	}
+	if !key.Matches(tea.KeyMsg{Type: tea.KeyTab}, km.paneNext) {
+		t.Error("paneNext binding should match Tab key")
+	}
+	if !key.Matches(tea.KeyMsg{Type: tea.KeyShiftTab}, km.panePrev) {
+		t.Error("panePrev binding should match Shift+Tab key")
+	}
+	if !key.Matches(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}}, km.quickReply) {
+		t.Error("quickReply binding should match i key")
+	}
 	if !key.Matches(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}, km.help) {
 		t.Error("help binding should match ? key")
 	}

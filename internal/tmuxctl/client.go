@@ -620,6 +620,22 @@ func (c *Client) SendKeys(ctx context.Context, target string, keys ...string) er
 	return nil
 }
 
+// SendKeysLiteral sends a literal string to a target pane.
+func (c *Client) SendKeysLiteral(ctx context.Context, target, text string) error {
+	if target == "" {
+		return errors.New("send-keys target cannot be empty")
+	}
+	if text == "" {
+		return nil
+	}
+	args := []string{"send-keys", "-t", target, "-l", text}
+	cmd := c.run(ctx, c.bin, args...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return wrapTmuxErr("send-keys", err, out)
+	}
+	return nil
+}
+
 // SelectPane sets the title of a pane.
 func (c *Client) SelectPane(ctx context.Context, target, title string) error {
 	if target == "" {

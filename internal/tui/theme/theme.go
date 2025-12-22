@@ -27,8 +27,12 @@ var (
 	// UI element colors
 	Border        = lipgloss.Color("210")
 	BorderFocused = lipgloss.Color("#7D56F4")
+	BorderTarget  = lipgloss.Color("#25A065")
 	Background    = lipgloss.Color("#1a1a1a")
 	Highlight     = lipgloss.Color("#3a3a3a")
+	QuickReplyBg  = lipgloss.Color("#444444")
+	QuickReplyTag = lipgloss.Color("#555555")
+	QuickReplyAcc = lipgloss.Color("#6a6a6a")
 
 	// Dialog colors
 	DialogBorderColor = lipgloss.Color("210")
