@@ -227,8 +227,8 @@ func TestBuildDashboardData(t *testing.T) {
 		t.Fatalf("defaultDashboardConfig() error: %v", err)
 	}
 
-	fullFormat := "#{pane_id}\t#{pane_index}\t#{pane_active}\t#{pane_title}\t#{pane_current_command}\t#{pane_left}\t#{pane_top}\t#{pane_width}\t#{pane_height}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_last_active}"
-	paneLine := fmt.Sprintf("%%1\t0\t1\tTitle\tbash\t0\t0\t80\t24\t0\t0\t%d\n", time.Now().Unix())
+	fullFormat := "#{pane_id}\t#{pane_index}\t#{pane_active}\t#{pane_title}\t#{pane_current_command}\t#{pane_start_command}\t#{pane_pid}\t#{pane_left}\t#{pane_top}\t#{pane_width}\t#{pane_height}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_last_active}"
+	paneLine := fmt.Sprintf("%%1\t0\t1\tTitle\tbash\tbash\t1234\t0\t0\t80\t24\t0\t0\t%d\n", time.Now().Unix())
 
 	runner := &fakeRunner{t: t, specs: []cmdSpec{
 		{name: "tmux", args: []string{"display-message", "-p", "#S"}, stdout: "app\n", exit: 0},

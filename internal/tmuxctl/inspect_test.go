@@ -62,10 +62,12 @@ func TestListWindowsMissingSession(t *testing.T) {
 
 func TestListPanesDetailedFallback(t *testing.T) {
 	fullFormat := "#{pane_id}\t#{pane_index}\t#{pane_active}\t#{pane_title}\t#{pane_current_command}\t#{pane_start_command}\t#{pane_pid}\t#{pane_left}\t#{pane_top}\t#{pane_width}\t#{pane_height}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_last_active}"
+	legacyFormat := "#{pane_id}\t#{pane_index}\t#{pane_active}\t#{pane_title}\t#{pane_current_command}\t#{pane_start_command}\t#{pane_left}\t#{pane_top}\t#{pane_width}\t#{pane_height}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_last_active}"
 	basicFormat := "#{pane_id}\t#{pane_index}\t#{pane_active}\t#{pane_title}\t#{pane_current_command}\t#{pane_left}\t#{pane_top}\t#{pane_width}\t#{pane_height}"
 
 	runner := &fakeRunner{t: t, specs: []cmdSpec{
 		{name: "tmux", args: []string{"list-panes", "-t", "demo:0", "-F", fullFormat}, exit: 1},
+		{name: "tmux", args: []string{"list-panes", "-t", "demo:0", "-F", legacyFormat}, exit: 1},
 		{name: "tmux", args: []string{"list-panes", "-t", "demo:0", "-F", basicFormat}, stdout: "%1\t0\t1\t\tcmd\t0\t0\t80\t24\n", exit: 0},
 	}}
 	client := &Client{bin: "tmux", run: runner.run}
