@@ -76,6 +76,42 @@ func (c *Client) SessionHasClients(ctx context.Context, session string) (bool, e
 	return false, nil
 }
 
+// HasClientOnTTY returns true if any tmux client is attached to the given tty.
+func (c *Client) HasClientOnTTY(ctx context.Context, tty string) (bool, error) {
+	tty = strings.TrimSpace(tty)
+	if tty == "" {
+		return false, nil
+	}
+	cmd := c.run(ctx, c.bin, "list-clients", "-F", "#{client_tty}")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		msg := strings.ToLower(strings.TrimSpace(string(out)))
+		if msg == "" {
+			msg = strings.ToLower(strings.TrimSpace(err.Error()))
+		}
+		if strings.Contains(msg, "no server") ||
+			strings.Contains(msg, "no such file") ||
+			strings.Contains(msg, "failed to connect") ||
+			strings.Contains(msg, "error connecting to") ||
+			strings.Contains(msg, "no sessions") ||
+			strings.Contains(msg, "no session") ||
+			strings.Contains(msg, "can't find") {
+			return false, nil
+		}
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return false, nil
+		}
+		return false, wrapTmuxErr("list-clients", err, out)
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	for _, line := range lines {
+		if strings.TrimSpace(line) == tty {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // ListSessionsInfo returns session names with their paths when available.
 func (c *Client) ListSessionsInfo(ctx context.Context) ([]SessionInfo, error) {
 	cmd := c.run(ctx, c.bin, "list-sessions", "-F", "#{session_name}\t#{session_path}")

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"io"
 	"os"
 	"path/filepath"
@@ -73,14 +74,28 @@ func TestSanitizeSessionName(t *testing.T) {
 }
 
 func TestInsideTmux(t *testing.T) {
+	origTTY := currentTTYFn
+	origHas := hasClientOnTTYFn
+	defer func() {
+		currentTTYFn = origTTY
+		hasClientOnTTYFn = origHas
+	}()
+	currentTTYFn = func() string { return "/dev/ttys001" }
+
 	t.Setenv("TMUX", "")
 	t.Setenv("TMUX_PANE", "")
 	if insideTmux() {
 		t.Fatalf("insideTmux() should be false")
 	}
 	t.Setenv("TMUX", "/tmp/tmux")
+	t.Setenv("TMUX_PANE", "%1")
+	hasClientOnTTYFn = func(ctx context.Context, tty string) (bool, error) { return true, nil }
 	if !insideTmux() {
 		t.Fatalf("insideTmux() should be true")
+	}
+	hasClientOnTTYFn = func(ctx context.Context, tty string) (bool, error) { return false, nil }
+	if insideTmux() {
+		t.Fatalf("insideTmux() should be false when no client matches")
 	}
 }
 

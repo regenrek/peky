@@ -117,7 +117,7 @@ func NewModel(client *tmuxctl.Client) (*Model, error) {
 	m := &Model{
 		tmux:               client,
 		state:              StateDashboard,
-		insideTmux:         os.Getenv("TMUX") != "" || os.Getenv("TMUX_PANE") != "",
+		insideTmux:         detectInsideTmux(client),
 		configPath:         configPath,
 		expandedSessions:   make(map[string]bool),
 		selectionByProject: make(map[string]selectionState),
@@ -392,7 +392,7 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.openLayoutPicker()
 		return m, nil
 	case key.Matches(msg, m.keys.openTerminal):
-		return m, m.openSessionInNewTerminal()
+		return m, m.openSessionInNewTerminal(false)
 	case key.Matches(msg, m.keys.toggleWindows):
 		m.toggleWindows()
 	case key.Matches(msg, m.keys.openProject):
@@ -933,6 +933,26 @@ func (m *Model) View() string {
 	}
 }
 
+func detectInsideTmux(client *tmuxctl.Client) bool {
+	if client == nil {
+		return false
+	}
+	if os.Getenv("TMUX") == "" && os.Getenv("TMUX_PANE") == "" {
+		return false
+	}
+	tty := tmuxctl.CurrentTTY()
+	if tty == "" {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	ok, err := client.HasClientOnTTY(ctx, tty)
+	if err != nil {
+		return false
+	}
+	return ok
+}
+
 func (m *Model) setState(state ViewState) {
 	m.state = state
 	if state == StateDashboard && !m.filterActive {
@@ -1119,6 +1139,15 @@ func (m *Model) attachOrStart() tea.Cmd {
 	if session == nil {
 		return nil
 	}
+	switch m.settings.AttachBehavior {
+	case AttachBehaviorNewTerminal:
+		return m.openSessionInNewTerminal(true)
+	case AttachBehaviorDetached:
+		if session.Status == StatusStopped {
+			return m.startProjectDetached(*session)
+		}
+		return NewInfoCmd("Session already running")
+	}
 	if session.Status == StatusStopped {
 		if session.Path == "" {
 			m.setToast("No project path configured", toastWarning)
@@ -1129,12 +1158,15 @@ func (m *Model) attachOrStart() tea.Cmd {
 	return m.attachSession(*session)
 }
 
-func (m *Model) openSessionInNewTerminal() tea.Cmd {
+func (m *Model) openSessionInNewTerminal(forceNew bool) tea.Cmd {
 	session := m.selectedSession()
 	if session == nil {
 		return nil
 	}
-	tmuxEnv := strings.TrimSpace(os.Getenv("TMUX"))
+	tmuxEnv := ""
+	if m.insideTmux {
+		tmuxEnv = strings.TrimSpace(os.Getenv("TMUX"))
+	}
 	tmuxSocket := tmuxSocketFromEnv(tmuxEnv)
 
 	if session.Status == StatusStopped {
@@ -1164,15 +1196,17 @@ func (m *Model) openSessionInNewTerminal() tea.Cmd {
 		return m.openNewTerminal(command, args, "Session started in new terminal")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	attached, err := m.tmux.SessionHasClients(ctx, session.Name)
-	if err != nil {
-		m.setToast("Check clients failed: "+err.Error(), toastError)
-		return nil
-	}
-	if attached {
-		return m.focusTerminalApp("Session already open")
+	if !forceNew {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		attached, err := m.tmux.SessionHasClients(ctx, session.Name)
+		if err != nil {
+			m.setToast("Check clients failed: "+err.Error(), toastError)
+			return nil
+		}
+		if attached {
+			return m.focusTerminalApp("Session already open")
+		}
 	}
 
 	target := session.Name
@@ -1295,16 +1329,7 @@ func (m *Model) startNewSessionWithLayout(layoutName string) tea.Cmd {
 	}
 	newName := nextSessionName(base, existing)
 
-	args := []string{"start", "--session", newName, "--path", path}
-	if strings.TrimSpace(layoutName) != "" {
-		args = append(args, "--layout", layoutName)
-	}
-	return tea.ExecProcess(exec.Command(selfExecutable(), args...), func(err error) tea.Msg {
-		if err != nil {
-			return WarningMsg{Message: "Start failed: " + err.Error()}
-		}
-		return SuccessMsg{Message: "Session started: " + newName}
-	})
+	return m.startSessionWithBehavior(newName, path, layoutName)
 }
 
 func (m *Model) attachSession(session SessionItem) tea.Cmd {
@@ -1321,6 +1346,7 @@ func (m *Model) attachSession(session SessionItem) tea.Cmd {
 			tmuxPath = "tmux"
 		}
 		cmd := exec.Command(tmuxPath, "attach-session", "-t", target)
+		cmd.Env = withoutTmuxEnv(os.Environ())
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		cmd.Stdin = os.Stdin
@@ -1329,6 +1355,20 @@ func (m *Model) attachSession(session SessionItem) tea.Cmd {
 		}
 		return exitAfterAttachMsg{}
 	}
+}
+
+func withoutTmuxEnv(env []string) []string {
+	if len(env) == 0 {
+		return env
+	}
+	out := make([]string, 0, len(env))
+	for _, entry := range env {
+		if strings.HasPrefix(entry, "TMUX=") || strings.HasPrefix(entry, "TMUX_PANE=") {
+			continue
+		}
+		out = append(out, entry)
+	}
+	return out
 }
 
 func (m *Model) startProject(session SessionItem) tea.Cmd {
@@ -1349,6 +1389,73 @@ func (m *Model) startProject(session SessionItem) tea.Cmd {
 		}
 		return SuccessMsg{Message: "Session started"}
 	})
+}
+
+func (m *Model) startProjectDetached(session SessionItem) tea.Cmd {
+	args := []string{"start", "--session", session.Name, "--detach"}
+	if session.Path != "" {
+		if err := validateProjectPath(session.Path); err != nil {
+			m.setToast("Start failed: "+err.Error(), toastError)
+			return nil
+		}
+		args = append(args, "--path", session.Path)
+	}
+	if session.LayoutName != "" {
+		args = append(args, "--layout", session.LayoutName)
+	}
+	return tea.ExecProcess(exec.Command(selfExecutable(), args...), func(err error) tea.Msg {
+		if err != nil {
+			return WarningMsg{Message: "Start failed: " + err.Error()}
+		}
+		return SuccessMsg{Message: "Session started (detached)"}
+	})
+}
+
+func (m *Model) startSessionWithBehavior(sessionName, path, layoutName string) tea.Cmd {
+	switch m.settings.AttachBehavior {
+	case AttachBehaviorNewTerminal:
+		return m.startSessionInNewTerminal(sessionName, path, layoutName)
+	case AttachBehaviorDetached:
+		args := []string{"start", "--session", sessionName, "--path", path, "--detach"}
+		if strings.TrimSpace(layoutName) != "" {
+			args = append(args, "--layout", layoutName)
+		}
+		return tea.ExecProcess(exec.Command(selfExecutable(), args...), func(err error) tea.Msg {
+			if err != nil {
+				return WarningMsg{Message: "Start failed: " + err.Error()}
+			}
+			return SuccessMsg{Message: "Session started (detached): " + sessionName}
+		})
+	default:
+		args := []string{"start", "--session", sessionName, "--path", path}
+		if strings.TrimSpace(layoutName) != "" {
+			args = append(args, "--layout", layoutName)
+		}
+		return tea.ExecProcess(exec.Command(selfExecutable(), args...), func(err error) tea.Msg {
+			if err != nil {
+				return WarningMsg{Message: "Start failed: " + err.Error()}
+			}
+			return SuccessMsg{Message: "Session started: " + sessionName}
+		})
+	}
+}
+
+func (m *Model) startSessionInNewTerminal(sessionName, path, layoutName string) tea.Cmd {
+	args := []string{"start", "--session", sessionName, "--path", path}
+	if strings.TrimSpace(layoutName) != "" {
+		args = append(args, "--layout", layoutName)
+	}
+	tmuxEnv := ""
+	if m.insideTmux {
+		tmuxEnv = strings.TrimSpace(os.Getenv("TMUX"))
+	}
+	command := selfExecutable()
+	if tmuxEnv != "" {
+		envArgs := []string{fmt.Sprintf("TMUX=%s", tmuxEnv), command}
+		command = "/usr/bin/env"
+		args = append(envArgs, args...)
+	}
+	return m.openNewTerminal(command, args, "Session started in new terminal")
 }
 
 func (m *Model) startSessionAtPathDetached(path string) tea.Cmd {
@@ -1677,7 +1784,7 @@ func (m *Model) commandPaletteItems() []list.Item {
 			return nil
 		}},
 		{Label: "Session: Open in new terminal", Desc: "Open session in Ghostty window", Run: func(m *Model) tea.Cmd {
-			return m.openSessionInNewTerminal()
+			return m.openSessionInNewTerminal(false)
 		}},
 		{Label: "Session: Kill session", Desc: "Kill the selected session", Run: func(m *Model) tea.Cmd {
 			m.openKillConfirm()

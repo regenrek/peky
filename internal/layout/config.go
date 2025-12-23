@@ -129,6 +129,7 @@ type DashboardConfig struct {
 	PreviewMode    string                `yaml:"preview_mode,omitempty"` // grid | layout
 	ProjectRoots   []string              `yaml:"project_roots,omitempty"`
 	AgentDetection AgentDetectionConfig  `yaml:"agent_detection,omitempty"`
+	AttachBehavior string                `yaml:"attach_behavior,omitempty"` // current | new_terminal | detached
 	Keymap         DashboardKeymapConfig `yaml:"keymap,omitempty"`
 }
 

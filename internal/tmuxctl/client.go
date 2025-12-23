@@ -746,7 +746,7 @@ func (c *Client) SelectLayout(ctx context.Context, target, layoutName string) er
 }
 
 // SplitWindowWithCmd splits a pane and optionally runs a command.
-func (c *Client) SplitWindowWithCmd(ctx context.Context, target, startDir string, vertical bool, percent int, command string) (string, error) {
+func (c *Client) SplitWindowWithCmd(ctx context.Context, target, startDir string, vertical bool, percent int, command string, detached bool) (string, error) {
 	if target == "" {
 		return "", errors.New("split target cannot be empty")
 	}
@@ -755,6 +755,9 @@ func (c *Client) SplitWindowWithCmd(ctx context.Context, target, startDir string
 		orientation = "-v"
 	}
 	args := []string{"split-window", orientation, "-t", target, "-P", "-F", "#{pane_id}"}
+	if detached {
+		args = append(args, "-d")
+	}
 	if startDir != "" {
 		args = append(args, "-c", startDir)
 	}
@@ -796,11 +799,14 @@ func (c *Client) NewSessionWithCmd(ctx context.Context, session, startDir, windo
 }
 
 // NewWindowWithCmd creates a window and returns the pane ID.
-func (c *Client) NewWindowWithCmd(ctx context.Context, session, windowName, startDir, command string) (string, error) {
+func (c *Client) NewWindowWithCmd(ctx context.Context, session, windowName, startDir, command string, detached bool) (string, error) {
 	if session == "" {
 		return "", errors.New("session name is required")
 	}
 	args := []string{"new-window", "-t", session, "-P", "-F", "#{pane_id}"}
+	if detached {
+		args = append(args, "-d")
+	}
 	if windowName != "" {
 		args = append(args, "-n", windowName)
 	}

@@ -39,6 +39,9 @@ func TestDefaultDashboardConfigDefaults(t *testing.T) {
 	if cfg.PreviewMode != "grid" {
 		t.Fatalf("PreviewMode = %q", cfg.PreviewMode)
 	}
+	if cfg.AttachBehavior != AttachBehaviorNewTerminal {
+		t.Fatalf("AttachBehavior = %q", cfg.AttachBehavior)
+	}
 	if len(cfg.ProjectRoots) != 1 || cfg.ProjectRoots[0] != filepath.Join(home, "projects") {
 		t.Fatalf("ProjectRoots = %#v", cfg.ProjectRoots)
 	}
@@ -55,6 +58,7 @@ func TestDefaultDashboardConfigOverrides(t *testing.T) {
 		ShowThumbnails: &show,
 		PreviewCompact: &compact,
 		PreviewMode:    "layout",
+		AttachBehavior: "new-terminal",
 		ProjectRoots:   []string{"/tmp", "/tmp"},
 	})
 	if err != nil {
@@ -75,6 +79,9 @@ func TestDefaultDashboardConfigOverrides(t *testing.T) {
 	if cfg.PreviewMode != "layout" {
 		t.Fatalf("PreviewMode = %q", cfg.PreviewMode)
 	}
+	if cfg.AttachBehavior != AttachBehaviorNewTerminal {
+		t.Fatalf("AttachBehavior = %q", cfg.AttachBehavior)
+	}
 	if !reflect.DeepEqual(cfg.ProjectRoots, []string{"/tmp"}) {
 		t.Fatalf("ProjectRoots = %#v", cfg.ProjectRoots)
 	}
@@ -82,6 +89,13 @@ func TestDefaultDashboardConfigOverrides(t *testing.T) {
 
 func TestDefaultDashboardConfigInvalidPreviewMode(t *testing.T) {
 	_, err := defaultDashboardConfig(layout.DashboardConfig{PreviewMode: "bad"})
+	if err == nil {
+		t.Fatalf("defaultDashboardConfig() expected error")
+	}
+}
+
+func TestDefaultDashboardConfigInvalidAttachBehavior(t *testing.T) {
+	_, err := defaultDashboardConfig(layout.DashboardConfig{AttachBehavior: "weird"})
 	if err == nil {
 		t.Fatalf("defaultDashboardConfig() expected error")
 	}

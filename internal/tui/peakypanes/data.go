@@ -101,6 +101,10 @@ func defaultDashboardConfig(cfg layout.DashboardConfig) (DashboardConfig, error)
 	if previewMode != "grid" && previewMode != "layout" {
 		return DashboardConfig{}, fmt.Errorf("invalid preview_mode %q (use grid or layout)", previewMode)
 	}
+	attachBehavior, ok := normalizeAttachBehavior(cfg.AttachBehavior)
+	if !ok {
+		return DashboardConfig{}, fmt.Errorf("invalid attach_behavior %q (use current, new_terminal, or detached)", cfg.AttachBehavior)
+	}
 	projectRoots := normalizeProjectRoots(cfg.ProjectRoots)
 	if len(projectRoots) == 0 {
 		projectRoots = defaultProjectRoots()
@@ -120,7 +124,25 @@ func defaultDashboardConfig(cfg layout.DashboardConfig) (DashboardConfig, error)
 		PreviewMode:     previewMode,
 		ProjectRoots:    projectRoots,
 		AgentDetection:  agentDetection,
+		AttachBehavior:  attachBehavior,
 	}, nil
+}
+
+func normalizeAttachBehavior(value string) (string, bool) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return AttachBehaviorNewTerminal, true
+	}
+	switch strings.ToLower(trimmed) {
+	case AttachBehaviorCurrent, "attach", "default":
+		return AttachBehaviorCurrent, true
+	case AttachBehaviorNewTerminal, "new-terminal", "newterminal", "terminal":
+		return AttachBehaviorNewTerminal, true
+	case AttachBehaviorDetached, "detach", "detached-only":
+		return AttachBehaviorDetached, true
+	default:
+		return "", false
+	}
 }
 
 func defaultProjectRoots() []string {

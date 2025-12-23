@@ -32,7 +32,17 @@ var (
 	runDashboardPopupFn  = runDashboardPopup
 	runDashboardHostedFn = runDashboardHosted
 	fatalFn              = fatal
+	currentTTYFn         = tmuxctl.CurrentTTY
+	hasClientOnTTYFn     = defaultHasClientOnTTY
 )
+
+func defaultHasClientOnTTY(ctx context.Context, tty string) (bool, error) {
+	client, err := tmuxctl.NewClient("")
+	if err != nil {
+		return false, err
+	}
+	return client.HasClientOnTTY(ctx, tty)
+}
 
 const helpText = `🎩 Peaky Panes - Tmux Layout Manager
 
@@ -184,6 +194,7 @@ Examples:
 `
 
 func main() {
+	sanitizeTmuxEnv()
 	if len(os.Args) < 2 {
 		// Default: open dashboard directly in the current terminal
 		runMenu()
@@ -232,10 +243,39 @@ func runMenu() {
 		fatal("failed to initialize: %v", err)
 	}
 
-	p := tea.NewProgram(model, tea.WithAltScreen())
+	input, cleanup, err := openTUIInput()
+	if err != nil {
+		fatal("cannot initialize TUI input: %v", err)
+	}
+	defer cleanup()
+
+	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithInput(input))
 	if _, err := p.Run(); err != nil {
 		fatal("TUI error: %v", err)
 	}
+}
+
+func openTUIInput() (*os.File, func(), error) {
+	if f, err := os.OpenFile("/dev/tty", os.O_RDWR, 0); err == nil {
+		if err := ensureBlocking(f); err != nil {
+			_ = f.Close()
+			return nil, func() {}, fmt.Errorf("configure /dev/tty: %w", err)
+		}
+		return f, func() { _ = f.Close() }, nil
+	}
+	if tty := currentTTYFn(); tty != "" {
+		if f, err := os.OpenFile(tty, os.O_RDWR, 0); err == nil {
+			if err := ensureBlocking(f); err != nil {
+				_ = f.Close()
+				return nil, func() {}, fmt.Errorf("configure %s: %w", tty, err)
+			}
+			return f, func() { _ = f.Close() }, nil
+		}
+	}
+	if err := ensureBlocking(os.Stdin); err != nil {
+		return nil, func() {}, fmt.Errorf("stdin is not a usable TUI input: %w", err)
+	}
+	return os.Stdin, func() {}, nil
 }
 
 type dashboardOptions struct {
@@ -633,6 +673,7 @@ ghostty:
 #   idle_seconds: 20
 #   show_thumbnails: true
 #   preview_mode: grid   # grid | layout
+#   attach_behavior: new_terminal  # current | new_terminal | detached
 #   project_roots:
 #     - ~/projects
 #   status_regex:
@@ -1101,7 +1142,7 @@ func createSessionWithLayout(ctx context.Context, client *tmuxctl.Client, sessio
 		// Give tmux a tiny moment
 		time.Sleep(100 * time.Millisecond)
 
-		newPaneID, err := client.SplitWindowWithCmd(ctx, target, projectPath, vertical, percent, pane.Cmd)
+		newPaneID, err := client.SplitWindowWithCmd(ctx, target, projectPath, vertical, percent, pane.Cmd, true)
 		if err != nil {
 			return fmt.Errorf("split pane: %w", err)
 		}
@@ -1128,7 +1169,7 @@ func createSessionWithLayout(ctx context.Context, client *tmuxctl.Client, sessio
 			firstCmd = win.Panes[0].Cmd
 		}
 
-		firstPaneID, err := client.NewWindowWithCmd(ctx, session, win.Name, projectPath, firstCmd)
+		firstPaneID, err := client.NewWindowWithCmd(ctx, session, win.Name, projectPath, firstCmd, true)
 		if err != nil {
 			return fmt.Errorf("create window %s: %w", win.Name, err)
 		}
@@ -1158,7 +1199,7 @@ func createSessionWithLayout(ctx context.Context, client *tmuxctl.Client, sessio
 			// Give tmux a tiny moment
 			time.Sleep(100 * time.Millisecond)
 
-			newPaneID, err := client.SplitWindowWithCmd(ctx, target, projectPath, vertical, percent, pane.Cmd)
+			newPaneID, err := client.SplitWindowWithCmd(ctx, target, projectPath, vertical, percent, pane.Cmd, true)
 			if err != nil {
 				return fmt.Errorf("split pane in %s: %w", win.Name, err)
 			}
@@ -1175,15 +1216,6 @@ func createSessionWithLayout(ctx context.Context, client *tmuxctl.Client, sessio
 		}
 
 		fmt.Printf("(%d panes)\n", len(win.Panes))
-	}
-
-	// Select first window and first pane
-	if len(layoutCfg.Windows) > 0 {
-		windowTarget := fmt.Sprintf("%s:%s", session, layoutCfg.Windows[0].Name)
-		// Select window
-		_ = exec.CommandContext(ctx, "tmux", "select-window", "-t", windowTarget).Run()
-		// Select first pane
-		_ = exec.CommandContext(ctx, "tmux", "select-pane", "-t", windowTarget+".0").Run()
 	}
 
 	return nil
@@ -1274,10 +1306,6 @@ func createSessionWithGridLayout(ctx context.Context, client *tmuxctl.Client, se
 
 	fmt.Printf("(%d panes)\n", grid.Panes())
 
-	windowTarget = fmt.Sprintf("%s:%s", session, windowName)
-	_ = exec.CommandContext(ctx, "tmux", "select-window", "-t", windowTarget).Run()
-	_ = exec.CommandContext(ctx, "tmux", "select-pane", "-t", windowTarget+".0").Run()
-
 	return nil
 }
 
@@ -1285,7 +1313,7 @@ func splitGridColumns(ctx context.Context, client *tmuxctl.Client, projectPath, 
 	remaining := columns
 	for remaining > 1 {
 		percent := gridSplitPercent(remaining)
-		if _, err := client.SplitWindowWithCmd(ctx, targetPane, projectPath, false, percent, ""); err != nil {
+		if _, err := client.SplitWindowWithCmd(ctx, targetPane, projectPath, false, percent, "", true); err != nil {
 			return fmt.Errorf("split grid columns: %w", err)
 		}
 		remaining--
@@ -1298,7 +1326,7 @@ func splitGridRows(ctx context.Context, client *tmuxctl.Client, projectPath, tar
 	remaining := rows
 	for remaining > 1 {
 		percent := gridSplitPercent(remaining)
-		if _, err := client.SplitWindowWithCmd(ctx, targetPane, projectPath, true, percent, ""); err != nil {
+		if _, err := client.SplitWindowWithCmd(ctx, targetPane, projectPath, true, percent, "", true); err != nil {
 			return fmt.Errorf("split grid rows: %w", err)
 		}
 		remaining--
@@ -1420,7 +1448,7 @@ func expandUserPath(path string) string {
 
 func attachToSession(client *tmuxctl.Client, session string) {
 	// Check if we're inside tmux
-	if os.Getenv("TMUX") != "" {
+	if insideTmux() {
 		// Switch client
 		cmd := exec.Command("tmux", "switch-client", "-t", session)
 		cmd.Stdout = os.Stdout
@@ -1432,6 +1460,7 @@ func attachToSession(client *tmuxctl.Client, session string) {
 	} else {
 		// Attach session
 		cmd := exec.Command("tmux", "attach-session", "-t", session)
+		cmd.Env = withoutTmuxEnv(os.Environ())
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		cmd.Stdin = os.Stdin
@@ -1470,8 +1499,46 @@ func sanitizeSessionName(name string) string {
 	return result
 }
 
+func sanitizeTmuxEnv() {
+	if os.Getenv("TMUX") == "" && os.Getenv("TMUX_PANE") == "" {
+		return
+	}
+	if insideTmux() {
+		return
+	}
+	_ = os.Unsetenv("TMUX")
+	_ = os.Unsetenv("TMUX_PANE")
+}
+
+func withoutTmuxEnv(env []string) []string {
+	if len(env) == 0 {
+		return env
+	}
+	out := make([]string, 0, len(env))
+	for _, entry := range env {
+		if strings.HasPrefix(entry, "TMUX=") || strings.HasPrefix(entry, "TMUX_PANE=") {
+			continue
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
 func insideTmux() bool {
-	return os.Getenv("TMUX") != "" || os.Getenv("TMUX_PANE") != ""
+	if os.Getenv("TMUX") == "" && os.Getenv("TMUX_PANE") == "" {
+		return false
+	}
+	tty := currentTTYFn()
+	if tty == "" {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	ok, err := hasClientOnTTYFn(ctx, tty)
+	if err != nil {
+		return false
+	}
+	return ok
 }
 
 func selfExecutable() string {

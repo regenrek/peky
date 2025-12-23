@@ -45,6 +45,12 @@ const (
 	PaneStatusError
 )
 
+const (
+	AttachBehaviorCurrent     = "current"
+	AttachBehaviorNewTerminal = "new_terminal"
+	AttachBehaviorDetached    = "detached"
+)
+
 // DashboardData contains all data required to render the dashboard.
 type DashboardData struct {
 	Projects    []ProjectGroup
@@ -124,6 +130,7 @@ type DashboardConfig struct {
 	PreviewMode     string
 	ProjectRoots    []string
 	AgentDetection  AgentDetectionConfig
+	AttachBehavior  string
 }
 
 // selectionState tracks the current selection by name/index.

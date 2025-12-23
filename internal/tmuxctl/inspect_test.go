@@ -24,6 +24,42 @@ func TestSessionHasClientsNoServer(t *testing.T) {
 	runner.assertDone()
 }
 
+func TestHasClientOnTTY(t *testing.T) {
+	runner := &fakeRunner{t: t, specs: []cmdSpec{{
+		name:   "tmux",
+		args:   []string{"list-clients", "-F", "#{client_tty}"},
+		stdout: "/dev/ttys001\n/dev/ttys002\n",
+		exit:   0,
+	}}}
+	client := &Client{bin: "tmux", run: runner.run}
+	has, err := client.HasClientOnTTY(context.Background(), "/dev/ttys002")
+	if err != nil {
+		t.Fatalf("HasClientOnTTY() error: %v", err)
+	}
+	if !has {
+		t.Fatalf("HasClientOnTTY() should be true")
+	}
+	runner.assertDone()
+}
+
+func TestHasClientOnTTYNoServer(t *testing.T) {
+	runner := &fakeRunner{t: t, specs: []cmdSpec{{
+		name:   "tmux",
+		args:   []string{"list-clients", "-F", "#{client_tty}"},
+		stdout: "no server running",
+		exit:   1,
+	}}}
+	client := &Client{bin: "tmux", run: runner.run}
+	has, err := client.HasClientOnTTY(context.Background(), "/dev/ttys001")
+	if err != nil {
+		t.Fatalf("HasClientOnTTY() error: %v", err)
+	}
+	if has {
+		t.Fatalf("HasClientOnTTY() should be false")
+	}
+	runner.assertDone()
+}
+
 func TestListSessionsInfoParses(t *testing.T) {
 	runner := &fakeRunner{t: t, specs: []cmdSpec{{
 		name:   "tmux",

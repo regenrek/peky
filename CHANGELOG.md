@@ -5,6 +5,8 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.0.3 - 2025-12-23
+
 ### Added
 - Sidebar icon system with size/ASCII fallbacks (`PEAKYPANES_ICON_SET`, `PEAKYPANES_ICON_SIZE`).
 - Command palette action for creating windows.
@@ -18,10 +20,13 @@ This format is based on Keep a Changelog.
 - Window list toggle key moved to ctrl+u to avoid conflicts.
 - Preview header line removed and global header spacing added for cleaner layout.
 - Theme uses design tokens for consistent TUI colors.
+- Dashboard attach behavior is configurable (current terminal, new terminal, or detached).
+- Default attach behavior now opens sessions in a new terminal to avoid switching other tmux clients.
 
 ### Fixed
 - Active/target tile borders now draw fully even when sharing edges.
 - Pane selection no longer jumps back during rapid tab cycling.
+- Session creation no longer switches other tmux clients when launched outside tmux.
 
 ## 0.0.2 - 2025-12-23
 

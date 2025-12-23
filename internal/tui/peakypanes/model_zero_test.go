@@ -74,7 +74,7 @@ func TestAttachOrStartAndSessionActions(t *testing.T) {
 	}
 
 	m.data.Projects[0].Sessions[0].Status = StatusRunning
-	if cmd := m.openSessionInNewTerminal(); cmd == nil {
+	if cmd := m.openSessionInNewTerminal(false); cmd == nil {
 		t.Fatalf("openSessionInNewTerminal() returned nil")
 	}
 	runner.assertDone()

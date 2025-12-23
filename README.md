@@ -286,6 +286,7 @@ dashboard:
   idle_seconds: 20
   show_thumbnails: true
   preview_mode: grid  # grid | layout
+  attach_behavior: new_terminal  # current | new_terminal | detached
   keymap:
     project_left: ["ctrl+a"]
     project_right: ["ctrl+d"]
@@ -305,6 +306,8 @@ dashboard:
     codex: true
     claude: true
 ```
+
+`attach_behavior` controls what the “attach/start” action does (default `new_terminal`): `current` switches the terminal running PeakyPanes into the session, `new_terminal` opens a fresh terminal to attach, and `detached` only creates the session.
 
 ### Agent Status Detection (Codex & Claude Code)
 

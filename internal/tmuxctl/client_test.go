@@ -356,7 +356,7 @@ func TestSplitWindowWithCmdArgs(t *testing.T) {
 		exit:   0,
 	}}}
 	client := &Client{bin: "tmux", run: runner.run}
-	pane, err := client.SplitWindowWithCmd(context.Background(), "%1", "/tmp", true, 50, "echo hi")
+	pane, err := client.SplitWindowWithCmd(context.Background(), "%1", "/tmp", true, 50, "echo hi", false)
 	if err != nil {
 		t.Fatalf("SplitWindowWithCmd() error: %v", err)
 	}
@@ -392,7 +392,7 @@ func TestNewWindowWithCmdArgs(t *testing.T) {
 		exit:   0,
 	}}}
 	client := &Client{bin: "tmux", run: runner.run}
-	pane, err := client.NewWindowWithCmd(context.Background(), "demo", "win", "/tmp", "echo hi")
+	pane, err := client.NewWindowWithCmd(context.Background(), "demo", "win", "/tmp", "echo hi", false)
 	if err != nil {
 		t.Fatalf("NewWindowWithCmd() error: %v", err)
 	}
