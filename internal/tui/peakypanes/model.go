@@ -55,10 +55,10 @@ type dashboardKeyMap struct {
 
 func newDashboardKeyMap() *dashboardKeyMap {
 	return &dashboardKeyMap{
-		projectLeft:    key.NewBinding(key.WithKeys("ctrl+h"), key.WithHelp("ctrl+h", "project")),
-		projectRight:   key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "project")),
-		sessionUp:      key.NewBinding(key.WithKeys("ctrl+k"), key.WithHelp("ctrl+k", "session")),
-		sessionDown:    key.NewBinding(key.WithKeys("ctrl+j"), key.WithHelp("ctrl+j", "session")),
+		projectLeft:    key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "project")),
+		projectRight:   key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "project")),
+		sessionUp:      key.NewBinding(key.WithKeys("w"), key.WithHelp("w", "session")),
+		sessionDown:    key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "session")),
 		paneNext:       key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "pane")),
 		panePrev:       key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("⇧tab", "pane")),
 		attach:         key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "attach")),

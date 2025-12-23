@@ -243,7 +243,7 @@ The dashboard shows:
 - Quick reply bar (always visible) and target pane highlight for follow-ups
 
 Navigation (always visible):
-- `ctrl+h/ctrl+l` project, `ctrl+k/ctrl+j` session, `tab/⇧tab` pane (across windows), `ctrl+g` help
+- `a/d` project, `w/s` session, `tab/⇧tab` pane (across windows), `ctrl+g` help
 
 Key bindings (also shown in the help view):
 
