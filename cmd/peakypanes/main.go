@@ -608,7 +608,7 @@ func initGlobal(layoutName string, force bool) {
 		}
 	}
 
-configContent := `# Peaky Panes - Global Configuration
+	configContent := `# Peaky Panes - Global Configuration
 # https://github.com/regenrek/peakypanes
 
 multiplexer: tmux

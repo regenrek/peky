@@ -140,11 +140,11 @@ type Config struct {
 
 // ProjectLocalConfig is the schema for .peakypanes.yml in project directories.
 type ProjectLocalConfig struct {
-	Session      string            `yaml:"session,omitempty"`
-	Multiplexer  string            `yaml:"multiplexer,omitempty"`
-	Layout       *LayoutConfig     `yaml:"layout,omitempty"`
-	Vars         map[string]string `yaml:"vars,omitempty"`
-	Tools        ToolsConfig       `yaml:"tools,omitempty"`
+	Session     string            `yaml:"session,omitempty"`
+	Multiplexer string            `yaml:"multiplexer,omitempty"`
+	Layout      *LayoutConfig     `yaml:"layout,omitempty"`
+	Vars        map[string]string `yaml:"vars,omitempty"`
+	Tools       ToolsConfig       `yaml:"tools,omitempty"`
 }
 
 // LoadConfig reads and parses a YAML config file.
