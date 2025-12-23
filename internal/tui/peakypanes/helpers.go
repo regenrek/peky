@@ -6,20 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 )
-
-func statusIcon(s Status) string {
-	switch s {
-	case StatusCurrent:
-		return "◆"
-	case StatusRunning:
-		return "●"
-	case StatusStopped:
-		return "○"
-	default:
-		return "?"
-	}
-}
 
 func expandPath(p string) string {
 	if p == "" {
@@ -77,6 +65,18 @@ func sanitizeSessionName(name string) string {
 		return "session"
 	}
 	return result
+}
+
+func validateTmuxName(name string) error {
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("Name cannot be empty")
+	}
+	for _, r := range name {
+		if unicode.IsControl(r) {
+			return fmt.Errorf("Name contains control characters")
+		}
+	}
+	return nil
 }
 
 func selfExecutable() string {

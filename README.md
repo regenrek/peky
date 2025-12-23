@@ -243,7 +243,7 @@ The dashboard shows:
 - Quick reply bar (always visible) and target pane highlight for follow-ups
 
 Navigation (always visible):
-- `ctrl+h/ctrl+l` project, `ctrl+k/ctrl+j` session, `ctrl+u/ctrl+d` window, `tab/⇧tab` pane, `ctrl+g` help
+- `ctrl+h/ctrl+l` project, `ctrl+k/ctrl+j` session, `tab/⇧tab` pane (across windows), `ctrl+g` help
 
 Key bindings (also shown in the help view):
 
@@ -262,12 +262,15 @@ Window
 - `ctrl+w` toggle window list
 - rename window via command palette (`ctrl+p`)
 
+Pane
+- rename pane via command palette (`ctrl+p`)
+
 Tmux (inside session)
 - `prefix+g` open dashboard popup (tmux prefix is yours)
 
 Other
 - `ctrl+p` command palette
-- `ctrl+r` refresh, `ctrl+e` edit config, `ctrl+f` filter, `ctrl+q` quit (or `ctrl+c`)
+- `ctrl+r` refresh, `ctrl+e` edit config, `ctrl+f` filter, `ctrl+c` quit
 
 Quick reply details: the input is always active—type and press `enter` to send to the highlighted pane. Use `esc` to clear. `tab/⇧tab` still cycles panes while the input is focused.
 

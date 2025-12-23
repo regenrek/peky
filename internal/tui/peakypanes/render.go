@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/cellbuf"
+	"github.com/regenrek/peakypanes/internal/tui/icons"
 	"github.com/regenrek/peakypanes/internal/tui/theme"
 )
 
@@ -33,19 +34,14 @@ func (m Model) viewDashboardContent() string {
 	}
 
 	header := m.viewHeader(contentWidth)
-	divider := m.dividerLine(contentWidth)
 	footer := m.viewFooter(contentWidth)
 	quickReply := m.viewQuickReply(contentWidth)
 	quickReplyHeight := lipgloss.Height(quickReply)
-	dividerHeight := lipgloss.Height(divider)
 
 	headerHeight := lipgloss.Height(header)
 	footerHeight := lipgloss.Height(footer)
-	dividerCount := 1 // footer divider
-	if showThumbs {
-		dividerCount++
-	}
-	extraLines := headerHeight + footerHeight + quickReplyHeight + (dividerCount * dividerHeight)
+	headerGap := 1
+	extraLines := headerHeight + headerGap + footerHeight + quickReplyHeight
 	if showThumbs {
 		extraLines += thumbHeight
 	}
@@ -53,24 +49,28 @@ func (m Model) viewDashboardContent() string {
 	if bodyHeight < 4 {
 		showThumbs = false
 		thumbHeight = 0
-		dividerCount = 1
-		extraLines = headerHeight + footerHeight + quickReplyHeight + (dividerCount * dividerHeight)
+		headerGap = 0
+		extraLines = headerHeight + headerGap + footerHeight + quickReplyHeight
 		bodyHeight = contentHeight - extraLines
 	}
 
 	body := m.viewBody(contentWidth, bodyHeight)
-	sections := []string{header, body, quickReply}
-	if showThumbs {
-		sections = append(sections, divider, m.viewThumbnails(contentWidth))
+	sections := []string{header}
+	if headerGap > 0 {
+		sections = append(sections, fitLine("", contentWidth))
 	}
-	sections = append(sections, divider, footer)
+	sections = append(sections, body, quickReply)
+	if showThumbs {
+		sections = append(sections, m.viewThumbnails(contentWidth))
+	}
+	sections = append(sections, footer)
 
 	return lipgloss.JoinVertical(lipgloss.Top, sections...)
 }
 
 func (m Model) viewHeader(width int) string {
 	logo := "🎩 Peaky Panes"
-	parts := []string{logo, "Projects:"}
+	parts := []string{logo}
 
 	if len(m.data.Projects) == 0 {
 		parts = append(parts, theme.TabInactive.Render("none"))
@@ -104,19 +104,11 @@ func (m Model) viewBody(width, height int) string {
 	}
 	left := m.viewSidebar(leftWidth, height)
 	right := m.viewPreview(rightWidth, height)
-	sepLine := "│"
-	if height > 1 {
-		sepLine = strings.Repeat("│\n", height-1) + "│"
-	}
-	sep := theme.ListDimmed.Render(sepLine)
-	return lipgloss.JoinHorizontal(lipgloss.Top, left, sep, right)
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 }
 
 func (m Model) viewSidebar(width, height int) string {
 	builder := strings.Builder{}
-	title := theme.SectionTitle.Render("Sessions")
-	builder.WriteString(fitLine(title, width))
-	builder.WriteString("\n")
 
 	project := m.selectedProject()
 	if project == nil {
@@ -130,38 +122,72 @@ func (m Model) viewSidebar(width, height int) string {
 		return padLines(builder.String(), width, height)
 	}
 
-	for _, s := range sessions {
+	iconSet := icons.Active()
+	iconSize := icons.ActiveSize()
+	for i, s := range sessions {
+		isSelectedSession := s.Name == m.selection.Session
 		marker := " "
-		if s.Name == m.selection.Session {
-			marker = "▸"
+		if isSelectedSession {
+			marker = theme.SidebarCaret.Render(iconSet.Caret.BySize(iconSize))
 		}
-		line := fmt.Sprintf("%s %s %s (%d)", marker, statusIcon(s.Status), s.Name, s.WindowCount)
-		if s.Name == m.selection.Session {
-			line = theme.ListSelectedTitle.Render(line)
-		} else if s.Status == StatusStopped {
-			line = theme.ListDimmed.Render(line)
+		nameStyle := theme.SidebarSession
+		if isSelectedSession {
+			nameStyle = theme.SidebarSessionSelected
 		}
+		if s.Status == StatusStopped {
+			nameStyle = theme.SidebarSessionStopped
+		}
+		name := nameStyle.Render(s.Name)
+		count := theme.SidebarMeta.Render(fmt.Sprintf("(%d)", s.WindowCount))
+		line := fmt.Sprintf("%s %s %s", marker, name, count)
 		builder.WriteString(fitLine(line, width))
 		builder.WriteString("\n")
-		if s.Name == m.selection.Session {
-			if s.WindowCount > 0 {
-				builder.WriteString(fitLine(sessionWindowToggleLine(m.expandedSessions[s.Name]), width))
+		if s.WindowCount <= 0 {
+			continue
+		}
+		expanded := m.sessionExpanded(s.Name)
+		if !expanded {
+			if i < len(sessions)-1 {
 				builder.WriteString("\n")
 			}
-			if m.expandedSessions[s.Name] && s.WindowCount > 0 {
-				for _, w := range s.Windows {
-					marker := " "
-					if w.Index == m.selection.Window {
-						marker = "▸"
-					}
-					wline := fmt.Sprintf("  %s %s", marker, w.Name)
-					if w.Index == m.selection.Window {
-						wline = theme.ListSelectedDesc.Render(wline)
-					}
-					builder.WriteString(fitLine(wline, width))
-					builder.WriteString("\n")
+			continue
+		}
+		for _, w := range s.Windows {
+			isSelectedWindow := isSelectedSession && w.Index == m.selection.Window
+			windowLabelStyle := theme.SidebarWindow
+			if isSelectedWindow {
+				windowLabelStyle = theme.SidebarWindowSelected
+			}
+			wline := fmt.Sprintf("%s %s", theme.SidebarPrefix.Render(iconSet.WindowLabel), windowLabelStyle.Render(windowLabel(w)))
+			builder.WriteString(fitLine(wline, width))
+			builder.WriteString("\n")
+			if len(w.Panes) == 0 {
+				continue
+			}
+			selectedPane := ""
+			if isSelectedWindow {
+				selectedPane = m.selection.Pane
+				if selectedPane == "" {
+					selectedPane = activePaneIndex(w.Panes)
 				}
 			}
+			for _, p := range w.Panes {
+				isSelectedPane := isSelectedWindow && selectedPane != "" && p.Index == selectedPane
+				paneMarker := " "
+				if isSelectedPane {
+					paneMarker = theme.SidebarPaneMarker.Render(iconSet.PaneDot.BySize(iconSize))
+				}
+				paneLabelStyle := theme.SidebarPane
+				if isSelectedPane {
+					paneLabelStyle = theme.SidebarPaneSelected
+				}
+				pline := fmt.Sprintf("%s %s", paneMarker, paneLabelStyle.Render(paneLabel(p)))
+				builder.WriteString(fitLine(pline, width))
+				builder.WriteString("\n")
+			}
+		}
+		if i < len(sessions)-1 {
+			builder.WriteString("\n")
 		}
 	}
 
@@ -173,6 +199,17 @@ func (m Model) viewSidebar(width, height int) string {
 	}
 
 	return padLines(builder.String(), width, height)
+}
+
+func (m Model) sessionExpanded(name string) bool {
+	if m.expandedSessions == nil {
+		return true
+	}
+	expanded, ok := m.expandedSessions[name]
+	if !ok {
+		return true
+	}
+	return expanded
 }
 
 func (m Model) viewPreview(width, height int) string {
@@ -190,17 +227,14 @@ func (m Model) viewPreview(width, height int) string {
 		}
 	}
 
-	title := fmt.Sprintf("Pane Preview  • refresh: %ds", int(m.settings.RefreshInterval.Seconds()))
-	lines := []string{fitLine(title, width)}
-
-	gridHeight := height - 2
+	lines := []string{}
+	gridHeight := height
 	if gridHeight < 1 {
 		gridHeight = 1
 	}
 	gridWidth := width
 	grid := renderPanePreview(panes, gridWidth, gridHeight, m.settings.PreviewMode, m.settings.PreviewCompact, m.selection.Pane)
 	lines = append(lines, grid)
-	lines = append(lines, m.dividerLine(width))
 
 	return padLines(strings.Join(lines, "\n"), width, height)
 }
@@ -268,7 +302,7 @@ func (m Model) viewThumbnails(width int) string {
 }
 
 func (m Model) viewFooter(width int) string {
-	base := "ctrl+h/l ←/→ project · ctrl+k/j ↑/↓ session · ctrl+u/d window · tab pane · ctrl+p commands · ctrl+g help"
+	base := "ctrl+h/l ←/→ project · ctrl+k/j ↑/↓ session · tab/shift+tab pane · ctrl+p commands · ctrl+g help · ctrl+c quit"
 	base = theme.ListDimmed.Render(base)
 	toast := m.toastText()
 	if toast == "" {
@@ -400,13 +434,41 @@ func (m Model) viewRename() string {
 	var dialogContent strings.Builder
 
 	title := "Rename Session"
-	if m.state == StateRenameWindow {
+	switch m.state {
+	case StateRenameWindow:
 		title = "Rename Window"
+	case StateRenamePane:
+		title = "Rename Pane"
 	}
 	dialogContent.WriteString(dialogTitleStyle.Render(title))
 	dialogContent.WriteString("\n\n")
 
-	if m.state == StateRenameWindow {
+	if m.state == StateRenamePane {
+		if strings.TrimSpace(m.renameSession) != "" {
+			dialogContent.WriteString(theme.DialogLabel.Render("Session: "))
+			dialogContent.WriteString(theme.DialogValue.Render(m.renameSession))
+			dialogContent.WriteString("\n")
+		}
+		windowLabel := strings.TrimSpace(m.renameWindow)
+		if windowLabel == "" {
+			windowLabel = strings.TrimSpace(m.renameWindowIndex)
+		}
+		if windowLabel != "" {
+			dialogContent.WriteString(theme.DialogLabel.Render("Window: "))
+			dialogContent.WriteString(theme.DialogValue.Render(windowLabel))
+			dialogContent.WriteString("\n")
+		}
+		paneLabel := strings.TrimSpace(m.renamePane)
+		if paneLabel == "" && strings.TrimSpace(m.renamePaneIndex) != "" {
+			paneLabel = fmt.Sprintf("pane %s", strings.TrimSpace(m.renamePaneIndex))
+		}
+		if paneLabel != "" {
+			dialogContent.WriteString(theme.DialogLabel.Render("Pane: "))
+			dialogContent.WriteString(theme.DialogValue.Render(paneLabel))
+			dialogContent.WriteString("\n")
+		}
+		dialogContent.WriteString("\n")
+	} else if m.state == StateRenameWindow {
 		if strings.TrimSpace(m.renameSession) != "" {
 			dialogContent.WriteString(theme.DialogLabel.Render("Session: "))
 			dialogContent.WriteString(theme.DialogValue.Render(m.renameSession))
@@ -511,8 +573,7 @@ func (m Model) viewHelp() string {
 	left.WriteString("Navigation\n")
 	left.WriteString("  ctrl+h/ctrl+l Switch projects\n")
 	left.WriteString("  ctrl+k/ctrl+j Switch sessions\n")
-	left.WriteString("  ctrl+u/ctrl+d Switch windows\n")
-	left.WriteString("  tab/⇧tab Switch panes\n")
+	left.WriteString("  tab/⇧tab Switch panes (across windows)\n")
 	left.WriteString("\nProject\n")
 	left.WriteString("  ctrl+o Open project picker\n")
 	left.WriteString("  ctrl+b Close project\n")
@@ -537,7 +598,7 @@ func (m Model) viewHelp() string {
 	right.WriteString("  ctrl+p Command palette\n")
 	right.WriteString("  ctrl+f Filter sessions\n")
 	right.WriteString("  ctrl+g Close help\n")
-	right.WriteString("  ctrl+q Quit (ctrl+c)\n")
+	right.WriteString("  ctrl+c Quit\n")
 
 	colWidth := 36
 	if m.width > 0 {
@@ -672,6 +733,40 @@ func renderPaneLayout(panes []PaneItem, width, height int, targetPane string) st
 	return c.String()
 }
 
+const (
+	borderLevelDefault = iota
+	borderLevelActive
+	borderLevelTarget
+)
+
+func borderLevelForPane(pane PaneItem, targetPane string) int {
+	if pane.Index == targetPane {
+		return borderLevelTarget
+	}
+	if pane.Active {
+		return borderLevelActive
+	}
+	return borderLevelDefault
+}
+
+func borderColorFor(level int) lipgloss.TerminalColor {
+	switch level {
+	case borderLevelTarget:
+		return theme.BorderTarget
+	case borderLevelActive:
+		return theme.BorderFocused
+	default:
+		return theme.Border
+	}
+}
+
+func maxBorderLevel(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 func renderPaneTiles(panes []PaneItem, width, height int, compact bool, targetPane string) string {
 	if width <= 0 || height <= 0 {
 		return ""
@@ -695,7 +790,7 @@ func renderPaneTiles(panes []PaneItem, width, height int, compact bool, targetPa
 	}
 
 	rows := (len(panes) + cols - 1) / cols
-	gap := 1
+	gap := 0
 	availableHeight := height - gap*(rows-1)
 	if availableHeight < rows {
 		availableHeight = rows
@@ -711,6 +806,11 @@ func renderPaneTiles(panes []PaneItem, width, height int, compact bool, targetPa
 		tileWidth = 14
 	}
 
+	paneLevels := make([]int, len(panes))
+	for i, pane := range panes {
+		paneLevels[i] = borderLevelForPane(pane, targetPane)
+	}
+
 	var renderedRows []string
 	for r := 0; r < rows; r++ {
 		rowHeight := baseHeight
@@ -724,18 +824,58 @@ func renderPaneTiles(panes []PaneItem, width, height int, compact bool, targetPa
 				tiles = append(tiles, padLines("", tileWidth, rowHeight))
 				continue
 			}
-			tiles = append(tiles, renderPaneTile(panes[idx], tileWidth, rowHeight, compact, panes[idx].Index == targetPane))
+			level := paneLevels[idx]
+			rightLevel := borderLevelDefault
+			if c < cols-1 {
+				neighbor := idx + 1
+				if neighbor < len(panes) {
+					rightLevel = paneLevels[neighbor]
+				}
+			}
+			bottomLevel := borderLevelDefault
+			if r < rows-1 {
+				neighbor := idx + cols
+				if neighbor < len(panes) {
+					bottomLevel = paneLevels[neighbor]
+				}
+			}
+			colors := tileBorderColors{
+				top:    borderColorFor(level),
+				left:   borderColorFor(level),
+				right:  borderColorFor(maxBorderLevel(level, rightLevel)),
+				bottom: borderColorFor(maxBorderLevel(level, bottomLevel)),
+			}
+			borders := tileBorders{
+				top:    r == 0,
+				left:   c == 0,
+				right:  true,
+				bottom: true,
+				colors: colors,
+			}
+			tiles = append(tiles, renderPaneTile(panes[idx], tileWidth, rowHeight, compact, panes[idx].Index == targetPane, borders))
 		}
 		row := lipgloss.JoinHorizontal(lipgloss.Top, tiles...)
 		renderedRows = append(renderedRows, row)
-		if r < rows-1 {
-			renderedRows = append(renderedRows, strings.Repeat(" ", width))
-		}
 	}
 	return padLines(strings.Join(renderedRows, "\n"), width, height)
 }
 
-func renderPaneTile(pane PaneItem, width, height int, compact bool, target bool) string {
+type tileBorderColors struct {
+	top    lipgloss.TerminalColor
+	right  lipgloss.TerminalColor
+	bottom lipgloss.TerminalColor
+	left   lipgloss.TerminalColor
+}
+
+type tileBorders struct {
+	top    bool
+	right  bool
+	bottom bool
+	left   bool
+	colors tileBorderColors
+}
+
+func renderPaneTile(pane PaneItem, width, height int, compact bool, target bool, borders tileBorders) string {
 	title := pane.Title
 	if target {
 		title = "TARGET " + title
@@ -747,15 +887,17 @@ func renderPaneTile(pane PaneItem, width, height int, compact bool, target bool)
 	style := lipgloss.NewStyle().
 		Width(width).
 		Height(height).
-		Border(lipgloss.NormalBorder()).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderTop(borders.top).
+		BorderRight(borders.right).
+		BorderBottom(borders.bottom).
+		BorderLeft(borders.left).
 		BorderForeground(theme.Border).
+		BorderTopForeground(borders.colors.top).
+		BorderRightForeground(borders.colors.right).
+		BorderBottomForeground(borders.colors.bottom).
+		BorderLeftForeground(borders.colors.left).
 		Padding(0, 1)
-	if pane.Active {
-		style = style.BorderForeground(theme.BorderFocused)
-	}
-	if target {
-		style = style.BorderForeground(theme.BorderTarget)
-	}
 
 	frameW, frameH := style.GetFrameSize()
 	contentWidth := width - frameW
@@ -826,11 +968,30 @@ func scalePane(p PaneItem, totalW, totalH, width, height int) (int, int, int, in
 	return x1, y1, w, h
 }
 
-func sessionWindowToggleLine(expanded bool) string {
-	if expanded {
-		return "  [▾] windows"
+func windowLabel(window WindowItem) string {
+	name := strings.TrimSpace(window.Name)
+	index := strings.TrimSpace(window.Index)
+	if name == "" {
+		return index
 	}
-	return "  [▸] windows"
+	if index == "" {
+		return name
+	}
+	return fmt.Sprintf("%s %s", index, name)
+}
+
+func paneLabel(pane PaneItem) string {
+	label := strings.TrimSpace(pane.Title)
+	if label == "" {
+		label = strings.TrimSpace(pane.Command)
+	}
+	if label == "" {
+		return fmt.Sprintf("pane %s", pane.Index)
+	}
+	if strings.TrimSpace(pane.Index) == "" {
+		return label
+	}
+	return fmt.Sprintf("%s %s", pane.Index, label)
 }
 
 func windowNameOrDash(name string) string {
@@ -1090,11 +1251,4 @@ func renderBufferLines(buf *cellbuf.Buffer) string {
 		lines[y] = line
 	}
 	return strings.Join(lines, "\n")
-}
-
-func (m Model) dividerLine(width int) string {
-	if width <= 0 {
-		return ""
-	}
-	return theme.ListDimmed.Render(strings.Repeat("─", width))
 }

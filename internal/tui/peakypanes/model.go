@@ -36,8 +36,6 @@ type dashboardKeyMap struct {
 	projectRight   key.Binding
 	sessionUp      key.Binding
 	sessionDown    key.Binding
-	windowUp       key.Binding
-	windowDown     key.Binding
 	paneNext       key.Binding
 	panePrev       key.Binding
 	attach         key.Binding
@@ -61,8 +59,6 @@ func newDashboardKeyMap() *dashboardKeyMap {
 		projectRight:   key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "project")),
 		sessionUp:      key.NewBinding(key.WithKeys("ctrl+k"), key.WithHelp("ctrl+k", "session")),
 		sessionDown:    key.NewBinding(key.WithKeys("ctrl+j"), key.WithHelp("ctrl+j", "session")),
-		windowUp:       key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("ctrl+u", "window")),
-		windowDown:     key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "window")),
 		paneNext:       key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "pane")),
 		panePrev:       key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("⇧tab", "pane")),
 		attach:         key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "attach")),
@@ -76,7 +72,7 @@ func newDashboardKeyMap() *dashboardKeyMap {
 		kill:           key.NewBinding(key.WithKeys("ctrl+x"), key.WithHelp("ctrl+x", "kill session")),
 		closeProject:   key.NewBinding(key.WithKeys("ctrl+b"), key.WithHelp("ctrl+b", "close project")),
 		help:           key.NewBinding(key.WithKeys("ctrl+g"), key.WithHelp("ctrl+g", "help")),
-		quit:           key.NewBinding(key.WithKeys("ctrl+q", "ctrl+c"), key.WithHelp("ctrl+q", "quit")),
+		quit:           key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit")),
 		filter:         key.NewBinding(key.WithKeys("ctrl+f"), key.WithHelp("ctrl+f", "filter")),
 	}
 }
@@ -118,6 +114,8 @@ type Model struct {
 	renameSession     string
 	renameWindow      string
 	renameWindowIndex string
+	renamePane        string
+	renamePaneIndex   string
 
 	projectRootInput textinput.Model
 
@@ -292,6 +290,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.selection = resolveSelection(m.data.Projects, m.selection)
 		}
+		m.syncExpandedSessions()
 		return m, nil
 	case SuccessMsg:
 		m.setToast(msg.Message, toastSuccess)
@@ -323,7 +322,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateHelp(msg)
 		case StateCommandPalette:
 			return m.updateCommandPalette(msg)
-		case StateRenameSession, StateRenameWindow:
+		case StateRenameSession, StateRenameWindow, StateRenamePane:
 			return m.updateRename(msg)
 		case StateProjectRootSetup:
 			return m.updateProjectRootSetup(msg)
@@ -389,18 +388,10 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.sessionDown):
 		m.selectSession(1)
 		return m, m.selectionRefreshCmd()
-	case key.Matches(msg, m.keys.windowUp):
-		m.selectWindow(-1)
-		return m, m.selectionRefreshCmd()
-	case key.Matches(msg, m.keys.windowDown):
-		m.selectWindow(1)
-		return m, m.selectionRefreshCmd()
 	case key.Matches(msg, m.keys.paneNext):
-		m.selectPane(1)
-		return m, nil
+		return m, m.cyclePane(1)
 	case key.Matches(msg, m.keys.panePrev):
-		m.selectPane(-1)
-		return m, nil
+		return m, m.cyclePane(-1)
 	case key.Matches(msg, m.keys.newSession):
 		m.openLayoutPicker()
 		return m, nil
@@ -564,6 +555,8 @@ func (m *Model) openRenameSession() {
 	m.renameSession = session.Name
 	m.renameWindow = ""
 	m.renameWindowIndex = ""
+	m.renamePane = ""
+	m.renamePaneIndex = ""
 	m.initRenameInput(session.Name, "new session name")
 	m.setState(StateRenameSession)
 }
@@ -586,8 +579,73 @@ func (m *Model) openRenameWindow() {
 	m.renameSession = session.Name
 	m.renameWindow = window.Name
 	m.renameWindowIndex = window.Index
+	m.renamePane = ""
+	m.renamePaneIndex = ""
 	m.initRenameInput(window.Name, "new window name")
 	m.setState(StateRenameWindow)
+}
+
+func (m *Model) openNewWindow() tea.Cmd {
+	session := m.selectedSession()
+	if session == nil {
+		m.setToast("No session selected", toastWarning)
+		return nil
+	}
+	if session.Status == StatusStopped {
+		m.setToast("Session not running", toastWarning)
+		return nil
+	}
+	startDir := strings.TrimSpace(session.Path)
+	if startDir == "" {
+		if project := m.selectedProject(); project != nil {
+			startDir = strings.TrimSpace(project.Path)
+		}
+	}
+	if startDir != "" {
+		if err := validateProjectPath(startDir); err != nil {
+			m.setToast("Start failed: "+err.Error(), toastError)
+			return nil
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := m.tmux.NewWindow(ctx, session.Name, "", startDir, ""); err != nil {
+		m.setToast("New window failed: "+err.Error(), toastError)
+		return nil
+	}
+	m.selectionVersion++
+	m.setToast("Opened new window", toastSuccess)
+	return m.refreshCmd()
+}
+
+func (m *Model) openRenamePane() {
+	session := m.selectedSession()
+	if session == nil {
+		m.setToast("No session selected", toastWarning)
+		return
+	}
+	if session.Status == StatusStopped {
+		m.setToast("Session not running", toastWarning)
+		return
+	}
+	window := selectedWindow(session, m.selection.Window)
+	if window == nil {
+		m.setToast("No window selected", toastWarning)
+		return
+	}
+	pane := m.selectedPane()
+	if pane == nil {
+		m.setToast("No pane selected", toastWarning)
+		return
+	}
+	m.renameSession = session.Name
+	m.renameWindow = window.Name
+	m.renameWindowIndex = window.Index
+	m.renamePane = pane.Title
+	m.renamePaneIndex = pane.Index
+	m.initRenameInput(pane.Title, "new pane title")
+	m.setState(StateRenamePane)
 }
 
 func (m *Model) updateRename(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -606,8 +664,8 @@ func (m *Model) updateRename(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *Model) applyRename() tea.Cmd {
 	newName := strings.TrimSpace(m.renameInput.Value())
-	if newName == "" {
-		m.setToast("Name cannot be empty", toastWarning)
+	if err := validateTmuxName(newName); err != nil {
+		m.setToast(err.Error(), toastWarning)
 		return nil
 	}
 
@@ -649,6 +707,37 @@ func (m *Model) applyRename() tea.Cmd {
 		m.selectionVersion++
 		m.setState(StateDashboard)
 		m.setToast("Renamed window to "+newName, toastSuccess)
+		return m.refreshCmd()
+	case StateRenamePane:
+		if newName == m.renamePane {
+			m.setState(StateDashboard)
+			m.setToast("Pane title unchanged", toastInfo)
+			return nil
+		}
+		session := strings.TrimSpace(m.renameSession)
+		window := strings.TrimSpace(m.renameWindowIndex)
+		pane := strings.TrimSpace(m.renamePaneIndex)
+		if session == "" {
+			session = strings.TrimSpace(m.selection.Session)
+		}
+		if window == "" {
+			window = strings.TrimSpace(m.selection.Window)
+		}
+		if pane == "" {
+			pane = strings.TrimSpace(m.selection.Pane)
+		}
+		if session == "" || window == "" || pane == "" {
+			m.setToast("No pane selected", toastWarning)
+			return nil
+		}
+		target := fmt.Sprintf("%s:%s.%s", session, window, pane)
+		if err := m.tmux.SelectPane(ctx, target, newName); err != nil {
+			m.setToast("Rename failed: "+err.Error(), toastError)
+			return nil
+		}
+		m.selectionVersion++
+		m.setState(StateDashboard)
+		m.setToast("Renamed pane to "+newName, toastSuccess)
 		return m.refreshCmd()
 	default:
 		m.setState(StateDashboard)
@@ -835,7 +924,7 @@ func (m *Model) View() string {
 		return m.viewHelp()
 	case StateCommandPalette:
 		return m.viewCommandPalette()
-	case StateRenameSession, StateRenameWindow:
+	case StateRenameSession, StateRenameWindow, StateRenamePane:
 		return m.viewRename()
 	case StateProjectRootSetup:
 		return m.viewProjectRootSetup()
@@ -850,6 +939,26 @@ func (m *Model) setState(state ViewState) {
 		m.quickReplyInput.Focus()
 	} else {
 		m.quickReplyInput.Blur()
+	}
+}
+
+func (m *Model) syncExpandedSessions() {
+	if m.expandedSessions == nil {
+		m.expandedSessions = make(map[string]bool)
+	}
+	current := make(map[string]struct{})
+	for _, project := range m.data.Projects {
+		for _, session := range project.Sessions {
+			current[session.Name] = struct{}{}
+			if _, ok := m.expandedSessions[session.Name]; !ok {
+				m.expandedSessions[session.Name] = true
+			}
+		}
+	}
+	for name := range m.expandedSessions {
+		if _, ok := current[name]; !ok {
+			delete(m.expandedSessions, name)
+		}
 	}
 }
 
@@ -904,13 +1013,52 @@ func (m *Model) selectPane(delta int) {
 	if session == nil {
 		return
 	}
-	window := selectedWindow(session, m.selection.Window)
-	if window == nil || len(window.Panes) == 0 {
+	type paneRef struct {
+		windowIndex string
+		paneIndex   string
+	}
+	var panes []paneRef
+	for _, window := range session.Windows {
+		if len(window.Panes) == 0 {
+			continue
+		}
+		for _, pane := range window.Panes {
+			panes = append(panes, paneRef{windowIndex: window.Index, paneIndex: pane.Index})
+		}
+	}
+	if len(panes) == 0 {
 		return
 	}
-	idx := paneIndex(window.Panes, m.selection.Pane)
-	idx = wrapIndex(idx+delta, len(window.Panes))
-	m.selection.Pane = window.Panes[idx].Index
+
+	currentWindow := strings.TrimSpace(m.selection.Window)
+	if currentWindow == "" {
+		currentWindow = session.ActiveWindow
+	}
+	currentPane := strings.TrimSpace(m.selection.Pane)
+	if currentPane == "" {
+		if window := selectedWindow(session, currentWindow); window != nil && len(window.Panes) > 0 {
+			if active := activePaneIndex(window.Panes); active != "" {
+				currentPane = active
+			} else {
+				currentPane = window.Panes[0].Index
+			}
+		}
+	}
+
+	idx := -1
+	for i, ref := range panes {
+		if ref.windowIndex == currentWindow && ref.paneIndex == currentPane {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		idx = 0
+	}
+	idx = wrapIndex(idx+delta, len(panes))
+	next := panes[idx]
+	m.selection.Window = next.windowIndex
+	m.selection.Pane = next.paneIndex
 }
 
 func (m *Model) toggleWindows() {
@@ -920,6 +1068,16 @@ func (m *Model) toggleWindows() {
 	}
 	current := m.expandedSessions[session.Name]
 	m.expandedSessions[session.Name] = !current
+}
+
+func (m *Model) cyclePane(delta int) tea.Cmd {
+	prevWindow := m.selection.Window
+	m.selectPane(delta)
+	if m.selection.Window != prevWindow {
+		m.selectionVersion++
+		return m.selectionRefreshCmd()
+	}
+	return nil
 }
 
 func (m *Model) attachOrStart() tea.Cmd {
@@ -1258,10 +1416,10 @@ func (m *Model) setupProjectPicker() {
 	delegate := list.NewDefaultDelegate()
 	delegate.Styles.SelectedTitle = delegate.Styles.SelectedTitle.
 		Foreground(theme.TextPrimary).
-		BorderLeftForeground(theme.Secondary)
+		BorderLeftForeground(theme.AccentAlt)
 	delegate.Styles.SelectedDesc = delegate.Styles.SelectedDesc.
 		Foreground(theme.TextSecondary).
-		BorderLeftForeground(theme.Secondary)
+		BorderLeftForeground(theme.AccentAlt)
 
 	l := list.New(nil, delegate, 0, 0)
 	l.Title = "📁 Open Project"
@@ -1326,10 +1484,10 @@ func (m *Model) setupLayoutPicker() {
 	delegate := list.NewDefaultDelegate()
 	delegate.Styles.SelectedTitle = delegate.Styles.SelectedTitle.
 		Foreground(theme.TextPrimary).
-		BorderLeftForeground(theme.Secondary)
+		BorderLeftForeground(theme.AccentAlt)
 	delegate.Styles.SelectedDesc = delegate.Styles.SelectedDesc.
 		Foreground(theme.TextSecondary).
-		BorderLeftForeground(theme.Secondary)
+		BorderLeftForeground(theme.AccentAlt)
 
 	l := list.New(nil, delegate, 0, 0)
 	l.Title = "🧩 New Session Layout"
@@ -1400,7 +1558,7 @@ func (m *Model) setupCommandPalette() {
 	delegate.SetSpacing(0)
 	delegate.Styles.SelectedTitle = delegate.Styles.SelectedTitle.
 		Foreground(theme.TextPrimary).
-		BorderLeftForeground(theme.Secondary)
+		BorderLeftForeground(theme.AccentAlt)
 
 	l := list.New(nil, delegate, 0, 0)
 	l.Title = "⌘ Command Palette"
@@ -1487,12 +1645,20 @@ func (m *Model) commandPaletteItems() []list.Item {
 		{Label: "Session: Open in new terminal", Desc: "Open session in Ghostty window", Run: func(m *Model) tea.Cmd {
 			return m.openSessionInNewTerminal()
 		}},
+		{Label: "Session: Close session", Desc: "Close the selected session", Run: func(m *Model) tea.Cmd {
+			m.openKillConfirm()
+			return nil
+		}},
 		{Label: "Session: Kill session", Desc: "Kill the selected session", Run: func(m *Model) tea.Cmd {
 			m.openKillConfirm()
 			return nil
 		}},
 		{Label: "Pane: Quick reply", Desc: "Send a short follow-up to the selected pane", Run: func(m *Model) tea.Cmd {
 			return m.openQuickReply()
+		}},
+		{Label: "Pane: Rename pane", Desc: "Rename the selected pane title", Run: func(m *Model) tea.Cmd {
+			m.openRenamePane()
+			return nil
 		}},
 		{Label: "Session: Rename session", Desc: "Rename the selected session", Run: func(m *Model) tea.Cmd {
 			m.openRenameSession()
@@ -1501,6 +1667,9 @@ func (m *Model) commandPaletteItems() []list.Item {
 		{Label: "Window: Toggle window list", Desc: "Expand/collapse window list", Run: func(m *Model) tea.Cmd {
 			m.toggleWindows()
 			return nil
+		}},
+		{Label: "Window: New window", Desc: "Create a new window in the selected session", Run: func(m *Model) tea.Cmd {
+			return m.openNewWindow()
 		}},
 		{Label: "Window: Rename window", Desc: "Rename the selected window", Run: func(m *Model) tea.Cmd {
 			m.openRenameWindow()
@@ -1548,11 +1717,9 @@ func (m *Model) openQuickReply() tea.Cmd {
 func (m *Model) updateQuickReply(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.paneNext):
-		m.selectPane(1)
-		return m, nil
+		return m, m.cyclePane(1)
 	case key.Matches(msg, m.keys.panePrev):
-		m.selectPane(-1)
-		return m, nil
+		return m, m.cyclePane(-1)
 	}
 	switch msg.String() {
 	case "enter":

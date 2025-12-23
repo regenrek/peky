@@ -7,29 +7,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// TestStatusIcon tests the status icon helper function
-func TestStatusIcon(t *testing.T) {
-	tests := []struct {
-		name   string
-		status Status
-		want   string
-	}{
-		{name: "current", status: StatusCurrent, want: "◆"},
-		{name: "running", status: StatusRunning, want: "●"},
-		{name: "stopped", status: StatusStopped, want: "○"},
-		{name: "unknown", status: Status(99), want: "?"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := statusIcon(tt.status)
-			if got != tt.want {
-				t.Errorf("statusIcon(%d) = %q, want %q", tt.status, got, tt.want)
-			}
-		})
-	}
-}
-
 // TestExpandPath tests the path expansion helper
 func TestExpandPath(t *testing.T) {
 	tests := []struct {
@@ -163,5 +140,8 @@ func TestKeyBindings(t *testing.T) {
 	}
 	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlG}, km.help) {
 		t.Error("help binding should match ctrl+g")
+	}
+	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlC}, km.quit) {
+		t.Error("quit binding should match ctrl+c")
 	}
 }

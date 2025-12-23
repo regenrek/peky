@@ -88,13 +88,18 @@ func TestPickersAndRenamePaths(t *testing.T) {
 			Status:       StatusRunning,
 			ActiveWindow: "1",
 			Path:         m.configPath,
-			Windows:      []WindowItem{{Index: "1", Name: "win"}},
+			Windows: []WindowItem{{
+				Index: "1",
+				Name:  "win",
+				Panes: []PaneItem{{Index: "0", Title: "pane"}},
+			}},
 		}},
 	}}}
 	m.selection = selectionState{Project: "Proj", Session: "sess", Window: "1"}
 
 	m.openRenameSession()
 	m.openRenameWindow()
+	m.openRenamePane()
 	_, _ = m.updateRename(tea.KeyMsg{Type: tea.KeyEsc})
 
 	m.openProjectPicker()

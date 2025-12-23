@@ -235,6 +235,8 @@ func TestBuildDashboardData(t *testing.T) {
 		{name: "tmux", args: []string{"list-sessions", "-F", "#{session_name}\t#{session_path}"}, stdout: fmt.Sprintf("app\t%s\n", tmpDir), exit: 0},
 		{name: "tmux", args: []string{"list-windows", "-t", "app", "-F", "#{window_index}\t#{window_name}\t#{window_active}"}, stdout: "0\tmain\t1\n1\tlogs\t0\n", exit: 0},
 		{name: "tmux", args: []string{"list-panes", "-t", "app:0", "-F", fullFormat}, stdout: paneLine, exit: 0},
+		{name: "tmux", args: []string{"list-panes", "-t", "app:1", "-F", fullFormat}, stdout: paneLine, exit: 0},
+		{name: "tmux", args: []string{"list-panes", "-t", "app:0", "-F", fullFormat}, stdout: paneLine, exit: 0},
 		{name: "tmux", args: []string{"capture-pane", "-p", "-J", "-a", "-t", "app:0.0", "-S", "0", "-E", "-"}, stdout: "done\n", exit: 0},
 		{name: "tmux", args: []string{"list-panes", "-t", "app:0", "-F", fullFormat}, stdout: paneLine, exit: 0},
 		{name: "tmux", args: []string{"capture-pane", "-p", "-J", "-a", "-t", "app:0.0", "-S", "0", "-E", "-"}, stdout: "line1\nline2\n", exit: 0},

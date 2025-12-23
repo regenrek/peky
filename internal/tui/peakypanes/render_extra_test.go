@@ -80,12 +80,6 @@ func TestRenderHelpers(t *testing.T) {
 	if out := padRight("x", 3); out != "x  " {
 		t.Fatalf("padRight() = %q", out)
 	}
-	if out := sessionWindowToggleLine(true); !strings.Contains(out, "▾") {
-		t.Fatalf("sessionWindowToggleLine(true) = %q", out)
-	}
-	if out := sessionWindowToggleLine(false); !strings.Contains(out, "▸") {
-		t.Fatalf("sessionWindowToggleLine(false) = %q", out)
-	}
 }
 
 func TestLayoutAndPathHelpers(t *testing.T) {
@@ -135,6 +129,15 @@ func TestViewStates(t *testing.T) {
 	m.state = StateRenameSession
 	if out := m.View(); strings.TrimSpace(out) == "" {
 		t.Fatalf("View(StateRenameSession) empty")
+	}
+
+	m.renameSession = "sess"
+	m.renameWindowIndex = "1"
+	m.renamePaneIndex = "0"
+	m.initRenameInput("pane", "new name")
+	m.state = StateRenamePane
+	if out := m.View(); strings.TrimSpace(out) == "" {
+		t.Fatalf("View(StateRenamePane) empty")
 	}
 
 	m.projectRootInput.SetValue("/tmp")
