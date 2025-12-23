@@ -22,6 +22,7 @@ const (
 	StateCommandPalette
 	StateRenameSession
 	StateRenameWindow
+	StateRenamePane
 	StateProjectRootSetup
 )
 

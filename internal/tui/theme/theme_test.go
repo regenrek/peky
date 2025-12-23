@@ -89,14 +89,16 @@ func TestStylesNotNil(t *testing.T) {
 // TestColorsAreDefined ensures all colors are properly defined
 func TestColorsAreDefined(t *testing.T) {
 	colors := map[string]interface{}{
-		"Primary":       Primary,
-		"PrimaryLight":  PrimaryLight,
-		"Secondary":     Secondary,
-		"SecondaryDark": SecondaryDark,
+		"Accent":        Accent,
+		"AccentSoft":    AccentSoft,
+		"AccentAlt":     AccentAlt,
 		"TextPrimary":   TextPrimary,
 		"TextSecondary": TextSecondary,
 		"TextMuted":     TextMuted,
 		"TextDim":       TextDim,
+		"Surface":       Surface,
+		"SurfaceAlt":    SurfaceAlt,
+		"SurfaceMuted":  SurfaceMuted,
 		"Border":        Border,
 		"BorderFocused": BorderFocused,
 		"Logo":          Logo,

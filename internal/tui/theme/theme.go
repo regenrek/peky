@@ -4,44 +4,49 @@ package theme
 
 import "github.com/charmbracelet/lipgloss"
 
-// Color palette - using adaptive colors for light/dark terminal support
+// Design tokens for consistent TUI colors.
 var (
-	// Primary brand colors
-	Primary       = lipgloss.Color("#7D56F4") // Purple accent
-	PrimaryLight  = lipgloss.Color("#9B7EF7")
-	Secondary     = lipgloss.Color("#25A065") // Green accent
-	SecondaryDark = lipgloss.Color("#1D8051")
+	// Accent colors
+	Accent     = lipgloss.Color("#3B82F6") // highlight blue
+	AccentSoft = lipgloss.Color("#60A5FA")
+	AccentAlt  = lipgloss.Color("#22C55E")
 
 	// Status colors
-	Success = lipgloss.AdaptiveColor{Light: "#04B575", Dark: "#04B575"}
-	Warning = lipgloss.AdaptiveColor{Light: "#FFA500", Dark: "#FFB627"}
-	Error   = lipgloss.AdaptiveColor{Light: "#FF4444", Dark: "#FF6B6B"}
-	Info    = lipgloss.AdaptiveColor{Light: "#3498DB", Dark: "#5DADE2"}
+	Success = lipgloss.AdaptiveColor{Light: "#16A34A", Dark: "#22C55E"}
+	Warning = lipgloss.AdaptiveColor{Light: "#F59E0B", Dark: "#FBBF24"}
+	Error   = lipgloss.AdaptiveColor{Light: "#EF4444", Dark: "#F87171"}
+	Info    = lipgloss.AdaptiveColor{Light: "#38BDF8", Dark: "#60A5FA"}
 
 	// Text colors
-	TextPrimary   = lipgloss.Color("#FFFDF5")
-	TextSecondary = lipgloss.Color("#B8B8B8")
-	TextMuted     = lipgloss.Color("#808080")
-	TextDim       = lipgloss.Color("#555555")
+	TextPrimary   = lipgloss.Color("#F8FAFC")
+	TextSecondary = lipgloss.Color("#CBD5E1")
+	TextMuted     = lipgloss.Color("#94A3B8")
+	TextDim       = lipgloss.Color("#64748B")
+
+	// Surface colors
+	Surface      = lipgloss.Color("#1A1A1A")
+	SurfaceAlt   = lipgloss.Color("#242424")
+	SurfaceMuted = lipgloss.Color("#2E2E2E")
+	SurfaceInset = lipgloss.Color("#3A3A3A")
 
 	// UI element colors
-	Border        = lipgloss.Color("210")
-	BorderFocused = lipgloss.Color("#7D56F4")
-	BorderTarget  = lipgloss.Color("#25A065")
-	Background    = lipgloss.Color("#1a1a1a")
-	Highlight     = lipgloss.Color("#3a3a3a")
-	QuickReplyBg  = lipgloss.Color("#444444")
-	QuickReplyTag = lipgloss.Color("#555555")
-	QuickReplyAcc = lipgloss.Color("#6a6a6a")
+	Border        = lipgloss.Color("#3A3A3A")
+	BorderFocused = Accent
+	BorderTarget  = AccentAlt
+	Background    = Surface
+	Highlight     = SurfaceAlt
+	QuickReplyBg  = SurfaceMuted
+	QuickReplyTag = SurfaceInset
+	QuickReplyAcc = SurfaceInset
 
 	// Dialog colors
-	DialogBorderColor = lipgloss.Color("210")
-	DialogLabelColor  = lipgloss.Color("244")
-	DialogValueColor  = lipgloss.Color("252")
-	DialogChoiceColor = lipgloss.Color("114")
+	DialogBorderColor = Accent
+	DialogLabelColor  = TextMuted
+	DialogValueColor  = TextSecondary
+	DialogChoiceColor = AccentSoft
 
 	// Logo color
-	Logo = lipgloss.Color("#FFFF99")
+	Logo = lipgloss.Color("#FDE68A")
 )
 
 // ===== Base Styles =====
@@ -54,20 +59,20 @@ var App = lipgloss.NewStyle().Padding(1, 2)
 // Title is the main title style (e.g., "🎩 Peaky Panes")
 var Title = lipgloss.NewStyle().
 	Foreground(TextPrimary).
-	Background(Primary).
+	Background(Accent).
 	Padding(0, 1)
 
 // TitleAlt is an alternative title style (e.g., project picker)
 var TitleAlt = lipgloss.NewStyle().
 	Foreground(TextPrimary).
-	Background(Secondary).
+	Background(AccentAlt).
 	Padding(0, 1)
 
 // HelpTitle for help/shortcut views
 var HelpTitle = lipgloss.NewStyle().
 	Bold(true).
-	Foreground(lipgloss.Color("229")).
-	Background(lipgloss.Color("57")).
+	Foreground(TextPrimary).
+	Background(Accent).
 	Padding(0, 1).
 	MarginBottom(1)
 
@@ -102,15 +107,15 @@ var DialogTitle = lipgloss.NewStyle().
 
 // DialogLabel for labels in dialogs
 var DialogLabel = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("244"))
+	Foreground(DialogLabelColor)
 
 // DialogValue for values in dialogs
 var DialogValue = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("252"))
+	Foreground(DialogValueColor)
 
 // DialogNote for italic notes
 var DialogNote = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("244")).
+	Foreground(DialogLabelColor).
 	Italic(true)
 
 // DialogChoiceKey for highlighted keys (y/n)
@@ -119,54 +124,103 @@ var DialogChoiceKey = lipgloss.NewStyle().
 
 // DialogChoiceSep for separators in choices
 var DialogChoiceSep = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("244"))
+	Foreground(DialogLabelColor)
 
 // ===== List Delegate Styles =====
 
 // ListSelectedTitle for selected items in lists
 var ListSelectedTitle = lipgloss.NewStyle().
 	Foreground(TextPrimary).
-	BorderLeftForeground(Primary)
+	BorderLeftForeground(Accent)
 
 // ListSelectedDesc for selected item descriptions
 var ListSelectedDesc = lipgloss.NewStyle().
 	Foreground(TextSecondary).
-	BorderLeftForeground(Primary)
+	BorderLeftForeground(Accent)
 
 // ListSelectedTitleAlt for alternative lists (project picker)
 var ListSelectedTitleAlt = lipgloss.NewStyle().
 	Foreground(TextPrimary).
-	BorderLeftForeground(Secondary)
+	BorderLeftForeground(AccentAlt)
 
 // ListSelectedDescAlt for alternative list descriptions
 var ListSelectedDescAlt = lipgloss.NewStyle().
 	Foreground(TextSecondary).
-	BorderLeftForeground(Secondary)
+	BorderLeftForeground(AccentAlt)
 
 // ListDimmed for dimmed/background list views
 var ListDimmed = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("240"))
+	Foreground(TextDim)
+
+// ===== Sidebar Styles =====
+
+// SidebarCaret highlights the active caret in the sidebar.
+var SidebarCaret = lipgloss.NewStyle().
+	Foreground(Accent).
+	Bold(true)
+
+// SidebarPaneMarker highlights the active pane marker.
+var SidebarPaneMarker = lipgloss.NewStyle().
+	Foreground(Accent).
+	Bold(true)
+
+// SidebarSession for session rows.
+var SidebarSession = lipgloss.NewStyle().
+	Foreground(TextPrimary)
+
+// SidebarSessionSelected for the active session.
+var SidebarSessionSelected = lipgloss.NewStyle().
+	Foreground(TextPrimary).
+	Bold(true)
+
+// SidebarSessionStopped for stopped sessions.
+var SidebarSessionStopped = lipgloss.NewStyle().
+	Foreground(TextDim)
+
+// SidebarWindow for window rows.
+var SidebarWindow = lipgloss.NewStyle().
+	Foreground(TextSecondary)
+
+// SidebarWindowSelected for the active window.
+var SidebarWindowSelected = lipgloss.NewStyle().
+	Foreground(TextPrimary)
+
+// SidebarPane for pane rows.
+var SidebarPane = lipgloss.NewStyle().
+	Foreground(TextMuted)
+
+// SidebarPaneSelected for the active pane.
+var SidebarPaneSelected = lipgloss.NewStyle().
+	Foreground(TextSecondary)
+
+// SidebarMeta for counts or metadata.
+var SidebarMeta = lipgloss.NewStyle().
+	Foreground(TextDim)
+
+// SidebarPrefix for row labels like "win"/"pane".
+var SidebarPrefix = lipgloss.NewStyle().
+	Foreground(TextDim)
 
 // ===== Shortcut/Help Styles =====
 
 // ShortcutKey for keyboard shortcut keys
 var ShortcutKey = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("114")).
+	Foreground(AccentSoft).
 	Bold(true).
 	Width(22)
 
 // ShortcutDesc for shortcut descriptions
 var ShortcutDesc = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("252"))
+	Foreground(TextSecondary)
 
 // ShortcutNote for footnotes in help views
 var ShortcutNote = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("244")).
+	Foreground(TextMuted).
 	Italic(true)
 
 // ShortcutHint for close/action hints
 var ShortcutHint = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("241"))
+	Foreground(TextDim)
 
 // ===== Tabs and Sections =====
 
@@ -174,7 +228,7 @@ var ShortcutHint = lipgloss.NewStyle().
 var TabActive = lipgloss.NewStyle().
 	Bold(true).
 	Foreground(TextPrimary).
-	Background(Primary).
+	Background(Accent).
 	Padding(0, 1)
 
 // TabInactive for inactive tabs.
@@ -187,7 +241,7 @@ var TabInactive = lipgloss.NewStyle().
 var TabAdd = lipgloss.NewStyle().
 	Bold(true).
 	Foreground(TextPrimary).
-	Background(Secondary).
+	Background(AccentAlt).
 	Padding(0, 1)
 
 // SectionTitle for sidebar/panel headers.
@@ -202,22 +256,22 @@ var SectionTitle = lipgloss.NewStyle().
 // StatusBadgeRunning for running activity.
 var StatusBadgeRunning = lipgloss.NewStyle().
 	Bold(true).
-	Foreground(lipgloss.Color("229")).
-	Background(lipgloss.Color("60")).
+	Foreground(TextPrimary).
+	Background(Info).
 	Padding(0, 1)
 
 // StatusBadgeDone for successful completion.
 var StatusBadgeDone = lipgloss.NewStyle().
 	Bold(true).
-	Foreground(lipgloss.Color("16")).
-	Background(lipgloss.Color("114")).
+	Foreground(TextPrimary).
+	Background(Success).
 	Padding(0, 1)
 
 // StatusBadgeError for failures.
 var StatusBadgeError = lipgloss.NewStyle().
 	Bold(true).
-	Foreground(lipgloss.Color("15")).
-	Background(lipgloss.Color("160")).
+	Foreground(TextPrimary).
+	Background(Error).
 	Padding(0, 1)
 
 // StatusBadgeIdle for idle/unknown.
@@ -249,7 +303,7 @@ var ErrorTitle = lipgloss.NewStyle().
 
 // ErrorMessage for error body text
 var ErrorMessage = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("252"))
+	Foreground(TextSecondary)
 
 // ===== Helper Functions =====
 

@@ -68,10 +68,11 @@ func TestSendQuickReplyEmpty(t *testing.T) {
 	}
 }
 
-func TestRenameSessionAndWindow(t *testing.T) {
+func TestRenameSessionWindowAndPane(t *testing.T) {
 	specs := []cmdSpec{
 		{name: "tmux", args: []string{"rename-session", "-t", "old", "new"}, exit: 0},
 		{name: "tmux", args: []string{"rename-window", "-t", "sess:1", "win"}, exit: 0},
+		{name: "tmux", args: []string{"select-pane", "-t", "sess:1.0", "-T", "pane"}, exit: 0},
 	}
 	m, runner := newTestModel(t, specs)
 	m.selection = selectionState{Project: "Proj", Session: "old", Window: "1"}
@@ -92,6 +93,15 @@ func TestRenameSessionAndWindow(t *testing.T) {
 	m.state = StateRenameWindow
 	m.renameInput = textinput.New()
 	m.renameInput.SetValue("win")
+	m.applyRename()
+
+	m.renameSession = "sess"
+	m.renameWindowIndex = "1"
+	m.renamePane = "oldpane"
+	m.renamePaneIndex = "0"
+	m.state = StateRenamePane
+	m.renameInput = textinput.New()
+	m.renameInput.SetValue("pane")
 	m.applyRename()
 
 	runner.assertDone()
@@ -125,6 +135,27 @@ func TestUpdateConfirmCloseProject(t *testing.T) {
 	if m.state != StateDashboard {
 		t.Fatalf("state = %v", m.state)
 	}
+	runner.assertDone()
+}
+
+func TestOpenNewWindow(t *testing.T) {
+	tmpDir := t.TempDir()
+	specs := []cmdSpec{{name: "tmux", args: []string{"new-window", "-t", "sess", "-c", tmpDir}, exit: 0}}
+	m, runner := newTestModel(t, specs)
+	m.data = DashboardData{Projects: []ProjectGroup{{
+		Name: "Proj",
+		Path: tmpDir,
+		Sessions: []SessionItem{{
+			Name:         "sess",
+			Status:       StatusRunning,
+			Path:         tmpDir,
+			ActiveWindow: "1",
+		}},
+	}}}
+	m.selection = selectionState{Project: "Proj", Session: "sess", Window: "1"}
+
+	_ = m.openNewWindow()
+
 	runner.assertDone()
 }
 

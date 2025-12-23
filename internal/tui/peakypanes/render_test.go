@@ -42,7 +42,19 @@ func TestRenderPaneTileKeepsLastPreviewLine(t *testing.T) {
 		},
 	}
 
-	out := renderPaneTile(pane, 12, 6, false, false)
+	colors := tileBorderColors{
+		top:    borderColorFor(borderLevelDefault),
+		right:  borderColorFor(borderLevelDefault),
+		bottom: borderColorFor(borderLevelDefault),
+		left:   borderColorFor(borderLevelDefault),
+	}
+	out := renderPaneTile(pane, 12, 6, false, false, tileBorders{
+		top:    true,
+		right:  true,
+		bottom: true,
+		left:   true,
+		colors: colors,
+	})
 	if !strings.Contains(out, "hi") {
 		t.Fatalf("renderPaneTile() missing last preview line: %q", out)
 	}
@@ -77,7 +89,7 @@ func TestViewQuickReplyClampsInputWidth(t *testing.T) {
 	}
 }
 
-func TestViewPreviewDividerFitsSmallHeight(t *testing.T) {
+func TestViewPreviewFitsSmallHeight(t *testing.T) {
 	m, _ := newTestModel(t, nil)
 	m.settings.RefreshInterval = 2 * time.Second
 	m.data = DashboardData{Projects: []ProjectGroup{{
@@ -110,8 +122,7 @@ func TestViewPreviewDividerFitsSmallHeight(t *testing.T) {
 	if len(lines) != height {
 		t.Fatalf("viewPreview() lines = %d, want %d", len(lines), height)
 	}
-	divider := strings.Repeat("─", width)
-	if lines[len(lines)-1] != divider {
-		t.Fatalf("viewPreview() last line = %q, want divider %q", lines[len(lines)-1], divider)
+	if strings.Contains(out, "Pane Preview") {
+		t.Fatalf("viewPreview() should not include title: %q", out)
 	}
 }

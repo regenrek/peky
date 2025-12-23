@@ -6,13 +6,19 @@ This format is based on Keep a Changelog.
 ## Unreleased
 
 ### Added
-- (none)
+- Sidebar icon system with size/ASCII fallbacks (`PEAKYPANES_ICON_SET`, `PEAKYPANES_ICON_SIZE`).
+- Command palette action for creating windows.
 
 ### Changed
-- (none)
+- Sidebar hierarchy styling (single caret, per-session spacing, no "Windows"/"Sessions" labels).
+- Pane preview tiles use collapsed borders with consistent shared edges and highlight colors.
+- Tab/shift+tab now cycles panes across windows; footer help reflects new navigation.
+- Preview header line removed and global header spacing added for cleaner layout.
+- Theme uses design tokens for consistent TUI colors.
 
 ### Fixed
-- (none)
+- Active/target tile borders now draw fully even when sharing edges.
+- Pane selection no longer jumps back during rapid tab cycling.
 
 ## 0.0.2 - 2025-12-23
 

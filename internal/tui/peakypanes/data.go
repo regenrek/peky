@@ -284,6 +284,13 @@ func buildDashboardData(ctx context.Context, client *tmuxctl.Client, input tmuxS
 
 	resolved := resolveSelection(groups, selected)
 
+	if resolved.Project != "" {
+		if err := populateProjectPanes(ctx, client, groups, resolved.Project); err != nil {
+			result.Err = err
+			return result
+		}
+	}
+
 	// Populate thumbnails and preview panes
 	for gi := range groups {
 		for si := range groups[gi].Sessions {
@@ -568,6 +575,34 @@ func lastNonEmpty(lines []string) string {
 		}
 	}
 	return ""
+}
+
+func populateProjectPanes(ctx context.Context, client *tmuxctl.Client, groups []ProjectGroup, projectName string) error {
+	project := findProject(groups, projectName)
+	if project == nil || client == nil {
+		return nil
+	}
+	for si := range project.Sessions {
+		session := &project.Sessions[si]
+		if session.Status == StatusStopped {
+			continue
+		}
+		if strings.TrimSpace(session.Name) == "" {
+			continue
+		}
+		for wi := range session.Windows {
+			window := &session.Windows[wi]
+			if strings.TrimSpace(window.Index) == "" {
+				continue
+			}
+			panes, err := sessionWindowPanes(ctx, client, session.Name, window.Index, 0)
+			if err != nil {
+				return err
+			}
+			window.Panes = panes
+		}
+	}
+	return nil
 }
 
 func attachPanesToWindow(groups []ProjectGroup, sessionName, windowIndex string, panes []PaneItem) {
