@@ -369,10 +369,14 @@ Manual npm smoke run (fresh HOME/XDG config):
 
 ```bash
 scripts/fresh-run
-scripts/fresh-run 0.0.1 --with-project
+scripts/fresh-run 0.0.2 --with-project
 ```
 
 GitHub Actions runs gofmt checks, go vet, go test with coverage, race, and tmux integration tests on Linux.
+
+## Release
+
+See `RELEASE-DOCS.md` for the full release checklist (tests, tag, GoReleaser, npm publish).
 
 ## Windows
 > npm packages are currently published for macOS and Linux.  

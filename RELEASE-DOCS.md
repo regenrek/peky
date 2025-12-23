@@ -10,10 +10,24 @@ This document is the single source of truth for releasing Peaky Panes.
 
 ## Required Tests (must pass)
 
-Run these before any release:
+Run these before any release (matches CI):
 
 ```bash
-go test ./...
+files=$(git ls-files '*.go')
+if [ -n "$files" ]; then
+  unformatted=$(gofmt -l $files)
+  if [ -n "$unformatted" ]; then
+    echo "gofmt needed on:"
+    echo "$unformatted"
+    exit 1
+  fi
+fi
+
+go vet ./...
+go test ./... -coverprofile=cover.out
+go tool cover -func=cover.out | tail -n 1
+go test ./... -race
+PEAKYPANES_INTEGRATION=1 go test ./internal/tmuxctl -run Integration -count=1
 ```
 
 ## Release Steps
@@ -23,6 +37,7 @@ go test ./...
 2) Update docs:
 - Move `CHANGELOG.md` “Unreleased” → the new version with today’s date.
 - Ensure `README.md` matches current behavior.
+- Update any versioned examples (e.g. `scripts/fresh-run X.Y.Z`).
 
 3) Commit and tag:
 
@@ -75,6 +90,7 @@ The helper requires:
 - clean working tree
 - `CHANGELOG.md` contains the target version
 - npm auth (`npm whoami` must succeed)
+- `goreleaser` installed locally
 
 ## Post-Release Verification
 
