@@ -7,7 +7,7 @@ This format is based on Keep a Changelog.
 
 ### Added
 - Sidebar icon system with size/ASCII fallbacks (`PEAKYPANES_ICON_SET`, `PEAKYPANES_ICON_SIZE`).
-- Command palette actions for creating windows and closing sessions.
+- Command palette action for creating windows.
 
 ### Changed
 - Sidebar hierarchy styling (single caret, per-session spacing, no "Windows"/"Sessions" labels).
@@ -18,6 +18,7 @@ This format is based on Keep a Changelog.
 
 ### Fixed
 - Active/target tile borders now draw fully even when sharing edges.
+- Pane selection no longer jumps back during rapid tab cycling.
 
 ## 0.0.2 - 2025-12-23
 

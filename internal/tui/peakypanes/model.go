@@ -1072,9 +1072,14 @@ func (m *Model) toggleWindows() {
 
 func (m *Model) cyclePane(delta int) tea.Cmd {
 	prevWindow := m.selection.Window
+	prevPane := m.selection.Pane
 	m.selectPane(delta)
+	changed := m.selection.Window != prevWindow || m.selection.Pane != prevPane
+	if !changed {
+		return nil
+	}
+	m.selectionVersion++
 	if m.selection.Window != prevWindow {
-		m.selectionVersion++
 		return m.selectionRefreshCmd()
 	}
 	return nil
@@ -1644,10 +1649,6 @@ func (m *Model) commandPaletteItems() []list.Item {
 		}},
 		{Label: "Session: Open in new terminal", Desc: "Open session in Ghostty window", Run: func(m *Model) tea.Cmd {
 			return m.openSessionInNewTerminal()
-		}},
-		{Label: "Session: Close session", Desc: "Close the selected session", Run: func(m *Model) tea.Cmd {
-			m.openKillConfirm()
-			return nil
 		}},
 		{Label: "Session: Kill session", Desc: "Kill the selected session", Run: func(m *Model) tea.Cmd {
 			m.openKillConfirm()
