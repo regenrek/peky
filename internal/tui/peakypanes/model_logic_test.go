@@ -226,6 +226,7 @@ func TestNeedsProjectRootSetup(t *testing.T) {
 
 func TestSelectHelpers(t *testing.T) {
 	m, _ := newTestModel(t, nil)
+	m.tab = TabProject
 	m.data = DashboardData{Projects: []ProjectGroup{{
 		Name:     "A",
 		Sessions: []SessionItem{{Name: "s1", ActiveWindow: "0", Windows: []WindowItem{{Index: "0", Panes: []PaneItem{{Index: "0", Active: true}, {Index: "1"}}}}}},
@@ -234,9 +235,9 @@ func TestSelectHelpers(t *testing.T) {
 		Sessions: []SessionItem{{Name: "s2", ActiveWindow: "1", Windows: []WindowItem{{Index: "1", Panes: []PaneItem{{Index: "0", Active: true}}}}}},
 	}}}
 	m.selection = selectionState{Project: "A", Session: "s1", Window: "0"}
-	m.selectProject(1)
+	m.selectTab(1)
 	if m.selection.Project != "B" {
-		t.Fatalf("selectProject() = %q", m.selection.Project)
+		t.Fatalf("selectTab() = %q", m.selection.Project)
 	}
 	m.selectSession(1)
 	if m.selection.Session == "" {
@@ -248,6 +249,7 @@ func TestSelectHelpers(t *testing.T) {
 
 func TestSelectionMemoryAcrossProjects(t *testing.T) {
 	m, _ := newTestModel(t, nil)
+	m.tab = TabProject
 	m.data = DashboardData{Projects: []ProjectGroup{{
 		Name: "A",
 		Sessions: []SessionItem{
@@ -267,16 +269,16 @@ func TestSelectionMemoryAcrossProjects(t *testing.T) {
 		t.Fatalf("selectSession() = %q", m.selection.Session)
 	}
 
-	m.selectProject(1)
+	m.selectTab(1)
 	if m.selection.Project != "B" {
-		t.Fatalf("selectProject() = %q", m.selection.Project)
+		t.Fatalf("selectTab() = %q", m.selection.Project)
 	}
 	m.selectSession(1)
 	if m.selection.Session != "b2" {
 		t.Fatalf("selectSession() = %q", m.selection.Session)
 	}
 
-	m.selectProject(-1)
+	m.selectTab(-1)
 	if m.selection.Project != "A" || m.selection.Session != "s2" {
 		t.Fatalf("selection restore = %#v", m.selection)
 	}
@@ -284,6 +286,7 @@ func TestSelectionMemoryAcrossProjects(t *testing.T) {
 
 func TestSelectionMemoryFallbackWhenMissing(t *testing.T) {
 	m, _ := newTestModel(t, nil)
+	m.tab = TabProject
 	m.data = DashboardData{Projects: []ProjectGroup{{
 		Name: "A",
 		Sessions: []SessionItem{
@@ -299,9 +302,9 @@ func TestSelectionMemoryFallbackWhenMissing(t *testing.T) {
 	m.selection = selectionState{Project: "A", Session: "s2", Window: "1"}
 	m.rememberSelection(m.selection)
 
-	m.selectProject(1)
+	m.selectTab(1)
 	if m.selection.Project != "B" {
-		t.Fatalf("selectProject() = %q", m.selection.Project)
+		t.Fatalf("selectTab() = %q", m.selection.Project)
 	}
 
 	m.data = DashboardData{Projects: []ProjectGroup{{
@@ -312,7 +315,7 @@ func TestSelectionMemoryFallbackWhenMissing(t *testing.T) {
 		Sessions: []SessionItem{{Name: "b1", ActiveWindow: "0", Windows: []WindowItem{{Index: "0", Panes: []PaneItem{{Index: "0", Active: true}}}}}},
 	}}}
 
-	m.selectProject(-1)
+	m.selectTab(-1)
 	if m.selection.Project != "A" || m.selection.Session != "s1" {
 		t.Fatalf("selection fallback = %#v", m.selection)
 	}

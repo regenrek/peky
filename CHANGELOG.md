@@ -5,6 +5,14 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Added
+- Dashboard tab now renders per-project columns with pane blocks and multi-line previews.
+- Dashboard pane blocks show bordered tiles with per-pane status and metadata.
+
+### Changed
+- Dashboard navigation uses up/down to move panes within a project column and tab/shift+tab to switch columns; help/footer text updated.
+- Dashboard refresh now captures pane previews for all running sessions (minimum 10 lines per pane).
+
 ## 0.0.3 - 2025-12-23
 
 ### Added

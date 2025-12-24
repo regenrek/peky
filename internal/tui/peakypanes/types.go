@@ -26,6 +26,14 @@ const (
 	StateProjectRootSetup
 )
 
+// DashboardTab represents the active tab within the dashboard view.
+type DashboardTab int
+
+const (
+	TabDashboard DashboardTab = iota
+	TabProject
+)
+
 // Status describes the tmux lifecycle state of a session.
 type Status int
 
@@ -76,6 +84,23 @@ type SessionItem struct {
 	Windows      []WindowItem
 	Thumbnail    PaneSummary
 	Config       *layout.ProjectConfig
+}
+
+// DashboardPane represents a pane with project metadata for the dashboard.
+type DashboardPane struct {
+	ProjectName string
+	ProjectPath string
+	SessionName string
+	WindowIndex string
+	WindowName  string
+	Pane        PaneItem
+}
+
+// DashboardProjectColumn represents a dashboard column for a project.
+type DashboardProjectColumn struct {
+	ProjectName string
+	ProjectPath string
+	Panes       []DashboardPane
 }
 
 // WindowItem represents a tmux window.
@@ -144,6 +169,7 @@ type selectionState struct {
 // tmuxSnapshotInput carries the state needed for refresh.
 type tmuxSnapshotInput struct {
 	Selection selectionState
+	Tab       DashboardTab
 	Version   uint64
 	Config    *layout.Config
 	Settings  DashboardConfig

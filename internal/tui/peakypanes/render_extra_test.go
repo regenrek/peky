@@ -92,7 +92,8 @@ func TestLayoutAndPathHelpers(t *testing.T) {
 	if layoutOrDash("") != "-" {
 		t.Fatalf("layoutOrDash(empty)")
 	}
-	if emptyStateMessage() == "" {
+	m, _ := newTestModel(t, nil)
+	if m.emptyStateMessage() == "" {
 		t.Fatalf("emptyStateMessage() empty")
 	}
 	if out := tailLines([]string{"a", "b", "c"}, 2); len(out) != 2 {

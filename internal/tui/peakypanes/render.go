@@ -72,11 +72,31 @@ func (m Model) viewHeader(width int) string {
 	logo := "🎩 Peaky Panes"
 	parts := []string{logo}
 
+	dashboardLabel := "Dashboard"
+	if m.tab == TabDashboard {
+		parts = append(parts, theme.TabActive.Render(dashboardLabel))
+	} else {
+		parts = append(parts, theme.TabInactive.Render(dashboardLabel))
+	}
+
 	if len(m.data.Projects) == 0 {
 		parts = append(parts, theme.TabInactive.Render("none"))
 	} else {
+		activeProject := m.selection.Project
+		if m.tab == TabProject {
+			found := false
+			for _, p := range m.data.Projects {
+				if p.Name == activeProject {
+					found = true
+					break
+				}
+			}
+			if !found && len(m.data.Projects) > 0 {
+				activeProject = m.data.Projects[0].Name
+			}
+		}
 		for _, p := range m.data.Projects {
-			if p.Name == m.selection.Project {
+			if m.tab == TabProject && p.Name == activeProject {
 				parts = append(parts, theme.TabActive.Render(p.Name))
 			} else {
 				parts = append(parts, theme.TabInactive.Render(p.Name))
@@ -92,6 +112,13 @@ func (m Model) viewBody(width, height int) string {
 	if height <= 0 {
 		return ""
 	}
+	if m.tab == TabDashboard {
+		return m.viewDashboardGrid(width, height)
+	}
+	return m.viewProjectBody(width, height)
+}
+
+func (m Model) viewProjectBody(width, height int) string {
 	base := width / 3
 	leftWidth := clamp(base-(width/30), 22, 36)
 	if leftWidth > width-10 {
@@ -105,6 +132,30 @@ func (m Model) viewBody(width, height int) string {
 	left := m.viewSidebar(leftWidth, height)
 	right := m.viewPreview(rightWidth, height)
 	return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+}
+
+func (m Model) viewDashboardGrid(width, height int) string {
+	if width <= 0 || height <= 0 {
+		return ""
+	}
+	columns := collectDashboardColumns(m.data.Projects)
+	if len(columns) == 0 {
+		return padLines(m.emptyStateMessage(), width, height)
+	}
+	columns = m.filteredDashboardColumns(columns)
+	totalPanes := 0
+	for _, column := range columns {
+		totalPanes += len(column.Panes)
+	}
+	if totalPanes == 0 {
+		if strings.TrimSpace(m.filterInput.Value()) != "" {
+			return padLines("No panes match the current filter.", width, height)
+		}
+		return padLines(m.emptyStateMessage(), width, height)
+	}
+	selectedProject := m.dashboardSelectedProject(columns)
+	previewLines := dashboardPreviewLines(m.settings)
+	return renderDashboardColumns(columns, width, height, selectedProject, m.selection, previewLines)
 }
 
 func (m Model) viewSidebar(width, height int) string {
@@ -218,7 +269,7 @@ func (m Model) viewPreview(width, height int) string {
 	}
 	session := m.selectedSession()
 	if session == nil {
-		return padLines(emptyStateMessage(), width, height)
+		return padLines(m.emptyStateMessage(), width, height)
 	}
 	var panes []PaneItem
 	if session != nil {
@@ -305,11 +356,19 @@ func (m Model) viewFooter(width int) string {
 	projectKeys := joinKeyLabels(m.keys.projectLeft, m.keys.projectRight)
 	sessionKeys := joinKeyLabels(m.keys.sessionUp, m.keys.sessionDown)
 	paneKeys := joinKeyLabels(m.keys.paneNext, m.keys.panePrev)
+	sessionLabel := "session"
+	paneLabel := "pane"
+	if m.tab == TabDashboard {
+		sessionLabel = "pane"
+		paneLabel = "project"
+	}
 	base := fmt.Sprintf(
-		"%s ←/→ project · %s ↑/↓ session · %s pane · %s commands · %s help · %s quit",
+		"%s ←/→ project · %s ↑/↓ %s · %s %s · %s commands · %s help · %s quit",
 		projectKeys,
 		sessionKeys,
+		sessionLabel,
 		paneKeys,
+		paneLabel,
 		keyLabel(m.keys.commandPalette),
 		keyLabel(m.keys.help),
 		keyLabel(m.keys.quit),
@@ -583,8 +642,10 @@ func (m Model) viewHelp() string {
 	var left strings.Builder
 	left.WriteString("Navigation\n")
 	left.WriteString(fmt.Sprintf("  %s Switch projects\n", joinKeyLabels(m.keys.projectLeft, m.keys.projectRight)))
-	left.WriteString(fmt.Sprintf("  %s Switch sessions\n", joinKeyLabels(m.keys.sessionUp, m.keys.sessionDown)))
-	left.WriteString(fmt.Sprintf("  %s Switch panes (across windows)\n", joinKeyLabels(m.keys.paneNext, m.keys.panePrev)))
+	left.WriteString(fmt.Sprintf("  %s Switch sessions (project view)\n", joinKeyLabels(m.keys.sessionUp, m.keys.sessionDown)))
+	left.WriteString(fmt.Sprintf("  %s Switch panes (project view)\n", joinKeyLabels(m.keys.paneNext, m.keys.panePrev)))
+	left.WriteString(fmt.Sprintf("  %s Switch panes (dashboard)\n", joinKeyLabels(m.keys.sessionUp, m.keys.sessionDown)))
+	left.WriteString(fmt.Sprintf("  %s Switch project column (dashboard)\n", joinKeyLabels(m.keys.paneNext, m.keys.panePrev)))
 	left.WriteString("\nProject\n")
 	left.WriteString(fmt.Sprintf("  %s Open project picker\n", keyLabel(m.keys.openProject)))
 	left.WriteString(fmt.Sprintf("  %s Close project\n", keyLabel(m.keys.closeProject)))
@@ -871,6 +932,236 @@ func renderPaneTiles(panes []PaneItem, width, height int, compact bool, targetPa
 	return padLines(strings.Join(renderedRows, "\n"), width, height)
 }
 
+func (m Model) dashboardSelectedProject(columns []DashboardProjectColumn) string {
+	if len(columns) == 0 {
+		return ""
+	}
+	if m.selection.Project != "" {
+		for _, column := range columns {
+			if column.ProjectName == m.selection.Project {
+				return column.ProjectName
+			}
+		}
+	}
+	if m.selection.Session != "" {
+		for _, column := range columns {
+			for _, pane := range column.Panes {
+				if pane.SessionName == m.selection.Session {
+					return column.ProjectName
+				}
+			}
+		}
+	}
+	return columns[0].ProjectName
+}
+
+func renderDashboardColumns(columns []DashboardProjectColumn, width, height int, selectedProject string, selection selectionState, previewLines int) string {
+	if width <= 0 || height <= 0 {
+		return ""
+	}
+	if len(columns) == 0 {
+		return padLines("No projects", width, height)
+	}
+	gap := 2
+	minColWidth := 24
+	maxCols := (width + gap) / (minColWidth + gap)
+	if maxCols < 1 {
+		maxCols = 1
+	}
+	selectedIndex := 0
+	for i, column := range columns {
+		if column.ProjectName == selectedProject {
+			selectedIndex = i
+			break
+		}
+	}
+	if len(columns) > maxCols {
+		start := selectedIndex - maxCols/2
+		if start < 0 {
+			start = 0
+		}
+		if start+maxCols > len(columns) {
+			start = len(columns) - maxCols
+		}
+		columns = columns[start : start+maxCols]
+		selectedIndex = selectedIndex - start
+	}
+	colWidth := width
+	if len(columns) > 1 {
+		colWidth = (width - gap*(len(columns)-1)) / len(columns)
+	}
+	if colWidth < 1 {
+		colWidth = 1
+	}
+
+	iconSet := icons.Active()
+	iconSize := icons.ActiveSize()
+	parts := make([]string, 0, len(columns)*2)
+	for i, column := range columns {
+		if i > 0 {
+			parts = append(parts, strings.Repeat(" ", gap))
+		}
+		selected := i == selectedIndex
+		parts = append(parts, renderDashboardColumn(column, colWidth, height, selected, selection, previewLines, iconSet, iconSize))
+	}
+	return padLines(lipgloss.JoinHorizontal(lipgloss.Top, parts...), width, height)
+}
+
+func renderDashboardColumn(column DashboardProjectColumn, width, height int, selected bool, selection selectionState, previewLines int, iconSet icons.IconSet, iconSize icons.Size) string {
+	if width <= 0 || height <= 0 {
+		return ""
+	}
+	name := strings.TrimSpace(column.ProjectName)
+	if name == "" {
+		name = "project"
+	}
+	path := pathOrDash(column.ProjectPath)
+	headerStyle := theme.TabInactive
+	if selected {
+		headerStyle = theme.TabActive
+	}
+	headerLines := []string{
+		fitLine(headerStyle.Render(name), width),
+		fitLine(theme.SidebarMeta.Render(path), width),
+		strings.Repeat("─", width),
+	}
+	headerHeight := len(headerLines)
+	bodyHeight := height - headerHeight
+	if bodyHeight <= 0 {
+		return padLines(strings.Join(headerLines, "\n"), width, height)
+	}
+
+	if len(column.Panes) == 0 {
+		body := padLines("No running panes", width, bodyHeight)
+		return strings.Join(append(headerLines, body), "\n")
+	}
+
+	blockHeight := dashboardPaneBlockHeight(previewLines)
+	if blockHeight > bodyHeight {
+		blockHeight = bodyHeight
+	}
+	if blockHeight < 3 {
+		blockHeight = bodyHeight
+	}
+	visibleBlocks := bodyHeight / blockHeight
+	if visibleBlocks < 1 {
+		visibleBlocks = 1
+	}
+
+	selectedIndex := -1
+	if selected {
+		selectedIndex = dashboardPaneIndex(column.Panes, selection)
+	}
+	start := 0
+	if selected && selectedIndex >= 0 && selectedIndex >= visibleBlocks {
+		start = selectedIndex - visibleBlocks + 1
+	}
+	if start < 0 {
+		start = 0
+	}
+	if start > len(column.Panes)-1 {
+		start = len(column.Panes) - 1
+	}
+	end := start + visibleBlocks
+	if end > len(column.Panes) {
+		end = len(column.Panes)
+	}
+	if end < start {
+		end = start
+	}
+
+	blocks := make([]string, 0, visibleBlocks)
+	for i := start; i < end; i++ {
+		selectedPane := selected && i == selectedIndex
+		blocks = append(blocks, renderDashboardPaneTile(column.Panes[i], width, blockHeight, previewLines, selectedPane, iconSet, iconSize))
+	}
+	body := padLines(strings.Join(blocks, "\n"), width, bodyHeight)
+	return strings.Join(append(headerLines, body), "\n")
+}
+
+func dashboardPaneBlockHeight(previewLines int) int {
+	if previewLines < 0 {
+		previewLines = 0
+	}
+	return previewLines + 4
+}
+
+func renderDashboardPaneTile(pane DashboardPane, width, height, previewLines int, selected bool, iconSet icons.IconSet, iconSize icons.Size) string {
+	if width <= 0 || height <= 0 {
+		return ""
+	}
+	if previewLines < 0 {
+		previewLines = 0
+	}
+	borderColor := theme.Border
+	if selected {
+		borderColor = theme.BorderTarget
+	}
+	style := lipgloss.NewStyle().
+		Width(width).
+		Height(height).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(borderColor).
+		Padding(0, 1)
+
+	frameW, frameH := style.GetFrameSize()
+	contentWidth := width - frameW
+	if contentWidth < 1 {
+		contentWidth = 1
+	}
+	contentHeight := height - frameH
+	if contentHeight < 1 {
+		contentHeight = 1
+	}
+	availablePreview := previewLines
+	if contentHeight-2 < availablePreview {
+		availablePreview = contentHeight - 2
+	}
+	if availablePreview < 0 {
+		availablePreview = 0
+	}
+
+	marker := " "
+	if selected {
+		marker = theme.SidebarCaret.Render(iconSet.Caret.BySize(iconSize))
+	}
+	window := windowLabel(WindowItem{Index: pane.WindowIndex, Name: pane.WindowName})
+	label := fmt.Sprintf("%s / %s / %s", pane.SessionName, window, paneLabel(pane.Pane))
+	header := fmt.Sprintf("%s %s %s", marker, renderBadge(pane.Pane.Status), label)
+	if selected {
+		header = theme.SidebarSessionSelected.Render(header)
+	}
+	header = truncateTileLine(header, contentWidth)
+
+	detail := strings.TrimSpace(pane.Pane.Command)
+	if detail == "" {
+		detail = strings.TrimSpace(pane.Pane.Title)
+	}
+	if detail == "" {
+		detail = "-"
+	}
+	detail = "cmd: " + detail
+	if selected {
+		detail = theme.SidebarWindowSelected.Render(detail)
+	} else {
+		detail = theme.SidebarWindow.Render(detail)
+	}
+	detailLine := truncateTileLine(detail, contentWidth)
+
+	lines := []string{header, detailLine}
+	preview := tailLines(pane.Pane.Preview, availablePreview)
+	for len(preview) < availablePreview {
+		preview = append(preview, "")
+	}
+	for i := 0; i < availablePreview; i++ {
+		lines = append(lines, truncateTileLine(preview[i], contentWidth))
+	}
+	if len(lines) > contentHeight {
+		lines = lines[:contentHeight]
+	}
+	return style.Render(strings.Join(lines, "\n"))
+}
+
 type tileBorderColors struct {
 	top    lipgloss.TerminalColor
 	right  lipgloss.TerminalColor
@@ -1026,14 +1317,18 @@ func layoutOrDash(layout string) string {
 	return layout
 }
 
-func emptyStateMessage() string {
+func (m Model) emptyStateMessage() string {
+	openKey := keyLabel(m.keys.openProject)
+	if strings.TrimSpace(openKey) == "" {
+		openKey = "ctrl+o"
+	}
 	return strings.Join([]string{
 		"No sessions found.",
 		"",
 		"Tips:",
 		"  • Run 'peakypanes init' to create a global config",
 		"  • Run 'peakypanes start' in a project directory",
-		"  • Press 'o' to scan for git projects (set dashboard.project_roots)",
+		fmt.Sprintf("  • Press %s to open a project (set dashboard.project_roots)", openKey),
 	}, "\n")
 }
 

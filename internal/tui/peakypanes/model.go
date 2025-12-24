@@ -57,6 +57,7 @@ type dashboardKeyMap struct {
 type Model struct {
 	tmux   *tmuxctl.Client
 	state  ViewState
+	tab    DashboardTab
 	width  int
 	height int
 
@@ -117,6 +118,7 @@ func NewModel(client *tmuxctl.Client) (*Model, error) {
 	m := &Model{
 		tmux:               client,
 		state:              StateDashboard,
+		tab:                TabDashboard,
 		insideTmux:         detectInsideTmux(client),
 		configPath:         configPath,
 		expandedSessions:   make(map[string]bool),
@@ -208,6 +210,7 @@ func (m *Model) endRefresh() {
 
 func (m Model) refreshCmd() tea.Cmd {
 	selection := m.selection
+	currentTab := m.tab
 	configPath := m.configPath
 	version := m.selectionVersion
 	currentSettings := m.settings
@@ -237,7 +240,13 @@ func (m Model) refreshCmd() tea.Cmd {
 			warning += "keymap: " + err.Error()
 			keys = currentKeys
 		}
-		result := buildDashboardData(ctx, m.tmux, tmuxSnapshotInput{Selection: selection, Version: version, Config: cfg, Settings: settings})
+		result := buildDashboardData(ctx, m.tmux, tmuxSnapshotInput{
+			Selection: selection,
+			Tab:       currentTab,
+			Version:   version,
+			Config:    cfg,
+			Settings:  settings,
+		})
 		result.Keymap = keys
 		result.Warning = warning
 		return tmuxSnapshotMsg{Result: result}
@@ -373,20 +382,36 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch {
 	case key.Matches(msg, m.keys.projectLeft):
-		m.selectProject(-1)
+		m.selectTab(-1)
 		return m, m.selectionRefreshCmd()
 	case key.Matches(msg, m.keys.projectRight):
-		m.selectProject(1)
+		m.selectTab(1)
 		return m, m.selectionRefreshCmd()
 	case key.Matches(msg, m.keys.sessionUp):
+		if m.tab == TabDashboard {
+			m.selectDashboardPane(-1)
+			return m, nil
+		}
 		m.selectSession(-1)
 		return m, m.selectionRefreshCmd()
 	case key.Matches(msg, m.keys.sessionDown):
+		if m.tab == TabDashboard {
+			m.selectDashboardPane(1)
+			return m, nil
+		}
 		m.selectSession(1)
 		return m, m.selectionRefreshCmd()
 	case key.Matches(msg, m.keys.paneNext):
+		if m.tab == TabDashboard {
+			m.selectDashboardProject(1)
+			return m, nil
+		}
 		return m, m.cyclePane(1)
 	case key.Matches(msg, m.keys.panePrev):
+		if m.tab == TabDashboard {
+			m.selectDashboardProject(-1)
+			return m, nil
+		}
 		return m, m.cyclePane(-1)
 	case key.Matches(msg, m.keys.newSession):
 		m.openLayoutPicker()
@@ -446,15 +471,20 @@ func (m *Model) updateProjectPicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "enter":
 		if item, ok := m.projectPicker.SelectedItem().(GitProject); ok {
+			projectName := m.projectNameForPath(item.Path)
+			if projectName == "" {
+				projectName = item.Name
+			}
+			sessionName := m.projectSessionNameForPath(item.Path)
 			m.setState(StateDashboard)
 			m.rememberSelection(m.selection)
-			m.selection.Project = item.Name
-			m.selection.Session = ""
+			m.selection.Project = projectName
+			m.selection.Session = sessionName
 			m.selection.Window = ""
 			m.selection.Pane = ""
 			m.selectionVersion++
 			m.rememberSelection(m.selection)
-			return m, m.startSessionAtPathDetached(item.Path)
+			return m, tea.Batch(m.startSessionAtPathDetached(item.Path), m.selectionRefreshCmd())
 		}
 		m.setState(StateDashboard)
 		return m, nil
@@ -1012,14 +1042,46 @@ func (m *Model) applySelection(sel selectionState) {
 	m.rememberSelection(sel)
 }
 
-func (m *Model) selectProject(delta int) {
-	if len(m.data.Projects) == 0 {
+func (m *Model) selectTab(delta int) {
+	total := len(m.data.Projects) + 1
+	if total <= 1 {
+		m.tab = TabDashboard
 		return
 	}
-	m.rememberSelection(m.selection)
-	idx := m.projectIndex(m.selection.Project)
-	idx = wrapIndex(idx+delta, len(m.data.Projects))
-	projectName := m.data.Projects[idx].Name
+
+	if m.tab == TabDashboard {
+		if delta < 0 {
+			m.tab = TabProject
+			projectName := m.data.Projects[len(m.data.Projects)-1].Name
+			resolved := resolveSelection(m.data.Projects, m.selectionForProject(projectName))
+			m.applySelection(resolved)
+			m.selectionVersion++
+			return
+		}
+		idx, ok := m.projectIndexFor(m.selection.Project)
+		if !ok {
+			idx = 0
+		}
+		m.tab = TabProject
+		projectName := m.data.Projects[idx].Name
+		resolved := resolveSelection(m.data.Projects, m.selectionForProject(projectName))
+		m.applySelection(resolved)
+		m.selectionVersion++
+		return
+	}
+
+	idx, ok := m.projectIndexFor(m.selection.Project)
+	if !ok {
+		idx = 0
+	}
+	current := idx + 1
+	next := wrapIndex(current+delta, total)
+	if next == 0 {
+		m.tab = TabDashboard
+		m.selectionVersion++
+		return
+	}
+	projectName := m.data.Projects[next-1].Name
 	resolved := resolveSelection(m.data.Projects, m.selectionForProject(projectName))
 	m.applySelection(resolved)
 	m.selectionVersion++
@@ -1041,6 +1103,61 @@ func (m *Model) selectSession(delta int) {
 	m.selection.Pane = ""
 	m.selectionVersion++
 	m.rememberSelection(m.selection)
+}
+
+func (m *Model) selectDashboardPane(delta int) {
+	columns := collectDashboardColumns(m.data.Projects)
+	if len(columns) == 0 {
+		return
+	}
+	filtered := m.filteredDashboardColumns(columns)
+	if len(filtered) == 0 {
+		return
+	}
+	projectIndex := m.dashboardProjectIndex(filtered)
+	if projectIndex < 0 || projectIndex >= len(filtered) {
+		projectIndex = 0
+	}
+	column := filtered[projectIndex]
+	if len(column.Panes) == 0 {
+		return
+	}
+	idx := dashboardPaneIndex(column.Panes, m.selection)
+	if idx < 0 {
+		idx = 0
+	}
+	idx = wrapIndex(idx+delta, len(column.Panes))
+	pane := column.Panes[idx]
+	m.selection.Project = column.ProjectName
+	m.selection.Session = pane.SessionName
+	m.selection.Window = pane.WindowIndex
+	m.selection.Pane = pane.Pane.Index
+	m.selectionVersion++
+	m.rememberSelection(m.selection)
+}
+
+func (m *Model) selectDashboardProject(delta int) {
+	columns := collectDashboardColumns(m.data.Projects)
+	if len(columns) == 0 {
+		return
+	}
+	filtered := m.filteredDashboardColumns(columns)
+	if len(filtered) == 0 {
+		return
+	}
+	idx := m.dashboardProjectIndex(filtered)
+	if idx < 0 {
+		idx = 0
+	}
+	idx = wrapIndex(idx+delta, len(filtered))
+	target := filtered[idx]
+	desired := m.selectionForProject(target.ProjectName)
+	resolved := resolveDashboardSelectionFromColumns(filtered, desired)
+	if resolved.Project == "" {
+		resolved.Project = target.ProjectName
+	}
+	m.applySelection(resolved)
+	m.selectionVersion++
 }
 
 func (m *Model) selectWindow(delta int) {
@@ -1313,12 +1430,12 @@ func (m *Model) startNewSessionWithLayout(layoutName string) tea.Cmd {
 		base = session.Config.Session
 	}
 	if strings.TrimSpace(base) == "" {
-		base = sanitizeSessionName(project.Name)
+		base = layout.SanitizeSessionName(project.Name)
 	}
 	if strings.TrimSpace(base) == "" {
-		base = sanitizeSessionName(session.Name)
+		base = layout.SanitizeSessionName(session.Name)
 	}
-	base = sanitizeSessionName(base)
+	base = layout.SanitizeSessionName(base)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -1617,6 +1734,32 @@ func (m *Model) gitProjectsToItems() []list.Item {
 		items[i] = p
 	}
 	return items
+}
+
+func (m *Model) projectNameForPath(path string) string {
+	if strings.TrimSpace(path) == "" {
+		return ""
+	}
+	if m.config != nil {
+		for i := range m.config.Projects {
+			name, _, cfgPath := normalizeProjectConfig(&m.config.Projects[i])
+			if cfgPath != "" && cfgPath == path {
+				return name
+			}
+		}
+	}
+	return filepath.Base(path)
+}
+
+func (m *Model) projectSessionNameForPath(path string) string {
+	cfg, err := layout.LoadProjectLocal(path)
+	if err != nil && !os.IsNotExist(err) {
+		m.setToast("Project config error: "+err.Error(), toastWarning)
+	}
+	if err != nil {
+		return layout.ResolveSessionName(path, "", nil)
+	}
+	return layout.ResolveSessionName(path, "", cfg)
 }
 
 // ===== Layout picker =====
@@ -2057,10 +2200,33 @@ func layoutChoicesToItems(choices []LayoutChoice) []list.Item {
 
 // ===== Helpers =====
 
-func (m *Model) projectIndex(name string) int {
+func (m *Model) projectIndexFor(name string) (int, bool) {
 	for i := range m.data.Projects {
 		if m.data.Projects[i].Name == name {
-			return i
+			return i, true
+		}
+	}
+	return -1, false
+}
+
+func (m *Model) dashboardProjectIndex(columns []DashboardProjectColumn) int {
+	if len(columns) == 0 {
+		return -1
+	}
+	if m.selection.Project != "" {
+		for i, column := range columns {
+			if column.ProjectName == m.selection.Project {
+				return i
+			}
+		}
+	}
+	if m.selection.Session != "" {
+		for i, column := range columns {
+			for _, pane := range column.Panes {
+				if pane.SessionName == m.selection.Session {
+					return i
+				}
+			}
 		}
 	}
 	return 0
@@ -2107,6 +2273,11 @@ func wrapIndex(idx, total int) int {
 }
 
 func (m *Model) selectedProject() *ProjectGroup {
+	if m.tab == TabDashboard {
+		if project, _ := findProjectForSession(m.data.Projects, m.selection.Session); project != nil {
+			return project
+		}
+	}
 	for i := range m.data.Projects {
 		if m.data.Projects[i].Name == m.selection.Project {
 			return &m.data.Projects[i]
@@ -2119,6 +2290,17 @@ func (m *Model) selectedProject() *ProjectGroup {
 }
 
 func (m *Model) selectedSession() *SessionItem {
+	if m.tab == TabDashboard {
+		if _, session := findProjectForSession(m.data.Projects, m.selection.Session); session != nil {
+			return session
+		}
+		for i := range m.data.Projects {
+			if len(m.data.Projects[i].Sessions) > 0 {
+				return &m.data.Projects[i].Sessions[0]
+			}
+		}
+		return nil
+	}
 	project := m.selectedProject()
 	if project == nil {
 		return nil
@@ -2197,6 +2379,34 @@ func (m *Model) filteredSessions(sessions []SessionItem) []SessionItem {
 		if strings.Contains(strings.ToLower(s.Name), filter) || strings.Contains(strings.ToLower(s.Path), filter) {
 			out = append(out, s)
 		}
+	}
+	return out
+}
+
+func (m *Model) filteredDashboardColumns(columns []DashboardProjectColumn) []DashboardProjectColumn {
+	filter := strings.TrimSpace(m.filterInput.Value())
+	if filter == "" {
+		return columns
+	}
+	filter = strings.ToLower(filter)
+	out := make([]DashboardProjectColumn, 0, len(columns))
+	for _, column := range columns {
+		next := DashboardProjectColumn{
+			ProjectName: column.ProjectName,
+			ProjectPath: column.ProjectPath,
+		}
+		for _, pane := range column.Panes {
+			if strings.Contains(strings.ToLower(pane.ProjectName), filter) ||
+				strings.Contains(strings.ToLower(pane.ProjectPath), filter) ||
+				strings.Contains(strings.ToLower(pane.SessionName), filter) ||
+				strings.Contains(strings.ToLower(pane.WindowName), filter) ||
+				strings.Contains(strings.ToLower(pane.WindowIndex), filter) ||
+				strings.Contains(strings.ToLower(pane.Pane.Title), filter) ||
+				strings.Contains(strings.ToLower(pane.Pane.Command), filter) {
+				next.Panes = append(next.Panes, pane)
+			}
+		}
+		out = append(out, next)
 	}
 	return out
 }
