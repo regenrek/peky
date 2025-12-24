@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/regenrek/peakypanes/internal/layout"
 )
 
 func expandPath(p string) string {
@@ -36,35 +38,6 @@ func shortenPath(p string) string {
 		return "~" + strings.TrimPrefix(p, home)
 	}
 	return p
-}
-
-func sanitizeSessionName(name string) string {
-	name = strings.ToLower(strings.TrimSpace(name))
-	if name == "" {
-		return "session"
-	}
-	var b strings.Builder
-	lastDash := false
-	for _, r := range name {
-		switch {
-		case r >= 'a' && r <= 'z':
-			b.WriteRune(r)
-			lastDash = false
-		case r >= '0' && r <= '9':
-			b.WriteRune(r)
-			lastDash = false
-		case r == '-' || r == '_' || r == ' ':
-			if !lastDash {
-				b.WriteRune('-')
-				lastDash = true
-			}
-		}
-	}
-	result := strings.Trim(b.String(), "-")
-	if result == "" {
-		return "session"
-	}
-	return result
 }
 
 func validateTmuxName(name string) error {
@@ -102,7 +75,7 @@ func validateProjectPath(path string) error {
 }
 
 func nextSessionName(base string, existing []string) string {
-	base = sanitizeSessionName(base)
+	base = layout.SanitizeSessionName(base)
 	if base == "" {
 		base = "session"
 	}

@@ -89,9 +89,9 @@ func TestSanitizeSessionName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := sanitizeSessionName(tt.input)
+			got := layout.SanitizeSessionName(tt.input)
 			if got != tt.want {
-				t.Errorf("sanitizeSessionName(%q) = %q, want %q", tt.input, got, tt.want)
+				t.Errorf("SanitizeSessionName(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
 	}

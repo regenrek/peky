@@ -379,7 +379,7 @@ func runDashboardHosted(sessionName string) {
 	if err != nil {
 		fatal("tmux not found: %v", err)
 	}
-	sessionName = sanitizeSessionName(strings.TrimSpace(sessionName))
+	sessionName = layout.SanitizeSessionName(strings.TrimSpace(sessionName))
 	if sessionName == "" {
 		sessionName = defaultDashboardSession
 	}
@@ -833,7 +833,7 @@ func runKill(args []string) {
 		if err != nil {
 			fatal("cannot determine current directory: %v", err)
 		}
-		sessionName = sanitizeSessionName(filepath.Base(cwd))
+		sessionName = layout.SanitizeSessionName(filepath.Base(cwd))
 	}
 
 	// Create tmux client
@@ -909,15 +909,7 @@ func runStart(args []string) {
 		fatal("failed to load layouts: %v", err)
 	}
 
-	// Load session name from config if not explicitly provided via flag
-	if sessionName == "" && loader.GetProjectConfig() != nil && loader.GetProjectConfig().Session != "" {
-		sessionName = loader.GetProjectConfig().Session
-	}
-
-	// Default to directory name if still empty
-	if sessionName == "" {
-		sessionName = sanitizeSessionName(filepath.Base(projectPath))
-	}
+	sessionName = layout.ResolveSessionName(projectPath, sessionName, loader.GetProjectConfig())
 
 	// Determine which layout to use
 	var selectedLayout *layout.LayoutConfig
@@ -1468,35 +1460,6 @@ func attachToSession(client *tmuxctl.Client, session string) {
 			fmt.Printf("   Run: tmux attach -t %s\n", session)
 		}
 	}
-}
-
-func sanitizeSessionName(name string) string {
-	name = strings.ToLower(strings.TrimSpace(name))
-	if name == "" {
-		return "session"
-	}
-	var b strings.Builder
-	lastDash := false
-	for _, r := range name {
-		switch {
-		case r >= 'a' && r <= 'z':
-			b.WriteRune(r)
-			lastDash = false
-		case r >= '0' && r <= '9':
-			b.WriteRune(r)
-			lastDash = false
-		case r == '-' || r == '_' || r == ' ':
-			if !lastDash {
-				b.WriteRune('-')
-				lastDash = true
-			}
-		}
-	}
-	result := strings.Trim(b.String(), "-")
-	if result == "" {
-		return "session"
-	}
-	return result
 }
 
 func sanitizeTmuxEnv() {

@@ -1,6 +1,8 @@
 package peakypanes
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -114,6 +116,29 @@ func TestPickersAndRenamePaths(t *testing.T) {
 
 	m.commandPalette.SetItems(m.commandPaletteItems())
 	_, _ = m.updateCommandPalette(tea.KeyMsg{Type: tea.KeyEsc})
+}
+
+func TestOpenProjectSelectsProjectAndSession(t *testing.T) {
+	m, _ := newTestModel(t, nil)
+	projectPath := t.TempDir()
+	if err := os.WriteFile(filepath.Join(projectPath, ".peakypanes.yml"), []byte("session: My Session\n"), 0o644); err != nil {
+		t.Fatalf("write project config: %v", err)
+	}
+	m.config = &layout.Config{Projects: []layout.ProjectConfig{{
+		Name: "Configured",
+		Path: projectPath,
+	}}}
+
+	m.openProjectPicker()
+	m.projectPicker.SetItems([]list.Item{GitProject{Name: "nested/repo", Path: projectPath}})
+	_, _ = m.updateProjectPicker(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if m.selection.Project != "Configured" {
+		t.Fatalf("selection.Project = %q, want %q", m.selection.Project, "Configured")
+	}
+	if m.selection.Session != "My Session" {
+		t.Fatalf("selection.Session = %q, want %q", m.selection.Session, "My Session")
+	}
 }
 
 func TestMiscHelpers(t *testing.T) {
