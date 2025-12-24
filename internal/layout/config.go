@@ -105,6 +105,7 @@ type DashboardKeymapConfig struct {
 	Attach         []string `yaml:"attach,omitempty"`
 	NewSession     []string `yaml:"new_session,omitempty"`
 	OpenTerminal   []string `yaml:"open_terminal,omitempty"`
+	PeekPane       []string `yaml:"peek_pane,omitempty"`
 	ToggleWindows  []string `yaml:"toggle_windows,omitempty"`
 	OpenProject    []string `yaml:"open_project,omitempty"`
 	CommandPalette []string `yaml:"command_palette,omitempty"`

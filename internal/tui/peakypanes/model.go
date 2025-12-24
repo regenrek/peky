@@ -41,6 +41,7 @@ type dashboardKeyMap struct {
 	attach         key.Binding
 	newSession     key.Binding
 	openTerminal   key.Binding
+	peekPane       key.Binding
 	toggleWindows  key.Binding
 	openProject    key.Binding
 	commandPalette key.Binding
@@ -418,6 +419,8 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case key.Matches(msg, m.keys.openTerminal):
 		return m, m.openSessionInNewTerminal(false)
+	case key.Matches(msg, m.keys.peekPane):
+		return m, m.openPaneInNewTerminal()
 	case key.Matches(msg, m.keys.toggleWindows):
 		m.toggleWindows()
 	case key.Matches(msg, m.keys.openProject):
@@ -1342,6 +1345,65 @@ func (m *Model) openSessionInNewTerminal(forceNew bool) tea.Cmd {
 	return m.openNewTerminal(tmuxPath, attachArgs, "Opened session in new terminal")
 }
 
+func (m *Model) openPaneInNewTerminal() tea.Cmd {
+	session := m.selectedSession()
+	if session == nil {
+		m.setToast("No session selected", toastWarning)
+		return nil
+	}
+	if session.Status == StatusStopped {
+		m.setToast("Session not running", toastWarning)
+		return nil
+	}
+	window := selectedWindow(session, m.selection.Window)
+	if window == nil {
+		m.setToast("No window selected", toastWarning)
+		return nil
+	}
+	pane := m.selectedPane()
+	if pane == nil {
+		m.setToast("No pane selected", toastWarning)
+		return nil
+	}
+	target, label, ok := m.selectedPaneTarget()
+	if !ok {
+		m.setToast("No pane selected", toastWarning)
+		return nil
+	}
+
+	windowTarget := strings.TrimSpace(window.Index)
+	if windowTarget == "" {
+		windowTarget = strings.TrimSpace(window.Name)
+	}
+	attachTarget := session.Name
+	if windowTarget != "" {
+		attachTarget = fmt.Sprintf("%s:%s", session.Name, windowTarget)
+	}
+
+	tmuxEnv := ""
+	if m.insideTmux {
+		tmuxEnv = strings.TrimSpace(os.Getenv("TMUX"))
+	}
+	tmuxSocket := tmuxSocketFromEnv(tmuxEnv)
+	tmuxPath := m.tmux.Binary()
+	if tmuxPath == "" {
+		tmuxPath = "tmux"
+	}
+	attachArgs := []string{}
+	if tmuxSocket != "" {
+		attachArgs = append(attachArgs, "-S", tmuxSocket)
+	}
+	attachArgs = append(attachArgs,
+		"attach-session", "-t", attachTarget,
+		";", "select-pane", "-t", target,
+	)
+	successMsg := "Opened pane in new terminal"
+	if label != "" {
+		successMsg = "Opened " + label + " in new terminal"
+	}
+	return m.openNewTerminal(tmuxPath, attachArgs, successMsg)
+}
+
 func (m *Model) openNewTerminal(command string, args []string, successMsg string) tea.Cmd {
 	cmd := m.newTerminalCommand(command, args)
 	if cmd == nil {
@@ -1935,6 +1997,9 @@ func (m *Model) commandPaletteItems() []list.Item {
 		}},
 		{Label: "Pane: Quick reply", Desc: "Send a short follow-up to the selected pane", Run: func(m *Model) tea.Cmd {
 			return m.openQuickReply()
+		}},
+		{Label: "Pane: Peek in new terminal", Desc: "Open the selected pane in a new terminal", Run: func(m *Model) tea.Cmd {
+			return m.openPaneInNewTerminal()
 		}},
 		{Label: "Pane: Rename pane", Desc: "Rename the selected pane title", Run: func(m *Model) tea.Cmd {
 			m.openRenamePane()

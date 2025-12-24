@@ -265,6 +265,7 @@ Window
 
 Pane
 - rename pane via command palette (`ctrl+p`)
+- `ctrl+y` peek selected pane in new terminal
 
 Tmux (inside session)
 - `prefix+g` open dashboard popup (tmux prefix is yours)
@@ -294,6 +295,7 @@ dashboard:
     session_down: ["ctrl+s"]
     pane_next: ["tab"]
     pane_prev: ["shift+tab"]
+    peek_pane: ["ctrl+y"]
     toggle_windows: ["ctrl+u"]
     command_palette: ["ctrl+p"]
     help: ["ctrl+g"]

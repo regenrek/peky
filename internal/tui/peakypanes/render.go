@@ -658,6 +658,7 @@ func (m Model) viewHelp() string {
 	left.WriteString("  type  Quick reply is always active\n")
 	left.WriteString("  enter Send quick reply\n")
 	left.WriteString("  esc   Clear quick reply\n")
+	left.WriteString(fmt.Sprintf("  %s Peek pane in new terminal\n", keyLabel(m.keys.peekPane)))
 
 	var right strings.Builder
 	right.WriteString("Window\n")

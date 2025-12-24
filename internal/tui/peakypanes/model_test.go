@@ -148,6 +148,9 @@ func TestKeyBindings(t *testing.T) {
 	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlU}, km.toggleWindows) {
 		t.Error("toggleWindows binding should match ctrl+u")
 	}
+	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlY}, km.peekPane) {
+		t.Error("peekPane binding should match ctrl+y")
+	}
 	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlG}, km.help) {
 		t.Error("help binding should match ctrl+g")
 	}
