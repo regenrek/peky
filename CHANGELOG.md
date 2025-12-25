@@ -8,6 +8,7 @@ This format is based on Keep a Changelog.
 ### Added
 - Dashboard tab now renders per-project columns with pane blocks and multi-line previews.
 - Dashboard pane blocks show bordered tiles with per-pane status and metadata.
+- Peek selected pane in a new terminal (default `ctrl+y`, configurable via `dashboard.keymap.peek_pane`).
 
 ### Changed
 - Dashboard navigation uses up/down to move panes within a project column and tab/shift+tab to switch columns; help/footer text updated.

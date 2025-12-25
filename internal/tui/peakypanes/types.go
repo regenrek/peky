@@ -156,6 +156,7 @@ type DashboardConfig struct {
 	ProjectRoots    []string
 	AgentDetection  AgentDetectionConfig
 	AttachBehavior  string
+	HiddenProjects  map[string]struct{}
 }
 
 // selectionState tracks the current selection by name/index.

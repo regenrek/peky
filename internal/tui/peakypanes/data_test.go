@@ -338,6 +338,47 @@ func TestBuildDashboardData(t *testing.T) {
 	runner.assertDone()
 }
 
+func TestBuildDashboardDataHonorsHiddenProjects(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &layout.Config{
+		Projects: []layout.ProjectConfig{{Name: "App", Path: tmpDir}},
+		Dashboard: layout.DashboardConfig{
+			HiddenProjects: []layout.HiddenProjectConfig{{Name: "App", Path: tmpDir}},
+		},
+	}
+	settings, err := defaultDashboardConfig(cfg.Dashboard)
+	if err != nil {
+		t.Fatalf("defaultDashboardConfig() error: %v", err)
+	}
+
+	runner := &fakeRunner{t: t, specs: []cmdSpec{
+		{name: "tmux", args: []string{"display-message", "-p", "#S"}, stdout: "app\n", exit: 0},
+		{name: "tmux", args: []string{"list-sessions", "-F", "#{session_name}\t#{session_path}"}, stdout: fmt.Sprintf("app\t%s\n", tmpDir), exit: 0},
+	}}
+
+	client, err := tmuxctl.NewClient("tmux")
+	if err != nil {
+		t.Fatalf("NewClient() error: %v", err)
+	}
+	client.WithExec(runner.run)
+
+	result := buildDashboardData(context.Background(), client, tmuxSnapshotInput{
+		Selection: selectionState{},
+		Tab:       TabProject,
+		Config:    cfg,
+		Settings:  settings,
+		Version:   1,
+	})
+	if result.Err != nil {
+		t.Fatalf("buildDashboardData() error: %v", result.Err)
+	}
+	if len(result.Data.Projects) != 0 {
+		t.Fatalf("Projects = %#v", result.Data.Projects)
+	}
+
+	runner.assertDone()
+}
+
 func TestPaneExistsAndActivePaneIndex(t *testing.T) {
 	panes := []PaneItem{{Index: "0", Active: false}, {Index: "1", Active: true}}
 	if !paneExists(panes, "1") || paneExists(panes, "2") {

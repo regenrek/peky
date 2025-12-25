@@ -86,6 +86,13 @@ func buildDashboardKeyMap(cfg layout.DashboardKeymapConfig) (*dashboardKeyMap, e
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.openTerminal = b },
 		},
 		{
+			name:     "peek_pane",
+			desc:     "peek pane",
+			defaults: []string{"ctrl+y"},
+			override: cfg.PeekPane,
+			assign:   func(m *dashboardKeyMap, b key.Binding) { m.peekPane = b },
+		},
+		{
 			name:     "toggle_windows",
 			desc:     "windows",
 			defaults: []string{"ctrl+u"},

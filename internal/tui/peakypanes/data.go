@@ -110,6 +110,7 @@ func defaultDashboardConfig(cfg layout.DashboardConfig) (DashboardConfig, error)
 	if len(projectRoots) == 0 {
 		projectRoots = defaultProjectRoots()
 	}
+	hiddenProjects := hiddenProjectKeySet(cfg.HiddenProjects)
 	matcher, err := compileStatusMatcher(cfg.StatusRegex)
 	if err != nil {
 		return DashboardConfig{}, err
@@ -126,6 +127,7 @@ func defaultDashboardConfig(cfg layout.DashboardConfig) (DashboardConfig, error)
 		ProjectRoots:    projectRoots,
 		AgentDetection:  agentDetection,
 		AttachBehavior:  attachBehavior,
+		HiddenProjects:  hiddenProjects,
 	}, nil
 }
 
@@ -154,6 +156,16 @@ func defaultProjectRoots() []string {
 	return []string{filepath.Join(home, "projects")}
 }
 
+func normalizeProjectPath(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	path = expandPath(path)
+	path = filepath.Clean(path)
+	return path
+}
+
 func normalizeProjectRoots(roots []string) []string {
 	if len(roots) == 0 {
 		return nil
@@ -173,6 +185,52 @@ func normalizeProjectRoots(roots []string) []string {
 		out = append(out, root)
 	}
 	return out
+}
+
+func normalizeHiddenProjects(entries []layout.HiddenProjectConfig) []layout.HiddenProjectConfig {
+	if len(entries) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	out := make([]layout.HiddenProjectConfig, 0, len(entries))
+	for _, entry := range entries {
+		entry.Name = strings.TrimSpace(entry.Name)
+		entry.Path = normalizeProjectPath(entry.Path)
+		key := normalizeProjectKey(entry.Path, entry.Name)
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, entry)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func hiddenProjectKeySet(entries []layout.HiddenProjectConfig) map[string]struct{} {
+	if len(entries) == 0 {
+		return nil
+	}
+	keys := make(map[string]struct{})
+	for _, entry := range entries {
+		name := strings.TrimSpace(entry.Name)
+		path := normalizeProjectPath(entry.Path)
+		if path != "" {
+			keys[strings.ToLower(path)] = struct{}{}
+		}
+		if name != "" {
+			keys[strings.ToLower(name)] = struct{}{}
+		}
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+	return keys
 }
 
 func loadConfig(path string) (*layout.Config, error) {
@@ -219,6 +277,9 @@ func buildDashboardData(ctx context.Context, client *tmuxctl.Client, input tmuxS
 		pc := &cfg.Projects[i]
 		name, session, path := normalizeProjectConfig(pc)
 		groupKey := projectKey(path, name)
+		if isHiddenProject(settings, path, name) {
+			continue
+		}
 		group := addGroup(groupKey, ProjectGroup{
 			Name:       name,
 			Path:       path,
@@ -242,7 +303,11 @@ func buildDashboardData(ctx context.Context, client *tmuxctl.Client, input tmuxS
 		if s.Name == currentSession {
 			status = StatusCurrent
 		}
-		path := strings.TrimSpace(s.Path)
+		path := normalizeProjectPath(s.Path)
+		name := groupNameFromPath(path, s.Name)
+		if isHiddenProject(settings, path, name) {
+			continue
+		}
 		var group *ProjectGroup
 		if g := projectBySession[s.Name]; g != nil {
 			group = g
@@ -252,7 +317,6 @@ func buildDashboardData(ctx context.Context, client *tmuxctl.Client, input tmuxS
 			}
 		}
 		if group == nil {
-			name := groupNameFromPath(path, s.Name)
 			group = addGroup(projectKey(path, name), ProjectGroup{
 				Name:       name,
 				Path:       path,
@@ -373,11 +437,20 @@ func normalizeProjectConfig(pc *layout.ProjectConfig) (name, session, path strin
 	if session == "" {
 		session = layout.SanitizeSessionName(name)
 	}
-	path = strings.TrimSpace(pc.Path)
-	if path != "" {
-		path = expandPath(path)
-	}
+	path = normalizeProjectPath(pc.Path)
 	return name, session, path
+}
+
+func normalizeProjectKey(path, name string) string {
+	path = normalizeProjectPath(path)
+	if path != "" {
+		return strings.ToLower(path)
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+	return strings.ToLower(name)
 }
 
 func resolveSelection(groups []ProjectGroup, desired selectionState) selectionState {
@@ -795,10 +868,25 @@ func attachPanesToWindow(groups []ProjectGroup, sessionName, windowIndex string,
 }
 
 func projectKey(path, name string) string {
-	if strings.TrimSpace(path) != "" {
-		return strings.ToLower(path)
+	return normalizeProjectKey(path, name)
+}
+
+func isHiddenProject(settings DashboardConfig, path, name string) bool {
+	if len(settings.HiddenProjects) == 0 {
+		return false
 	}
-	return strings.ToLower(name)
+	path = normalizeProjectPath(path)
+	if path != "" {
+		if _, ok := settings.HiddenProjects[strings.ToLower(path)]; ok {
+			return true
+		}
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return false
+	}
+	_, ok := settings.HiddenProjects[strings.ToLower(name)]
+	return ok
 }
 
 func groupNameFromPath(path, fallback string) string {

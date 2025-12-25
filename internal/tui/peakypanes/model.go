@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -41,6 +42,7 @@ type dashboardKeyMap struct {
 	attach         key.Binding
 	newSession     key.Binding
 	openTerminal   key.Binding
+	peekPane       key.Binding
 	toggleWindows  key.Binding
 	openProject    key.Binding
 	commandPalette key.Binding
@@ -418,6 +420,8 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case key.Matches(msg, m.keys.openTerminal):
 		return m, m.openSessionInNewTerminal(false)
+	case key.Matches(msg, m.keys.peekPane):
+		return m, m.openPaneInNewTerminal()
 	case key.Matches(msg, m.keys.toggleWindows):
 		m.toggleWindows()
 	case key.Matches(msg, m.keys.openProject):
@@ -476,6 +480,9 @@ func (m *Model) updateProjectPicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				projectName = item.Name
 			}
 			sessionName := m.projectSessionNameForPath(item.Path)
+			if _, err := m.unhideProjectInConfig(layout.HiddenProjectConfig{Name: projectName, Path: item.Path}); err != nil {
+				m.setToast("Unhide failed: "+err.Error(), toastError)
+			}
 			m.setState(StateDashboard)
 			m.rememberSelection(m.selection)
 			m.selection.Project = projectName
@@ -894,6 +901,126 @@ func (m *Model) saveProjectRoots(roots []string) error {
 	m.config = cfg
 	m.settings.ProjectRoots = normalizeProjectRoots(roots)
 	return nil
+}
+
+func (m *Model) hideProjectInConfig(project ProjectGroup) (bool, error) {
+	key := normalizeProjectKey(project.Path, project.Name)
+	if key == "" {
+		return false, fmt.Errorf("invalid project key")
+	}
+	cfg, err := loadConfig(m.configPath)
+	if err != nil {
+		return false, fmt.Errorf("load config: %w", err)
+	}
+	existing := hiddenProjectKeySet(cfg.Dashboard.HiddenProjects)
+	if _, ok := existing[key]; ok {
+		return false, nil
+	}
+	nameKey := strings.ToLower(strings.TrimSpace(project.Name))
+	if nameKey != "" {
+		if _, ok := existing[nameKey]; ok {
+			return false, nil
+		}
+	}
+	pathKey := strings.ToLower(normalizeProjectPath(project.Path))
+	if pathKey != "" {
+		if _, ok := existing[pathKey]; ok {
+			return false, nil
+		}
+	}
+	entry := layout.HiddenProjectConfig{
+		Name: strings.TrimSpace(project.Name),
+		Path: normalizeProjectPath(project.Path),
+	}
+	cfg.Dashboard.HiddenProjects = append(cfg.Dashboard.HiddenProjects, entry)
+	cfg.Dashboard.HiddenProjects = normalizeHiddenProjects(cfg.Dashboard.HiddenProjects)
+	if err := os.MkdirAll(filepath.Dir(m.configPath), 0o755); err != nil {
+		return false, fmt.Errorf("create config dir: %w", err)
+	}
+	if err := layout.SaveConfig(m.configPath, cfg); err != nil {
+		return false, err
+	}
+	m.config = cfg
+	m.settings.HiddenProjects = hiddenProjectKeySet(cfg.Dashboard.HiddenProjects)
+	return true, nil
+}
+
+func (m *Model) unhideProjectInConfig(entry layout.HiddenProjectConfig) (bool, error) {
+	targetPathKey := strings.ToLower(normalizeProjectPath(entry.Path))
+	targetNameKey := strings.ToLower(strings.TrimSpace(entry.Name))
+	if targetPathKey == "" && targetNameKey == "" {
+		return false, nil
+	}
+	cfg, err := loadConfig(m.configPath)
+	if err != nil {
+		return false, fmt.Errorf("load config: %w", err)
+	}
+	if len(cfg.Dashboard.HiddenProjects) == 0 {
+		return false, nil
+	}
+	kept := make([]layout.HiddenProjectConfig, 0, len(cfg.Dashboard.HiddenProjects))
+	removed := 0
+	for _, existing := range cfg.Dashboard.HiddenProjects {
+		existingPathKey := strings.ToLower(normalizeProjectPath(existing.Path))
+		existingNameKey := strings.ToLower(strings.TrimSpace(existing.Name))
+		match := false
+		if targetPathKey != "" && existingPathKey != "" && existingPathKey == targetPathKey {
+			match = true
+		}
+		if !match && existingPathKey == "" && targetNameKey != "" && existingNameKey == targetNameKey {
+			match = true
+		}
+		if !match && targetPathKey == "" && targetNameKey != "" && existingNameKey == targetNameKey {
+			match = true
+		}
+		if match {
+			removed++
+			continue
+		}
+		kept = append(kept, existing)
+	}
+	if removed == 0 {
+		return false, nil
+	}
+	cfg.Dashboard.HiddenProjects = normalizeHiddenProjects(kept)
+	if err := os.MkdirAll(filepath.Dir(m.configPath), 0o755); err != nil {
+		return false, fmt.Errorf("create config dir: %w", err)
+	}
+	if err := layout.SaveConfig(m.configPath, cfg); err != nil {
+		return false, err
+	}
+	m.config = cfg
+	m.settings.HiddenProjects = hiddenProjectKeySet(cfg.Dashboard.HiddenProjects)
+	return true, nil
+}
+
+func (m *Model) hiddenProjectEntries() []layout.HiddenProjectConfig {
+	if m.config == nil {
+		return nil
+	}
+	entries := normalizeHiddenProjects(m.config.Dashboard.HiddenProjects)
+	if len(entries) == 0 {
+		return nil
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		return hiddenProjectLabel(entries[i]) < hiddenProjectLabel(entries[j])
+	})
+	return entries
+}
+
+func hiddenProjectLabel(entry layout.HiddenProjectConfig) string {
+	name := strings.TrimSpace(entry.Name)
+	path := strings.TrimSpace(entry.Path)
+	if name != "" && path != "" {
+		return fmt.Sprintf("%s (%s)", name, shortenPath(path))
+	}
+	if name != "" {
+		return name
+	}
+	if path != "" {
+		return shortenPath(path)
+	}
+	return "unknown project"
 }
 
 func (m *Model) updateConfirmKill(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -1342,6 +1469,65 @@ func (m *Model) openSessionInNewTerminal(forceNew bool) tea.Cmd {
 	return m.openNewTerminal(tmuxPath, attachArgs, "Opened session in new terminal")
 }
 
+func (m *Model) openPaneInNewTerminal() tea.Cmd {
+	session := m.selectedSession()
+	if session == nil {
+		m.setToast("No session selected", toastWarning)
+		return nil
+	}
+	if session.Status == StatusStopped {
+		m.setToast("Session not running", toastWarning)
+		return nil
+	}
+	window := selectedWindow(session, m.selection.Window)
+	if window == nil {
+		m.setToast("No window selected", toastWarning)
+		return nil
+	}
+	pane := m.selectedPane()
+	if pane == nil {
+		m.setToast("No pane selected", toastWarning)
+		return nil
+	}
+	target, label, ok := m.selectedPaneTarget()
+	if !ok {
+		m.setToast("No pane selected", toastWarning)
+		return nil
+	}
+
+	windowTarget := strings.TrimSpace(window.Index)
+	if windowTarget == "" {
+		windowTarget = strings.TrimSpace(window.Name)
+	}
+	attachTarget := session.Name
+	if windowTarget != "" {
+		attachTarget = fmt.Sprintf("%s:%s", session.Name, windowTarget)
+	}
+
+	tmuxEnv := ""
+	if m.insideTmux {
+		tmuxEnv = strings.TrimSpace(os.Getenv("TMUX"))
+	}
+	tmuxSocket := tmuxSocketFromEnv(tmuxEnv)
+	tmuxPath := m.tmux.Binary()
+	if tmuxPath == "" {
+		tmuxPath = "tmux"
+	}
+	attachArgs := []string{}
+	if tmuxSocket != "" {
+		attachArgs = append(attachArgs, "-S", tmuxSocket)
+	}
+	attachArgs = append(attachArgs,
+		"attach-session", "-t", attachTarget,
+		";", "select-pane", "-t", target,
+	)
+	successMsg := "Opened pane in new terminal"
+	if label != "" {
+		successMsg = "Opened " + label + " in new terminal"
+	}
+	return m.openNewTerminal(tmuxPath, attachArgs, successMsg)
+}
+
 func (m *Model) openNewTerminal(command string, args []string, successMsg string) tea.Cmd {
 	cmd := m.newTerminalCommand(command, args)
 	if cmd == nil {
@@ -1620,52 +1806,78 @@ func (m *Model) openCloseProjectConfirm() {
 func (m *Model) updateConfirmCloseProject(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "y", "enter":
-		name := strings.TrimSpace(m.confirmClose)
-		if name == "" {
-			m.setState(StateDashboard)
-			return m, nil
-		}
-		project := findProject(m.data.Projects, name)
-		if project == nil {
-			m.setToast("Project not found", toastWarning)
-			m.confirmClose = ""
-			m.setState(StateDashboard)
-			return m, nil
-		}
-		var running []SessionItem
-		for _, s := range project.Sessions {
-			if s.Status != StatusStopped {
-				running = append(running, s)
-			}
-		}
-		if len(running) == 0 {
-			m.setToast("No running sessions to close", toastInfo)
-			m.confirmClose = ""
-			m.setState(StateDashboard)
-			return m, nil
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		var failed []string
-		for _, s := range running {
-			if err := m.tmux.KillSession(ctx, s.Name); err != nil {
-				failed = append(failed, s.Name)
-			}
-		}
-		m.confirmClose = ""
-		m.setState(StateDashboard)
-		if len(failed) > 0 {
-			m.setToast("Close failed: "+strings.Join(failed, ", "), toastError)
-			return m, m.refreshCmd()
-		}
-		m.setToast("Closed project "+name, toastSuccess)
-		return m, m.refreshCmd()
+		return m, m.applyCloseProject()
+	case "k":
+		return m, m.killProjectSessions()
 	case "n", "esc":
 		m.confirmClose = ""
 		m.setState(StateDashboard)
 		return m, nil
 	}
 	return m, nil
+}
+
+func (m *Model) applyCloseProject() tea.Cmd {
+	name := strings.TrimSpace(m.confirmClose)
+	m.confirmClose = ""
+	m.setState(StateDashboard)
+	if name == "" {
+		return nil
+	}
+	project := findProject(m.data.Projects, name)
+	if project == nil {
+		m.setToast("Project not found", toastWarning)
+		return nil
+	}
+	hidden, err := m.hideProjectInConfig(*project)
+	if err != nil {
+		m.setToast("Close failed: "+err.Error(), toastError)
+		return nil
+	}
+	if !hidden {
+		m.setToast("Project already hidden", toastInfo)
+		return nil
+	}
+	m.setToast("Closed project "+name, toastSuccess)
+	return m.refreshCmd()
+}
+
+func (m *Model) killProjectSessions() tea.Cmd {
+	name := strings.TrimSpace(m.confirmClose)
+	m.confirmClose = ""
+	m.setState(StateDashboard)
+	if name == "" {
+		return nil
+	}
+	project := findProject(m.data.Projects, name)
+	if project == nil {
+		m.setToast("Project not found", toastWarning)
+		return nil
+	}
+	var running []SessionItem
+	for _, s := range project.Sessions {
+		if s.Status != StatusStopped {
+			running = append(running, s)
+		}
+	}
+	if len(running) == 0 {
+		m.setToast("No running sessions to kill", toastInfo)
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var failed []string
+	for _, s := range running {
+		if err := m.tmux.KillSession(ctx, s.Name); err != nil {
+			failed = append(failed, s.Name)
+		}
+	}
+	if len(failed) > 0 {
+		m.setToast("Kill failed: "+strings.Join(failed, ", "), toastError)
+		return m.refreshCmd()
+	}
+	m.setToast("Killed sessions for "+name, toastSuccess)
+	return m.refreshCmd()
 }
 
 // ===== Project picker =====
@@ -1737,7 +1949,8 @@ func (m *Model) gitProjectsToItems() []list.Item {
 }
 
 func (m *Model) projectNameForPath(path string) string {
-	if strings.TrimSpace(path) == "" {
+	path = normalizeProjectPath(path)
+	if path == "" {
 		return ""
 	}
 	if m.config != nil {
@@ -1915,10 +2128,23 @@ func (m *Model) commandPaletteItems() []list.Item {
 			m.openProjectRootSetup()
 			return nil
 		}},
-		{Label: "Project: Close project", Desc: "Kill all running sessions in project", Run: func(m *Model) tea.Cmd {
+		{Label: "Project: Close project", Desc: "Hide project from tabs (sessions stay running)", Run: func(m *Model) tea.Cmd {
 			m.openCloseProjectConfirm()
 			return nil
 		}},
+	}
+	for _, entry := range m.hiddenProjectEntries() {
+		entry := entry
+		label := hiddenProjectLabel(entry)
+		items = append(items, CommandItem{
+			Label: "Project: Reopen " + label,
+			Desc:  "Show hidden project",
+			Run: func(m *Model) tea.Cmd {
+				return m.reopenHiddenProject(entry)
+			},
+		})
+	}
+	items = append(items, []CommandItem{
 		{Label: "Session: Attach / start", Desc: "Attach to running session or start if stopped", Run: func(m *Model) tea.Cmd {
 			return m.attachOrStart()
 		}},
@@ -1935,6 +2161,9 @@ func (m *Model) commandPaletteItems() []list.Item {
 		}},
 		{Label: "Pane: Quick reply", Desc: "Send a short follow-up to the selected pane", Run: func(m *Model) tea.Cmd {
 			return m.openQuickReply()
+		}},
+		{Label: "Pane: Peek in new terminal", Desc: "Open the selected pane in a new terminal", Run: func(m *Model) tea.Cmd {
+			return m.openPaneInNewTerminal()
 		}},
 		{Label: "Pane: Rename pane", Desc: "Rename the selected pane title", Run: func(m *Model) tea.Cmd {
 			m.openRenamePane()
@@ -1976,12 +2205,27 @@ func (m *Model) commandPaletteItems() []list.Item {
 		{Label: "Other: Quit", Desc: "Exit PeakyPanes", Run: func(m *Model) tea.Cmd {
 			return tea.Quit
 		}},
-	}
+	}...)
 	out := make([]list.Item, len(items))
 	for i, item := range items {
 		out[i] = item
 	}
 	return out
+}
+
+func (m *Model) reopenHiddenProject(entry layout.HiddenProjectConfig) tea.Cmd {
+	label := hiddenProjectLabel(entry)
+	changed, err := m.unhideProjectInConfig(entry)
+	if err != nil {
+		m.setToast("Reopen failed: "+err.Error(), toastError)
+		return nil
+	}
+	if !changed {
+		m.setToast("Project already visible", toastInfo)
+		return nil
+	}
+	m.setToast("Reopened project "+label, toastSuccess)
+	return m.refreshCmd()
 }
 
 func (m *Model) openQuickReply() tea.Cmd {

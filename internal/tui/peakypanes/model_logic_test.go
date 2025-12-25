@@ -122,6 +122,49 @@ func TestUpdateConfirmKill(t *testing.T) {
 }
 
 func TestUpdateConfirmCloseProject(t *testing.T) {
+	m, _ := newTestModel(t, nil)
+	projectPath := t.TempDir()
+	cfg := &layout.Config{Projects: []layout.ProjectConfig{{
+		Name: "Proj",
+		Path: projectPath,
+	}}}
+	if err := os.MkdirAll(filepath.Dir(m.configPath), 0o755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+	if err := layout.SaveConfig(m.configPath, cfg); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+	m.config = cfg
+	m.data = DashboardData{Projects: []ProjectGroup{{
+		Name:       "Proj",
+		Path:       projectPath,
+		FromConfig: true,
+		Sessions:   []SessionItem{{Name: "sess", Status: StatusRunning}},
+	}}}
+	m.confirmClose = "Proj"
+	m.state = StateConfirmCloseProject
+
+	_, _ = m.updateConfirmCloseProject(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	if m.state != StateDashboard {
+		t.Fatalf("state = %v", m.state)
+	}
+	loaded, err := layout.LoadConfig(m.configPath)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if len(loaded.Projects) != 1 {
+		t.Fatalf("Projects = %#v", loaded.Projects)
+	}
+	if len(loaded.Dashboard.HiddenProjects) != 1 {
+		t.Fatalf("HiddenProjects = %#v", loaded.Dashboard.HiddenProjects)
+	}
+	entry := loaded.Dashboard.HiddenProjects[0]
+	if normalizeProjectKey(entry.Path, entry.Name) != projectKey(projectPath, "Proj") {
+		t.Fatalf("HiddenProjects[0] = %#v", entry)
+	}
+}
+
+func TestUpdateConfirmCloseProjectKillsSessions(t *testing.T) {
 	specs := []cmdSpec{{name: "tmux", args: []string{"kill-session", "-t", "sess"}, exit: 0}}
 	m, runner := newTestModel(t, specs)
 	m.data = DashboardData{Projects: []ProjectGroup{{
@@ -131,7 +174,7 @@ func TestUpdateConfirmCloseProject(t *testing.T) {
 	m.confirmClose = "Proj"
 	m.state = StateConfirmCloseProject
 
-	_, _ = m.updateConfirmCloseProject(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	_, _ = m.updateConfirmCloseProject(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
 	if m.state != StateDashboard {
 		t.Fatalf("state = %v", m.state)
 	}

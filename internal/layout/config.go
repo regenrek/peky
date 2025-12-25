@@ -105,6 +105,7 @@ type DashboardKeymapConfig struct {
 	Attach         []string `yaml:"attach,omitempty"`
 	NewSession     []string `yaml:"new_session,omitempty"`
 	OpenTerminal   []string `yaml:"open_terminal,omitempty"`
+	PeekPane       []string `yaml:"peek_pane,omitempty"`
 	ToggleWindows  []string `yaml:"toggle_windows,omitempty"`
 	OpenProject    []string `yaml:"open_project,omitempty"`
 	CommandPalette []string `yaml:"command_palette,omitempty"`
@@ -115,6 +116,12 @@ type DashboardKeymapConfig struct {
 	Help           []string `yaml:"help,omitempty"`
 	Quit           []string `yaml:"quit,omitempty"`
 	Filter         []string `yaml:"filter,omitempty"`
+}
+
+// HiddenProjectConfig stores a project hidden from the dashboard.
+type HiddenProjectConfig struct {
+	Name string `yaml:"name,omitempty"`
+	Path string `yaml:"path,omitempty"`
 }
 
 // DashboardConfig configures the Peaky Panes dashboard UI.
@@ -130,6 +137,7 @@ type DashboardConfig struct {
 	ProjectRoots   []string              `yaml:"project_roots,omitempty"`
 	AgentDetection AgentDetectionConfig  `yaml:"agent_detection,omitempty"`
 	AttachBehavior string                `yaml:"attach_behavior,omitempty"` // current | new_terminal | detached
+	HiddenProjects []HiddenProjectConfig `yaml:"hidden_projects,omitempty"`
 	Keymap         DashboardKeymapConfig `yaml:"keymap,omitempty"`
 }
 
