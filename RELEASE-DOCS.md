@@ -13,14 +13,11 @@ This document is the single source of truth for releasing Peaky Panes.
 Run these before any release (matches CI):
 
 ```bash
-files=$(git ls-files '*.go')
-if [ -n "$files" ]; then
-  unformatted=$(gofmt -l $files)
-  if [ -n "$unformatted" ]; then
-    echo "gofmt needed on:"
-    echo "$unformatted"
-    exit 1
-  fi
+unformatted=$(git ls-files -z '*.go' | xargs -0 gofmt -l)
+if [ -n "$unformatted" ]; then
+  echo "gofmt needed on:"
+  echo "$unformatted"
+  exit 1
 fi
 
 go vet ./...

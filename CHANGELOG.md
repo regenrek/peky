@@ -5,14 +5,19 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.0.4 - 2025-12-25
+
 ### Added
 - Dashboard tab now renders per-project columns with pane blocks and multi-line previews.
 - Dashboard pane blocks show bordered tiles with per-pane status and metadata.
 - Peek selected pane in a new terminal (default `ctrl+y`, configurable via `dashboard.keymap.peek_pane`).
+- Persist hidden projects in `dashboard.hidden_projects` so closed projects stay out of tabs.
+- Command palette entries to reopen hidden projects (and auto-unhide when opening from picker).
 
 ### Changed
 - Dashboard navigation uses up/down to move panes within a project column and tab/shift+tab to switch columns; help/footer text updated.
 - Dashboard refresh now captures pane previews for all running sessions (minimum 10 lines per pane).
+- Close project now hides it from tabs instead of killing sessions (with optional kill in the dialog).
 
 ## 0.0.3 - 2025-12-23
 

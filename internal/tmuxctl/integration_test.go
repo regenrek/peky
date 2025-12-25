@@ -16,7 +16,7 @@ func TestIntegrationEnsureSessionLifecycle(t *testing.T) {
 		t.Skip("integration test disabled; set PEAKYPANES_INTEGRATION=1")
 	}
 
-	t.Setenv("TMUX_TMPDIR", t.TempDir())
+	t.Setenv("TMUX_TMPDIR", shortTmpDir(t))
 
 	client, err := NewClient("")
 	if err != nil {
@@ -78,6 +78,22 @@ func TestIntegrationEnsureSessionLifecycle(t *testing.T) {
 	if containsSession(sessions, session) {
 		t.Fatalf("session %q still present after kill", session)
 	}
+}
+
+func shortTmpDir(t *testing.T) string {
+	t.Helper()
+	base := "/tmp"
+	if info, err := os.Stat(base); err != nil || !info.IsDir() {
+		base = os.TempDir()
+	}
+	dir, err := os.MkdirTemp(base, "peakypanes-tmux-")
+	if err != nil {
+		t.Fatalf("mkdir temp: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.RemoveAll(dir)
+	})
+	return dir
 }
 
 func containsSession(sessions []string, name string) bool {
