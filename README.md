@@ -250,7 +250,7 @@ Keymap overrides are available in the global config (`~/.config/peakypanes/confi
 
 Project
 - `ctrl+o` open project picker (creates session detached; stay in dashboard)
-- `ctrl+b` close project (kills all running sessions in project)
+- `ctrl+b` close project (hides from tabs; sessions keep running; press k in the dialog to kill)
 
 Session
 - `enter` attach/start session (when reply is empty)

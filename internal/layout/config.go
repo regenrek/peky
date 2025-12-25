@@ -118,6 +118,12 @@ type DashboardKeymapConfig struct {
 	Filter         []string `yaml:"filter,omitempty"`
 }
 
+// HiddenProjectConfig stores a project hidden from the dashboard.
+type HiddenProjectConfig struct {
+	Name string `yaml:"name,omitempty"`
+	Path string `yaml:"path,omitempty"`
+}
+
 // DashboardConfig configures the Peaky Panes dashboard UI.
 type DashboardConfig struct {
 	RefreshMS      int                   `yaml:"refresh_ms,omitempty"`
@@ -131,6 +137,7 @@ type DashboardConfig struct {
 	ProjectRoots   []string              `yaml:"project_roots,omitempty"`
 	AgentDetection AgentDetectionConfig  `yaml:"agent_detection,omitempty"`
 	AttachBehavior string                `yaml:"attach_behavior,omitempty"` // current | new_terminal | detached
+	HiddenProjects []HiddenProjectConfig `yaml:"hidden_projects,omitempty"`
 	Keymap         DashboardKeymapConfig `yaml:"keymap,omitempty"`
 }
 

@@ -488,11 +488,15 @@ func (m Model) viewConfirmCloseProject() string {
 		dialogContent.WriteString("\n")
 	}
 
-	dialogContent.WriteString(theme.DialogNote.Render("This will kill all running sessions in the project."))
+	dialogContent.WriteString(theme.DialogNote.Render("Close hides the project from tabs; sessions stay running."))
+	dialogContent.WriteString("\n")
+	dialogContent.WriteString(theme.DialogNote.Render("Press k to kill running sessions instead."))
 	dialogContent.WriteString("\n\n")
 
 	dialogContent.WriteString(theme.DialogChoiceKey.Render("y"))
-	dialogContent.WriteString(theme.DialogChoiceSep.Render(" confirm • "))
+	dialogContent.WriteString(theme.DialogChoiceSep.Render(" close • "))
+	dialogContent.WriteString(theme.DialogChoiceKey.Render("k"))
+	dialogContent.WriteString(theme.DialogChoiceSep.Render(" kill sessions • "))
 	dialogContent.WriteString(theme.DialogChoiceKey.Render("n"))
 	dialogContent.WriteString(theme.DialogChoiceSep.Render(" cancel"))
 
