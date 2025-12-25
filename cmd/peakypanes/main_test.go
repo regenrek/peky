@@ -65,11 +65,11 @@ func TestExpandUserPath(t *testing.T) {
 }
 
 func TestSanitizeSessionName(t *testing.T) {
-	if got := sanitizeSessionName(" My Project "); got != "my-project" {
-		t.Fatalf("sanitizeSessionName() = %q", got)
+	if got := layout.SanitizeSessionName(" My Project "); got != "my-project" {
+		t.Fatalf("SanitizeSessionName() = %q", got)
 	}
-	if got := sanitizeSessionName(""); got != "session" {
-		t.Fatalf("sanitizeSessionName(empty) = %q", got)
+	if got := layout.SanitizeSessionName(""); got != "session" {
+		t.Fatalf("SanitizeSessionName(empty) = %q", got)
 	}
 }
 

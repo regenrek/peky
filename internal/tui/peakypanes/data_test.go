@@ -130,6 +130,13 @@ func TestCaptureLinesForPreview(t *testing.T) {
 	}
 }
 
+func TestDashboardPreviewLinesMinimum(t *testing.T) {
+	settings := DashboardConfig{PreviewLines: 3}
+	if got := dashboardPreviewLines(settings); got < 10 {
+		t.Fatalf("dashboardPreviewLines() = %d", got)
+	}
+}
+
 func TestClassifyPane(t *testing.T) {
 	matcher, err := compileStatusMatcher(layout.StatusRegexConfig{})
 	if err != nil {
@@ -233,6 +240,42 @@ func TestResolveSelection(t *testing.T) {
 	}
 }
 
+func TestResolveDashboardSelection(t *testing.T) {
+	groups := []ProjectGroup{
+		{
+			Name: "A",
+			Sessions: []SessionItem{
+				{
+					Name:   "s1",
+					Status: StatusRunning,
+					Windows: []WindowItem{{
+						Index: "0",
+						Panes: []PaneItem{{Index: "0", Active: true}},
+					}},
+				},
+			},
+		},
+		{
+			Name: "B",
+			Sessions: []SessionItem{
+				{
+					Name:   "s2",
+					Status: StatusRunning,
+					Windows: []WindowItem{{
+						Index: "1",
+						Panes: []PaneItem{{Index: "2", Active: true}},
+					}},
+				},
+			},
+		},
+	}
+	desired := selectionState{Session: "s2", Window: "1", Pane: "2"}
+	resolved := resolveDashboardSelection(groups, desired)
+	if resolved.Project != "B" || resolved.Session != "s2" || resolved.Window != "1" || resolved.Pane != "2" {
+		t.Fatalf("resolveDashboardSelection() = %#v", resolved)
+	}
+}
+
 func TestBuildDashboardData(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &layout.Config{Projects: []layout.ProjectConfig{{Name: "App", Path: tmpDir}}}
@@ -264,6 +307,7 @@ func TestBuildDashboardData(t *testing.T) {
 
 	result := buildDashboardData(context.Background(), client, tmuxSnapshotInput{
 		Selection: selectionState{},
+		Tab:       TabProject,
 		Config:    cfg,
 		Settings:  settings,
 		Version:   1,

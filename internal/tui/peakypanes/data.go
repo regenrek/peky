@@ -21,6 +21,7 @@ const (
 	defaultIdleSeconds    = 20
 	previewSlackLines     = 20
 	maxCaptureLines       = 400
+	minDashboardPreview   = 10
 )
 
 var (
@@ -216,21 +217,7 @@ func buildDashboardData(ctx context.Context, client *tmuxctl.Client, input tmuxS
 
 	for i := range cfg.Projects {
 		pc := &cfg.Projects[i]
-		name := strings.TrimSpace(pc.Name)
-		if name == "" {
-			name = strings.TrimSpace(pc.Session)
-		}
-		if name == "" {
-			name = "project"
-		}
-		session := strings.TrimSpace(pc.Session)
-		if session == "" {
-			session = sanitizeSessionName(name)
-		}
-		path := strings.TrimSpace(pc.Path)
-		if path != "" {
-			path = expandPath(path)
-		}
+		name, session, path := normalizeProjectConfig(pc)
 		groupKey := projectKey(path, name)
 		group := addGroup(groupKey, ProjectGroup{
 			Name:       name,
@@ -304,34 +291,48 @@ func buildDashboardData(ctx context.Context, client *tmuxctl.Client, input tmuxS
 		}
 	}
 
-	resolved := resolveSelection(groups, selected)
-
-	if resolved.Project != "" {
-		if err := populateProjectPanes(ctx, client, groups, resolved.Project); err != nil {
+	var resolved selectionState
+	if input.Tab == TabDashboard {
+		previewLines := dashboardPreviewLines(settings)
+		if err := populateAllProjectPanes(ctx, client, groups, previewLines, settings); err != nil {
 			result.Err = err
 			return result
 		}
+		resolved = resolveDashboardSelection(groups, selected)
+	} else {
+		resolved = resolveSelection(groups, selected)
+		if resolved.Project != "" {
+			if err := populateProjectPanes(ctx, client, groups, resolved.Project, 0, settings); err != nil {
+				result.Err = err
+				return result
+			}
+		}
 	}
 
-	// Populate thumbnails and preview panes
+	// Populate thumbnails
 	for gi := range groups {
 		for si := range groups[gi].Sessions {
 			session := &groups[gi].Sessions[si]
 			if session.Status == StatusStopped {
 				continue
 			}
-			if settings.ShowThumbnails {
-				thumb, err := sessionThumbnail(ctx, client, *session, settings)
-				if err != nil {
-					result.Err = err
-					return result
-				}
-				session.Thumbnail = thumb
+			if !settings.ShowThumbnails {
+				continue
 			}
+			if input.Tab == TabDashboard {
+				session.Thumbnail = sessionThumbnailFromData(session)
+				continue
+			}
+			thumb, err := sessionThumbnail(ctx, client, *session, settings)
+			if err != nil {
+				result.Err = err
+				return result
+			}
+			session.Thumbnail = thumb
 		}
 	}
 
-	if resolved.Session != "" {
+	if input.Tab == TabProject && resolved.Session != "" {
 		if target := findSessionByName(groups, resolved.Session); target != nil {
 			windowIndex := resolved.Window
 			if windowIndex == "" {
@@ -355,6 +356,28 @@ func buildDashboardData(ctx context.Context, client *tmuxctl.Client, input tmuxS
 	result.Data = DashboardData{Projects: groups, RefreshedAt: time.Now()}
 	result.Resolved = resolved
 	return result
+}
+
+func normalizeProjectConfig(pc *layout.ProjectConfig) (name, session, path string) {
+	if pc == nil {
+		return "project", layout.SanitizeSessionName("project"), ""
+	}
+	name = strings.TrimSpace(pc.Name)
+	if name == "" {
+		name = strings.TrimSpace(pc.Session)
+	}
+	if name == "" {
+		name = "project"
+	}
+	session = strings.TrimSpace(pc.Session)
+	if session == "" {
+		session = layout.SanitizeSessionName(name)
+	}
+	path = strings.TrimSpace(pc.Path)
+	if path != "" {
+		path = expandPath(path)
+	}
+	return name, session, path
 }
 
 func resolveSelection(groups []ProjectGroup, desired selectionState) selectionState {
@@ -385,6 +408,76 @@ func resolveSelection(groups []ProjectGroup, desired selectionState) selectionSt
 	}
 	resolved.Pane = desired.Pane
 	return resolved
+}
+
+func resolveDashboardSelection(groups []ProjectGroup, desired selectionState) selectionState {
+	columns := collectDashboardColumns(groups)
+	if len(columns) == 0 {
+		return selectionState{}
+	}
+	if selected := resolveDashboardSelectionFromColumns(columns, desired); selected.Project != "" {
+		return selected
+	}
+	return selectionState{}
+}
+
+func resolveDashboardSelectionFromColumns(columns []DashboardProjectColumn, desired selectionState) selectionState {
+	if len(columns) == 0 {
+		return selectionState{}
+	}
+	if desired.Session != "" {
+		for _, column := range columns {
+			if len(column.Panes) == 0 {
+				continue
+			}
+			if idx := dashboardPaneIndex(column.Panes, desired); idx >= 0 {
+				pane := column.Panes[idx]
+				return selectionState{
+					Project: column.ProjectName,
+					Session: pane.SessionName,
+					Window:  pane.WindowIndex,
+					Pane:    pane.Pane.Index,
+				}
+			}
+		}
+	}
+	if desired.Project != "" {
+		for _, column := range columns {
+			if column.ProjectName != desired.Project {
+				continue
+			}
+			if len(column.Panes) == 0 {
+				return selectionState{Project: column.ProjectName}
+			}
+			idx := dashboardPaneIndex(column.Panes, desired)
+			if idx < 0 {
+				idx = 0
+			}
+			pane := column.Panes[idx]
+			return selectionState{
+				Project: column.ProjectName,
+				Session: pane.SessionName,
+				Window:  pane.WindowIndex,
+				Pane:    pane.Pane.Index,
+			}
+		}
+	}
+	for _, column := range columns {
+		if len(column.Panes) == 0 {
+			continue
+		}
+		pane := column.Panes[0]
+		return selectionState{
+			Project: column.ProjectName,
+			Session: pane.SessionName,
+			Window:  pane.WindowIndex,
+			Pane:    pane.Pane.Index,
+		}
+	}
+	if len(columns) > 0 {
+		return selectionState{Project: columns[0].ProjectName}
+	}
+	return selectionState{}
 }
 
 func resolvePaneSelection(desired string, panes []PaneItem) string {
@@ -430,6 +523,17 @@ func findSessionByName(groups []ProjectGroup, name string) *SessionItem {
 		}
 	}
 	return nil
+}
+
+func findProjectForSession(groups []ProjectGroup, name string) (*ProjectGroup, *SessionItem) {
+	for gi := range groups {
+		for si := range groups[gi].Sessions {
+			if groups[gi].Sessions[si].Name == name {
+				return &groups[gi], &groups[gi].Sessions[si]
+			}
+		}
+	}
+	return nil, nil
 }
 
 func windowsToItems(windows []tmuxctl.WindowInfo) []WindowItem {
@@ -520,6 +624,17 @@ func captureLinesForPreview(paneHeight, previewLines int) int {
 	return lines
 }
 
+func dashboardPreviewLines(settings DashboardConfig) int {
+	lines := settings.PreviewLines
+	if lines < minDashboardPreview {
+		lines = minDashboardPreview
+	}
+	if lines <= 0 {
+		lines = minDashboardPreview
+	}
+	return lines
+}
+
 func sessionThumbnail(ctx context.Context, client *tmuxctl.Client, session SessionItem, settings DashboardConfig) (PaneSummary, error) {
 	if session.Name == "" || session.ActiveWindow == "" {
 		return PaneSummary{}, nil
@@ -539,6 +654,27 @@ func sessionThumbnail(ctx context.Context, client *tmuxctl.Client, session Sessi
 	}
 	status := classifyPane(paneFromTmux(*active), lines, settings, time.Now())
 	return PaneSummary{Line: lastNonEmpty(lines), Status: status}, nil
+}
+
+func sessionThumbnailFromData(session *SessionItem) PaneSummary {
+	if session == nil {
+		return PaneSummary{}
+	}
+	window := selectedWindow(session, session.ActiveWindow)
+	if window == nil || len(window.Panes) == 0 {
+		return PaneSummary{}
+	}
+	var active *PaneItem
+	for i := range window.Panes {
+		if window.Panes[i].Active {
+			active = &window.Panes[i]
+			break
+		}
+	}
+	if active == nil {
+		active = &window.Panes[0]
+	}
+	return PaneSummary{Line: lastNonEmpty(active.Preview), Status: active.Status}
 }
 
 func pickActivePane(panes []tmuxctl.PaneInfo) *tmuxctl.PaneInfo {
@@ -599,7 +735,7 @@ func lastNonEmpty(lines []string) string {
 	return ""
 }
 
-func populateProjectPanes(ctx context.Context, client *tmuxctl.Client, groups []ProjectGroup, projectName string) error {
+func populateProjectPanes(ctx context.Context, client *tmuxctl.Client, groups []ProjectGroup, projectName string, previewLines int, settings DashboardConfig) error {
 	project := findProject(groups, projectName)
 	if project == nil || client == nil {
 		return nil
@@ -617,11 +753,26 @@ func populateProjectPanes(ctx context.Context, client *tmuxctl.Client, groups []
 			if strings.TrimSpace(window.Index) == "" {
 				continue
 			}
-			panes, err := sessionWindowPanes(ctx, client, session.Name, window.Index, 0)
+			panes, err := sessionWindowPanes(ctx, client, session.Name, window.Index, previewLines)
 			if err != nil {
 				return err
 			}
+			if previewLines > 0 {
+				now := time.Now()
+				for i := range panes {
+					panes[i].Status = classifyPane(panes[i], panes[i].Preview, settings, now)
+				}
+			}
 			window.Panes = panes
+		}
+	}
+	return nil
+}
+
+func populateAllProjectPanes(ctx context.Context, client *tmuxctl.Client, groups []ProjectGroup, previewLines int, settings DashboardConfig) error {
+	for i := range groups {
+		if err := populateProjectPanes(ctx, client, groups, groups[i].Name, previewLines, settings); err != nil {
+			return err
 		}
 	}
 	return nil
