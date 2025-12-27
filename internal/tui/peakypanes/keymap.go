@@ -51,6 +51,20 @@ func buildDashboardKeyMap(cfg layout.DashboardKeymapConfig) (*dashboardKeyMap, e
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.sessionDown = b },
 		},
 		{
+			name:     "session_only_up",
+			desc:     "session (skip windows)",
+			defaults: []string{"alt+w"},
+			override: cfg.SessionOnlyUp,
+			assign:   func(m *dashboardKeyMap, b key.Binding) { m.sessionOnlyUp = b },
+		},
+		{
+			name:     "session_only_down",
+			desc:     "session (skip windows)",
+			defaults: []string{"alt+s"},
+			override: cfg.SessionOnlyDown,
+			assign:   func(m *dashboardKeyMap, b key.Binding) { m.sessionOnlyDown = b },
+		},
+		{
 			name:     "pane_next",
 			desc:     "pane",
 			defaults: []string{"tab"},

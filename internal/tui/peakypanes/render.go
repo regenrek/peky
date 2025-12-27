@@ -358,7 +358,7 @@ func (m Model) viewFooter(width int) string {
 	projectKeys := joinKeyLabels(m.keys.projectLeft, m.keys.projectRight)
 	sessionKeys := joinKeyLabels(m.keys.sessionUp, m.keys.sessionDown)
 	paneKeys := joinKeyLabels(m.keys.paneNext, m.keys.panePrev)
-	sessionLabel := "session"
+	sessionLabel := "session/window"
 	paneLabel := "pane"
 	if m.tab == TabDashboard {
 		sessionLabel = "pane"
@@ -523,6 +523,42 @@ func (m Model) viewConfirmCloseProject() string {
 	return m.overlayDialog(dialog)
 }
 
+func (m Model) viewConfirmClosePane() string {
+	var dialogContent strings.Builder
+
+	dialogContent.WriteString(dialogTitleStyle.Render("⚠️  Close Pane?"))
+	dialogContent.WriteString("\n\n")
+	if m.confirmPaneTitle != "" {
+		dialogContent.WriteString(theme.DialogLabel.Render("Pane: "))
+		dialogContent.WriteString(theme.DialogValue.Render(m.confirmPaneTitle))
+		dialogContent.WriteString("\n")
+	}
+	if m.confirmPaneWindow != "" {
+		dialogContent.WriteString(theme.DialogLabel.Render("Window: "))
+		dialogContent.WriteString(theme.DialogValue.Render(m.confirmPaneWindow))
+		dialogContent.WriteString("\n")
+	}
+	if m.confirmPaneSession != "" {
+		dialogContent.WriteString(theme.DialogLabel.Render("Session: "))
+		dialogContent.WriteString(theme.DialogValue.Render(m.confirmPaneSession))
+		dialogContent.WriteString("\n")
+	}
+	dialogContent.WriteString("\n")
+
+	if m.confirmPaneRunning {
+		dialogContent.WriteString(theme.DialogNote.Render("The pane is still running. Closing it will stop the process."))
+		dialogContent.WriteString("\n\n")
+	}
+
+	dialogContent.WriteString(theme.DialogChoiceKey.Render("y"))
+	dialogContent.WriteString(theme.DialogChoiceSep.Render(" close • "))
+	dialogContent.WriteString(theme.DialogChoiceKey.Render("n"))
+	dialogContent.WriteString(theme.DialogChoiceSep.Render(" cancel"))
+
+	dialog := dialogStyle.Render(dialogContent.String())
+	return m.overlayDialog(dialog)
+}
+
 func (m Model) viewRename() string {
 	var dialogContent strings.Builder
 
@@ -646,6 +682,42 @@ func (m Model) viewLayoutPicker() string {
 	return overlayCenteredSized(base, dialog, m.width, m.height, overlayW, overlayH)
 }
 
+func (m Model) viewPaneSplitPicker() string {
+	if m.width == 0 || m.height == 0 {
+		return ""
+	}
+	base := appStyle.Render(theme.ListDimmed.Render(m.viewDashboardContent()))
+	var dialogContent strings.Builder
+	dialogContent.WriteString(dialogTitleStyle.Render("➕ Add Pane"))
+	dialogContent.WriteString("\n\n")
+	dialogContent.WriteString(theme.DialogNote.Render("Choose split direction"))
+	dialogContent.WriteString("\n\n")
+	dialogContent.WriteString(theme.DialogChoiceKey.Render("r"))
+	dialogContent.WriteString(theme.DialogChoiceSep.Render(" split right • "))
+	dialogContent.WriteString(theme.DialogChoiceKey.Render("d"))
+	dialogContent.WriteString(theme.DialogChoiceSep.Render(" split down • "))
+	dialogContent.WriteString(theme.DialogChoiceKey.Render("esc"))
+	dialogContent.WriteString(theme.DialogChoiceSep.Render(" cancel"))
+
+	dialog := dialogStyle.Render(dialogContent.String())
+	return overlayCentered(base, dialog, m.width, m.height)
+}
+
+func (m Model) viewPaneSwapPicker() string {
+	if m.width == 0 || m.height == 0 {
+		return ""
+	}
+	base := appStyle.Render(theme.ListDimmed.Render(m.viewDashboardContent()))
+	listW := m.paneSwapPicker.Width()
+	listH := m.paneSwapPicker.Height()
+	frameW, frameH := dialogStyle.GetFrameSize()
+	overlayW := listW + frameW
+	overlayH := listH + frameH
+	content := lipgloss.NewStyle().Width(listW).Height(listH).Render(m.paneSwapPicker.View())
+	dialog := dialogStyle.Width(overlayW).Height(overlayH).Render(content)
+	return overlayCenteredSized(base, dialog, m.width, m.height, overlayW, overlayH)
+}
+
 func (m Model) viewCommandPalette() string {
 	if m.width == 0 || m.height == 0 {
 		return ""
@@ -665,7 +737,8 @@ func (m Model) viewHelp() string {
 	var left strings.Builder
 	left.WriteString("Navigation\n")
 	left.WriteString(fmt.Sprintf("  %s Switch projects\n", joinKeyLabels(m.keys.projectLeft, m.keys.projectRight)))
-	left.WriteString(fmt.Sprintf("  %s Switch sessions (project view)\n", joinKeyLabels(m.keys.sessionUp, m.keys.sessionDown)))
+	left.WriteString(fmt.Sprintf("  %s Switch sessions/windows (project view)\n", joinKeyLabels(m.keys.sessionUp, m.keys.sessionDown)))
+	left.WriteString(fmt.Sprintf("  %s Switch sessions only (project view)\n", joinKeyLabels(m.keys.sessionOnlyUp, m.keys.sessionOnlyDown)))
 	left.WriteString(fmt.Sprintf("  %s Switch panes (project view)\n", joinKeyLabels(m.keys.paneNext, m.keys.panePrev)))
 	left.WriteString(fmt.Sprintf("  %s Switch panes (dashboard)\n", joinKeyLabels(m.keys.sessionUp, m.keys.sessionDown)))
 	left.WriteString(fmt.Sprintf("  %s Switch project column (dashboard)\n", joinKeyLabels(m.keys.paneNext, m.keys.panePrev)))
@@ -1672,8 +1745,12 @@ func selectedWindow(session *SessionItem, windowIndex string) *WindowItem {
 	if session == nil {
 		return nil
 	}
+	resolved := strings.TrimSpace(windowIndex)
+	if resolved == "" {
+		resolved = strings.TrimSpace(session.ActiveWindow)
+	}
 	for i := range session.Windows {
-		if session.Windows[i].Index == windowIndex {
+		if session.Windows[i].Index == resolved {
 			return &session.Windows[i]
 		}
 	}

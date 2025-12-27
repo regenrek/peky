@@ -248,7 +248,7 @@ The dashboard shows:
 - Quick reply bar (always visible) and target pane highlight for follow-ups (native or tmux)
 
 Navigation (always visible):
-- `ctrl+a/ctrl+d` project, `ctrl+w/ctrl+s` session, `tab/⇧tab` pane (across windows), `ctrl+g` help
+- `ctrl+a/ctrl+d` project, `ctrl+w/ctrl+s` session/window, `alt+w/alt+s` session only, `tab/⇧tab` pane (across windows), `ctrl+g` help
 
 Key bindings (also shown in the help view):
 Keymap overrides are available in the global config (`~/.config/peakypanes/config.yml`).
@@ -299,6 +299,8 @@ dashboard:
     project_right: ["ctrl+d"]
     session_up: ["ctrl+w"]
     session_down: ["ctrl+s"]
+    session_only_up: ["alt+w"]
+    session_only_down: ["alt+s"]
     pane_next: ["tab"]
     pane_prev: ["shift+tab"]
     peek_pane: ["ctrl+y"]

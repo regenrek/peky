@@ -36,27 +36,29 @@ var (
 // Key bindings
 
 type dashboardKeyMap struct {
-	projectLeft    key.Binding
-	projectRight   key.Binding
-	sessionUp      key.Binding
-	sessionDown    key.Binding
-	paneNext       key.Binding
-	panePrev       key.Binding
-	attach         key.Binding
-	newSession     key.Binding
-	openTerminal   key.Binding
-	peekPane       key.Binding
-	terminalFocus  key.Binding
-	toggleWindows  key.Binding
-	openProject    key.Binding
-	commandPalette key.Binding
-	refresh        key.Binding
-	editConfig     key.Binding
-	kill           key.Binding
-	closeProject   key.Binding
-	help           key.Binding
-	quit           key.Binding
-	filter         key.Binding
+	projectLeft     key.Binding
+	projectRight    key.Binding
+	sessionUp       key.Binding
+	sessionDown     key.Binding
+	sessionOnlyUp   key.Binding
+	sessionOnlyDown key.Binding
+	paneNext        key.Binding
+	panePrev        key.Binding
+	attach          key.Binding
+	newSession      key.Binding
+	openTerminal    key.Binding
+	peekPane        key.Binding
+	terminalFocus   key.Binding
+	toggleWindows   key.Binding
+	openProject     key.Binding
+	commandPalette  key.Binding
+	refresh         key.Binding
+	editConfig      key.Binding
+	kill            key.Binding
+	closeProject    key.Binding
+	help            key.Binding
+	quit            key.Binding
+	filter          key.Binding
 }
 
 // Model implements tea.Model for peakypanes TUI.
@@ -90,12 +92,19 @@ type Model struct {
 
 	projectPicker  list.Model
 	layoutPicker   list.Model
+	paneSwapPicker list.Model
 	commandPalette list.Model
 	gitProjects    []GitProject
 
-	confirmSession string
-	confirmProject string
-	confirmClose   string
+	confirmSession     string
+	confirmProject     string
+	confirmClose       string
+	confirmPaneSession string
+	confirmPaneWindow  string
+	confirmPaneIndex   string
+	confirmPaneID      string
+	confirmPaneTitle   string
+	confirmPaneRunning bool
 
 	renameInput       textinput.Model
 	renameSession     string
@@ -103,6 +112,11 @@ type Model struct {
 	renameWindowIndex string
 	renamePane        string
 	renamePaneIndex   string
+
+	swapSourceSession string
+	swapSourceWindow  string
+	swapSourcePane    string
+	swapSourcePaneID  string
 
 	projectRootInput textinput.Model
 
@@ -166,6 +180,7 @@ func NewModel(client *tmuxctl.Client) (*Model, error) {
 
 	m.setupProjectPicker()
 	m.setupLayoutPicker()
+	m.setupPaneSwapPicker()
 	m.setupCommandPalette()
 
 	configExists := true
@@ -313,6 +328,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.projectPicker.SetSize(msg.Width-4, msg.Height-4)
 		m.setLayoutPickerSize()
+		m.setPaneSwapPickerSize()
 		m.setCommandPaletteSize()
 		m.setQuickReplySize()
 		return m, m.syncTmuxStreamsCmd()
@@ -401,10 +417,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateProjectPicker(msg)
 		case StateLayoutPicker:
 			return m.updateLayoutPicker(msg)
+		case StatePaneSplitPicker:
+			return m.updatePaneSplitPicker(msg)
+		case StatePaneSwapPicker:
+			return m.updatePaneSwapPicker(msg)
 		case StateConfirmKill:
 			return m.updateConfirmKill(msg)
 		case StateConfirmCloseProject:
 			return m.updateConfirmCloseProject(msg)
+		case StateConfirmClosePane:
+			return m.updateConfirmClosePane(msg)
 		case StateHelp:
 			return m.updateHelp(msg)
 		case StateCommandPalette:
@@ -425,6 +447,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.state == StateLayoutPicker {
 		var cmd tea.Cmd
 		m.layoutPicker, cmd = m.layoutPicker.Update(msg)
+		return m, cmd
+	}
+	if m.state == StatePaneSwapPicker {
+		var cmd tea.Cmd
+		m.paneSwapPicker, cmd = m.paneSwapPicker.Update(msg)
 		return m, cmd
 	}
 	if m.state == StateCommandPalette {
@@ -492,9 +519,23 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selectDashboardPane(-1)
 			return m, m.syncTmuxStreamsCmd()
 		}
-		m.selectSession(-1)
+		m.selectSessionOrWindow(-1)
 		return m, m.selectionRefreshCmd()
 	case key.Matches(msg, m.keys.sessionDown):
+		if m.tab == TabDashboard {
+			m.selectDashboardPane(1)
+			return m, m.syncTmuxStreamsCmd()
+		}
+		m.selectSessionOrWindow(1)
+		return m, m.selectionRefreshCmd()
+	case key.Matches(msg, m.keys.sessionOnlyUp):
+		if m.tab == TabDashboard {
+			m.selectDashboardPane(-1)
+			return m, m.syncTmuxStreamsCmd()
+		}
+		m.selectSession(-1)
+		return m, m.selectionRefreshCmd()
+	case key.Matches(msg, m.keys.sessionOnlyDown):
 		if m.tab == TabDashboard {
 			m.selectDashboardPane(1)
 			return m, m.syncTmuxStreamsCmd()
@@ -556,6 +597,7 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *Model) openProjectPicker() {
 	m.scanGitProjects()
+	m.projectPicker.ResetFilter()
 	m.projectPicker.SetItems(m.gitProjectsToItems())
 	m.setState(StateProjectPicker)
 }
@@ -569,6 +611,7 @@ func (m *Model) updateProjectPicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "esc":
+		m.projectPicker.ResetFilter()
 		m.setState(StateDashboard)
 		return m, nil
 	case "enter":
@@ -581,6 +624,7 @@ func (m *Model) updateProjectPicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if _, err := m.unhideProjectInConfig(layout.HiddenProjectConfig{Name: projectName, Path: item.Path}); err != nil {
 				m.setToast("Unhide failed: "+err.Error(), toastError)
 			}
+			m.projectPicker.ResetFilter()
 			m.setState(StateDashboard)
 			m.rememberSelection(m.selection)
 			m.selection.Project = projectName
@@ -591,9 +635,11 @@ func (m *Model) updateProjectPicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.rememberSelection(m.selection)
 			return m, tea.Batch(m.startSessionAtPathDetached(item.Path), m.selectionRefreshCmd())
 		}
+		m.projectPicker.ResetFilter()
 		m.setState(StateDashboard)
 		return m, nil
 	case "q":
+		m.projectPicker.ResetFilter()
 		m.setState(StateDashboard)
 		return m, nil
 	}
@@ -634,15 +680,18 @@ func (m *Model) updateLayoutPicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *Model) updateCommandPalette(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q":
+		m.commandPalette.ResetFilter()
 		m.setState(StateDashboard)
 		return m, nil
 	case "enter":
 		if item, ok := m.commandPalette.SelectedItem().(CommandItem); ok {
+			m.commandPalette.ResetFilter()
 			m.setState(StateDashboard)
 			if item.Run != nil {
 				return m, item.Run(m)
 			}
 		}
+		m.commandPalette.ResetFilter()
 		m.setState(StateDashboard)
 		return m, nil
 	}
@@ -799,6 +848,260 @@ func (m *Model) openRenamePane() {
 	m.renamePaneIndex = pane.Index
 	m.initRenameInput(pane.Title, "new pane title")
 	m.setState(StateRenamePane)
+}
+
+func (m *Model) addPaneSplit(vertical bool) tea.Cmd {
+	session := m.selectedSession()
+	if session == nil {
+		m.setToast("No session selected", toastWarning)
+		return nil
+	}
+	if session.Status == StatusStopped {
+		m.setToast("Session not running", toastWarning)
+		return nil
+	}
+	if m.selectedPane() == nil {
+		m.setToast("No pane selected", toastWarning)
+		return nil
+	}
+	startDir := strings.TrimSpace(session.Path)
+	if startDir == "" {
+		if project := m.selectedProject(); project != nil {
+			startDir = strings.TrimSpace(project.Path)
+		}
+	}
+	if startDir != "" {
+		if err := validateProjectPath(startDir); err != nil {
+			m.setToast("Start failed: "+err.Error(), toastError)
+			return nil
+		}
+	}
+
+	if m.isNativeSession(session) {
+		if m.native == nil {
+			m.setToast("Add pane failed: native manager unavailable", toastError)
+			return nil
+		}
+		window := selectedWindow(session, m.selection.Window)
+		if window == nil {
+			m.setToast("No window selected", toastWarning)
+			return nil
+		}
+		pane := m.selectedPane()
+		if pane == nil {
+			m.setToast("No pane selected", toastWarning)
+			return nil
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		newIndex, err := m.native.SplitPane(ctx, session.Name, window.Index, pane.Index, vertical, 0)
+		if err != nil {
+			m.setToast("Add pane failed: "+err.Error(), toastError)
+			return nil
+		}
+		m.selection.Session = session.Name
+		m.selection.Window = window.Index
+		m.selection.Pane = newIndex
+		m.selectionVersion++
+		m.rememberSelection(m.selection)
+		m.setToast("Added pane", toastSuccess)
+		return m.refreshCmd()
+	}
+
+	if m.tmux == nil {
+		m.setToast("Add pane failed: tmux unavailable", toastError)
+		return nil
+	}
+	target, _, ok := m.selectedPaneTarget()
+	if !ok {
+		m.setToast("No pane selected", toastWarning)
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	paneID, err := m.tmux.SplitWindowWithCmd(ctx, target, startDir, vertical, 0, "", true)
+	if err != nil {
+		m.setToast("Add pane failed: "+err.Error(), toastError)
+		return nil
+	}
+	if strings.TrimSpace(paneID) != "" {
+		if loc, locErr := m.tmux.PaneLocation(ctx, paneID); locErr == nil {
+			m.selection.Session = loc.Session
+			m.selection.Window = loc.Window
+			m.selection.Pane = loc.Pane
+		} else {
+			m.selection.Pane = ""
+		}
+	} else {
+		m.selection.Pane = ""
+	}
+	m.selectionVersion++
+	m.rememberSelection(m.selection)
+	m.setToast("Added pane", toastSuccess)
+	return m.refreshCmd()
+}
+
+func (m *Model) movePaneToNewWindow() tea.Cmd {
+	session := m.selectedSession()
+	if session == nil {
+		m.setToast("No session selected", toastWarning)
+		return nil
+	}
+	if session.Status == StatusStopped {
+		m.setToast("Session not running", toastWarning)
+		return nil
+	}
+	pane := m.selectedPane()
+	if pane == nil {
+		m.setToast("No pane selected", toastWarning)
+		return nil
+	}
+	window := selectedWindow(session, m.selection.Window)
+	if window == nil {
+		m.setToast("No window selected", toastWarning)
+		return nil
+	}
+
+	if m.isNativeSession(session) {
+		if m.native == nil {
+			m.setToast("Move pane failed: native manager unavailable", toastError)
+			return nil
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		newWindow, newPane, err := m.native.MovePaneToNewWindow(ctx, session.Name, window.Index, pane.Index)
+		if err != nil {
+			m.setToast("Move pane failed: "+err.Error(), toastError)
+			return nil
+		}
+		m.selection.Session = session.Name
+		m.selection.Window = newWindow
+		m.selection.Pane = newPane
+		m.selectionVersion++
+		m.rememberSelection(m.selection)
+		m.setToast("Moved pane to new window", toastSuccess)
+		return m.refreshCmd()
+	}
+
+	if m.tmux == nil {
+		m.setToast("Move pane failed: tmux unavailable", toastError)
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	targetID := strings.TrimSpace(pane.ID)
+	if targetID == "" {
+		target, _, ok := m.selectedPaneTarget()
+		if !ok {
+			m.setToast("No pane selected", toastWarning)
+			return nil
+		}
+		if err := m.tmux.BreakPane(ctx, target, "", true); err != nil {
+			m.setToast("Move pane failed: "+err.Error(), toastError)
+			return nil
+		}
+		m.selection.Window = ""
+		m.selection.Pane = ""
+		m.selectionVersion++
+		m.rememberSelection(m.selection)
+		m.setToast("Moved pane to new window", toastSuccess)
+		return m.refreshCmd()
+	}
+	if err := m.tmux.BreakPane(ctx, targetID, "", true); err != nil {
+		m.setToast("Move pane failed: "+err.Error(), toastError)
+		return nil
+	}
+	if loc, err := m.tmux.PaneLocation(ctx, targetID); err == nil {
+		m.selection.Session = loc.Session
+		m.selection.Window = loc.Window
+		m.selection.Pane = loc.Pane
+	} else {
+		m.selection.Window = ""
+		m.selection.Pane = ""
+	}
+	m.selectionVersion++
+	m.rememberSelection(m.selection)
+	m.setToast("Moved pane to new window", toastSuccess)
+	return m.refreshCmd()
+}
+
+func (m *Model) swapPaneWith(target PaneSwapChoice) tea.Cmd {
+	session := m.selectedSession()
+	if session == nil {
+		m.setToast("No session selected", toastWarning)
+		return nil
+	}
+	if session.Status == StatusStopped {
+		m.setToast("Session not running", toastWarning)
+		return nil
+	}
+	sourceSession := strings.TrimSpace(m.swapSourceSession)
+	sourceWindow := strings.TrimSpace(m.swapSourceWindow)
+	sourcePane := strings.TrimSpace(m.swapSourcePane)
+	if sourceSession == "" {
+		sourceSession = session.Name
+	}
+	if sourceWindow == "" {
+		sourceWindow = strings.TrimSpace(m.selection.Window)
+	}
+	if sourcePane == "" {
+		if pane := m.selectedPane(); pane != nil {
+			sourcePane = pane.Index
+		}
+	}
+	if sourceSession == "" || sourceWindow == "" || sourcePane == "" {
+		m.setToast("No pane selected", toastWarning)
+		return nil
+	}
+
+	if m.isNativeSession(session) {
+		if m.native == nil {
+			m.setToast("Swap pane failed: native manager unavailable", toastError)
+			return nil
+		}
+		if err := m.native.SwapPanes(session.Name, sourceWindow, sourcePane, target.PaneIndex); err != nil {
+			m.setToast("Swap pane failed: "+err.Error(), toastError)
+			return nil
+		}
+		m.selection.Session = session.Name
+		m.selection.Window = sourceWindow
+		m.selection.Pane = target.PaneIndex
+		m.selectionVersion++
+		m.rememberSelection(m.selection)
+		m.setToast("Swapped panes", toastSuccess)
+		return m.refreshCmd()
+	}
+
+	if m.tmux == nil {
+		m.setToast("Swap pane failed: tmux unavailable", toastError)
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	sourceTarget := fmt.Sprintf("%s:%s.%s", sourceSession, sourceWindow, sourcePane)
+	destTarget := fmt.Sprintf("%s:%s.%s", sourceSession, target.WindowIndex, target.PaneIndex)
+	if err := m.tmux.SwapPane(ctx, sourceTarget, destTarget); err != nil {
+		m.setToast("Swap pane failed: "+err.Error(), toastError)
+		return nil
+	}
+	sourceID := strings.TrimSpace(m.swapSourcePaneID)
+	if sourceID != "" {
+		if loc, err := m.tmux.PaneLocation(ctx, sourceID); err == nil {
+			m.selection.Session = loc.Session
+			m.selection.Window = loc.Window
+			m.selection.Pane = loc.Pane
+		} else {
+			m.selection.Window = sourceWindow
+			m.selection.Pane = target.PaneIndex
+		}
+	} else {
+		m.selection.Window = sourceWindow
+		m.selection.Pane = target.PaneIndex
+	}
+	m.selectionVersion++
+	m.rememberSelection(m.selection)
+	m.setToast("Swapped panes", toastSuccess)
+	return m.refreshCmd()
 }
 
 func (m *Model) updateRename(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -1248,10 +1551,16 @@ func (m *Model) View() string {
 		return appStyle.Render(m.projectPicker.View())
 	case StateLayoutPicker:
 		return m.viewLayoutPicker()
+	case StatePaneSplitPicker:
+		return m.viewPaneSplitPicker()
+	case StatePaneSwapPicker:
+		return m.viewPaneSwapPicker()
 	case StateConfirmKill:
 		return m.viewConfirmKill()
 	case StateConfirmCloseProject:
 		return m.viewConfirmCloseProject()
+	case StateConfirmClosePane:
+		return m.viewConfirmClosePane()
 	case StateHelp:
 		return m.viewHelp()
 	case StateCommandPalette:
@@ -1489,7 +1798,63 @@ func (m *Model) selectSession(delta int) {
 	idx := sessionIndex(filtered, m.selection.Session)
 	idx = wrapIndex(idx+delta, len(filtered))
 	m.selection.Session = filtered[idx].Name
-	m.selection.Window = filtered[idx].ActiveWindow
+	m.selection.Window = ""
+	m.selection.Pane = ""
+	m.selectionVersion++
+	m.rememberSelection(m.selection)
+}
+
+func (m *Model) selectSessionOrWindow(delta int) {
+	project := m.selectedProject()
+	if project == nil || len(project.Sessions) == 0 {
+		return
+	}
+	filtered := m.filteredSessions(project.Sessions)
+	if len(filtered) == 0 {
+		return
+	}
+	type entry struct {
+		session string
+		window  string
+	}
+	items := make([]entry, 0, len(filtered))
+	for _, session := range filtered {
+		items = append(items, entry{session: session.Name})
+		if !m.sessionExpanded(session.Name) {
+			continue
+		}
+		for _, window := range session.Windows {
+			items = append(items, entry{session: session.Name, window: window.Index})
+		}
+	}
+	if len(items) == 0 {
+		return
+	}
+
+	current := -1
+	if m.selection.Window != "" {
+		for i, item := range items {
+			if item.session == m.selection.Session && item.window == m.selection.Window {
+				current = i
+				break
+			}
+		}
+	}
+	if current == -1 {
+		for i, item := range items {
+			if item.session == m.selection.Session && item.window == "" {
+				current = i
+				break
+			}
+		}
+	}
+	if current == -1 {
+		current = 0
+	}
+
+	next := items[wrapIndex(current+delta, len(items))]
+	m.selection.Session = next.session
+	m.selection.Window = next.window
 	m.selection.Pane = ""
 	m.selectionVersion++
 	m.rememberSelection(m.selection)
@@ -2221,6 +2586,49 @@ func (m *Model) openCloseProjectConfirm() {
 	m.setState(StateConfirmCloseProject)
 }
 
+func (m *Model) openClosePaneConfirm() tea.Cmd {
+	session := m.selectedSession()
+	if session == nil {
+		m.setToast("No session selected", toastWarning)
+		return nil
+	}
+	if session.Status == StatusStopped {
+		m.setToast("Session not running", toastWarning)
+		return nil
+	}
+	window := selectedWindow(session, m.selection.Window)
+	if window == nil {
+		m.setToast("No window selected", toastWarning)
+		return nil
+	}
+	pane := m.selectedPane()
+	if pane == nil {
+		m.setToast("No pane selected", toastWarning)
+		return nil
+	}
+	running := !pane.Dead
+	if !running {
+		m.setState(StateDashboard)
+		m.setToast("Closing pane...", toastInfo)
+		return m.closePane(session.Name, window.Index, pane.Index, pane.ID)
+	}
+	title := strings.TrimSpace(pane.Title)
+	if title == "" {
+		title = strings.TrimSpace(pane.Command)
+	}
+	if title == "" {
+		title = fmt.Sprintf("pane %s", pane.Index)
+	}
+	m.confirmPaneSession = session.Name
+	m.confirmPaneWindow = window.Index
+	m.confirmPaneIndex = pane.Index
+	m.confirmPaneID = pane.ID
+	m.confirmPaneTitle = title
+	m.confirmPaneRunning = running
+	m.setState(StateConfirmClosePane)
+	return nil
+}
+
 func (m *Model) updateConfirmCloseProject(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "y", "enter":
@@ -2233,6 +2641,27 @@ func (m *Model) updateConfirmCloseProject(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m, nil
+}
+
+func (m *Model) updateConfirmClosePane(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "enter":
+		return m, m.applyClosePane()
+	case "n", "esc":
+		m.resetConfirmPane()
+		m.setState(StateDashboard)
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m *Model) resetConfirmPane() {
+	m.confirmPaneSession = ""
+	m.confirmPaneWindow = ""
+	m.confirmPaneIndex = ""
+	m.confirmPaneID = ""
+	m.confirmPaneTitle = ""
+	m.confirmPaneRunning = false
 }
 
 func (m *Model) applyCloseProject() tea.Cmd {
@@ -2257,6 +2686,81 @@ func (m *Model) applyCloseProject() tea.Cmd {
 		return nil
 	}
 	m.setToast("Closed project "+name, toastSuccess)
+	return m.refreshCmd()
+}
+
+func (m *Model) applyClosePane() tea.Cmd {
+	session := strings.TrimSpace(m.confirmPaneSession)
+	window := strings.TrimSpace(m.confirmPaneWindow)
+	pane := strings.TrimSpace(m.confirmPaneIndex)
+	paneID := strings.TrimSpace(m.confirmPaneID)
+	m.resetConfirmPane()
+	m.setState(StateDashboard)
+	if session == "" || window == "" || pane == "" {
+		m.setToast("No pane selected", toastWarning)
+		return nil
+	}
+	return m.closePane(session, window, pane, paneID)
+}
+
+func (m *Model) closePane(sessionName, windowIndex, paneIndex, paneID string) tea.Cmd {
+	sessionName = strings.TrimSpace(sessionName)
+	windowIndex = strings.TrimSpace(windowIndex)
+	paneIndex = strings.TrimSpace(paneIndex)
+	if sessionName == "" || windowIndex == "" || paneIndex == "" {
+		m.setToast("No pane selected", toastWarning)
+		return nil
+	}
+	session := m.selectedSession()
+	if session == nil || session.Name != sessionName {
+		if session = findSessionByName(m.data.Projects, sessionName); session == nil {
+			m.setToast("Session not found", toastWarning)
+			return nil
+		}
+	}
+
+	if m.isNativeSession(session) {
+		if m.native == nil {
+			m.setToast("Close pane failed: native manager unavailable", toastError)
+			return nil
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := m.native.ClosePane(ctx, sessionName, windowIndex, paneIndex); err != nil {
+			m.setToast("Close pane failed: "+err.Error(), toastError)
+			return nil
+		}
+		m.selection.Pane = ""
+		if m.selection.Window == windowIndex {
+			m.selection.Window = ""
+		}
+		m.selectionVersion++
+		m.rememberSelection(m.selection)
+		m.setToast("Closed pane", toastSuccess)
+		return m.refreshCmd()
+	}
+
+	if m.tmux == nil {
+		m.setToast("Close pane failed: tmux unavailable", toastError)
+		return nil
+	}
+	target := strings.TrimSpace(paneID)
+	if target == "" {
+		target = fmt.Sprintf("%s:%s.%s", sessionName, windowIndex, paneIndex)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := m.tmux.KillPane(ctx, target); err != nil {
+		m.setToast("Close pane failed: "+err.Error(), toastError)
+		return nil
+	}
+	m.selection.Pane = ""
+	if m.selection.Window == windowIndex {
+		m.selection.Window = ""
+	}
+	m.selectionVersion++
+	m.rememberSelection(m.selection)
+	m.setToast("Closed pane", toastSuccess)
 	return m.refreshCmd()
 }
 
@@ -2479,6 +2983,172 @@ func (m *Model) setLayoutPickerSize() {
 	m.layoutPicker.SetSize(listW, listH)
 }
 
+// ===== Pane split picker =====
+
+func (m *Model) openPaneSplitPicker() {
+	session := m.selectedSession()
+	if session == nil {
+		m.setToast("No session selected", toastWarning)
+		return
+	}
+	if session.Status == StatusStopped {
+		m.setToast("Session not running", toastWarning)
+		return
+	}
+	if m.selectedPane() == nil {
+		m.setToast("No pane selected", toastWarning)
+		return
+	}
+	m.setState(StatePaneSplitPicker)
+}
+
+func (m *Model) updatePaneSplitPicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "q":
+		m.setState(StateDashboard)
+		return m, nil
+	case "r":
+		m.setState(StateDashboard)
+		return m, m.addPaneSplit(false)
+	case "d":
+		m.setState(StateDashboard)
+		return m, m.addPaneSplit(true)
+	}
+	return m, nil
+}
+
+// ===== Pane swap picker =====
+
+func (m *Model) setupPaneSwapPicker() {
+	delegate := list.NewDefaultDelegate()
+	delegate.Styles.SelectedTitle = delegate.Styles.SelectedTitle.
+		Foreground(theme.TextPrimary).
+		BorderLeftForeground(theme.AccentAlt)
+	delegate.Styles.SelectedDesc = delegate.Styles.SelectedDesc.
+		Foreground(theme.TextSecondary).
+		BorderLeftForeground(theme.AccentAlt)
+
+	l := list.New(nil, delegate, 0, 0)
+	l.Title = "🔁 Swap Pane"
+	l.Styles.Title = theme.TitleAlt
+	l.SetShowStatusBar(true)
+	l.SetFilteringEnabled(true)
+	l.SetStatusBarItemName("pane", "panes")
+	m.paneSwapPicker = l
+}
+
+func (m *Model) openPaneSwapPicker() {
+	session := m.selectedSession()
+	if session == nil {
+		m.setToast("No session selected", toastWarning)
+		return
+	}
+	if session.Status == StatusStopped {
+		m.setToast("Session not running", toastWarning)
+		return
+	}
+	window := selectedWindow(session, m.selection.Window)
+	if window == nil || len(window.Panes) == 0 {
+		m.setToast("No window selected", toastWarning)
+		return
+	}
+	source := m.selectedPane()
+	if source == nil {
+		m.setToast("No pane selected", toastWarning)
+		return
+	}
+	if len(window.Panes) < 2 {
+		m.setToast("Not enough panes to swap", toastInfo)
+		return
+	}
+	var items []list.Item
+	for _, pane := range window.Panes {
+		if pane.Index == source.Index {
+			continue
+		}
+		title := strings.TrimSpace(pane.Title)
+		if title == "" {
+			title = strings.TrimSpace(pane.Command)
+		}
+		if title == "" {
+			title = fmt.Sprintf("pane %s", pane.Index)
+		}
+		label := fmt.Sprintf("pane %s — %s", pane.Index, title)
+		desc := strings.TrimSpace(pane.Command)
+		if desc == "" {
+			desc = "swap target"
+		}
+		items = append(items, PaneSwapChoice{
+			Label:       label,
+			Desc:        desc,
+			WindowIndex: window.Index,
+			PaneIndex:   pane.Index,
+		})
+	}
+	if len(items) == 0 {
+		m.setToast("No pane selected", toastWarning)
+		return
+	}
+	m.swapSourceSession = session.Name
+	m.swapSourceWindow = window.Index
+	m.swapSourcePane = source.Index
+	m.swapSourcePaneID = source.ID
+	m.paneSwapPicker.SetItems(items)
+	m.setPaneSwapPickerSize()
+	m.setState(StatePaneSwapPicker)
+}
+
+func (m *Model) setPaneSwapPickerSize() {
+	if m.width <= 0 || m.height <= 0 {
+		return
+	}
+	hFrame, vFrame := dialogStyle.GetFrameSize()
+	availableW := m.width - 6
+	availableH := m.height - 4
+	if availableW < 30 {
+		availableW = m.width
+	}
+	if availableH < 10 {
+		availableH = m.height
+	}
+	desiredW := clamp(availableW, 46, 100)
+	desiredH := clamp(availableH, 12, 24)
+	listW := desiredW - hFrame
+	listH := desiredH - vFrame
+	if listW < 20 {
+		listW = clamp(m.width-hFrame, 20, m.width)
+	}
+	if listH < 6 {
+		listH = clamp(m.height-vFrame, 6, m.height)
+	}
+	m.paneSwapPicker.SetSize(listW, listH)
+}
+
+func (m *Model) updatePaneSwapPicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.paneSwapPicker.FilterState() == list.Filtering {
+		var cmd tea.Cmd
+		m.paneSwapPicker, cmd = m.paneSwapPicker.Update(msg)
+		return m, cmd
+	}
+
+	switch msg.String() {
+	case "esc", "q":
+		m.setState(StateDashboard)
+		return m, nil
+	case "enter":
+		if item, ok := m.paneSwapPicker.SelectedItem().(PaneSwapChoice); ok {
+			m.setState(StateDashboard)
+			return m, m.swapPaneWith(item)
+		}
+		m.setState(StateDashboard)
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.paneSwapPicker, cmd = m.paneSwapPicker.Update(msg)
+	return m, cmd
+}
+
 // ===== Command palette =====
 
 func (m *Model) setupCommandPalette() {
@@ -2500,6 +3170,7 @@ func (m *Model) setupCommandPalette() {
 
 func (m *Model) openCommandPalette() tea.Cmd {
 	m.setCommandPaletteSize()
+	m.commandPalette.ResetFilter()
 	m.commandPalette.SetFilterState(list.Filtering)
 	cmd := m.commandPalette.SetItems(m.commandPaletteItems())
 	m.setState(StateCommandPalette)
@@ -2590,6 +3261,20 @@ func (m *Model) commandPaletteItems() []list.Item {
 		{Label: "Session: Kill session", Desc: "Kill the selected session", Run: func(m *Model) tea.Cmd {
 			m.openKillConfirm()
 			return nil
+		}},
+		{Label: "Pane: Add pane", Desc: "Split the selected pane", Run: func(m *Model) tea.Cmd {
+			m.openPaneSplitPicker()
+			return nil
+		}},
+		{Label: "Pane: Move to new window", Desc: "Move the selected pane into a new window", Run: func(m *Model) tea.Cmd {
+			return m.movePaneToNewWindow()
+		}},
+		{Label: "Pane: Swap pane", Desc: "Swap the selected pane with another", Run: func(m *Model) tea.Cmd {
+			m.openPaneSwapPicker()
+			return nil
+		}},
+		{Label: "Pane: Close pane", Desc: "Close the selected pane", Run: func(m *Model) tea.Cmd {
+			return m.openClosePaneConfirm()
 		}},
 		{Label: "Pane: Quick reply", Desc: "Send a short follow-up to the selected pane", Run: func(m *Model) tea.Cmd {
 			return m.openQuickReply()

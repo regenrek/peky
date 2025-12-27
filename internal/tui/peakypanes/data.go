@@ -577,13 +577,15 @@ func resolveSelection(groups []ProjectGroup, desired selectionState) selectionSt
 		session = &project.Sessions[0]
 	}
 	resolved.Session = session.Name
-	if desired.Window != "" && windowExists(session.Windows, desired.Window) {
-		resolved.Window = desired.Window
-	} else {
-		resolved.Window = session.ActiveWindow
-	}
-	if resolved.Window == "" && len(session.Windows) > 0 {
-		resolved.Window = session.Windows[0].Index
+	if desired.Window != "" {
+		if windowExists(session.Windows, desired.Window) {
+			resolved.Window = desired.Window
+		} else {
+			resolved.Window = session.ActiveWindow
+		}
+		if resolved.Window == "" && len(session.Windows) > 0 {
+			resolved.Window = session.Windows[0].Index
+		}
 	}
 	resolved.Pane = desired.Pane
 	return resolved

@@ -2,6 +2,7 @@ package tmuxctl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -38,6 +39,13 @@ type PaneInfo struct {
 	Dead         bool
 	DeadStatus   int
 	LastActive   time.Time
+}
+
+// PaneLocation describes a pane's location within tmux.
+type PaneLocation struct {
+	Session string
+	Window  string
+	Pane    string
 }
 
 // SessionHasClients returns true if the session has any attached clients.
@@ -398,6 +406,28 @@ func (c *Client) CapturePaneLines(ctx context.Context, target string, lines int)
 		return nil, wrapTmuxErr("capture-pane", err, out)
 	}
 	return parse(out), nil
+}
+
+// PaneLocation returns the session/window/pane indexes for a pane ID.
+func (c *Client) PaneLocation(ctx context.Context, paneID string) (PaneLocation, error) {
+	paneID = strings.TrimSpace(paneID)
+	if paneID == "" {
+		return PaneLocation{}, errors.New("pane id cannot be empty")
+	}
+	cmd := c.run(ctx, c.bin, "display-message", "-p", "-t", paneID, "#{session_name}\t#{window_index}\t#{pane_index}")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return PaneLocation{}, wrapTmuxErr("display-message", err, out)
+	}
+	parts := strings.Split(strings.TrimSpace(string(out)), "\t")
+	if len(parts) < 3 {
+		return PaneLocation{}, fmt.Errorf("tmux: invalid pane location output")
+	}
+	return PaneLocation{
+		Session: strings.TrimSpace(parts[0]),
+		Window:  strings.TrimSpace(parts[1]),
+		Pane:    strings.TrimSpace(parts[2]),
+	}, nil
 }
 
 func parseInt(v string) int {

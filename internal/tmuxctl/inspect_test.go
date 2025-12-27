@@ -150,3 +150,21 @@ func TestCapturePaneLinesFallback(t *testing.T) {
 	}
 	runner.assertDone()
 }
+
+func TestPaneLocation(t *testing.T) {
+	runner := &fakeRunner{t: t, specs: []cmdSpec{{
+		name:   "tmux",
+		args:   []string{"display-message", "-p", "-t", "%1", "#{session_name}\t#{window_index}\t#{pane_index}"},
+		stdout: "demo\t2\t1\n",
+		exit:   0,
+	}}}
+	client := &Client{bin: "tmux", run: runner.run}
+	loc, err := client.PaneLocation(context.Background(), "%1")
+	if err != nil {
+		t.Fatalf("PaneLocation() error: %v", err)
+	}
+	if loc.Session != "demo" || loc.Window != "2" || loc.Pane != "1" {
+		t.Fatalf("PaneLocation() = %#v", loc)
+	}
+	runner.assertDone()
+}

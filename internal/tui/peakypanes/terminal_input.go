@@ -10,9 +10,12 @@ func encodeKeyMsg(msg tea.KeyMsg) []byte {
 	if msg.Type == tea.KeyRunes {
 		return []byte(string(msg.Runes))
 	}
+	if msg.Type == tea.KeySpace {
+		return []byte{' '}
+	}
 
 	switch msg.String() {
-	case "space":
+	case " ":
 		return []byte{' '}
 	case "enter":
 		return []byte{'\r'}

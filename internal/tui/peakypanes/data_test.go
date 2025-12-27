@@ -331,7 +331,7 @@ func TestBuildDashboardData(t *testing.T) {
 	if len(session.Windows) == 0 || len(session.Windows[0].Panes) == 0 {
 		t.Fatalf("panes not attached: %#v", session.Windows)
 	}
-	if result.Resolved.Session != "app" || result.Resolved.Window != "0" {
+	if result.Resolved.Session != "app" || result.Resolved.Window != "" {
 		t.Fatalf("Resolved = %#v", result.Resolved)
 	}
 

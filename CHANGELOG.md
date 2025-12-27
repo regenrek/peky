@@ -10,14 +10,20 @@ This format is based on Keep a Changelog.
 - Live pane rendering in the dashboard and project views (native + tmux streaming).
 - Terminal focus toggle for native panes (default `ctrl+\`, configurable).
 - Project config change detection to refresh selection without reopening projects.
+- Pane management actions: add pane (split), move pane to new window, swap panes, and close pane with a running-process confirmation.
+- Session-only jump keys (`alt+w` / `alt+s`) alongside the flat session/window navigation.
 
 ### Changed
 - Multiplexer resolution order is now project-local → project entry → global → native default.
 - Tmux previews capture ANSI output for richer fallback rendering.
 - Dashboard selection syncs live streams on navigation.
+- Project view navigation: `ctrl+w` / `ctrl+s` now cycles sessions and windows in a single vertical list.
+- Add pane now uses a lightweight direction prompt instead of a list picker.
 
 ### Fixed
 - Space key now passes correctly in native terminal focus.
+- Command palette and project picker filters now reset on open/selection.
+- Tmux move-pane now uses the correct break-pane source flag.
 
 ## 0.0.4 - 2025-12-25
 

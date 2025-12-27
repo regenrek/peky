@@ -17,8 +17,11 @@ const (
 	StateDashboard ViewState = iota
 	StateProjectPicker
 	StateLayoutPicker
+	StatePaneSplitPicker
+	StatePaneSwapPicker
 	StateConfirmKill
 	StateConfirmCloseProject
+	StateConfirmClosePane
 	StateHelp
 	StateCommandPalette
 	StateRenameSession
@@ -248,6 +251,18 @@ type LayoutChoice struct {
 func (l LayoutChoice) Title() string       { return l.Label }
 func (l LayoutChoice) Description() string { return l.Desc }
 func (l LayoutChoice) FilterValue() string { return l.Label }
+
+// PaneSwapChoice represents a target pane for swapping.
+type PaneSwapChoice struct {
+	Label       string
+	Desc        string
+	WindowIndex string
+	PaneIndex   string
+}
+
+func (p PaneSwapChoice) Title() string       { return p.Label }
+func (p PaneSwapChoice) Description() string { return p.Desc }
+func (p PaneSwapChoice) FilterValue() string { return strings.ToLower(p.Label + " " + p.Desc) }
 
 // CommandItem represents a selectable command in the palette.
 type CommandItem struct {
