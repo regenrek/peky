@@ -609,17 +609,6 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m.updateQuickReply(msg)
 }
 
-func (m *Model) nativeFocusedWindow() *terminal.Window {
-	if m.native == nil {
-		return nil
-	}
-	pane := m.selectedPane()
-	if pane == nil || strings.TrimSpace(pane.ID) == "" {
-		return nil
-	}
-	return m.native.PaneWindow(pane.ID)
-}
-
 func (m *Model) openProjectPicker() {
 	m.scanGitProjects()
 	m.projectPicker.ResetFilter()
