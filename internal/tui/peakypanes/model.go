@@ -84,6 +84,8 @@ type Model struct {
 
 	quickReplyInput textinput.Model
 
+	mouse mouseState
+
 	projectPicker  list.Model
 	layoutPicker   list.Model
 	paneSwapPicker list.Model
@@ -378,6 +380,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ErrorMsg:
 		m.setToast(msg.Error(), toastError)
 		return m, nil
+	case tea.MouseMsg:
+		if m.state == StateDashboard {
+			return m.updateDashboardMouse(msg)
+		}
+		return m, nil
 	case tea.KeyMsg:
 		switch m.state {
 		case StateDashboard:
@@ -459,6 +466,10 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.supportsTerminalFocus() && m.terminalFocus {
+		if msg.String() == "esc" {
+			m.setTerminalFocus(false)
+			return m, nil
+		}
 		if key.Matches(msg, m.keys.terminalFocus) {
 			m.setTerminalFocus(false)
 			return m, nil
@@ -1393,6 +1404,10 @@ func (m *Model) setTerminalFocus(enabled bool) {
 	}
 	m.terminalFocus = enabled
 	if enabled {
+		if m.filterActive {
+			m.filterActive = false
+			m.filterInput.Blur()
+		}
 		m.quickReplyInput.Blur()
 		return
 	}

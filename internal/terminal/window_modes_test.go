@@ -24,6 +24,7 @@ func (f *fakeEmu) Close() error                { return nil }
 func (f *fakeEmu) Resize(cols, rows int)       { f.cols, f.rows = cols, rows }
 func (f *fakeEmu) Render() string              { return "" }
 func (f *fakeEmu) CursorPosition() uv.Position { return f.cursor }
+func (f *fakeEmu) SendMouse(uv.MouseEvent)     {}
 func (f *fakeEmu) SetCallbacks(vt.Callbacks)   {}
 func (f *fakeEmu) Height() int                 { return f.rows }
 func (f *fakeEmu) Width() int                  { return f.cols }

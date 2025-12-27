@@ -169,7 +169,14 @@ func runMenu(autoStart *peakypanes.AutoStartSpec) {
 	}
 	defer cleanup()
 
-	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithInput(input))
+	motionFilter := peakypanes.NewMouseMotionFilter()
+	p := tea.NewProgram(
+		model,
+		tea.WithAltScreen(),
+		tea.WithInput(input),
+		tea.WithMouseAllMotion(),
+		tea.WithFilter(motionFilter.Filter),
+	)
 	if _, err := p.Run(); err != nil {
 		fatal("TUI error: %v", err)
 	}

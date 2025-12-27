@@ -247,9 +247,14 @@ Window
 
 Pane
 - rename pane via command palette (`ctrl+p`)
-- `ctrl+\` toggle terminal focus (Peaky Panes sessions; configurable via `dashboard.keymap.terminal_focus`)
-- `f7` scrollback mode (Peaky Panes sessions; configurable via `dashboard.keymap.scrollback`)
-- `f8` copy mode (Peaky Panes sessions; configurable via `dashboard.keymap.copy_mode`)
+- `ctrl+y` peek selected pane in new terminal
+- `ctrl+\` toggle terminal focus (native only; configurable via `dashboard.keymap.terminal_focus`)
+- mouse: single-click selects a pane; double-click toggles terminal focus (native only); `esc` exits focus
+- `f7` scrollback mode (native only; configurable via `dashboard.keymap.scrollback`)
+- `f8` copy mode (native only; configurable via `dashboard.keymap.copy_mode`)
+
+Tmux (inside session)
+- `prefix+g` open dashboard popup (tmux prefix is yours)
 
 Other
 - `ctrl+p` command palette
