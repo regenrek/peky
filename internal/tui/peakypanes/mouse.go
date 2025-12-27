@@ -101,6 +101,9 @@ func (m *Model) applySelectionFromHit(sel selectionState) bool {
 }
 
 func (m *Model) selectionCmd() tea.Cmd {
+	if m.tab == TabDashboard {
+		return nil
+	}
 	return m.selectionRefreshCmd()
 }
 
