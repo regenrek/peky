@@ -497,6 +497,7 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.setTerminalFocus(false)
 			return m, nil
 		}
+		// Intercept native scrollback/copy keys before PTY input.
 		win := m.nativeFocusedWindow()
 		if win != nil {
 			res := handleNativeTerminalKey(msg, m.keys, win)
@@ -3401,6 +3402,18 @@ func (m *Model) updateQuickReply(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.quickReplyInput, cmd = m.quickReplyInput.Update(msg)
 	return m, cmd
+}
+
+// nativeFocusedWindow returns the terminal.Window for the selected native pane.
+func (m *Model) nativeFocusedWindow() *terminal.Window {
+	if m.native == nil {
+		return nil
+	}
+	p := m.selectedPane()
+	if p == nil || strings.TrimSpace(p.ID) == "" {
+		return nil
+	}
+	return m.native.PaneWindow(p.ID)
 }
 
 func (m *Model) sendNativeKey(msg tea.KeyMsg) error {

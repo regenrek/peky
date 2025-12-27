@@ -12,6 +12,9 @@ This format is based on Keep a Changelog.
 - Project config change detection to refresh selection without reopening projects.
 - Pane management actions: add pane (split), move pane to new window, swap panes, and close pane with a running-process confirmation.
 - Session-only jump keys (`alt+w` / `alt+s`) alongside the flat session/window navigation.
+- Native pane scrollback and copy mode (selection + yank) with configurable key bindings.
+- Scrollback reflow on resize for native panes.
+- Smoke/integration coverage for native scrollback/copy, VT alt-screen + reflow, tmux send/capture, and key TUI state transitions.
 
 ### Changed
 - Multiplexer resolution order is now project-local → project entry → global → native default.
@@ -19,11 +22,14 @@ This format is based on Keep a Changelog.
 - Dashboard selection syncs live streams on navigation.
 - Project view navigation: `ctrl+w` / `ctrl+s` now cycles sessions and windows in a single vertical list.
 - Add pane now uses a lightweight direction prompt instead of a list picker.
+- Window rendering now supports scrollback viewports and copy-mode highlights for native panes.
+- Alternate screen panes no longer record scrollback history.
 
 ### Fixed
 - Space key now passes correctly in native terminal focus.
 - Command palette and project picker filters now reset on open/selection.
 - Tmux move-pane now uses the correct break-pane source flag.
+- Scrollback view stays anchored when new output arrives while scrolled up.
 
 ## 0.0.4 - 2025-12-25
 

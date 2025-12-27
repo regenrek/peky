@@ -756,6 +756,8 @@ func (m Model) viewHelp() string {
 		left.WriteString("  enter Send quick reply\n")
 		left.WriteString("  esc   Clear quick reply\n")
 		left.WriteString(fmt.Sprintf("  %s Toggle terminal focus\n", keyLabel(m.keys.terminalFocus)))
+		left.WriteString(fmt.Sprintf("  %s Scrollback mode (native panes)\n", keyLabel(m.keys.scrollback)))
+		left.WriteString(fmt.Sprintf("  %s Copy mode (native panes)\n", keyLabel(m.keys.copyMode)))
 		left.WriteString("  type  Send input to focused pane\n")
 	} else {
 		left.WriteString("  type  Quick reply is always active\n")
