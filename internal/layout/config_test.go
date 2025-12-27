@@ -54,8 +54,7 @@ func TestExpandLayoutVars(t *testing.T) {
 		Titles: []string{"${PROJECT_PATH}"},
 		Windows: []WindowDef{
 			{
-				Name:   "win-${FOO}",
-				Layout: "tiled",
+				Name: "win-${FOO}",
 				Panes: []PaneDef{
 					{Title: "${BAR}", Cmd: "${EXTRA}", Setup: []string{"${FOO}"}},
 				},

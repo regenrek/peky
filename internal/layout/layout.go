@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// Grid represents a rectangular tmux pane arrangement.
+// Grid represents a rectangular pane arrangement.
 type Grid struct {
 	Rows    int
 	Columns int
@@ -44,7 +44,7 @@ func Parse(spec string) (Grid, error) {
 	return g, nil
 }
 
-// Validate ensures the grid is reasonable for tmux panes.
+// Validate ensures the grid is reasonable for panes.
 func (g Grid) Validate() error {
 	switch {
 	case g.Rows <= 0:

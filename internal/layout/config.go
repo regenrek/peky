@@ -22,23 +22,14 @@ type PaneDef struct {
 
 // WindowDef defines a window (tab) with its panes.
 type WindowDef struct {
-	Name   string    `yaml:"name"`
-	Layout string    `yaml:"layout,omitempty"` // tiled, even-horizontal, even-vertical, main-horizontal, main-vertical
-	Panes  []PaneDef `yaml:"panes"`
+	Name  string    `yaml:"name"`
+	Panes []PaneDef `yaml:"panes"`
 }
 
 // LayoutSettings contains optional layout configuration.
 type LayoutSettings struct {
-	Width       int               `yaml:"width,omitempty"`
-	Height      int               `yaml:"height,omitempty"`
-	BindKeys    []KeyBind         `yaml:"bind_keys,omitempty"`
-	TmuxOptions map[string]string `yaml:"tmux_options,omitempty"` // session-scoped tmux options
-}
-
-// KeyBind defines a tmux key binding.
-type KeyBind struct {
-	Key    string `yaml:"key"`
-	Action string `yaml:"action"`
+	Width  int `yaml:"width,omitempty"`
+	Height int `yaml:"height,omitempty"`
 }
 
 // LayoutConfig represents a complete layout definition.
@@ -104,8 +95,6 @@ type DashboardKeymapConfig struct {
 	PanePrev        []string `yaml:"pane_prev,omitempty"`
 	Attach          []string `yaml:"attach,omitempty"`
 	NewSession      []string `yaml:"new_session,omitempty"`
-	OpenTerminal    []string `yaml:"open_terminal,omitempty"`
-	PeekPane        []string `yaml:"peek_pane,omitempty"`
 	TerminalFocus   []string `yaml:"terminal_focus,omitempty"`
 	ToggleWindows   []string `yaml:"toggle_windows,omitempty"`
 	OpenProject     []string `yaml:"open_project,omitempty"`
@@ -139,14 +128,9 @@ type DashboardConfig struct {
 	PreviewMode    string                `yaml:"preview_mode,omitempty"` // grid | layout
 	ProjectRoots   []string              `yaml:"project_roots,omitempty"`
 	AgentDetection AgentDetectionConfig  `yaml:"agent_detection,omitempty"`
-	AttachBehavior string                `yaml:"attach_behavior,omitempty"` // current | new_terminal | detached
+	AttachBehavior string                `yaml:"attach_behavior,omitempty"` // current | detached
 	HiddenProjects []HiddenProjectConfig `yaml:"hidden_projects,omitempty"`
 	Keymap         DashboardKeymapConfig `yaml:"keymap,omitempty"`
-}
-
-// TmuxSection holds tmux-specific config.
-type TmuxSection struct {
-	Config string `yaml:"config,omitempty"`
 }
 
 // ZellijSection holds zellij-specific config.
@@ -163,14 +147,13 @@ type GhosttySection struct {
 
 // Config is the root configuration structure for Peaky Panes.
 type Config struct {
-	Tmux        TmuxSection              `yaml:"tmux,omitempty"`
-	Zellij      ZellijSection            `yaml:"zellij,omitempty"`
-	Ghostty     GhosttySection           `yaml:"ghostty,omitempty"`
-	LayoutDirs  []string                 `yaml:"layout_dirs,omitempty"`
-	Layouts     map[string]*LayoutConfig `yaml:"layouts,omitempty"`
-	Projects    []ProjectConfig          `yaml:"projects,omitempty"`
-	Tools       ToolsConfig              `yaml:"tools,omitempty"`
-	Dashboard   DashboardConfig          `yaml:"dashboard,omitempty"`
+	Zellij     ZellijSection            `yaml:"zellij,omitempty"`
+	Ghostty    GhosttySection           `yaml:"ghostty,omitempty"`
+	LayoutDirs []string                 `yaml:"layout_dirs,omitempty"`
+	Layouts    map[string]*LayoutConfig `yaml:"layouts,omitempty"`
+	Projects   []ProjectConfig          `yaml:"projects,omitempty"`
+	Tools      ToolsConfig              `yaml:"tools,omitempty"`
+	Dashboard  DashboardConfig          `yaml:"dashboard,omitempty"`
 }
 
 // ProjectLocalConfig is the schema for .peakypanes.yml in project directories.
@@ -331,8 +314,7 @@ func ExpandLayoutVars(layout *LayoutConfig, extraVars map[string]string, project
 
 	for _, win := range layout.Windows {
 		expandedWin := WindowDef{
-			Name:   ExpandVars(win.Name, vars, projectPath, projectName),
-			Layout: win.Layout,
+			Name: ExpandVars(win.Name, vars, projectPath, projectName),
 		}
 		for _, pane := range win.Panes {
 			expandedPane := PaneDef{

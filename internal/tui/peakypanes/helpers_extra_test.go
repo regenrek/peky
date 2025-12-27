@@ -32,9 +32,3 @@ func TestValidateProjectPath(t *testing.T) {
 		t.Fatalf("validateProjectPath(missing) expected error")
 	}
 }
-
-func TestSelfExecutableNotEmpty(t *testing.T) {
-	if exe := selfExecutable(); exe == "" {
-		t.Fatalf("selfExecutable() returned empty")
-	}
-}

@@ -8,7 +8,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/cellbuf"
-	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/tui/icons"
 	"github.com/regenrek/peakypanes/internal/tui/theme"
 )
@@ -156,7 +155,7 @@ func (m Model) viewDashboardGrid(width, height int) string {
 	}
 	selectedProject := m.dashboardSelectedProject(columns)
 	previewLines := dashboardPreviewLines(m.settings)
-	return renderDashboardColumnsWithRenderer(columns, width, height, selectedProject, m.selection, previewLines, m.renderDashboardPaneTileWithMux)
+	return renderDashboardColumnsWithRenderer(columns, width, height, selectedProject, m.selection, previewLines, m.renderDashboardPaneTileLive)
 }
 
 func (m Model) viewSidebar(width, height int) string {
@@ -285,7 +284,7 @@ func (m Model) viewPreview(width, height int) string {
 		gridHeight = 1
 	}
 	gridWidth := width
-	grid := renderPanePreviewWithRenderer(panes, gridWidth, gridHeight, m.settings.PreviewMode, m.settings.PreviewCompact, m.selection.Pane, m.renderPaneTileWithMux)
+	grid := renderPanePreviewWithRenderer(panes, gridWidth, gridHeight, m.settings.PreviewMode, m.settings.PreviewCompact, m.selection.Pane, m.renderPaneTileLive)
 	lines = append(lines, grid)
 
 	return padLines(strings.Join(lines, "\n"), width, height)
@@ -747,7 +746,6 @@ func (m Model) viewHelp() string {
 	left.WriteString("\nSession\n")
 	left.WriteString("  enter Attach/start session (when reply empty)\n")
 	left.WriteString(fmt.Sprintf("  %s New session (pick layout)\n", keyLabel(m.keys.newSession)))
-	left.WriteString(fmt.Sprintf("  %s Open in new terminal window\n", keyLabel(m.keys.openTerminal)))
 	left.WriteString(fmt.Sprintf("  %s Kill session\n", keyLabel(m.keys.kill)))
 	left.WriteString("\nPane\n")
 	left.WriteString("  type  Quick reply (terminal focus off)\n")
@@ -757,13 +755,10 @@ func (m Model) viewHelp() string {
 	left.WriteString(fmt.Sprintf("  %s Scrollback mode (Peaky Panes sessions)\n", keyLabel(m.keys.scrollback)))
 	left.WriteString(fmt.Sprintf("  %s Copy mode (Peaky Panes sessions)\n", keyLabel(m.keys.copyMode)))
 	left.WriteString("  type  Send input to focused pane\n")
-	left.WriteString(fmt.Sprintf("  %s Peek pane in new terminal\n", keyLabel(m.keys.peekPane)))
 
 	var right strings.Builder
 	right.WriteString("Window\n")
 	right.WriteString(fmt.Sprintf("  %s Toggle window list\n", keyLabel(m.keys.toggleWindows)))
-	right.WriteString("\nTmux\n")
-	right.WriteString("  prefix+g Open dashboard popup\n")
 	right.WriteString("\nOther\n")
 	right.WriteString(fmt.Sprintf("  %s Refresh\n", keyLabel(m.keys.refresh)))
 	right.WriteString(fmt.Sprintf("  %s Edit config\n", keyLabel(m.keys.editConfig)))
@@ -1280,7 +1275,7 @@ func renderDashboardPaneTile(pane DashboardPane, width, height, previewLines int
 	return style.Render(strings.Join(lines, "\n"))
 }
 
-func (m Model) renderDashboardPaneTileWithMux(pane DashboardPane, width, height, previewLines int, selected bool, iconSet icons.IconSet, iconSize icons.Size) string {
+func (m Model) renderDashboardPaneTileLive(pane DashboardPane, width, height, previewLines int, selected bool, iconSet icons.IconSet, iconSize icons.Size) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
@@ -1345,7 +1340,7 @@ func (m Model) renderDashboardPaneTileWithMux(pane DashboardPane, width, height,
 	lines := []string{header, detailLine}
 	if availablePreview > 0 {
 		var live string
-		if pane.Pane.Multiplexer == layout.MultiplexerNative && m.native != nil {
+		if m.native != nil {
 			if win := m.native.Window(pane.Pane.ID); win != nil {
 				_ = win.Resize(contentWidth, availablePreview)
 				if selected && m.terminalFocus {
@@ -1453,7 +1448,7 @@ func renderPaneTile(pane PaneItem, width, height int, compact bool, target bool,
 	return style.Render(content)
 }
 
-func (m Model) renderPaneTileWithMux(pane PaneItem, width, height int, compact bool, target bool, borders tileBorders) string {
+func (m Model) renderPaneTileLive(pane PaneItem, width, height int, compact bool, target bool, borders tileBorders) string {
 	title := pane.Title
 	if target {
 		title = "TARGET " + title
@@ -1499,7 +1494,7 @@ func (m Model) renderPaneTileWithMux(pane PaneItem, width, height int, compact b
 	}
 	if maxPreview > 0 {
 		var live string
-		if pane.Multiplexer == layout.MultiplexerNative && m.native != nil {
+		if m.native != nil {
 			if win := m.native.Window(pane.ID); win != nil {
 				_ = win.Resize(contentWidth, maxPreview)
 				if target && m.terminalFocus {

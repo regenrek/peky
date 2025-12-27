@@ -9,7 +9,7 @@ import (
 )
 
 func TestViewDashboardContentRenders(t *testing.T) {
-	m, _ := newTestModel(t, nil)
+	m := newTestModel(t)
 	m.settings.RefreshInterval = 2 * time.Second
 	m.settings.ShowThumbnails = true
 	m.quickReplyInput.SetValue("hello")
@@ -92,7 +92,7 @@ func TestLayoutAndPathHelpers(t *testing.T) {
 	if layoutOrDash("") != "-" {
 		t.Fatalf("layoutOrDash(empty)")
 	}
-	m, _ := newTestModel(t, nil)
+	m := newTestModel(t)
 	if m.emptyStateMessage() == "" {
 		t.Fatalf("emptyStateMessage() empty")
 	}
@@ -102,7 +102,7 @@ func TestLayoutAndPathHelpers(t *testing.T) {
 }
 
 func TestViewStates(t *testing.T) {
-	m, _ := newTestModel(t, nil)
+	m := newTestModel(t)
 	m.width = 80
 	m.height = 24
 	m.data = DashboardData{Projects: []ProjectGroup{{Name: "Proj"}}}

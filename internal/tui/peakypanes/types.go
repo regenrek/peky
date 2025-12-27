@@ -7,7 +7,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/native"
-	"github.com/regenrek/peakypanes/internal/tmuxctl"
 )
 
 // ViewState represents the current UI view.
@@ -58,9 +57,8 @@ const (
 )
 
 const (
-	AttachBehaviorCurrent     = "current"
-	AttachBehaviorNewTerminal = "new_terminal"
-	AttachBehaviorDetached    = "detached"
+	AttachBehaviorCurrent  = "current"
+	AttachBehaviorDetached = "detached"
 )
 
 // DashboardData contains all data required to render the dashboard.
@@ -77,12 +75,11 @@ type ProjectGroup struct {
 	Sessions   []SessionItem
 }
 
-// SessionItem represents a session (native or tmux) in the dashboard.
+// SessionItem represents a session in the dashboard.
 type SessionItem struct {
 	Name         string
 	Path         string
 	LayoutName   string
-	Multiplexer  string
 	Status       Status
 	WindowCount  int
 	ActiveWindow string
@@ -119,7 +116,6 @@ type WindowItem struct {
 // PaneItem represents a pane with preview content.
 type PaneItem struct {
 	ID           string
-	Multiplexer  string
 	Index        string
 	Title        string
 	Command      string
@@ -173,8 +169,8 @@ type selectionState struct {
 	Pane    string
 }
 
-// tmuxSnapshotInput carries the state needed for refresh.
-type tmuxSnapshotInput struct {
+// dashboardSnapshotInput carries the state needed for refresh.
+type dashboardSnapshotInput struct {
 	Selection selectionState
 	Tab       DashboardTab
 	Version   uint64
@@ -183,8 +179,8 @@ type tmuxSnapshotInput struct {
 	Native    *native.Manager
 }
 
-// tmuxSnapshotResult is returned by a refresh.
-type tmuxSnapshotResult struct {
+// dashboardSnapshotResult is returned by a refresh.
+type dashboardSnapshotResult struct {
 	Data      DashboardData
 	Resolved  selectionState
 	Err       error
@@ -195,9 +191,9 @@ type tmuxSnapshotResult struct {
 	Version   uint64
 }
 
-// tmuxSnapshotMsg is sent back to the model.
-type tmuxSnapshotMsg struct {
-	Result tmuxSnapshotResult
+// dashboardSnapshotMsg is sent back to the model.
+type dashboardSnapshotMsg struct {
+	Result dashboardSnapshotResult
 }
 
 // refreshTickMsg triggers the next refresh.
@@ -208,9 +204,6 @@ type selectionRefreshMsg struct {
 	Version uint64
 }
 
-// exitAfterAttachMsg exits the dashboard after a tmux attach returns.
-type exitAfterAttachMsg struct{}
-
 // nativePaneUpdatedMsg is emitted when a native pane updates.
 type nativePaneUpdatedMsg struct {
 	PaneID string
@@ -219,8 +212,17 @@ type nativePaneUpdatedMsg struct {
 // nativeSessionStartedMsg signals a native session creation result.
 type nativeSessionStartedMsg struct {
 	Name  string
+	Path  string
 	Err   error
 	Focus bool
+}
+
+// AutoStartSpec instructs the TUI to start a session on launch.
+type AutoStartSpec struct {
+	Session string
+	Path    string
+	Layout  string
+	Focus   bool
 }
 
 // GitProject represents a project directory with .git.
@@ -266,24 +268,3 @@ type CommandItem struct {
 func (c CommandItem) Title() string       { return c.Label }
 func (c CommandItem) Description() string { return c.Desc }
 func (c CommandItem) FilterValue() string { return strings.ToLower(c.Label + " " + c.Desc) }
-
-// paneFromTmux converts tmux pane info to dashboard pane item.
-func paneFromTmux(p tmuxctl.PaneInfo) PaneItem {
-	return PaneItem{
-		ID:           p.ID,
-		Multiplexer:  layout.MultiplexerTmux,
-		Index:        p.Index,
-		Title:        p.Title,
-		Command:      p.Command,
-		StartCommand: p.StartCommand,
-		PID:          p.PID,
-		Active:       p.Active,
-		Left:         p.Left,
-		Top:          p.Top,
-		Width:        p.Width,
-		Height:       p.Height,
-		Dead:         p.Dead,
-		DeadStatus:   p.DeadStatus,
-		LastActive:   p.LastActive,
-	}
-}

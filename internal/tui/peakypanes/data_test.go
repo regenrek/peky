@@ -1,8 +1,6 @@
 package peakypanes
 
 import (
-	"context"
-	"fmt"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -10,7 +8,6 @@ import (
 	"time"
 
 	"github.com/regenrek/peakypanes/internal/layout"
-	"github.com/regenrek/peakypanes/internal/tmuxctl"
 )
 
 func TestDefaultDashboardConfigDefaults(t *testing.T) {
@@ -39,7 +36,7 @@ func TestDefaultDashboardConfigDefaults(t *testing.T) {
 	if cfg.PreviewMode != "grid" {
 		t.Fatalf("PreviewMode = %q", cfg.PreviewMode)
 	}
-	if cfg.AttachBehavior != AttachBehaviorNewTerminal {
+	if cfg.AttachBehavior != AttachBehaviorCurrent {
 		t.Fatalf("AttachBehavior = %q", cfg.AttachBehavior)
 	}
 	if len(cfg.ProjectRoots) != 1 || cfg.ProjectRoots[0] != filepath.Join(home, "projects") {
@@ -58,7 +55,7 @@ func TestDefaultDashboardConfigOverrides(t *testing.T) {
 		ShowThumbnails: &show,
 		PreviewCompact: &compact,
 		PreviewMode:    "layout",
-		AttachBehavior: "new-terminal",
+		AttachBehavior: "detached",
 		ProjectRoots:   []string{"/tmp", "/tmp"},
 	})
 	if err != nil {
@@ -79,7 +76,7 @@ func TestDefaultDashboardConfigOverrides(t *testing.T) {
 	if cfg.PreviewMode != "layout" {
 		t.Fatalf("PreviewMode = %q", cfg.PreviewMode)
 	}
-	if cfg.AttachBehavior != AttachBehaviorNewTerminal {
+	if cfg.AttachBehavior != AttachBehaviorDetached {
 		t.Fatalf("AttachBehavior = %q", cfg.AttachBehavior)
 	}
 	if !reflect.DeepEqual(cfg.ProjectRoots, []string{"/tmp"}) {
@@ -265,38 +262,21 @@ func TestResolveDashboardSelection(t *testing.T) {
 }
 
 func TestBuildDashboardData(t *testing.T) {
-	tmpDir := t.TempDir()
-	cfg := &layout.Config{Projects: []layout.ProjectConfig{{Name: "App", Path: tmpDir}}}
+	m := newTestModel(t)
+	snap := startNativeSession(t, m, "app")
+	cfg := &layout.Config{Projects: []layout.ProjectConfig{{Name: "App", Session: snap.Name, Path: snap.Path}}}
 	settings, err := defaultDashboardConfig(layout.DashboardConfig{})
 	if err != nil {
 		t.Fatalf("defaultDashboardConfig() error: %v", err)
 	}
 
-	fullFormat := "#{pane_id}\t#{pane_index}\t#{pane_active}\t#{pane_title}\t#{pane_current_command}\t#{pane_start_command}\t#{pane_pid}\t#{pane_left}\t#{pane_top}\t#{pane_width}\t#{pane_height}\t#{pane_dead}\t#{pane_dead_status}\t#{pane_last_active}"
-	paneLine := fmt.Sprintf("%%1\t0\t1\tTitle\tbash\tbash\t1234\t0\t0\t80\t24\t0\t0\t%d\n", time.Now().Unix())
-
-	runner := &fakeRunner{t: t, specs: []cmdSpec{
-		{name: "tmux", args: []string{"display-message", "-p", "#S"}, stdout: "app\n", exit: 0},
-		{name: "tmux", args: []string{"list-sessions", "-F", "#{session_name}\t#{session_path}"}, stdout: fmt.Sprintf("app\t%s\n", tmpDir), exit: 0},
-		{name: "tmux", args: []string{"list-windows", "-t", "app", "-F", "#{window_index}\t#{window_name}\t#{window_active}"}, stdout: "0\tmain\t1\n1\tlogs\t0\n", exit: 0},
-		{name: "tmux", args: []string{"list-panes", "-t", "app:0", "-F", fullFormat}, stdout: paneLine, exit: 0},
-		{name: "tmux", args: []string{"list-panes", "-t", "app:1", "-F", fullFormat}, stdout: paneLine, exit: 0},
-		{name: "tmux", args: []string{"list-panes", "-t", "app:0", "-F", fullFormat}, stdout: paneLine, exit: 0},
-		{name: "tmux", args: []string{"list-panes", "-t", "app:0", "-F", fullFormat}, stdout: paneLine, exit: 0},
-	}}
-
-	client, err := tmuxctl.NewClient("tmux")
-	if err != nil {
-		t.Fatalf("NewClient() error: %v", err)
-	}
-	client.WithExec(runner.run)
-
-	result := buildDashboardData(context.Background(), client, tmuxSnapshotInput{
+	result := buildDashboardData(dashboardSnapshotInput{
 		Selection: selectionState{},
 		Tab:       TabProject,
 		Config:    cfg,
 		Settings:  settings,
 		Version:   1,
+		Native:    m.native,
 	})
 	if result.Err != nil {
 		t.Fatalf("buildDashboardData() error: %v", result.Err)
@@ -305,31 +285,27 @@ func TestBuildDashboardData(t *testing.T) {
 		t.Fatalf("Projects = %#v", result.Data.Projects)
 	}
 	session := result.Data.Projects[0].Sessions[0]
-	if session.Status != StatusCurrent {
+	if session.Status != StatusRunning {
 		t.Fatalf("session status = %v", session.Status)
 	}
-	if session.WindowCount != 2 || session.ActiveWindow != "0" {
+	if session.WindowCount == 0 || session.ActiveWindow == "" {
 		t.Fatalf("session windows = %d active=%q", session.WindowCount, session.ActiveWindow)
-	}
-	if session.Thumbnail.Line != "Title" {
-		t.Fatalf("thumbnail line = %q", session.Thumbnail.Line)
 	}
 	if len(session.Windows) == 0 || len(session.Windows[0].Panes) == 0 {
 		t.Fatalf("panes not attached: %#v", session.Windows)
 	}
-	if result.Resolved.Session != "app" || result.Resolved.Window != "" {
+	if result.Resolved.Session != snap.Name {
 		t.Fatalf("Resolved = %#v", result.Resolved)
 	}
-
-	runner.assertDone()
 }
 
 func TestBuildDashboardDataHonorsHiddenProjects(t *testing.T) {
-	tmpDir := t.TempDir()
+	m := newTestModel(t)
+	snap := startNativeSession(t, m, "app")
 	cfg := &layout.Config{
-		Projects: []layout.ProjectConfig{{Name: "App", Path: tmpDir}},
+		Projects: []layout.ProjectConfig{{Name: "App", Path: snap.Path}},
 		Dashboard: layout.DashboardConfig{
-			HiddenProjects: []layout.HiddenProjectConfig{{Name: "App", Path: tmpDir}},
+			HiddenProjects: []layout.HiddenProjectConfig{{Name: "App", Path: snap.Path}},
 		},
 	}
 	settings, err := defaultDashboardConfig(cfg.Dashboard)
@@ -337,23 +313,13 @@ func TestBuildDashboardDataHonorsHiddenProjects(t *testing.T) {
 		t.Fatalf("defaultDashboardConfig() error: %v", err)
 	}
 
-	runner := &fakeRunner{t: t, specs: []cmdSpec{
-		{name: "tmux", args: []string{"display-message", "-p", "#S"}, stdout: "app\n", exit: 0},
-		{name: "tmux", args: []string{"list-sessions", "-F", "#{session_name}\t#{session_path}"}, stdout: fmt.Sprintf("app\t%s\n", tmpDir), exit: 0},
-	}}
-
-	client, err := tmuxctl.NewClient("tmux")
-	if err != nil {
-		t.Fatalf("NewClient() error: %v", err)
-	}
-	client.WithExec(runner.run)
-
-	result := buildDashboardData(context.Background(), client, tmuxSnapshotInput{
+	result := buildDashboardData(dashboardSnapshotInput{
 		Selection: selectionState{},
 		Tab:       TabProject,
 		Config:    cfg,
 		Settings:  settings,
 		Version:   1,
+		Native:    m.native,
 	})
 	if result.Err != nil {
 		t.Fatalf("buildDashboardData() error: %v", result.Err)
@@ -361,8 +327,6 @@ func TestBuildDashboardDataHonorsHiddenProjects(t *testing.T) {
 	if len(result.Data.Projects) != 0 {
 		t.Fatalf("Projects = %#v", result.Data.Projects)
 	}
-
-	runner.assertDone()
 }
 
 func TestPaneExistsAndActivePaneIndex(t *testing.T) {

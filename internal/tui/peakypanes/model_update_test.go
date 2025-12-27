@@ -13,7 +13,7 @@ import (
 )
 
 func TestModelInitAndRefreshHelpers(t *testing.T) {
-	m, _ := newTestModel(t, nil)
+	m := newTestModel(t)
 	m.beginRefresh()
 	if !m.refreshing || m.refreshInFlight == 0 {
 		t.Fatalf("beginRefresh() did not set flags")
@@ -34,13 +34,13 @@ func TestModelInitAndRefreshHelpers(t *testing.T) {
 }
 
 func TestUpdateHandlesMessages(t *testing.T) {
-	m, _ := newTestModel(t, nil)
+	m := newTestModel(t)
 	_, _ = m.Update(tea.WindowSizeMsg{Width: 90, Height: 30})
 	_, _ = m.Update(refreshTickMsg{})
 	_, _ = m.Update(selectionRefreshMsg{Version: m.selectionVersion})
 
-	result := tmuxSnapshotResult{Data: DashboardData{Projects: []ProjectGroup{{Name: "Proj"}}}, Settings: m.settings, Version: m.selectionVersion}
-	_, _ = m.Update(tmuxSnapshotMsg{Result: result})
+	result := dashboardSnapshotResult{Data: DashboardData{Projects: []ProjectGroup{{Name: "Proj"}}}, Settings: m.settings, Version: m.selectionVersion}
+	_, _ = m.Update(dashboardSnapshotMsg{Result: result})
 	_, _ = m.Update(SuccessMsg{Message: "ok"})
 	_, _ = m.Update(WarningMsg{Message: "warn"})
 	_, _ = m.Update(InfoMsg{Message: "info"})
@@ -52,7 +52,7 @@ type errTest string
 func (e errTest) Error() string { return string(e) }
 
 func TestUpdateDashboardKeys(t *testing.T) {
-	m, _ := newTestModel(t, nil)
+	m := newTestModel(t)
 	m.data = DashboardData{Projects: []ProjectGroup{{
 		Name: "Proj",
 		Sessions: []SessionItem{{
@@ -82,7 +82,7 @@ func TestUpdateDashboardKeys(t *testing.T) {
 }
 
 func TestPickersAndRenamePaths(t *testing.T) {
-	m, _ := newTestModel(t, nil)
+	m := newTestModel(t)
 	m.data = DashboardData{Projects: []ProjectGroup{{
 		Name: "Proj",
 		Sessions: []SessionItem{{
@@ -119,7 +119,7 @@ func TestPickersAndRenamePaths(t *testing.T) {
 }
 
 func TestOpenProjectSelectsProjectAndSession(t *testing.T) {
-	m, _ := newTestModel(t, nil)
+	m := newTestModel(t)
 	projectPath := t.TempDir()
 	if err := os.WriteFile(filepath.Join(projectPath, ".peakypanes.yml"), []byte("session: My Session\n"), 0o644); err != nil {
 		t.Fatalf("write project config: %v", err)
@@ -142,7 +142,7 @@ func TestOpenProjectSelectsProjectAndSession(t *testing.T) {
 }
 
 func TestMiscHelpers(t *testing.T) {
-	m, _ := newTestModel(t, nil)
+	m := newTestModel(t)
 	m.setLayoutPickerSize()
 	m.setCommandPaletteSize()
 	m.setQuickReplySize()
@@ -154,21 +154,6 @@ func TestMiscHelpers(t *testing.T) {
 	if summary := layoutSummary(&layout.LayoutConfig{Grid: "2x2"}); summary == "" {
 		t.Fatalf("layoutSummary() empty")
 	}
-	if tmuxSocketFromEnv("/tmp/tmux,123") != "/tmp/tmux" {
-		t.Fatalf("tmuxSocketFromEnv() failed")
-	}
-
-	cmd := m.openNewTerminal("echo", []string{"hi"}, "ok")
-	if cmd == nil {
-		t.Fatalf("openNewTerminal() returned nil")
-	}
-	if focus := m.focusTerminalApp("msg"); focus == nil {
-		t.Fatalf("focusTerminalApp() returned nil")
-	}
-	if m.newTerminalCommand("echo", nil) == nil {
-		t.Fatalf("newTerminalCommand() returned nil")
-	}
-	_ = m.focusTerminalCommand()
 
 	if view := m.viewDashboard(); strings.TrimSpace(view) == "" {
 		t.Fatalf("viewDashboard() empty")
@@ -176,7 +161,7 @@ func TestMiscHelpers(t *testing.T) {
 }
 
 func TestStartNewSessionWithLayout(t *testing.T) {
-	m, _ := newTestModel(t, nil)
+	m := newTestModel(t)
 	root := t.TempDir()
 	m.data = DashboardData{Projects: []ProjectGroup{{
 		Name: "Proj",

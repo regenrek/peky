@@ -3,80 +3,51 @@ package main
 import (
 	"context"
 	"fmt"
-	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
-	"sort"
-	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/regenrek/peakypanes/internal/layout"
-	"github.com/regenrek/peakypanes/internal/tmuxctl"
 	"github.com/regenrek/peakypanes/internal/tui/peakypanes"
 )
 
 var version = "dev"
 
-const (
-	defaultDashboardSession = "peakypanes-dashboard"
-	defaultDashboardWindow  = "peakypanes-dashboard"
-)
-
 var (
-	runMenuFn            = runMenu
-	runDashboardPopupFn  = runDashboardPopup
-	runDashboardHostedFn = runDashboardHosted
-	fatalFn              = fatal
-	currentTTYFn         = tmuxctl.CurrentTTY
-	hasClientOnTTYFn     = defaultHasClientOnTTY
+	runMenuFn = runMenu
+	fatalFn   = fatal
 )
 
-func defaultHasClientOnTTY(ctx context.Context, tty string) (bool, error) {
-	client, err := tmuxctl.NewClient("")
-	if err != nil {
-		return false, err
-	}
-	return client.HasClientOnTTY(ctx, tty)
-}
-
-const helpText = `🎩 Peaky Panes - Tmux Layout Manager
+const helpText = `🎩 Peaky Panes - Native Session Dashboard
 
 Usage:
   peakypanes [command] [options]
 
 Commands:
-  (no command)     Open interactive dashboard (direct)
+  (no command)     Open interactive dashboard
   dashboard        Open dashboard UI
-  popup            Open dashboard as a tmux popup (if available)
-  open             Start/attach session in current directory
-  start            Start/attach session (same as open)
-  kill             Kill a tmux session
+  open             Start a session and open dashboard
+  start            Start a session and open dashboard (alias)
   init             Initialize configuration
   layouts          List and manage layouts
   clone            Clone from GitHub and open
-	setup            Check dependencies and print install tips
   version          Show version
 
 Examples:
   peakypanes                          # Open dashboard
-  peakypanes dashboard                # Open dashboard (direct)
-  peakypanes dashboard --tmux-session # Host dashboard in tmux session
-  peakypanes popup                    # Open dashboard popup (tmux)
-  peakypanes open                     # Start/attach session in current directory
-  peakypanes open --layout dev-3      # Start with specific layout
-  peakypanes kill                     # Kill session for current directory
-  peakypanes kill myapp               # Kill specific session
+  peakypanes dashboard                # Open dashboard
+  peakypanes start                    # Start session from current dir
+  peakypanes start --layout dev-3     # Start with specific layout
+  peakypanes open --path ~/repo       # Start from a path
   peakypanes init                     # Create global config
   peakypanes init --local             # Create .peakypanes.yml in current dir
   peakypanes layouts                  # List available layouts
   peakypanes layouts export dev-3     # Export layout YAML to stdout
-  peakypanes clone user/repo          # Clone from GitHub and start session
-	peakypanes setup                    # Check tmux installation
+  peakypanes clone user/repo          # Clone from GitHub and open
 
 Run 'peakypanes <command> --help' for more information.
 `
@@ -87,22 +58,10 @@ Usage:
   peakypanes dashboard [options]
 
 Options:
-  --tmux-session       Host the dashboard in a dedicated tmux session
-  --session <name>     Session name for --tmux-session (default: peakypanes-dashboard)
-  --popup              Open the dashboard as a tmux popup when supported
   -h, --help           Show this help
 
 Examples:
   peakypanes dashboard
-  peakypanes dashboard --tmux-session
-  peakypanes dashboard --tmux-session --session my-dashboard
-  peakypanes dashboard --popup
-`
-
-const popupHelpText = `Open the dashboard as a tmux popup (fallbacks to direct UI).
-
-Usage:
-  peakypanes popup
 `
 
 const initHelpText = `Initialize Peaky Panes configuration.
@@ -140,7 +99,7 @@ Examples:
   peakypanes layouts export dev-3 > .peakypanes.yml
 `
 
-const startHelpText = `Start or attach to a tmux session.
+const startHelpText = `Start a session and open the dashboard.
 
 Usage:
   peakypanes start [options]
@@ -149,7 +108,6 @@ Options:
   --layout <name>      Use specific layout (default: auto-detect)
   --session <name>     Override session name (default: directory name)
   --path <dir>         Project directory (default: current directory)
-  -d, --detach         Create session but do not attach
   -h, --help           Show this help
 
 Layout Detection (in order):
@@ -162,62 +120,26 @@ Examples:
   peakypanes start                    # Auto-detect layout
   peakypanes start --layout fullstack
   peakypanes start --session myapp --layout go-dev
-  peakypanes start --detach
-`
-
-const killHelpText = `Kill a tmux session.
-
-Usage:
-  peakypanes kill [session-name]
-
-Arguments:
-  session-name         Session to kill (default: current directory name)
-
-Options:
-  -h, --help           Show this help
-
-Examples:
-  peakypanes kill                     # Kill session for current directory
-  peakypanes kill myapp               # Kill session named 'myapp'
-`
-
-const setupHelpText = `Check external dependencies.
-
-Usage:
-	peakypanes setup
-
-Checks:
-	tmux is installed and on PATH
-
-Examples:
-	peakypanes setup
 `
 
 func main() {
-	sanitizeTmuxEnv()
 	if len(os.Args) < 2 {
 		// Default: open dashboard directly in the current terminal
-		runMenu()
+		runMenuFn(nil)
 		return
 	}
 
 	switch os.Args[1] {
 	case "dashboard", "ui":
 		runDashboardCommand(os.Args[2:])
-	case "popup":
-		runDashboardPopup(os.Args[2:])
 	case "open", "o", "start":
 		runStart(os.Args[2:])
-	case "kill", "k":
-		runKill(os.Args[2:])
 	case "init":
 		runInit(os.Args[2:])
 	case "layouts":
 		runLayouts(os.Args[2:])
 	case "clone", "c":
 		runClone(os.Args[2:])
-	case "setup":
-		runSetup(os.Args[2:])
 	case "version", "-v", "--version":
 		fmt.Printf("peakypanes %s\n", version)
 	case "help", "-h", "--help":
@@ -232,16 +154,13 @@ func main() {
 	}
 }
 
-func runMenu() {
-	client, err := tmuxctl.NewClient("")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "peakypanes: tmux not found (tmux sessions unavailable): %v\n", err)
-		client = nil
-	}
-
-	model, err := peakypanes.NewModel(client)
+func runMenu(autoStart *peakypanes.AutoStartSpec) {
+	model, err := peakypanes.NewModel()
 	if err != nil {
 		fatal("failed to initialize: %v", err)
+	}
+	if autoStart != nil {
+		model.SetAutoStart(*autoStart)
 	}
 
 	input, cleanup, err := openTUIInput()
@@ -264,15 +183,6 @@ func openTUIInput() (*os.File, func(), error) {
 		}
 		return f, func() { _ = f.Close() }, nil
 	}
-	if tty := currentTTYFn(); tty != "" {
-		if f, err := os.OpenFile(tty, os.O_RDWR, 0); err == nil {
-			if err := ensureBlocking(f); err != nil {
-				_ = f.Close()
-				return nil, func() {}, fmt.Errorf("configure %s: %w", tty, err)
-			}
-			return f, func() { _ = f.Close() }, nil
-		}
-	}
 	if err := ensureBlocking(os.Stdin); err != nil {
 		return nil, func() {}, fmt.Errorf("stdin is not a usable TUI input: %w", err)
 	}
@@ -280,23 +190,14 @@ func openTUIInput() (*os.File, func(), error) {
 }
 
 type dashboardOptions struct {
-	popup      bool
-	tmuxHosted bool
-	session    string
-	showHelp   bool
+	showHelp bool
 }
 
 type startOptions struct {
 	layoutName string
 	session    string
 	path       string
-	detach     bool
 	showHelp   bool
-}
-
-type killOptions struct {
-	session  string
-	showHelp bool
 }
 
 type initOptions struct {
@@ -307,18 +208,9 @@ type initOptions struct {
 }
 
 func runDashboardCommand(args []string) {
-	opts := dashboardOptions{session: defaultDashboardSession}
+	opts := dashboardOptions{}
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
-		case "--tmux-session":
-			opts.tmuxHosted = true
-		case "--session":
-			if i+1 < len(args) {
-				opts.session = args[i+1]
-				i++
-			}
-		case "--popup":
-			opts.popup = true
 		case "-h", "--help":
 			opts.showHelp = true
 		}
@@ -328,153 +220,30 @@ func runDashboardCommand(args []string) {
 		fmt.Print(dashboardHelpText)
 		return
 	}
-	if opts.popup && opts.tmuxHosted {
-		fatalFn("choose either --popup or --tmux-session")
-	}
-	if opts.popup {
-		runDashboardPopupFn(nil)
-		return
-	}
-	if opts.tmuxHosted {
-		runDashboardHostedFn(opts.session)
-		return
-	}
-	runMenuFn()
+	runMenuFn(nil)
 }
 
-func runDashboardPopup(args []string) {
-	for _, a := range args {
-		if a == "-h" || a == "--help" {
-			fmt.Print(popupHelpText)
-			return
-		}
-	}
-	if !insideTmux() {
-		runMenu()
+func runStart(args []string) {
+	opts := parseStartArgs(args)
+	if opts.showHelp {
+		fmt.Print(startHelpText)
 		return
 	}
-	client, err := tmuxctl.NewClient("")
-	if err != nil {
-		fatal("tmux not found: %v", err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	if ok := client.SupportsPopup(ctx); ok {
-		err := client.DisplayPopup(ctx, tmuxctl.PopupOptions{
-			Width:    "90%",
-			Height:   "90%",
-			StartDir: currentDir(),
-		}, []string{selfExecutable(), "dashboard"})
-		if err == nil {
-			return
+	projectPath := strings.TrimSpace(opts.path)
+	if projectPath == "" {
+		var err error
+		projectPath, err = os.Getwd()
+		if err != nil {
+			fatal("cannot determine current directory: %v", err)
 		}
 	}
-	if err := openDashboardWindow(ctx, client); err != nil {
-		fmt.Fprintf(os.Stderr, "peakypanes: popup failed: %v\n", err)
-		runMenu()
+	autoStart := &peakypanes.AutoStartSpec{
+		Session: opts.session,
+		Path:    projectPath,
+		Layout:  opts.layoutName,
+		Focus:   true,
 	}
-}
-
-func runDashboardHosted(sessionName string) {
-	client, err := tmuxctl.NewClient("")
-	if err != nil {
-		fatal("tmux not found: %v", err)
-	}
-	sessionName = layout.SanitizeSessionName(strings.TrimSpace(sessionName))
-	if sessionName == "" {
-		sessionName = defaultDashboardSession
-	}
-	exe := selfExecutable()
-	if insideTmux() {
-		cmd := exec.Command(client.Binary(), "new-session", "-Ad", "-s", sessionName, exe, "dashboard")
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			fatal("failed to start dashboard session: %v", err)
-		}
-		switchCmd := exec.Command(client.Binary(), "switch-client", "-t", sessionName)
-		switchCmd.Stdin = os.Stdin
-		switchCmd.Stdout = os.Stdout
-		switchCmd.Stderr = os.Stderr
-		if err := switchCmd.Run(); err != nil {
-			fmt.Printf("   Run: tmux switch-client -t %s\n", sessionName)
-		}
-		return
-	}
-	cmd := exec.Command(client.Binary(), "new-session", "-A", "-s", sessionName, exe, "dashboard")
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		fatal("failed to start dashboard session: %v", err)
-	}
-}
-
-func runSetup(args []string) {
-	for _, a := range args {
-		if a == "-h" || a == "--help" {
-			fmt.Print(setupHelpText)
-			return
-		}
-	}
-
-	fmt.Println("🎩 Peaky Panes setup")
-	fmt.Println()
-
-	tmuxPath, err := exec.LookPath("tmux")
-	if err == nil && strings.TrimSpace(tmuxPath) != "" {
-		fmt.Printf("✅ tmux found: %s\n", tmuxPath)
-
-		if out, err := exec.Command("tmux", "-V").Output(); err == nil {
-			v := strings.TrimSpace(string(out))
-			if v != "" {
-				fmt.Printf("   %s\n", v)
-			}
-		}
-
-		fmt.Println()
-		fmt.Println("All set.")
-		fmt.Println("Run 'peakypanes' to open the dashboard.")
-		return
-	}
-
-	fmt.Println("❌ tmux not found in PATH")
-	fmt.Println()
-	fmt.Println("Install tmux, then rerun 'peakypanes setup'.")
-
-	switch runtime.GOOS {
-	case "darwin":
-		fmt.Println()
-		fmt.Println("macOS")
-		fmt.Println("  brew install tmux")
-		fmt.Println("  or")
-		fmt.Println("  port install tmux")
-	case "linux":
-		fmt.Println()
-		fmt.Println("Debian or Ubuntu")
-		fmt.Println("  sudo apt-get update")
-		fmt.Println("  sudo apt-get install tmux")
-		fmt.Println()
-		fmt.Println("Fedora")
-		fmt.Println("  sudo dnf install tmux")
-		fmt.Println()
-		fmt.Println("Arch")
-		fmt.Println("  sudo pacman -S tmux")
-	case "windows":
-		fmt.Println()
-		fmt.Println("Windows")
-		fmt.Println("  tmux runs in WSL")
-		fmt.Println("  wsl --install")
-		fmt.Println("  then inside WSL")
-		fmt.Println("    sudo apt-get update")
-		fmt.Println("    sudo apt-get install tmux")
-	default:
-		fmt.Println()
-		fmt.Println("Install tmux with your system package manager.")
-	}
-
-	os.Exit(1)
+	runMenuFn(autoStart)
 }
 
 func runClone(args []string) {
@@ -509,8 +278,10 @@ func runClone(args []string) {
 
 	fmt.Printf("🔄 Cloning %s...\n", url)
 
-	// Clone the repository
-	cmd := exec.Command("git", "clone", url, targetDir)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "git", "clone", url, targetDir)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -651,9 +422,6 @@ func initGlobal(layoutName string, force bool) {
 	configContent := `# Peaky Panes - Global Configuration
 # https://github.com/regenrek/peakypanes
 
-tmux:
-  config: ~/.config/tmux/tmux.conf
-
 zellij:
   # config: ~/.config/zellij/config.kdl
   # layout_dir: ~/.config/zellij/layouts
@@ -671,7 +439,7 @@ ghostty:
 #   idle_seconds: 20
 #   show_thumbnails: true
 #   preview_mode: grid   # grid | layout
-#   attach_behavior: new_terminal  # current | new_terminal | detached
+#   attach_behavior: current  # current | detached
 #   project_roots:
 #     - ~/projects
 #   status_regex:
@@ -817,195 +585,6 @@ func exportLayout(name string) {
 	fmt.Print(yaml)
 }
 
-func runKill(args []string) {
-	opts := parseKillArgs(args)
-	if opts.showHelp {
-		fmt.Print(killHelpText)
-		return
-	}
-	sessionName := opts.session
-
-	// Default session name to current directory name
-	if sessionName == "" {
-		cwd, err := os.Getwd()
-		if err != nil {
-			fatal("cannot determine current directory: %v", err)
-		}
-		sessionName = layout.SanitizeSessionName(filepath.Base(cwd))
-	}
-
-	// Create tmux client
-	client, err := tmuxctl.NewClient("")
-	if err != nil {
-		fatal("tmux not found: %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// Check if session exists
-	sessions, err := client.ListSessions(ctx)
-	if err != nil {
-		fatal("failed to list sessions: %v", err)
-	}
-
-	found := false
-	for _, s := range sessions {
-		if s == sessionName {
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		fmt.Printf("❌ Session '%s' not found\n", sessionName)
-		if len(sessions) > 0 {
-			fmt.Printf("\n   Running sessions:\n")
-			for _, s := range sessions {
-				fmt.Printf("   • %s\n", s)
-			}
-		}
-		return
-	}
-
-	// Kill the session
-	if err := client.KillSession(ctx, sessionName); err != nil {
-		fatal("failed to kill session: %v", err)
-	}
-
-	fmt.Printf("✅ Killed session '%s'\n", sessionName)
-}
-
-func runStart(args []string) {
-	opts := parseStartArgs(args)
-	if opts.showHelp {
-		fmt.Print(startHelpText)
-		return
-	}
-	layoutName := opts.layoutName
-	sessionName := opts.session
-	projectPath := opts.path
-	detach := opts.detach
-
-	// Default to current directory
-	if projectPath == "" {
-		var err error
-		projectPath, err = os.Getwd()
-		if err != nil {
-			fatal("cannot determine current directory: %v", err)
-		}
-	}
-
-	// Load layouts
-	loader, err := layout.NewLoader()
-	if err != nil {
-		fatal("failed to create loader: %v", err)
-	}
-	loader.SetProjectDir(projectPath)
-
-	if err := loader.LoadAll(); err != nil {
-		fatal("failed to load layouts: %v", err)
-	}
-
-	sessionName = layout.ResolveSessionName(projectPath, sessionName, loader.GetProjectConfig())
-
-	// Determine which layout to use
-	var selectedLayout *layout.LayoutConfig
-	var source string
-
-	if layoutName != "" {
-		// Explicit layout requested
-		selectedLayout, source, err = loader.GetLayout(layoutName)
-		if err != nil {
-			fatal("layout %q not found. Run 'peakypanes layouts' to see available layouts.", layoutName)
-		}
-	} else if loader.HasProjectConfig() {
-		// Use project-local config
-		selectedLayout = loader.GetProjectLayout()
-		source = "project"
-		if selectedLayout == nil {
-			// Project config exists but no layout defined, use default
-			selectedLayout, source, _ = loader.GetLayout("dev-3")
-		}
-	} else {
-		// Fall back to default
-		selectedLayout, source, _ = loader.GetLayout("dev-3")
-	}
-
-	if selectedLayout == nil {
-		fatal("no layout found")
-	}
-
-	// Expand variables
-	projectName := filepath.Base(projectPath)
-	var projectVars map[string]string
-	if loader.GetProjectConfig() != nil {
-		projectVars = loader.GetProjectConfig().Vars
-	}
-	expandedLayout := layout.ExpandLayoutVars(selectedLayout, projectVars, projectPath, projectName)
-
-	// Create tmux client
-	client, err := tmuxctl.NewClient("")
-	if err != nil {
-		fatal("tmux not found: %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	maybeSourceTmuxConfig(ctx, client)
-
-	// Check if session already exists
-	sessions, err := client.ListSessions(ctx)
-	if err != nil {
-		fatal("failed to list sessions: %v", err)
-	}
-
-	sessionExists := false
-	for _, s := range sessions {
-		if s == sessionName {
-			sessionExists = true
-			break
-		}
-	}
-
-	fmt.Printf("🎩 Peaky Panes\n")
-	fmt.Printf("   Session: %s\n", sessionName)
-	fmt.Printf("   Layout:  %s (%s)\n", selectedLayout.Name, source)
-	fmt.Printf("   Path:    %s\n", projectPath)
-	fmt.Println()
-
-	if sessionExists {
-		applyLayoutBindings(ctx, client, expandedLayout)
-		if detach {
-			fmt.Printf("   Session already exists.\n\n")
-			fmt.Printf("   Leaving session detached.\n")
-			return
-		}
-		fmt.Printf("   Session already exists, attaching...\n\n")
-		attachToSession(client, sessionName)
-		return
-	}
-
-	// Create the session with layout
-	fmt.Println("   Creating windows:")
-	if err := createSessionWithLayout(ctx, client, sessionName, projectPath, expandedLayout); err != nil {
-		fatal("failed to create session: %v", err)
-	}
-
-	applyLayoutBindings(ctx, client, expandedLayout)
-
-	fmt.Println()
-	fmt.Printf("   ✅ Session created!\n\n")
-
-	// Attach to session
-	if detach {
-		fmt.Printf("   Leaving session detached.\n")
-		return
-	}
-	attachToSession(client, sessionName)
-}
-
 func parseInitArgs(args []string) initOptions {
 	opts := initOptions{layout: "dev-3"}
 	for i := 0; i < len(args); i++ {
@@ -1021,21 +600,6 @@ func parseInitArgs(args []string) initOptions {
 			opts.force = true
 		case "-h", "--help":
 			opts.showHelp = true
-		}
-	}
-	return opts
-}
-
-func parseKillArgs(args []string) killOptions {
-	opts := killOptions{}
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "-h", "--help":
-			opts.showHelp = true
-		default:
-			if !strings.HasPrefix(args[i], "-") && opts.session == "" {
-				opts.session = args[i]
-			}
 		}
 	}
 	return opts
@@ -1060,8 +624,6 @@ func parseStartArgs(args []string) startOptions {
 				opts.path = args[i+1]
 				i++
 			}
-		case "--detach", "-d":
-			opts.detach = true
 		case "-h", "--help":
 			opts.showHelp = true
 		default:
@@ -1071,436 +633,6 @@ func parseStartArgs(args []string) startOptions {
 		}
 	}
 	return opts
-}
-
-func createSessionWithLayout(ctx context.Context, client *tmuxctl.Client, session, projectPath string, layoutCfg *layout.LayoutConfig) error {
-	if strings.TrimSpace(layoutCfg.Grid) != "" {
-		return createSessionWithGridLayout(ctx, client, session, projectPath, layoutCfg)
-	}
-	if len(layoutCfg.Windows) == 0 {
-		return fmt.Errorf("layout has no windows defined")
-	}
-
-	// Create first window with session
-	firstWindow := layoutCfg.Windows[0]
-	firstCmd := ""
-	if len(firstWindow.Panes) > 0 && firstWindow.Panes[0].Cmd != "" {
-		firstCmd = firstWindow.Panes[0].Cmd
-	}
-
-	firstPaneID, err := client.NewSessionWithCmd(ctx, session, projectPath, firstWindow.Name, firstCmd)
-	if err != nil {
-		return fmt.Errorf("create session: %w", err)
-	}
-
-	// Give tmux a moment to register the new session
-	time.Sleep(200 * time.Millisecond)
-
-	// Apply peakypanes default tmux options (session-scoped, not global)
-	// remain-on-exit: on keeps panes open when commands exit, which is better for debugging
-	_ = client.SetOption(ctx, session, "remain-on-exit", "on")
-
-	// Apply custom tmux options from layout config
-	for option, value := range layoutCfg.Settings.TmuxOptions {
-		_ = client.SetOption(ctx, session, option, value)
-	}
-
-	// Set title for first pane
-	if len(firstWindow.Panes) > 0 && firstWindow.Panes[0].Title != "" {
-		_ = client.SelectPane(ctx, firstPaneID, firstWindow.Panes[0].Title)
-	}
-
-	fmt.Printf("   • %s ", firstWindow.Name)
-
-	// Create additional panes in first window
-	for i := 1; i < len(firstWindow.Panes); i++ {
-		pane := firstWindow.Panes[i]
-		vertical := pane.Split == "vertical" || pane.Split == "v"
-
-		// Parse size percentage
-		percent := 0
-		if pane.Size != "" {
-			sizeStr := strings.TrimSuffix(pane.Size, "%")
-			if p, err := strconv.Atoi(sizeStr); err == nil {
-				percent = p
-			}
-		}
-
-		// Target the window directly
-		target := fmt.Sprintf("%s:%s", session, firstWindow.Name)
-
-		// Give tmux a tiny moment
-		time.Sleep(100 * time.Millisecond)
-
-		newPaneID, err := client.SplitWindowWithCmd(ctx, target, projectPath, vertical, percent, pane.Cmd, true)
-		if err != nil {
-			return fmt.Errorf("split pane: %w", err)
-		}
-
-		if pane.Title != "" {
-			_ = client.SelectPane(ctx, newPaneID, pane.Title)
-		}
-	}
-
-	fmt.Printf("(%d panes)\n", len(firstWindow.Panes))
-
-	// Apply layout if specified (after all panes are created)
-	if firstWindow.Layout != "" {
-		windowTarget := fmt.Sprintf("%s:%s", session, firstWindow.Name)
-		if err := client.SelectLayout(ctx, windowTarget, firstWindow.Layout); err != nil {
-			fmt.Printf("   ⚠ Layout %s: %v\n", firstWindow.Layout, err)
-		}
-	}
-
-	// Create additional windows
-	for _, win := range layoutCfg.Windows[1:] {
-		firstCmd := ""
-		if len(win.Panes) > 0 && win.Panes[0].Cmd != "" {
-			firstCmd = win.Panes[0].Cmd
-		}
-
-		firstPaneID, err := client.NewWindowWithCmd(ctx, session, win.Name, projectPath, firstCmd, true)
-		if err != nil {
-			return fmt.Errorf("create window %s: %w", win.Name, err)
-		}
-
-		if len(win.Panes) > 0 && win.Panes[0].Title != "" {
-			_ = client.SelectPane(ctx, firstPaneID, win.Panes[0].Title)
-		}
-
-		fmt.Printf("   • %s ", win.Name)
-
-		// Create additional panes
-		for i := 1; i < len(win.Panes); i++ {
-			pane := win.Panes[i]
-			vertical := pane.Split == "vertical" || pane.Split == "v"
-
-			percent := 0
-			if pane.Size != "" {
-				sizeStr := strings.TrimSuffix(pane.Size, "%")
-				if p, err := strconv.Atoi(sizeStr); err == nil {
-					percent = p
-				}
-			}
-
-			// Target the window directly
-			target := fmt.Sprintf("%s:%s", session, win.Name)
-
-			// Give tmux a tiny moment
-			time.Sleep(100 * time.Millisecond)
-
-			newPaneID, err := client.SplitWindowWithCmd(ctx, target, projectPath, vertical, percent, pane.Cmd, true)
-			if err != nil {
-				return fmt.Errorf("split pane in %s: %w", win.Name, err)
-			}
-
-			if pane.Title != "" {
-				_ = client.SelectPane(ctx, newPaneID, pane.Title)
-			}
-		}
-
-		// Apply layout if specified
-		if win.Layout != "" {
-			windowTarget := fmt.Sprintf("%s:%s", session, win.Name)
-			_ = client.SelectLayout(ctx, windowTarget, win.Layout)
-		}
-
-		fmt.Printf("(%d panes)\n", len(win.Panes))
-	}
-
-	return nil
-}
-
-func createSessionWithGridLayout(ctx context.Context, client *tmuxctl.Client, session, projectPath string, layoutCfg *layout.LayoutConfig) error {
-	grid, err := layout.Parse(layoutCfg.Grid)
-	if err != nil {
-		return fmt.Errorf("parse grid %q: %w", layoutCfg.Grid, err)
-	}
-
-	windowName := strings.TrimSpace(layoutCfg.Window)
-	if windowName == "" {
-		windowName = strings.TrimSpace(layoutCfg.Name)
-	}
-	if windowName == "" {
-		windowName = "grid"
-	}
-
-	firstPaneID, err := client.NewSessionWithCmd(ctx, session, projectPath, windowName, "")
-	if err != nil {
-		return fmt.Errorf("create session: %w", err)
-	}
-
-	time.Sleep(200 * time.Millisecond)
-
-	_ = client.SetOption(ctx, session, "remain-on-exit", "on")
-	for option, value := range layoutCfg.Settings.TmuxOptions {
-		_ = client.SetOption(ctx, session, option, value)
-	}
-
-	fmt.Printf("   • %s ", windowName)
-
-	if grid.Columns > 1 {
-		if err := splitGridColumns(ctx, client, projectPath, firstPaneID, grid.Columns); err != nil {
-			return err
-		}
-	}
-
-	windowTarget := fmt.Sprintf("%s:%s", session, windowName)
-
-	columnPanes, err := client.ListPanesDetailed(ctx, windowTarget)
-	if err != nil {
-		return fmt.Errorf("list grid columns: %w", err)
-	}
-	sort.SliceStable(columnPanes, func(i, j int) bool {
-		return columnPanes[i].Left < columnPanes[j].Left
-	})
-	if len(columnPanes) < grid.Columns {
-		return fmt.Errorf("expected %d columns, found %d panes", grid.Columns, len(columnPanes))
-	}
-	columnPanes = columnPanes[:grid.Columns]
-
-	if grid.Rows > 1 {
-		for _, pane := range columnPanes {
-			if err := splitGridRows(ctx, client, projectPath, pane.ID, grid.Rows); err != nil {
-				return err
-			}
-		}
-	}
-
-	panes, err := client.ListPanesDetailed(ctx, windowTarget)
-	if err != nil {
-		return fmt.Errorf("list grid panes: %w", err)
-	}
-	sort.SliceStable(panes, func(i, j int) bool {
-		if panes[i].Top == panes[j].Top {
-			return panes[i].Left < panes[j].Left
-		}
-		return panes[i].Top < panes[j].Top
-	})
-	if len(panes) < grid.Panes() {
-		return fmt.Errorf("expected %d panes, found %d panes", grid.Panes(), len(panes))
-	}
-
-	commands := layout.ResolveGridCommands(layoutCfg, grid.Panes())
-	titles := layout.ResolveGridTitles(layoutCfg, grid.Panes())
-
-	for i := 0; i < grid.Panes(); i++ {
-		pane := panes[i]
-		if strings.TrimSpace(titles[i]) != "" {
-			_ = client.SelectPane(ctx, pane.ID, titles[i])
-		}
-		if strings.TrimSpace(commands[i]) != "" {
-			_ = client.SendKeys(ctx, pane.ID, commands[i], "C-m")
-		}
-	}
-
-	fmt.Printf("(%d panes)\n", grid.Panes())
-
-	return nil
-}
-
-func splitGridColumns(ctx context.Context, client *tmuxctl.Client, projectPath, targetPane string, columns int) error {
-	remaining := columns
-	for remaining > 1 {
-		percent := gridSplitPercent(remaining)
-		if _, err := client.SplitWindowWithCmd(ctx, targetPane, projectPath, false, percent, "", true); err != nil {
-			return fmt.Errorf("split grid columns: %w", err)
-		}
-		remaining--
-		time.Sleep(80 * time.Millisecond)
-	}
-	return nil
-}
-
-func splitGridRows(ctx context.Context, client *tmuxctl.Client, projectPath, targetPane string, rows int) error {
-	remaining := rows
-	for remaining > 1 {
-		percent := gridSplitPercent(remaining)
-		if _, err := client.SplitWindowWithCmd(ctx, targetPane, projectPath, true, percent, "", true); err != nil {
-			return fmt.Errorf("split grid rows: %w", err)
-		}
-		remaining--
-		time.Sleep(80 * time.Millisecond)
-	}
-	return nil
-}
-
-func gridSplitPercent(remaining int) int {
-	if remaining <= 1 {
-		return 0
-	}
-	percent := int(math.Round(100.0 / float64(remaining)))
-	if percent < 1 {
-		return 1
-	}
-	if percent >= 100 {
-		return 99
-	}
-	return percent
-}
-
-func applyLayoutBindings(ctx context.Context, client *tmuxctl.Client, layoutCfg *layout.LayoutConfig) {
-	if layoutCfg == nil {
-		return
-	}
-	for _, bind := range layoutCfg.Settings.BindKeys {
-		if strings.TrimSpace(bind.Key) == "" || strings.TrimSpace(bind.Action) == "" {
-			continue
-		}
-		if err := client.BindKey(ctx, bind.Key, bind.Action); err != nil {
-			fmt.Printf("   ⚠ bind-key %s: %v\n", bind.Key, err)
-		}
-	}
-}
-
-func maybeSourceTmuxConfig(ctx context.Context, client *tmuxctl.Client) {
-	configPath, err := layout.DefaultConfigPath()
-	if err != nil {
-		return
-	}
-	if _, err := os.Stat(configPath); err != nil {
-		return
-	}
-	cfg, err := layout.LoadConfig(configPath)
-	if err != nil || cfg == nil {
-		return
-	}
-	tmuxConfig := expandUserPath(cfg.Tmux.Config)
-	if strings.TrimSpace(tmuxConfig) == "" {
-		return
-	}
-	if _, err := os.Stat(tmuxConfig); err != nil {
-		return
-	}
-	if err := client.SourceFile(ctx, tmuxConfig); err != nil {
-		fmt.Printf("   ⚠ tmux config: %v\n", err)
-	}
-}
-
-func expandUserPath(path string) string {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return path
-	}
-	path = os.ExpandEnv(path)
-	if path == "~" || strings.HasPrefix(path, "~/") {
-		home, err := os.UserHomeDir()
-		if err == nil {
-			if path == "~" {
-				return home
-			}
-			return filepath.Join(home, path[2:])
-		}
-	}
-	return path
-}
-
-func attachToSession(client *tmuxctl.Client, session string) {
-	// Check if we're inside tmux
-	if insideTmux() {
-		// Switch client
-		cmd := exec.Command("tmux", "switch-client", "-t", session)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Stdin = os.Stdin
-		if err := cmd.Run(); err != nil {
-			fmt.Printf("   Run: tmux switch-client -t %s\n", session)
-		}
-	} else {
-		// Attach session
-		cmd := exec.Command("tmux", "attach-session", "-t", session)
-		cmd.Env = withoutTmuxEnv(os.Environ())
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Stdin = os.Stdin
-		if err := cmd.Run(); err != nil {
-			fmt.Printf("   Run: tmux attach -t %s\n", session)
-		}
-	}
-}
-
-func sanitizeTmuxEnv() {
-	if os.Getenv("TMUX") == "" && os.Getenv("TMUX_PANE") == "" {
-		return
-	}
-	if insideTmux() {
-		return
-	}
-	_ = os.Unsetenv("TMUX")
-	_ = os.Unsetenv("TMUX_PANE")
-}
-
-func withoutTmuxEnv(env []string) []string {
-	if len(env) == 0 {
-		return env
-	}
-	out := make([]string, 0, len(env))
-	for _, entry := range env {
-		if strings.HasPrefix(entry, "TMUX=") || strings.HasPrefix(entry, "TMUX_PANE=") {
-			continue
-		}
-		out = append(out, entry)
-	}
-	return out
-}
-
-func insideTmux() bool {
-	if os.Getenv("TMUX") == "" && os.Getenv("TMUX_PANE") == "" {
-		return false
-	}
-	tty := currentTTYFn()
-	if tty == "" {
-		return false
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
-	ok, err := hasClientOnTTYFn(ctx, tty)
-	if err != nil {
-		return false
-	}
-	return ok
-}
-
-func selfExecutable() string {
-	exe, err := os.Executable()
-	if err != nil || strings.TrimSpace(exe) == "" {
-		return "peakypanes"
-	}
-	return exe
-}
-
-func currentDir() string {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return ""
-	}
-	return cwd
-}
-
-func openDashboardWindow(ctx context.Context, client *tmuxctl.Client) error {
-	session, err := client.CurrentSession(ctx)
-	if err != nil {
-		return err
-	}
-	if session == "" {
-		return fmt.Errorf("no active tmux session")
-	}
-	windows, err := client.ListWindows(ctx, session)
-	if err != nil {
-		return err
-	}
-	for _, w := range windows {
-		if w.Name == defaultDashboardWindow {
-			return client.SelectWindow(ctx, fmt.Sprintf("%s:%s", session, defaultDashboardWindow))
-		}
-	}
-	cmd := exec.Command(client.Binary(), "new-window", "-t", session, "-n", defaultDashboardWindow, selfExecutable(), "dashboard")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return err
-	}
-	return client.SelectWindow(ctx, fmt.Sprintf("%s:%s", session, defaultDashboardWindow))
 }
 
 func fatal(format string, args ...interface{}) {

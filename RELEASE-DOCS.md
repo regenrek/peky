@@ -24,7 +24,6 @@ go vet ./...
 go test ./... -coverprofile=cover.out
 go tool cover -func=cover.out | tail -n 1
 go test ./... -race
-PEAKYPANES_INTEGRATION=1 go test ./internal/tmuxctl -run Integration -count=1
 ```
 
 ## Release Steps
@@ -94,7 +93,7 @@ The helper requires:
 
 ```bash
 npm view peakypanes
-npx -y peakypanes setup
+npx -y peakypanes
 ```
 
 ## Notes

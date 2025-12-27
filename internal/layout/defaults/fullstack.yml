@@ -1,11 +1,6 @@
 name: fullstack
 description: "Fullstack development: editor, dev server, and logs"
 
-settings:
-  bind_keys:
-    - key: g
-      action: "run-shell \"peakypanes popup\""
-
 windows:
   - name: dev
     panes:
@@ -20,9 +15,10 @@ windows:
         split: vertical
 
   - name: logs
-    layout: even-horizontal
     panes:
       - title: app-logs
         cmd: ""
+        size: "50%"
       - title: docker
         cmd: "docker compose logs -f 2>/dev/null || echo 'No docker compose found'"
+        split: horizontal

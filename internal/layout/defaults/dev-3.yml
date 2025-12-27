@@ -1,11 +1,6 @@
 name: dev-3
 description: "Three-pane layout: large editor left, two stacked panes right"
 
-settings:
-  bind_keys:
-    - key: g
-      action: "run-shell \"peakypanes popup\""
-
 windows:
   - name: dev
     panes:

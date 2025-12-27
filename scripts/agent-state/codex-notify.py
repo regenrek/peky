@@ -36,7 +36,7 @@ def write_state(pane_id: str, state: str, tool: str, payload: dict) -> None:
 
 
 def main() -> int:
-    pane_id = os.environ.get("TMUX_PANE", "").strip()
+    pane_id = os.environ.get("PEAKYPANES_PANE_ID", "").strip()
     if not pane_id:
         return 0
     if len(sys.argv) < 2:

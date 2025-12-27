@@ -995,6 +995,9 @@ func (m *Manager) forwardUpdates(pane *Pane) {
 }
 
 func (m *Manager) markActive(id string) {
+	if m == nil || m.closed.Load() {
+		return
+	}
 	m.mu.Lock()
 	pane := m.panes[id]
 	if pane != nil {
@@ -1005,6 +1008,9 @@ func (m *Manager) markActive(id string) {
 }
 
 func (m *Manager) notify(id string) {
+	if m == nil || m.closed.Load() {
+		return
+	}
 	select {
 	case m.events <- PaneEvent{PaneID: id}:
 	default:

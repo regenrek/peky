@@ -1,11 +1,6 @@
 name: 2x2
 description: "Generic 2x2 grid (4 panes)"
 
-settings:
-  bind_keys:
-    - key: g
-      action: "run-shell \"peakypanes popup\""
-
 grid: 2x2
 window: grid
 titles:
