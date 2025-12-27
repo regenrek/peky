@@ -183,6 +183,20 @@ func buildDashboardKeyMap(cfg layout.DashboardKeymapConfig) (*dashboardKeyMap, e
 			override: cfg.Filter,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.filter = b },
 		},
+		{
+			name:     "scrollback",
+			desc:     "scrollback",
+			defaults: []string{"f7"},
+			override: cfg.Scrollback,
+			assign:   func(m *dashboardKeyMap, b key.Binding) { m.scrollback = b },
+		},
+		{
+			name:     "copy_mode",
+			desc:     "copy mode",
+			defaults: []string{"f8"},
+			override: cfg.CopyMode,
+			assign:   func(m *dashboardKeyMap, b key.Binding) { m.copyMode = b },
+		},
 	}
 
 	for _, action := range actions {

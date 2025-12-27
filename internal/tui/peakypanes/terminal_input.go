@@ -15,7 +15,7 @@ func encodeKeyMsg(msg tea.KeyMsg) []byte {
 	}
 
 	switch msg.String() {
-	case " ":
+	case " ", "space":
 		return []byte{' '}
 	case "enter":
 		return []byte{'\r'}

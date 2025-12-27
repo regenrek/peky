@@ -160,6 +160,11 @@ func (m *Manager) Window(id string) *terminal.Window {
 	return nil
 }
 
+// PaneWindow returns the terminal window for a pane ID.
+func (m *Manager) PaneWindow(paneID string) *terminal.Window {
+	return m.Window(paneID)
+}
+
 // KillSession stops and removes a session.
 func (m *Manager) KillSession(name string) error {
 	if m == nil {

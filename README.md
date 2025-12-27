@@ -272,6 +272,8 @@ Pane
 - rename pane via command palette (`ctrl+p`)
 - `ctrl+y` peek selected pane in new terminal
 - `ctrl+\` toggle terminal focus (native only; configurable via `dashboard.keymap.terminal_focus`)
+- `f7` scrollback mode (native only; configurable via `dashboard.keymap.scrollback`)
+- `f8` copy mode (native only; configurable via `dashboard.keymap.copy_mode`)
 
 Tmux (inside session)
 - `prefix+g` open dashboard popup (tmux prefix is yours)
@@ -280,7 +282,7 @@ Other
 - `ctrl+p` command palette
 - `ctrl+r` refresh, `ctrl+e` edit config, `ctrl+f` filter, `ctrl+c` quit
 
-Quick reply details: the input is always active—type and press `enter` to send to the highlighted pane. Use `esc` to clear. In native mode, toggle terminal focus to send raw keystrokes into the pane.
+Quick reply details: the input is always active—type and press `enter` to send to the highlighted pane. Use `esc` to clear. In native mode, toggle terminal focus to send raw keystrokes into the pane. Use scrollback (`f7`) to navigate output and copy mode (`f8`) to select/yank (`v` select, `y` yank, `esc/q` exit).
 
 ### Dashboard Config (optional)
 
@@ -305,6 +307,8 @@ dashboard:
     pane_prev: ["shift+tab"]
     peek_pane: ["ctrl+y"]
     terminal_focus: ["ctrl+\\"]
+    scrollback: ["f7"]
+    copy_mode: ["f8"]
     toggle_windows: ["ctrl+u"]
     command_palette: ["ctrl+p"]
     help: ["ctrl+g"]

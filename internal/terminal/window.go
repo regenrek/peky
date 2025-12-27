@@ -19,9 +19,29 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	uv "github.com/charmbracelet/ultraviolet"
-	"github.com/charmbracelet/x/vt"
 	xpty "github.com/charmbracelet/x/xpty"
+	"github.com/regenrek/peakypanes/internal/vt"
 )
+
+// vtEmulator is the subset of the VT emulator API Window depends on.
+// This makes scrollback + copy mode testable without a real PTY.
+type vtEmulator interface {
+	io.Reader
+	io.Writer
+	Close() error
+	Resize(cols, rows int)
+	Render() string
+	CellAt(x, y int) *uv.Cell
+	CursorPosition() uv.Position
+	SetCallbacks(vt.Callbacks)
+	Height() int
+	Width() int
+	IsAltScreen() bool
+	ScrollbackLen() int
+	ScrollbackLine(index int) []uv.Cell
+	ClearScrollback()
+	SetScrollbackMaxLines(maxLines int)
+}
 
 // Options describes how to start a pane process.
 type Options struct {
@@ -48,8 +68,9 @@ type Window struct {
 	cmd *exec.Cmd
 	pty xpty.Pty
 
-	term   *vt.Emulator
+	term   vtEmulator
 	termMu sync.Mutex // guards term.Write/Resize/Render/CellAt
+	ptyMu  sync.Mutex // guards pty pointer swaps during close
 
 	cols int
 	rows int
@@ -71,6 +92,14 @@ type Window struct {
 	cacheMu    sync.Mutex
 	cacheDirty bool
 	cacheANSI  string
+
+	stateMu sync.Mutex
+	// ScrollbackMode enables scrollback navigation (no PTY input).
+	ScrollbackMode bool
+	// CopyMode enables cursor + selection across scrollback+screen.
+	CopyMode *CopyMode
+	// ScrollbackOffset is how many lines "up" from live view we are (0 == live).
+	ScrollbackOffset int
 
 	lastUpdate atomic.Int64 // unix nanos
 }
@@ -227,11 +256,15 @@ func (w *Window) Resize(cols, rows int) error {
 	}
 	w.termMu.Unlock()
 
-	if w.pty != nil {
-		_ = w.pty.Resize(cols, rows)
+	w.ptyMu.Lock()
+	pty := w.pty
+	w.ptyMu.Unlock()
+	if pty != nil {
+		_ = pty.Resize(cols, rows)
 	}
 
 	if changed {
+		w.clampViewState()
 		w.markDirty()
 	}
 	return nil
@@ -249,14 +282,17 @@ func (w *Window) SendInput(input []byte) error {
 	if w.closed.Load() {
 		return errors.New("terminal: window closed")
 	}
-	if w.pty == nil {
+	w.ptyMu.Lock()
+	pty := w.pty
+	w.ptyMu.Unlock()
+	if pty == nil {
 		return errors.New("terminal: no pty")
 	}
 
 	w.writeMu.Lock()
 	defer w.writeMu.Unlock()
 
-	n, err := w.pty.Write(input)
+	n, err := pty.Write(input)
 	if err != nil {
 		return fmt.Errorf("terminal: pty write: %w", err)
 	}
@@ -283,17 +319,23 @@ func (w *Window) Close() error {
 	}
 
 	// Closing PTY/VT unblocks readers.
-	if w.pty != nil {
-		_ = w.pty.Close()
-		w.pty = nil
+	var pty xpty.Pty
+	w.ptyMu.Lock()
+	pty = w.pty
+	w.pty = nil
+	w.ptyMu.Unlock()
+	if pty != nil {
+		_ = pty.Close()
 	}
 
+	var term vtEmulator
 	w.termMu.Lock()
-	if w.term != nil {
-		_ = w.term.Close()
-		w.term = nil
-	}
+	term = w.term
+	w.term = nil
 	w.termMu.Unlock()
+	if term != nil {
+		_ = term.Close()
+	}
 
 	w.wg.Wait()
 
@@ -341,14 +383,99 @@ func (w *Window) ViewLipgloss(showCursor bool) string {
 	if w == nil {
 		return ""
 	}
+	// Snapshot view state without holding termMu for long.
+	w.stateMu.Lock()
+	offset := w.ScrollbackOffset
+	sbMode := w.ScrollbackMode
+	cm := w.CopyMode
+	w.stateMu.Unlock()
+
 	w.termMu.Lock()
 	defer w.termMu.Unlock()
-	if w.term == nil {
+	term := w.term
+	if term == nil {
 		return ""
 	}
-	return RenderEmulatorLipgloss(w.term, w.cols, w.rows, RenderOptions{
-		ShowCursor: showCursor && w.cursorVisible.Load(),
-	})
+
+	// Alt screen has no scrollback/copy mode rendering.
+	if term.IsAltScreen() {
+		offset = 0
+		sbMode = false
+		cm = nil
+	}
+
+	sbLen := term.ScrollbackLen()
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > sbLen {
+		offset = sbLen
+	}
+	topAbsY := sbLen - offset
+	if topAbsY < 0 {
+		topAbsY = 0
+	}
+
+	cellAt := func(x, y int) *uv.Cell {
+		absY := topAbsY + y
+		if absY < sbLen {
+			line := term.ScrollbackLine(absY)
+			if line == nil || x < 0 || x >= len(line) {
+				return nil
+			}
+			return &line[x]
+		}
+		screenY := absY - sbLen
+		if screenY < 0 || screenY >= w.rows {
+			return nil
+		}
+		return term.CellAt(x, screenY)
+	}
+
+	cur := term.CursorPosition()
+	opts := RenderOptions{
+		ShowCursor: showCursor && w.cursorVisible.Load() && offset == 0 && (cm == nil || !cm.Active),
+		CursorX:    cur.X,
+		CursorY:    cur.Y,
+	}
+
+	// Hide the terminal cursor in scrollback mode.
+	if sbMode || offset > 0 {
+		opts.ShowCursor = false
+	}
+
+	// Copy cursor + selection highlighting.
+	if cm != nil && cm.Active {
+		opts.ShowCursor = false
+		startX, startY := cm.SelStartX, cm.SelStartAbsY
+		endX, endY := cm.SelEndX, cm.SelEndAbsY
+		if startY > endY || (startY == endY && startX > endX) {
+			startX, endX = endX, startX
+			startY, endY = endY, startY
+		}
+		opts.Highlight = func(x, y int) (cursor bool, selection bool) {
+			absY := topAbsY + y
+			cursor = (absY == cm.CursorAbsY && x == cm.CursorX)
+			if cm.Selecting {
+				if absY < startY || absY > endY {
+					return cursor, false
+				}
+				if startY == endY {
+					return cursor, absY == startY && x >= startX && x <= endX
+				}
+				if absY == startY {
+					return cursor, x >= startX
+				}
+				if absY == endY {
+					return cursor, x <= endX
+				}
+				return cursor, true
+			}
+			return cursor, false
+		}
+	}
+
+	return renderCellsLipgloss(w.cols, w.rows, cellAt, opts)
 }
 
 func (w *Window) startIO(ctx context.Context) {
@@ -359,13 +486,30 @@ func (w *Window) startIO(ctx context.Context) {
 
 		buf := make([]byte, 32*1024)
 		for {
-			n, err := w.pty.Read(buf)
+			w.ptyMu.Lock()
+			pty := w.pty
+			w.ptyMu.Unlock()
+			if pty == nil {
+				return
+			}
+
+			n, err := pty.Read(buf)
 			if n > 0 {
+				// Track scrollback growth so scrollback view stays stable.
+				oldSB := 0
+				newSB := 0
+
 				w.termMu.Lock()
 				if w.term != nil {
+					oldSB = w.term.ScrollbackLen()
 					_, _ = w.term.Write(buf[:n])
+					newSB = w.term.ScrollbackLen()
 				}
 				w.termMu.Unlock()
+
+				if newSB > oldSB {
+					w.onScrollbackGrew(newSB - oldSB)
+				}
 				w.markDirty()
 			}
 			if err != nil {
@@ -390,22 +534,28 @@ func (w *Window) startIO(ctx context.Context) {
 
 		buf := make([]byte, 4096)
 		for {
-			if w.term == nil || w.pty == nil {
+			w.termMu.Lock()
+			term := w.term
+			w.termMu.Unlock()
+			w.ptyMu.Lock()
+			pty := w.pty
+			w.ptyMu.Unlock()
+			if term == nil || pty == nil {
 				return
 			}
 
-			n, err := w.term.Read(buf)
+			n, err := term.Read(buf)
 			if n > 0 {
 				data := buf[:n]
 				if looksLikeCPR(data) {
 					w.termMu.Lock()
-					pos := w.term.CursorPosition()
+					pos := term.CursorPosition()
 					w.termMu.Unlock()
 					data = []byte(fmt.Sprintf("\x1b[%d;%dR", pos.Y+1, pos.X+1))
 				}
 
 				w.writeMu.Lock()
-				_, _ = w.pty.Write(data)
+				_, _ = pty.Write(data)
 				w.writeMu.Unlock()
 			}
 			if err != nil {
@@ -548,24 +698,25 @@ func looksLikeCPR(data []byte) bool {
 // RenderOptions controls VT cell rendering.
 type RenderOptions struct {
 	ShowCursor bool
+	CursorX    int
+	CursorY    int
+
+	// Optional: override cursor/selection highlights.
+	Highlight func(x, y int) (cursor bool, selection bool)
 }
 
-// RenderEmulatorLipgloss converts a VT emulator screen into a lipgloss-compatible string.
-// It walks uv.Cells and batches runs with the same style to reduce ANSI churn.
-func RenderEmulatorLipgloss(term *vt.Emulator, cols, rows int, opts RenderOptions) string {
-	if term == nil || cols <= 0 || rows <= 0 {
+// renderCellsLipgloss renders a cols x rows viewport using a cellAt accessor.
+func renderCellsLipgloss(cols, rows int, cellAt func(x, y int) *uv.Cell, opts RenderOptions) string {
+	if cols <= 0 || rows <= 0 || cellAt == nil {
 		return ""
 	}
-
-	cursor := term.CursorPosition()
-	cursorX, cursorY := cursor.X, cursor.Y
-	cursorVisible := opts.ShowCursor
 
 	type key struct {
 		fg, bg                  string
 		bold, italic, underline bool
 		reverse, strike, blink  bool
 		cursor                  bool
+		selection               bool
 	}
 
 	styleCache := make(map[key]lipgloss.Style, 128)
@@ -574,12 +725,9 @@ func RenderEmulatorLipgloss(term *vt.Emulator, cols, rows int, opts RenderOption
 		if text == "" {
 			return ""
 		}
-
-		// No styling required.
 		if k == (key{}) {
 			return text
 		}
-
 		st, ok := styleCache[k]
 		if !ok {
 			st = lipgloss.NewStyle()
@@ -599,8 +747,6 @@ func RenderEmulatorLipgloss(term *vt.Emulator, cols, rows int, opts RenderOption
 				st = st.Underline(true)
 			}
 			if k.strike {
-				// lipgloss v1 supports Strikethrough; if you ever vendor a fork without it,
-				// drop this line.
 				st = st.Strikethrough(true)
 			}
 			if k.blink {
@@ -609,8 +755,10 @@ func RenderEmulatorLipgloss(term *vt.Emulator, cols, rows int, opts RenderOption
 			if k.reverse {
 				st = st.Reverse(true)
 			}
+			if k.selection {
+				st = st.Reverse(true)
+			}
 			if k.cursor {
-				// Cursor highlight: reverse video is generally the safest default.
 				st = st.Reverse(true).Bold(true)
 			}
 			styleCache[k] = st
@@ -639,9 +787,7 @@ func RenderEmulatorLipgloss(term *vt.Emulator, cols, rows int, opts RenderOption
 		}
 
 		for x := 0; x < cols; {
-			cell := term.CellAt(x, y)
-
-			// Wide char continuation cells usually have Width == 0. Skip them.
+			cell := cellAt(x, y)
 			if cell != nil && cell.Width == 0 {
 				x++
 				continue
@@ -658,27 +804,58 @@ func RenderEmulatorLipgloss(term *vt.Emulator, cols, rows int, opts RenderOption
 				}
 			}
 
-			k := keyFromCell(cell)
-			if cursorVisible && x == cursorX && y == cursorY {
-				k.cursor = true
+			kc := keyFromCell(cell)
+
+			cursor := false
+			selection := false
+			if opts.Highlight != nil {
+				cursor, selection = opts.Highlight(x, y)
+			} else if opts.ShowCursor && x == opts.CursorX && y == opts.CursorY {
+				cursor = true
+			}
+			if cursor {
+				kc.cursor = true
+			}
+			if selection {
+				kc.selection = true
 			}
 
 			if !hasPrev {
-				prev = k
+				prev = kc
 				hasPrev = true
-			} else if k != prev {
+			} else if kc != prev {
 				flush()
-				prev = k
+				prev = kc
 			}
 
 			run.WriteString(ch)
 			x += w
 		}
-
 		flush()
 	}
 
 	return b.String()
+}
+
+// RenderEmulatorLipgloss converts a VT emulator screen into a lipgloss-compatible string.
+// It walks uv.Cells and batches runs with the same style to reduce ANSI churn.
+func RenderEmulatorLipgloss(term interface {
+	CellAt(x, y int) *uv.Cell
+	CursorPosition() uv.Position
+}, cols, rows int, opts RenderOptions) string {
+	if term == nil || cols <= 0 || rows <= 0 {
+		return ""
+	}
+
+	cursor := term.CursorPosition()
+	return renderCellsLipgloss(cols, rows, func(x, y int) *uv.Cell {
+		return term.CellAt(x, y)
+	}, RenderOptions{
+		ShowCursor: opts.ShowCursor,
+		CursorX:    cursor.X,
+		CursorY:    cursor.Y,
+		Highlight:  opts.Highlight,
+	})
 }
 
 func keyFromCell(cell *uv.Cell) (k struct {
@@ -686,6 +863,7 @@ func keyFromCell(cell *uv.Cell) (k struct {
 	bold, italic, underline bool
 	reverse, strike, blink  bool
 	cursor                  bool
+	selection               bool
 }) {
 	if cell == nil {
 		return k

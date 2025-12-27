@@ -119,6 +119,8 @@ type DashboardKeymapConfig struct {
 	Help            []string `yaml:"help,omitempty"`
 	Quit            []string `yaml:"quit,omitempty"`
 	Filter          []string `yaml:"filter,omitempty"`
+	Scrollback      []string `yaml:"scrollback,omitempty"`
+	CopyMode        []string `yaml:"copy_mode,omitempty"`
 }
 
 // HiddenProjectConfig stores a project hidden from the dashboard.
