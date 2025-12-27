@@ -70,6 +70,7 @@ type Window struct {
 
 	term   vtEmulator
 	termMu sync.Mutex // guards term.Write/Resize/Render/CellAt
+	ptyMu  sync.Mutex // guards pty pointer swaps during close
 
 	cols int
 	rows int
@@ -255,8 +256,11 @@ func (w *Window) Resize(cols, rows int) error {
 	}
 	w.termMu.Unlock()
 
-	if w.pty != nil {
-		_ = w.pty.Resize(cols, rows)
+	w.ptyMu.Lock()
+	pty := w.pty
+	w.ptyMu.Unlock()
+	if pty != nil {
+		_ = pty.Resize(cols, rows)
 	}
 
 	if changed {
@@ -278,14 +282,17 @@ func (w *Window) SendInput(input []byte) error {
 	if w.closed.Load() {
 		return errors.New("terminal: window closed")
 	}
-	if w.pty == nil {
+	w.ptyMu.Lock()
+	pty := w.pty
+	w.ptyMu.Unlock()
+	if pty == nil {
 		return errors.New("terminal: no pty")
 	}
 
 	w.writeMu.Lock()
 	defer w.writeMu.Unlock()
 
-	n, err := w.pty.Write(input)
+	n, err := pty.Write(input)
 	if err != nil {
 		return fmt.Errorf("terminal: pty write: %w", err)
 	}
@@ -312,17 +319,23 @@ func (w *Window) Close() error {
 	}
 
 	// Closing PTY/VT unblocks readers.
-	if w.pty != nil {
-		_ = w.pty.Close()
-		w.pty = nil
+	var pty xpty.Pty
+	w.ptyMu.Lock()
+	pty = w.pty
+	w.pty = nil
+	w.ptyMu.Unlock()
+	if pty != nil {
+		_ = pty.Close()
 	}
 
+	var term vtEmulator
 	w.termMu.Lock()
-	if w.term != nil {
-		_ = w.term.Close()
-		w.term = nil
-	}
+	term = w.term
+	w.term = nil
 	w.termMu.Unlock()
+	if term != nil {
+		_ = term.Close()
+	}
 
 	w.wg.Wait()
 
@@ -473,7 +486,14 @@ func (w *Window) startIO(ctx context.Context) {
 
 		buf := make([]byte, 32*1024)
 		for {
-			n, err := w.pty.Read(buf)
+			w.ptyMu.Lock()
+			pty := w.pty
+			w.ptyMu.Unlock()
+			if pty == nil {
+				return
+			}
+
+			n, err := pty.Read(buf)
 			if n > 0 {
 				// Track scrollback growth so scrollback view stays stable.
 				oldSB := 0
@@ -514,22 +534,28 @@ func (w *Window) startIO(ctx context.Context) {
 
 		buf := make([]byte, 4096)
 		for {
-			if w.term == nil || w.pty == nil {
+			w.termMu.Lock()
+			term := w.term
+			w.termMu.Unlock()
+			w.ptyMu.Lock()
+			pty := w.pty
+			w.ptyMu.Unlock()
+			if term == nil || pty == nil {
 				return
 			}
 
-			n, err := w.term.Read(buf)
+			n, err := term.Read(buf)
 			if n > 0 {
 				data := buf[:n]
 				if looksLikeCPR(data) {
 					w.termMu.Lock()
-					pos := w.term.CursorPosition()
+					pos := term.CursorPosition()
 					w.termMu.Unlock()
 					data = []byte(fmt.Sprintf("\x1b[%d;%dR", pos.Y+1, pos.X+1))
 				}
 
 				w.writeMu.Lock()
-				_, _ = w.pty.Write(data)
+				_, _ = pty.Write(data)
 				w.writeMu.Unlock()
 			}
 			if err != nil {
