@@ -45,4 +45,3 @@ func statConfigFile(path string) (projectConfigState, bool) {
 		exists:  true,
 	}, true
 }
-
