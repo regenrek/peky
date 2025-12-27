@@ -17,7 +17,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/tmuxctl"
-	"github.com/regenrek/peakypanes/internal/tmuxstream"
 	"github.com/regenrek/peakypanes/internal/tui/peakypanes"
 )
 
@@ -219,8 +218,6 @@ func main() {
 		runClone(os.Args[2:])
 	case "setup":
 		runSetup(os.Args[2:])
-	case "pipe":
-		runPipe(os.Args[2:])
 	case "version", "-v", "--version":
 		fmt.Printf("peakypanes %s\n", version)
 	case "help", "-h", "--help":
@@ -307,13 +304,6 @@ type initOptions struct {
 	layout   string
 	force    bool
 	showHelp bool
-}
-
-type pipeOptions struct {
-	socketPath string
-	token      string
-	paneID     string
-	showHelp   bool
 }
 
 func runDashboardCommand(args []string) {
@@ -589,14 +579,13 @@ func initLocal(layoutName string, force bool) {
 	// Create project config
 	projectName := filepath.Base(cwd)
 	content := fmt.Sprintf(`# Peaky Panes - Project Layout Configuration
-# This file defines the tmux/zellij layout for this project.
+# This file defines the Peaky Panes layout for this project.
 # Teammates with peakypanes installed will get this layout automatically.
 #
 # Variables: ${PROJECT_NAME}, ${PROJECT_PATH}, ${EDITOR}, or any env var
 # Use ${VAR:-default} for defaults
 
 session: %s
-multiplexer: native
 
 layout:
 `, projectName)
@@ -661,8 +650,6 @@ func initGlobal(layoutName string, force bool) {
 
 	configContent := `# Peaky Panes - Global Configuration
 # https://github.com/regenrek/peakypanes
-
-multiplexer: native
 
 tmux:
   config: ~/.config/tmux/tmux.conf
@@ -1019,23 +1006,6 @@ func runStart(args []string) {
 	attachToSession(client, sessionName)
 }
 
-func runPipe(args []string) {
-	opts := parsePipeArgs(args)
-	if opts.showHelp {
-		return
-	}
-	if opts.socketPath == "" || opts.token == "" || opts.paneID == "" {
-		os.Exit(2)
-	}
-	if err := tmuxstream.RunPipe(context.Background(), tmuxstream.PipeOptions{
-		SocketPath: opts.socketPath,
-		Token:      opts.token,
-		PaneID:     opts.paneID,
-	}); err != nil {
-		os.Exit(1)
-	}
-}
-
 func parseInitArgs(args []string) initOptions {
 	opts := initOptions{layout: "dev-3"}
 	for i := 0; i < len(args); i++ {
@@ -1098,32 +1068,6 @@ func parseStartArgs(args []string) startOptions {
 			if !strings.HasPrefix(args[i], "-") && opts.layoutName == "" {
 				opts.layoutName = args[i]
 			}
-		}
-	}
-	return opts
-}
-
-func parsePipeArgs(args []string) pipeOptions {
-	opts := pipeOptions{}
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "--socket":
-			if i+1 < len(args) {
-				opts.socketPath = args[i+1]
-				i++
-			}
-		case "--token":
-			if i+1 < len(args) {
-				opts.token = args[i+1]
-				i++
-			}
-		case "--pane-id":
-			if i+1 < len(args) {
-				opts.paneID = args[i+1]
-				i++
-			}
-		case "-h", "--help":
-			opts.showHelp = true
 		}
 	}
 	return opts

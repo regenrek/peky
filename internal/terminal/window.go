@@ -1,5 +1,5 @@
 // Package terminal provides a minimal PTY + VT (virtual terminal) wrapper
-// for PeakyPanes native multiplexer mode.
+// for PeakyPanes native session manager.
 package terminal
 
 import (

@@ -7,19 +7,19 @@ This format is based on Keep a Changelog.
 
 ### Added
 - Native multiplexer manager with PTY/VT panes and full-screen TUI support.
-- Live pane rendering in the dashboard and project views (native + tmux streaming).
+- Live pane rendering in the dashboard and project views for native sessions.
 - Terminal focus toggle for native panes (default `ctrl+\`, configurable).
 - Project config change detection to refresh selection without reopening projects.
 - Pane management actions: add pane (split), move pane to new window, swap panes, and close pane with a running-process confirmation.
 - Session-only jump keys (`alt+w` / `alt+s`) alongside the flat session/window navigation.
 - Native pane scrollback and copy mode (selection + yank) with configurable key bindings.
 - Scrollback reflow on resize for native panes.
-- Smoke/integration coverage for native scrollback/copy, VT alt-screen + reflow, tmux send/capture, and key TUI state transitions.
+- Smoke/integration coverage for native scrollback/copy, VT alt-screen + reflow, tmux send, and key TUI state transitions.
 
 ### Changed
-- Multiplexer resolution order is now project-local → project entry → global → native default.
-- Tmux previews capture ANSI output for richer fallback rendering.
-- Dashboard selection syncs live streams on navigation.
+- Multiplexer selection removed; the dashboard always launches native sessions.
+- Tmux preview panes removed; tmux sessions render metadata-only summaries in previews.
+- Removed the `peakypanes pipe` streaming helper (no longer needed without tmux preview streaming).
 - Project view navigation: `ctrl+w` / `ctrl+s` now cycles sessions and windows in a single vertical list.
 - Add pane now uses a lightweight direction prompt instead of a list picker.
 - Window rendering now supports scrollback viewports and copy-mode highlights for native panes.

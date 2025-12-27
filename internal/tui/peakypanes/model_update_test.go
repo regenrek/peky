@@ -176,8 +176,7 @@ func TestMiscHelpers(t *testing.T) {
 }
 
 func TestStartNewSessionWithLayout(t *testing.T) {
-	specs := []cmdSpec{{name: "tmux", args: []string{"list-sessions", "-F", "#{session_name}"}, exit: 0}}
-	m, runner := newTestModel(t, specs)
+	m, _ := newTestModel(t, nil)
 	root := t.TempDir()
 	m.data = DashboardData{Projects: []ProjectGroup{{
 		Name: "Proj",
@@ -193,5 +192,4 @@ func TestStartNewSessionWithLayout(t *testing.T) {
 	if cmd == nil {
 		t.Fatalf("startNewSessionWithLayout() returned nil")
 	}
-	runner.assertDone()
 }

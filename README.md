@@ -6,12 +6,12 @@
 █       █████   █   █   █  ██     █      █        █   █   █  ██    █████   █████
 ```
 
-**Terminal multiplexer dashboard with YAML-based configuration (native + tmux).**
+**Terminal dashboard with YAML-based layouts, native live previews, and tmux-compatible sessions.**
 
 ![Peaky Panes Preview](assets/peakypanes-preview.jpg)
 
 
-Define your layouts in YAML, share them with your team via git, and get consistent development environments everywhere. Run sessions with the built-in **native multiplexer** (default) or keep **tmux** as your backend.
+Define your layouts in YAML, share them with your team via git, and get consistent development environments everywhere. Run sessions with the built-in **native session manager** while still listing and controlling existing **tmux** sessions.
 
 ## Features
 
@@ -21,7 +21,7 @@ Define your layouts in YAML, share them with your team via git, and get consiste
 - 🏠 **Global config** - Define layouts once, use everywhere
 - 🔄 **Variable expansion** - Use `${EDITOR}`, `${PROJECT_PATH}`, etc.
 - 🎯 **Zero config** - Just run `peakypanes` in any directory
-- 🧠 **Native multiplexer (default)** - Live panes with full TUI support (vim/htop)
+- 🧠 **Native live previews** - Full TUI support (vim/htop) with live panes
 - 🔁 **tmux compatibility** - Keep existing tmux sessions and layouts
 - ⚙️ **Session-scoped tmux options** - Configure tmux per-session without affecting global config
 - 🪟 **Popup dashboard** - Open the UI as a tmux popup when available
@@ -85,7 +85,6 @@ Create in your project root for team-shared layouts:
 ```yaml
 # .peakypanes.yml
 session: my-project
-multiplexer: native  # native (default) | tmux
 
 layout:
   windows:
@@ -131,9 +130,6 @@ layout:
 For personal layouts and multi-project management:
 
 ```yaml
-# Global settings
-multiplexer: native  # native (default) | tmux
-
 tmux:
   # Optional: source a custom tmux config when starting sessions.
   # (tmux already reads ~/.tmux.conf or ~/.config/tmux/tmux.conf by default)
@@ -271,9 +267,9 @@ Window
 Pane
 - rename pane via command palette (`ctrl+p`)
 - `ctrl+y` peek selected pane in new terminal
-- `ctrl+\` toggle terminal focus (native only; configurable via `dashboard.keymap.terminal_focus`)
-- `f7` scrollback mode (native only; configurable via `dashboard.keymap.scrollback`)
-- `f8` copy mode (native only; configurable via `dashboard.keymap.copy_mode`)
+- `ctrl+\` toggle terminal focus (Peaky Panes sessions; configurable via `dashboard.keymap.terminal_focus`)
+- `f7` scrollback mode (Peaky Panes sessions; configurable via `dashboard.keymap.scrollback`)
+- `f8` copy mode (Peaky Panes sessions; configurable via `dashboard.keymap.copy_mode`)
 
 Tmux (inside session)
 - `prefix+g` open dashboard popup (tmux prefix is yours)
@@ -282,7 +278,7 @@ Other
 - `ctrl+p` command palette
 - `ctrl+r` refresh, `ctrl+e` edit config, `ctrl+f` filter, `ctrl+c` quit
 
-Quick reply details: the input is always active—type and press `enter` to send to the highlighted pane. Use `esc` to clear. In native mode, toggle terminal focus to send raw keystrokes into the pane. Use scrollback (`f7`) to navigate output and copy mode (`f8`) to select/yank (`v` select, `y` yank, `esc/q` exit).
+Quick reply details: the input is always active—type and press `enter` to send to the highlighted pane. Use `esc` to clear. In Peaky Panes sessions, toggle terminal focus to send raw keystrokes into the pane. Use scrollback (`f7`) to navigate output and copy mode (`f8`) to select/yank (`v` select, `y` yank, `esc/q` exit).
 
 ### Dashboard Config (optional)
 

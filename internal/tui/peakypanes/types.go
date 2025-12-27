@@ -38,7 +38,7 @@ const (
 	TabProject
 )
 
-// Status describes the tmux lifecycle state of a session.
+// Status describes the lifecycle state of a session.
 type Status int
 
 const (
@@ -77,7 +77,7 @@ type ProjectGroup struct {
 	Sessions   []SessionItem
 }
 
-// SessionItem represents a tmux session in the dashboard.
+// SessionItem represents a session (native or tmux) in the dashboard.
 type SessionItem struct {
 	Name         string
 	Path         string
@@ -108,7 +108,7 @@ type DashboardProjectColumn struct {
 	Panes       []DashboardPane
 }
 
-// WindowItem represents a tmux window.
+// WindowItem represents a session window.
 type WindowItem struct {
 	Index  string
 	Name   string
@@ -116,7 +116,7 @@ type WindowItem struct {
 	Panes  []PaneItem
 }
 
-// PaneItem represents a tmux pane with preview content.
+// PaneItem represents a pane with preview content.
 type PaneItem struct {
 	ID           string
 	Multiplexer  string
@@ -221,14 +221,6 @@ type nativeSessionStartedMsg struct {
 	Name  string
 	Err   error
 	Focus bool
-}
-
-// tmuxStreamUpdatedMsg triggers a redraw when any streamed pane updates.
-type tmuxStreamUpdatedMsg struct{}
-
-// tmuxStreamSyncMsg reports tmux stream sync errors.
-type tmuxStreamSyncMsg struct {
-	Err error
 }
 
 // GitProject represents a project directory with .git.

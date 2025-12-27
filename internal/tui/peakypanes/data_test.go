@@ -118,18 +118,6 @@ func TestCompileStatusMatcherInvalid(t *testing.T) {
 	}
 }
 
-func TestCaptureLinesForPreview(t *testing.T) {
-	if got := captureLinesForPreview(0, 0); got != defaultPreviewLines {
-		t.Fatalf("captureLinesForPreview default = %d", got)
-	}
-	if got := captureLinesForPreview(10, 12); got != 30 {
-		t.Fatalf("captureLinesForPreview = %d", got)
-	}
-	if got := captureLinesForPreview(1000, 10); got != maxCaptureLines {
-		t.Fatalf("captureLinesForPreview clamp = %d", got)
-	}
-}
-
 func TestDashboardPreviewLinesMinimum(t *testing.T) {
 	settings := DashboardConfig{PreviewLines: 3}
 	if got := dashboardPreviewLines(settings); got < 10 {
@@ -294,9 +282,7 @@ func TestBuildDashboardData(t *testing.T) {
 		{name: "tmux", args: []string{"list-panes", "-t", "app:0", "-F", fullFormat}, stdout: paneLine, exit: 0},
 		{name: "tmux", args: []string{"list-panes", "-t", "app:1", "-F", fullFormat}, stdout: paneLine, exit: 0},
 		{name: "tmux", args: []string{"list-panes", "-t", "app:0", "-F", fullFormat}, stdout: paneLine, exit: 0},
-		{name: "tmux", args: []string{"capture-pane", "-p", "-J", "-e", "-a", "-t", "app:0.0", "-S", "0", "-E", "-"}, stdout: "done\n", exit: 0},
 		{name: "tmux", args: []string{"list-panes", "-t", "app:0", "-F", fullFormat}, stdout: paneLine, exit: 0},
-		{name: "tmux", args: []string{"capture-pane", "-p", "-J", "-e", "-a", "-t", "app:0.0", "-S", "0", "-E", "-"}, stdout: "line1\nline2\n", exit: 0},
 	}}
 
 	client, err := tmuxctl.NewClient("tmux")
@@ -325,7 +311,7 @@ func TestBuildDashboardData(t *testing.T) {
 	if session.WindowCount != 2 || session.ActiveWindow != "0" {
 		t.Fatalf("session windows = %d active=%q", session.WindowCount, session.ActiveWindow)
 	}
-	if session.Thumbnail.Line != "done" {
+	if session.Thumbnail.Line != "Title" {
 		t.Fatalf("thumbnail line = %q", session.Thumbnail.Line)
 	}
 	if len(session.Windows) == 0 || len(session.Windows[0].Panes) == 0 {

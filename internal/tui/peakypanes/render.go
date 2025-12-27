@@ -9,7 +9,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/cellbuf"
 	"github.com/regenrek/peakypanes/internal/layout"
-	"github.com/regenrek/peakypanes/internal/tmuxstream"
 	"github.com/regenrek/peakypanes/internal/tui/icons"
 	"github.com/regenrek/peakypanes/internal/tui/theme"
 )
@@ -365,7 +364,7 @@ func (m Model) viewFooter(width int) string {
 		paneLabel = "project"
 	}
 	modeHint := ""
-	if m.isNativeMode() {
+	if m.supportsTerminalFocus() {
 		label := "terminal"
 		if m.terminalFocus {
 			label = "terminal on"
@@ -414,7 +413,7 @@ func (m Model) viewQuickReply(width int) string {
 	m.quickReplyInput.Width = inputWidth
 
 	hintText := "enter send • esc clear"
-	if m.isNativeMode() {
+	if m.supportsTerminalFocus() {
 		toggle := keyLabel(m.keys.terminalFocus)
 		if m.terminalFocus {
 			hintText = fmt.Sprintf("%s quick reply", toggle)
@@ -751,19 +750,13 @@ func (m Model) viewHelp() string {
 	left.WriteString(fmt.Sprintf("  %s Open in new terminal window\n", keyLabel(m.keys.openTerminal)))
 	left.WriteString(fmt.Sprintf("  %s Kill session\n", keyLabel(m.keys.kill)))
 	left.WriteString("\nPane\n")
-	if m.isNativeMode() {
-		left.WriteString("  type  Quick reply (terminal focus off)\n")
-		left.WriteString("  enter Send quick reply\n")
-		left.WriteString("  esc   Clear quick reply\n")
-		left.WriteString(fmt.Sprintf("  %s Toggle terminal focus\n", keyLabel(m.keys.terminalFocus)))
-		left.WriteString(fmt.Sprintf("  %s Scrollback mode (native panes)\n", keyLabel(m.keys.scrollback)))
-		left.WriteString(fmt.Sprintf("  %s Copy mode (native panes)\n", keyLabel(m.keys.copyMode)))
-		left.WriteString("  type  Send input to focused pane\n")
-	} else {
-		left.WriteString("  type  Quick reply is always active\n")
-		left.WriteString("  enter Send quick reply\n")
-		left.WriteString("  esc   Clear quick reply\n")
-	}
+	left.WriteString("  type  Quick reply (terminal focus off)\n")
+	left.WriteString("  enter Send quick reply\n")
+	left.WriteString("  esc   Clear quick reply\n")
+	left.WriteString(fmt.Sprintf("  %s Toggle terminal focus (Peaky Panes sessions)\n", keyLabel(m.keys.terminalFocus)))
+	left.WriteString(fmt.Sprintf("  %s Scrollback mode (Peaky Panes sessions)\n", keyLabel(m.keys.scrollback)))
+	left.WriteString(fmt.Sprintf("  %s Copy mode (Peaky Panes sessions)\n", keyLabel(m.keys.copyMode)))
+	left.WriteString("  type  Send input to focused pane\n")
 	left.WriteString(fmt.Sprintf("  %s Peek pane in new terminal\n", keyLabel(m.keys.peekPane)))
 
 	var right strings.Builder
@@ -1352,25 +1345,13 @@ func (m Model) renderDashboardPaneTileWithMux(pane DashboardPane, width, height,
 	lines := []string{header, detailLine}
 	if availablePreview > 0 {
 		var live string
-		switch pane.Pane.Multiplexer {
-		case layout.MultiplexerNative:
-			if m.native != nil {
-				if win := m.native.Window(pane.Pane.ID); win != nil {
-					_ = win.Resize(contentWidth, availablePreview)
-					if selected && m.terminalFocus {
-						live = win.ViewLipgloss(true)
-					} else {
-						live = win.ViewANSI()
-					}
-				}
-			}
-		case layout.MultiplexerTmux:
-			if m.tmuxStreams != nil {
-				if view, ok := m.tmuxStreams.View(pane.Pane.ID, tmuxstream.ViewOptions{
-					Height:     availablePreview,
-					ShowCursor: selected,
-				}); ok {
-					live = view
+		if pane.Pane.Multiplexer == layout.MultiplexerNative && m.native != nil {
+			if win := m.native.Window(pane.Pane.ID); win != nil {
+				_ = win.Resize(contentWidth, availablePreview)
+				if selected && m.terminalFocus {
+					live = win.ViewLipgloss(true)
+				} else {
+					live = win.ViewANSI()
 				}
 			}
 		}
@@ -1379,7 +1360,13 @@ func (m Model) renderDashboardPaneTileWithMux(pane DashboardPane, width, height,
 			live = padLines(live, contentWidth, availablePreview)
 			lines = append(lines, strings.Split(live, "\n")...)
 		} else {
-			preview := tailLines(pane.Pane.Preview, availablePreview)
+			preview := pane.Pane.Preview
+			if len(preview) == 0 {
+				if summary := paneSummaryLine(pane.Pane, 0); summary != "" {
+					preview = []string{summary}
+				}
+			}
+			preview = tailLines(preview, availablePreview)
 			for len(preview) < availablePreview {
 				preview = append(preview, "")
 			}
@@ -1512,25 +1499,13 @@ func (m Model) renderPaneTileWithMux(pane PaneItem, width, height int, compact b
 	}
 	if maxPreview > 0 {
 		var live string
-		switch pane.Multiplexer {
-		case layout.MultiplexerNative:
-			if m.native != nil {
-				if win := m.native.Window(pane.ID); win != nil {
-					_ = win.Resize(contentWidth, maxPreview)
-					if target && m.terminalFocus {
-						live = win.ViewLipgloss(true)
-					} else {
-						live = win.ViewANSI()
-					}
-				}
-			}
-		case layout.MultiplexerTmux:
-			if m.tmuxStreams != nil {
-				if view, ok := m.tmuxStreams.View(pane.ID, tmuxstream.ViewOptions{
-					Height:     maxPreview,
-					ShowCursor: target,
-				}); ok {
-					live = view
+		if pane.Multiplexer == layout.MultiplexerNative && m.native != nil {
+			if win := m.native.Window(pane.ID); win != nil {
+				_ = win.Resize(contentWidth, maxPreview)
+				if target && m.terminalFocus {
+					live = win.ViewLipgloss(true)
+				} else {
+					live = win.ViewANSI()
 				}
 			}
 		}
@@ -1540,6 +1515,11 @@ func (m Model) renderPaneTileWithMux(pane PaneItem, width, height int, compact b
 			lines = append(lines, strings.Split(live, "\n")...)
 		} else {
 			previewSource := pane.Preview
+			if len(previewSource) == 0 {
+				if summary := paneSummaryLine(pane, 0); summary != "" {
+					previewSource = []string{summary}
+				}
+			}
 			if compact {
 				previewSource = compactPreviewLines(previewSource)
 			}
