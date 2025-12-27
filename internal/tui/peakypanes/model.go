@@ -21,6 +21,7 @@ import (
 
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/native"
+	"github.com/regenrek/peakypanes/internal/terminal"
 	"github.com/regenrek/peakypanes/internal/tmuxctl"
 	"github.com/regenrek/peakypanes/internal/tmuxstream"
 	"github.com/regenrek/peakypanes/internal/tui/theme"
@@ -59,6 +60,8 @@ type dashboardKeyMap struct {
 	help            key.Binding
 	quit            key.Binding
 	filter          key.Binding
+	scrollback      key.Binding
+	copyMode        key.Binding
 }
 
 // Model implements tea.Model for peakypanes TUI.
@@ -494,6 +497,16 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.setTerminalFocus(false)
 			return m, nil
 		}
+		win := m.nativeFocusedWindow()
+		if win != nil {
+			res := handleNativeTerminalKey(msg, m.keys, win)
+			if res.Handled {
+				if res.Toast != "" {
+					m.setToast(res.Toast, res.Level)
+				}
+				return m, res.Cmd
+			}
+		}
 		if err := m.sendNativeKey(msg); err != nil {
 			m.setToast("Input failed: "+err.Error(), toastError)
 		}
@@ -593,6 +606,17 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m.updateQuickReply(msg)
+}
+
+func (m *Model) nativeFocusedWindow() *terminal.Window {
+	if m.native == nil {
+		return nil
+	}
+	pane := m.selectedPane()
+	if pane == nil || strings.TrimSpace(pane.ID) == "" {
+		return nil
+	}
+	return m.native.PaneWindow(pane.ID)
 }
 
 func (m *Model) openProjectPicker() {
