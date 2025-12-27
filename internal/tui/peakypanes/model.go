@@ -77,6 +77,7 @@ type Model struct {
 	selectionByProject map[string]selectionState
 	settings           DashboardConfig
 	config             *layout.Config
+	projectConfigState map[string]projectConfigState
 
 	keys *dashboardKeyMap
 
@@ -348,6 +349,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.applySelection(resolveSelection(m.data.Projects, m.selection))
 		}
 		m.syncExpandedSessions()
+		if m.refreshSelectionForProjectConfig() {
+			m.setToast("Project config changed: selection refreshed", toastInfo)
+		}
 		if m.streamInitErr != nil {
 			m.setToast("tmux stream disabled: "+m.streamInitErr.Error(), toastWarning)
 			m.streamInitErr = nil
@@ -1399,6 +1403,44 @@ func (m *Model) applySelection(sel selectionState) {
 	m.setMuxMode(m.resolveMuxMode())
 }
 
+func (m *Model) refreshSelectionForProjectConfig() bool {
+	project := m.selectedProject()
+	if project == nil {
+		return false
+	}
+	projectPath := normalizeProjectPath(project.Path)
+	if projectPath == "" {
+		return false
+	}
+	if m.projectConfigState == nil {
+		m.projectConfigState = make(map[string]projectConfigState)
+	}
+	state := projectConfigStateForPath(projectPath)
+	prev, ok := m.projectConfigState[projectPath]
+	m.projectConfigState[projectPath] = state
+	if !ok || prev.equal(state) {
+		return false
+	}
+
+	delete(m.selectionByProject, project.Name)
+	desired := selectionState{Project: project.Name}
+	var resolved selectionState
+	if m.tab == TabDashboard {
+		resolved = resolveDashboardSelection(m.data.Projects, desired)
+		if resolved.Project == "" {
+			resolved = resolveSelection(m.data.Projects, desired)
+		}
+	} else {
+		resolved = resolveSelection(m.data.Projects, desired)
+	}
+	if resolved.Project == "" {
+		return false
+	}
+	m.applySelection(resolved)
+	m.selectionVersion++
+	return true
+}
+
 func (m *Model) selectTab(delta int) {
 	total := len(m.data.Projects) + 1
 	if total <= 1 {
@@ -1407,20 +1449,11 @@ func (m *Model) selectTab(delta int) {
 	}
 
 	if m.tab == TabDashboard {
-		if delta < 0 {
-			m.tab = TabProject
-			projectName := m.data.Projects[len(m.data.Projects)-1].Name
-			resolved := resolveSelection(m.data.Projects, m.selectionForProject(projectName))
-			m.applySelection(resolved)
-			m.selectionVersion++
-			return
-		}
-		idx, ok := m.projectIndexFor(m.selection.Project)
-		if !ok {
-			idx = 0
-		}
 		m.tab = TabProject
-		projectName := m.data.Projects[idx].Name
+		projectName := m.data.Projects[0].Name
+		if delta < 0 {
+			projectName = m.data.Projects[len(m.data.Projects)-1].Name
+		}
 		resolved := resolveSelection(m.data.Projects, m.selectionForProject(projectName))
 		m.applySelection(resolved)
 		m.selectionVersion++

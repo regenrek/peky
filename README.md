@@ -6,12 +6,12 @@
 █       █████   █   █   █  ██     █      █        █   █   █  ██    █████   █████
 ```
 
-**Tmux layout manager with YAML-based configuration.**
+**Terminal multiplexer dashboard with YAML-based configuration (native + tmux).**
 
 ![Peaky Panes Preview](assets/peakypanes-preview.jpg)
 
 
-Define your tmux layouts in YAML, share them with your team via git, and get consistent development environments everywhere.
+Define your layouts in YAML, share them with your team via git, and get consistent development environments everywhere. Run sessions with the built-in **native multiplexer** (default) or keep **tmux** as your backend.
 
 ## Features
 
@@ -21,6 +21,8 @@ Define your tmux layouts in YAML, share them with your team via git, and get con
 - 🏠 **Global config** - Define layouts once, use everywhere
 - 🔄 **Variable expansion** - Use `${EDITOR}`, `${PROJECT_PATH}`, etc.
 - 🎯 **Zero config** - Just run `peakypanes` in any directory
+- 🧠 **Native multiplexer (default)** - Live panes with full TUI support (vim/htop)
+- 🔁 **tmux compatibility** - Keep existing tmux sessions and layouts
 - ⚙️ **Session-scoped tmux options** - Configure tmux per-session without affecting global config
 - 🪟 **Popup dashboard** - Open the UI as a tmux popup when available
 - ⌘ **Command palette** - Quick actions, including renaming sessions/windows
@@ -83,6 +85,7 @@ Create in your project root for team-shared layouts:
 ```yaml
 # .peakypanes.yml
 session: my-project
+multiplexer: native  # native (default) | tmux
 
 layout:
   windows:
@@ -129,6 +132,8 @@ For personal layouts and multi-project management:
 
 ```yaml
 # Global settings
+multiplexer: native  # native (default) | tmux
+
 tmux:
   # Optional: source a custom tmux config when starting sessions.
   # (tmux already reads ~/.tmux.conf or ~/.config/tmux/tmux.conf by default)
@@ -238,9 +243,9 @@ If popups are unsupported, PeakyPanes opens a `peakypanes-dashboard` window in t
 The dashboard shows:
 - Projects on top (tabs)
 - Sessions on the left (with window counts and expandable windows)
-- Live pane preview on the right (window bar at the bottom)
+- Live pane preview on the right (native panes are fully interactive)
 - Lightweight session thumbnails at the bottom (last activity per session)
-- Quick reply bar (always visible) and target pane highlight for follow-ups
+- Quick reply bar (always visible) and target pane highlight for follow-ups (native or tmux)
 
 Navigation (always visible):
 - `ctrl+a/ctrl+d` project, `ctrl+w/ctrl+s` session, `tab/⇧tab` pane (across windows), `ctrl+g` help
@@ -266,6 +271,7 @@ Window
 Pane
 - rename pane via command palette (`ctrl+p`)
 - `ctrl+y` peek selected pane in new terminal
+- `ctrl+\` toggle terminal focus (native only; configurable via `dashboard.keymap.terminal_focus`)
 
 Tmux (inside session)
 - `prefix+g` open dashboard popup (tmux prefix is yours)
@@ -274,7 +280,7 @@ Other
 - `ctrl+p` command palette
 - `ctrl+r` refresh, `ctrl+e` edit config, `ctrl+f` filter, `ctrl+c` quit
 
-Quick reply details: the input is always active—type and press `enter` to send to the highlighted pane. Use `esc` to clear. `tab/⇧tab` still cycles panes while the input is focused.
+Quick reply details: the input is always active—type and press `enter` to send to the highlighted pane. Use `esc` to clear. In native mode, toggle terminal focus to send raw keystrokes into the pane.
 
 ### Dashboard Config (optional)
 
@@ -296,6 +302,7 @@ dashboard:
     pane_next: ["tab"]
     pane_prev: ["shift+tab"]
     peek_pane: ["ctrl+y"]
+    terminal_focus: ["ctrl+\\"]
     toggle_windows: ["ctrl+u"]
     command_palette: ["ctrl+p"]
     help: ["ctrl+g"]

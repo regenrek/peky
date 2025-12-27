@@ -5,6 +5,20 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Added
+- Native multiplexer manager with PTY/VT panes and full-screen TUI support.
+- Live pane rendering in the dashboard and project views (native + tmux streaming).
+- Terminal focus toggle for native panes (default `ctrl+\`, configurable).
+- Project config change detection to refresh selection without reopening projects.
+
+### Changed
+- Multiplexer resolution order is now project-local → project entry → global → native default.
+- Tmux previews capture ANSI output for richer fallback rendering.
+- Dashboard selection syncs live streams on navigation.
+
+### Fixed
+- Space key now passes correctly in native terminal focus.
+
 ## 0.0.4 - 2025-12-25
 
 ### Added
