@@ -61,7 +61,7 @@ func TestRenderPaneTileKeepsLastPreviewLine(t *testing.T) {
 }
 
 func TestViewDashboardContentSmallTerminal(t *testing.T) {
-	m, _ := newTestModel(t, nil)
+	m := newTestModel(t)
 	m.width = 12
 	m.height = 6
 	out := m.viewDashboardContent()
@@ -71,7 +71,7 @@ func TestViewDashboardContentSmallTerminal(t *testing.T) {
 }
 
 func TestViewQuickReplyClampsInputWidth(t *testing.T) {
-	m, _ := newTestModel(t, nil)
+	m := newTestModel(t)
 	out := m.viewQuickReply(18)
 	if strings.TrimSpace(out) == "" {
 		t.Fatalf("viewQuickReply() empty")
@@ -90,7 +90,7 @@ func TestViewQuickReplyClampsInputWidth(t *testing.T) {
 }
 
 func TestViewPreviewFitsSmallHeight(t *testing.T) {
-	m, _ := newTestModel(t, nil)
+	m := newTestModel(t)
 	m.settings.RefreshInterval = 2 * time.Second
 	m.data = DashboardData{Projects: []ProjectGroup{{
 		Name: "Proj",

@@ -1,16 +1,17 @@
 # Layout Builder Guide
 
-This guide covers everything you need to know about creating custom layouts in Peaky Panes, including pane arrangements, tmux options, and advanced configuration.
+This guide covers everything you need to know about creating custom layouts in Peaky Panes, including pane arrangements and advanced configuration.
 
 ## Table of Contents
 
 - [Basic Structure](#basic-structure)
 - [Pane Layouts](#pane-layouts)
 - [Split Directions](#split-directions)
-- [Tmux Options](#tmux-options)
 - [Variables](#variables)
 - [Multi-Window Layouts](#multi-window-layouts)
 - [Examples](#examples)
+- [Configuration Precedence](#configuration-precedence)
+- [Tips](#tips)
 
 ---
 
@@ -25,57 +26,50 @@ session: my-project
 layout:
   name: my-layout
   description: "Description of what this layout is for"
-  
+
   vars:
     # Custom variables
     log_file: "${HOME}/logs/${PROJECT_NAME}.log"
-  
+
   settings:
     width: 240          # Terminal width hint
     height: 84          # Terminal height hint
-    tmux_options:       # Session-scoped tmux options
-      history-limit: "50000"
-  
+
   windows:
     - name: dev
-      layout: tiled     # tmux layout algorithm
       panes:
         - title: editor
           cmd: "${EDITOR:-}"
+          size: "60%"
+        - title: server
+          cmd: "npm run dev"
+          split: horizontal
+        - title: shell
+          cmd: ""
+          split: vertical
 ```
 
 ---
 
 ## Pane Layouts
 
-### Automatic Layouts (Recommended)
+### Split Layouts (Recommended)
 
-Use the `layout` field on a window to let tmux arrange panes automatically:
-
-| Layout | Description |
-|--------|-------------|
-| `tiled` | Equal-sized grid (best for 4 panes = 2x2) |
-| `even-horizontal` | Side-by-side columns |
-| `even-vertical` | Stacked rows |
-| `main-horizontal` | Large pane on top, others below |
-| `main-vertical` | Large pane on left, others on right |
-
-For exact row/column grids (like 2x3), use the top-level `grid` configuration
-instead of `layout: tiled`.
+Use `split` on panes after the first to control how the window is divided. The first pane defines the base area; each subsequent pane splits the remaining space of that base pane, so order matters.
 
 ```yaml
 windows:
   - name: dev
-    layout: tiled      # Automatic 2x2 grid with 4 panes
     panes:
-      - title: top-left
+      - title: editor
+        cmd: "${EDITOR:-}"
+        size: "60%"
+      - title: server
+        cmd: "npm run dev"
+        split: horizontal
+      - title: shell
         cmd: ""
-      - title: top-right
-        cmd: ""
-      - title: bottom-left
-        cmd: ""
-      - title: bottom-right
-        cmd: ""
+        split: vertical
 ```
 
 ### Exact Grid Example (2x2)
@@ -118,7 +112,7 @@ windows:
       - title: server        # Splits horizontally from editor
         cmd: "npm run dev"
         split: horizontal
-      - title: shell         # Splits vertically from server
+      - title: shell         # Splits vertically from editor's remaining space
         cmd: ""
         split: vertical
 ```
@@ -145,59 +139,6 @@ panes:
     cmd: ""
     split: horizontal
     size: "30%"           # Remaining 30%
-```
-
----
-
-## Tmux Options
-
-Peaky Panes applies session-scoped tmux options that don't affect your global config.
-
-### Default Options
-
-These are applied automatically to all peakypanes sessions:
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `remain-on-exit` | `on` | Keeps panes open after command exits/crashes |
-
-### Custom Options
-
-Add your own tmux options per-layout:
-
-```yaml
-layout:
-  settings:
-    tmux_options:
-      remain-on-exit: "on"       # Keep crashed panes visible
-      history-limit: "50000"     # Scrollback buffer size
-      mouse: "on"                # Enable mouse support
-      status-position: "top"     # Status bar position
-```
-
-### Disabling Defaults
-
-Override defaults if needed:
-
-```yaml
-layout:
-  settings:
-    tmux_options:
-      remain-on-exit: "off"      # Let panes close on exit
-```
-
-### Key Bindings
-
-Add custom key bindings for the session:
-
-```yaml
-layout:
-  settings:
-    bind_keys:
-      - key: "S-Left"
-        action: "previous-window"
-      - key: "S-Right"
-        action: "next-window"
 ```
 
 ---
@@ -233,7 +174,7 @@ layout:
   vars:
     rust_log: "${HOME}/Library/Logs/${PROJECT_NAME}/rust.log"
     codex_log: "${HOME}/.spezi/codex/log/app-server.log"
-    
+
   windows:
     - name: logs
       panes:
@@ -247,33 +188,34 @@ layout:
 
 ## Multi-Window Layouts
 
-Create multiple tmux windows (tabs):
+Create multiple windows (tabs):
 
 ```yaml
 layout:
   windows:
     # Window 1: Development
     - name: dev
-      layout: tiled
       panes:
         - title: editor
           cmd: "${EDITOR:-}"
+          size: "60%"
         - title: server
           cmd: "npm run dev"
+          split: horizontal
         - title: test
           cmd: ""
-        - title: shell
-          cmd: ""
-    
+          split: vertical
+
     # Window 2: Logs
     - name: logs
-      layout: even-horizontal
       panes:
         - title: app-log
           cmd: "tail -f logs/app.log"
+          size: "50%"
         - title: error-log
           cmd: "tail -f logs/error.log"
-    
+          split: horizontal
+
     # Window 3: Database
     - name: db
       panes:
@@ -293,29 +235,28 @@ session: webapp
 layout:
   name: fullstack
   description: "Full-stack development with logs"
-  
-  settings:
-    tmux_options:
-      history-limit: "50000"
-  
+
   windows:
     - name: code
-      layout: main-vertical
       panes:
         - title: editor
           cmd: "${EDITOR:-}"
+          size: "60%"
         - title: server
           cmd: "npm run dev"
+          split: horizontal
         - title: shell
           cmd: ""
-    
+          split: vertical
+
     - name: logs
-      layout: even-horizontal
       panes:
         - title: frontend
           cmd: "tail -f logs/frontend.log"
+          size: "50%"
         - title: backend
           cmd: "tail -f logs/backend.log"
+          split: horizontal
 ```
 
 ### Tauri/Rust Development
@@ -326,29 +267,30 @@ session: tauri-app
 layout:
   name: tauri-debug
   description: "Tauri development with codex agents"
-  
+
   vars:
     rust_log: "${HOME}/Library/Logs/${PROJECT_NAME}/rust.log"
     codex_log: "${HOME}/.spezi/codex/log/app-server.log"
-  
+
   settings:
     width: 240
     height: 84
-    tmux_options:
-      remain-on-exit: "on"
-  
+
   windows:
     - name: dev
-      layout: tiled
       panes:
         - title: codex
           cmd: "RUST_LOG=debug codex"
+          size: "50%"
         - title: bun-dev
           cmd: "bun dev:tauri"
+          split: horizontal
         - title: codex-logs
           cmd: "tail -F ${codex_log} | grep -Ev '\\bINFO\\b'"
+          split: vertical
         - title: rust-logs
           cmd: "tail -F ${rust_log}"
+          split: vertical
 ```
 
 ### Go Development
@@ -358,7 +300,7 @@ session: go-project
 
 layout:
   name: go-dev
-  
+
   windows:
     - name: dev
       panes:
@@ -371,7 +313,7 @@ layout:
         - title: test
           cmd: ""
           split: vertical
-    
+
     - name: git
       panes:
         - title: lazygit
@@ -408,13 +350,9 @@ Layouts are loaded in this order (first match wins):
 
 ## Tips
 
-### Keep Crashed Panes Visible
-
-Peaky Panes sets `remain-on-exit: on` by default so panes stay open when commands exit. Set `remain-on-exit: off` in your layout's `tmux_options` if you prefer panes to close normally.
-
 ### Prefer `grid:` for Exact Grids
 
-For predictable rows/columns (2x3, 3x4, etc.), use the top-level `grid` configuration. `layout: tiled` is best-effort and may choose a different shape based on window size.
+For predictable rows/columns (2x3, 3x4, etc.), use the top-level `grid` configuration.
 
 ### Empty Commands
 

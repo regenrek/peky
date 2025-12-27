@@ -9,7 +9,7 @@ import (
 )
 
 func TestUpdateHelpAndProjectRootSetup(t *testing.T) {
-	m, _ := newTestModel(t, nil)
+	m := newTestModel(t)
 	m.state = StateHelp
 	m.updateHelp(tea.KeyMsg{Type: tea.KeyEsc})
 	if m.state != StateDashboard {
@@ -24,7 +24,7 @@ func TestUpdateHelpAndProjectRootSetup(t *testing.T) {
 }
 
 func TestOpenLayoutAndCommandPalette(t *testing.T) {
-	m, _ := newTestModel(t, nil)
+	m := newTestModel(t)
 	root := t.TempDir()
 	m.data = DashboardData{Projects: []ProjectGroup{{
 		Name:     "Proj",
@@ -47,9 +47,8 @@ func TestOpenLayoutAndCommandPalette(t *testing.T) {
 	}
 }
 
-func TestAttachOrStartAndSessionActions(t *testing.T) {
-	specs := []cmdSpec{{name: "tmux", args: []string{"list-clients", "-t", "sess", "-F", "#{client_tty}"}, stdout: "", exit: 0}}
-	m, runner := newTestModel(t, specs)
+func TestAttachOrStart(t *testing.T) {
+	m := newTestModel(t)
 	root := t.TempDir()
 	m.data = DashboardData{Projects: []ProjectGroup{{
 		Name: "Proj",
@@ -61,27 +60,21 @@ func TestAttachOrStartAndSessionActions(t *testing.T) {
 	}}}
 	m.selection = selectionState{Project: "Proj", Session: "sess"}
 	if cmd := m.attachOrStart(); cmd == nil {
-		t.Fatalf("attachOrStart() returned nil")
-	}
-
-	m.insideTmux = true
-	if cmd := m.attachSession(SessionItem{Name: "sess"}); cmd == nil {
-		t.Fatalf("attachSession() returned nil")
-	}
-
-	if cmd := m.startProject(SessionItem{Name: "sess", Path: root, LayoutName: "dev"}); cmd == nil {
-		t.Fatalf("startProject() returned nil")
+		t.Fatalf("attachOrStart() returned nil for stopped session")
 	}
 
 	m.data.Projects[0].Sessions[0].Status = StatusRunning
-	if cmd := m.openSessionInNewTerminal(false); cmd == nil {
-		t.Fatalf("openSessionInNewTerminal() returned nil")
+	m.terminalFocus = false
+	if cmd := m.attachOrStart(); cmd != nil {
+		t.Fatalf("attachOrStart() for running session should not return cmd")
 	}
-	runner.assertDone()
+	if !m.terminalFocus {
+		t.Fatalf("attachOrStart() should enable terminal focus")
+	}
 }
 
 func TestEditConfigAndCommandPaletteEnter(t *testing.T) {
-	m, _ := newTestModel(t, nil)
+	m := newTestModel(t)
 	if cmd := m.editConfig(); cmd == nil {
 		t.Fatalf("editConfig() returned nil")
 	}

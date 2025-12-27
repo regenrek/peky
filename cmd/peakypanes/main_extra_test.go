@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"os"
 	"strings"
 	"testing"
@@ -68,41 +67,5 @@ func TestExportLayoutPrintsYaml(t *testing.T) {
 	}
 	if !strings.Contains(out, "layout:") {
 		t.Fatalf("exportLayout() missing layout block")
-	}
-}
-
-func TestRunSetupHelp(t *testing.T) {
-	out := captureStdout(func() {
-		runSetup([]string{"--help"})
-	})
-	if !strings.Contains(out, "Check external dependencies") {
-		t.Fatalf("runSetup(--help) output = %q", out)
-	}
-}
-
-func TestSanitizeTmuxEnvClearsOutside(t *testing.T) {
-	origTTY := currentTTYFn
-	origHas := hasClientOnTTYFn
-	defer func() {
-		currentTTYFn = origTTY
-		hasClientOnTTYFn = origHas
-	}()
-	currentTTYFn = func() string { return "/dev/ttys001" }
-	hasClientOnTTYFn = func(_ context.Context, _ string) (bool, error) { return false, nil }
-
-	t.Setenv("TMUX", "/tmp/tmux")
-	t.Setenv("TMUX_PANE", "%1")
-
-	sanitizeTmuxEnv()
-	if os.Getenv("TMUX") != "" || os.Getenv("TMUX_PANE") != "" {
-		t.Fatalf("sanitizeTmuxEnv() should clear tmux env")
-	}
-}
-
-func TestWithoutTmuxEnv(t *testing.T) {
-	env := []string{"TMUX=/tmp/tmux", "PATH=/bin", "TMUX_PANE=%1"}
-	out := withoutTmuxEnv(env)
-	if len(out) != 1 || !strings.HasPrefix(out[0], "PATH=") {
-		t.Fatalf("withoutTmuxEnv() = %#v", out)
 	}
 }

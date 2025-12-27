@@ -1,11 +1,6 @@
 name: simple
 description: "Single window with one pane - minimal setup"
 
-settings:
-  bind_keys:
-    - key: g
-      action: "run-shell \"peakypanes popup\""
-
 windows:
   - name: main
     panes:

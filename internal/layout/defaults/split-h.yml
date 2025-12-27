@@ -1,16 +1,12 @@
 name: split-h
 description: "Two horizontal panes (top/bottom)"
 
-settings:
-  bind_keys:
-    - key: g
-      action: "run-shell \"peakypanes popup\""
-
 windows:
   - name: dev
-    layout: even-vertical
     panes:
       - title: top
         cmd: ""
+        size: "50%"
       - title: bottom
         cmd: ""
+        split: vertical

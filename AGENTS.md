@@ -10,7 +10,7 @@
 8. Keep the UI as a pure view layer that renders backend models and options using API responses or shared types.
 9. Use `context` timeouts for external I/O and process execution to prevent hangs.  
 10. Wrap errors with actionable context and preserve causes (`%w`).  
-11. Validate and sanitize all user-controlled inputs (paths, names) before OS/tmux calls.
+11. Validate and sanitize all user-controlled inputs (paths, names) before OS/process calls.
 
 # Workflow
 
@@ -19,5 +19,5 @@
 # Testing
 
 1. Maintain at least 60% code coverage for all Go modules to ensure reliability and early regression detection.
-2. Cover critical `tmuxctl` behaviors with integration-style tests (real tmux or faithful harness).  
+2. Cover critical native session manager behaviors with integration-style tests (real PTY or faithful harness).  
 3. Test TUI state transitions and edge-case updates (resize, refresh failures, empty data).

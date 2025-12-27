@@ -6,12 +6,12 @@
 █       █████   █   █   █  ██     █      █        █   █   █  ██    █████   █████
 ```
 
-**Terminal multiplexer dashboard with YAML-based configuration (native + tmux).**
+**Terminal dashboard with YAML-based layouts, native live previews, and native sessions.**
 
 ![Peaky Panes Preview](assets/peakypanes-preview.jpg)
 
 
-Define your layouts in YAML, share them with your team via git, and get consistent development environments everywhere. Run sessions with the built-in **native multiplexer** (default) or keep **tmux** as your backend.
+Define your layouts in YAML, share them with your team via git, and get consistent development environments everywhere. Run sessions with the built-in **native session manager**.
 
 ## Features
 
@@ -21,10 +21,9 @@ Define your layouts in YAML, share them with your team via git, and get consiste
 - 🏠 **Global config** - Define layouts once, use everywhere
 - 🔄 **Variable expansion** - Use `${EDITOR}`, `${PROJECT_PATH}`, etc.
 - 🎯 **Zero config** - Just run `peakypanes` in any directory
-- 🧠 **Native multiplexer (default)** - Live panes with full TUI support (vim/htop)
-- 🔁 **tmux compatibility** - Keep existing tmux sessions and layouts
-- ⚙️ **Session-scoped tmux options** - Configure tmux per-session without affecting global config
-- 🪟 **Popup dashboard** - Open the UI as a tmux popup when available
+- 🧠 **Native live previews** - Full TUI support (vim/htop) with live panes
+- 🧭 **Native session manager** - Multi-window sessions with configurable layouts
+- 📜 **Scrollback + copy mode** - Navigate output and yank from native panes
 - ⌘ **Command palette** - Quick actions, including renaming sessions/windows
 
 ## Quick Start
@@ -37,9 +36,6 @@ Define your layouts in YAML, share them with your team via git, and get consiste
 npm i -g peakypanes
 peakypanes
 ```
-
-> [!TIP]
-> Run `peakypanes setup` to check dependencies
 
 **Run once with npx**
 
@@ -76,7 +72,7 @@ git add .peakypanes.yml  # Share with team
 
 ## Configuration
 
-> 📖 **[Layout Builder Guide](docs/layout-builder.md)** - Detailed documentation on creating custom layouts, pane arrangements, and tmux options.
+> 📖 **[Layout Builder Guide](docs/layout-builder.md)** - Detailed documentation on creating custom layouts, pane arrangements, and configuration.
 
 ### Project-Local (`.peakypanes.yml`)
 
@@ -85,7 +81,6 @@ Create in your project root for team-shared layouts:
 ```yaml
 # .peakypanes.yml
 session: my-project
-multiplexer: native  # native (default) | tmux
 
 layout:
   windows:
@@ -131,14 +126,6 @@ layout:
 For personal layouts and multi-project management:
 
 ```yaml
-# Global settings
-multiplexer: native  # native (default) | tmux
-
-tmux:
-  # Optional: source a custom tmux config when starting sessions.
-  # (tmux already reads ~/.tmux.conf or ~/.config/tmux/tmux.conf by default)
-  config: ~/.config/tmux/tmux.conf
-
 # Dashboard UI settings (optional)
 # dashboard:
 #   project_roots:
@@ -190,20 +177,14 @@ layout:
 ```bash
 peakypanes                     # Open dashboard (direct)
 peakypanes dashboard           # Open dashboard (direct)
-peakypanes dashboard --tmux-session  # Host dashboard in tmux session
-peakypanes dashboard --popup   # Open dashboard as a tmux popup
-peakypanes popup               # Open dashboard as a tmux popup
-peakypanes open                # Start/attach session in current directory
+peakypanes open                # Start session and open dashboard
 peakypanes start               # Same as open
 peakypanes start --layout X    # Use specific layout
-peakypanes start --detach      # Create session without attaching
-peakypanes kill [session]      # Kill a tmux session
 peakypanes init                # Create global config
 peakypanes init --local        # Create .peakypanes.yml
 peakypanes layouts             # List available layouts
 peakypanes layouts export X    # Export layout YAML
 peakypanes clone user/repo     # Clone from GitHub and start session
-peakypanes setup               # Check external dependencies
 peakypanes version             # Show version
 ```
 
@@ -236,16 +217,13 @@ peakypanes layouts export codex-dev > .peakypanes.yml
 ## Dashboard UI
 
 Running `peakypanes` with no subcommand opens the dashboard UI in the current terminal.
-Use `peakypanes dashboard --tmux-session` to host the dashboard in a dedicated tmux session.
-Use `peakypanes popup` (or `peakypanes dashboard --popup`) from inside tmux for a popup dashboard.
-If popups are unsupported, PeakyPanes opens a `peakypanes-dashboard` window in the current tmux session.
 
 The dashboard shows:
 - Projects on top (tabs)
 - Sessions on the left (with window counts and expandable windows)
 - Live pane preview on the right (native panes are fully interactive)
 - Lightweight session thumbnails at the bottom (last activity per session)
-- Quick reply bar (always visible) and target pane highlight for follow-ups (native or tmux)
+- Quick reply bar (always visible) and target pane highlight for follow-ups
 
 Navigation (always visible):
 - `ctrl+a/ctrl+d` project, `ctrl+w/ctrl+s` session/window, `alt+w/alt+s` session only, `tab/⇧tab` pane (across windows), `ctrl+g` help
@@ -260,7 +238,6 @@ Project
 Session
 - `enter` attach/start session (when reply is empty)
 - `ctrl+n` new session (pick layout)
-- `ctrl+t` open in new terminal window
 - `ctrl+x` kill session
 - rename session via command palette (`ctrl+p`)
 
@@ -270,19 +247,15 @@ Window
 
 Pane
 - rename pane via command palette (`ctrl+p`)
-- `ctrl+y` peek selected pane in new terminal
-- `ctrl+\` toggle terminal focus (native only; configurable via `dashboard.keymap.terminal_focus`)
-- `f7` scrollback mode (native only; configurable via `dashboard.keymap.scrollback`)
-- `f8` copy mode (native only; configurable via `dashboard.keymap.copy_mode`)
-
-Tmux (inside session)
-- `prefix+g` open dashboard popup (tmux prefix is yours)
+- `ctrl+\` toggle terminal focus (Peaky Panes sessions; configurable via `dashboard.keymap.terminal_focus`)
+- `f7` scrollback mode (Peaky Panes sessions; configurable via `dashboard.keymap.scrollback`)
+- `f8` copy mode (Peaky Panes sessions; configurable via `dashboard.keymap.copy_mode`)
 
 Other
 - `ctrl+p` command palette
 - `ctrl+r` refresh, `ctrl+e` edit config, `ctrl+f` filter, `ctrl+c` quit
 
-Quick reply details: the input is always active—type and press `enter` to send to the highlighted pane. Use `esc` to clear. In native mode, toggle terminal focus to send raw keystrokes into the pane. Use scrollback (`f7`) to navigate output and copy mode (`f8`) to select/yank (`v` select, `y` yank, `esc/q` exit).
+Quick reply details: the input is always active—type and press `enter` to send to the highlighted pane. Use `esc` to clear. Toggle terminal focus to send raw keystrokes into the pane. Use scrollback (`f7`) to navigate output and copy mode (`f8`) to select/yank (`v` select, `y` yank, `esc/q` exit).
 
 ### Dashboard Config (optional)
 
@@ -295,7 +268,7 @@ dashboard:
   idle_seconds: 20
   show_thumbnails: true
   preview_mode: grid  # grid | layout
-  attach_behavior: new_terminal  # current | new_terminal | detached
+  attach_behavior: current  # current | detached
   keymap:
     project_left: ["ctrl+a"]
     project_right: ["ctrl+d"]
@@ -305,7 +278,6 @@ dashboard:
     session_only_down: ["alt+s"]
     pane_next: ["tab"]
     pane_prev: ["shift+tab"]
-    peek_pane: ["ctrl+y"]
     terminal_focus: ["ctrl+\\"]
     scrollback: ["f7"]
     copy_mode: ["f8"]
@@ -322,13 +294,13 @@ dashboard:
     claude: true
 ```
 
-`attach_behavior` controls what the “attach/start” action does (default `new_terminal`): `current` switches the terminal running PeakyPanes into the session, `new_terminal` opens a fresh terminal to attach, and `detached` only creates the session.
+`attach_behavior` controls what the “attach/start” action does (default `current`): `current` focuses the selected session in the dashboard, and `detached` creates the session without switching focus.
 
 ### Agent Status Detection (Codex & Claude Code)
 
 PeakyPanes can read per-pane JSON state files to show accurate running/idle/done status for Codex CLI and Claude Code TUI sessions. This is **on by default** and falls back to regex/idle detection if no state file is present. You can disable it via `dashboard.agent_detection`.
 
-State files are written under `${XDG_RUNTIME_DIR:-/tmp}/peakypanes/agent-state` and keyed by `TMUX_PANE` (override with `PEAKYPANES_AGENT_STATE_DIR`).
+State files are written under `${XDG_RUNTIME_DIR:-/tmp}/peakypanes/agent-state` and keyed by `PEAKYPANES_PANE_ID` (override with `PEAKYPANES_AGENT_STATE_DIR`).
 
 **Codex CLI (TUI)**
 
@@ -353,23 +325,6 @@ Example hook command (wire it to each event above in Claude Code):
 python3 /absolute/path/to/peakypanes/scripts/agent-state/claude-hook.py
 ```
 
-### Tmux Config & Key Bindings
-
-- PeakyPanes **never edits** your tmux config file.
-- tmux already reads `~/.tmux.conf` or `~/.config/tmux/tmux.conf` by default.
-- If you use a **custom tmux config path**, set `tmux.config` in `~/.config/peakypanes/config.yml`.
-  PeakyPanes will **source** that file when starting sessions (no overwrite).
-- Per-layout tmux options and key bindings are supported:
-
-```yaml
-settings:
-  tmux_options:
-    remain-on-exit: "on"
-  bind_keys:
-    - key: g
-      action: "run-shell \"peakypanes popup\""
-```
-
 ## How Layout Detection Works
 
 1. `--layout` flag (highest priority)
@@ -392,12 +347,6 @@ Race tests:
 go test ./... -race
 ```
 
-Tmux integration tests (requires tmux; opt-in):
-
-```bash
-PEAKYPANES_INTEGRATION=1 go test ./internal/tmuxctl -run Integration -count=1
-```
-
 Manual npm smoke run (fresh HOME/XDG config):
 
 ```bash
@@ -405,7 +354,7 @@ scripts/fresh-run
 scripts/fresh-run 0.0.2 --with-project
 ```
 
-GitHub Actions runs gofmt checks, go vet, go test with coverage, race, and tmux integration tests on Linux.
+GitHub Actions runs gofmt checks, go vet, go test with coverage, and race on Linux.
 
 ## Release
 

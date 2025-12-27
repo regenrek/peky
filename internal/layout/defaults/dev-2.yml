@@ -1,17 +1,12 @@
 name: dev-2
 description: "Simple two-pane layout: editor left, terminal right"
 
-settings:
-  bind_keys:
-    - key: g
-      action: "run-shell \"peakypanes popup\""
-
 windows:
   - name: dev
-    layout: even-horizontal
     panes:
       - title: editor
         cmd: "${EDITOR:-}"
         size: "60%"
       - title: shell
         cmd: ""
+        split: horizontal

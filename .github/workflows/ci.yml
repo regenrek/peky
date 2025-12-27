@@ -32,17 +32,11 @@ jobs:
       - name: Go vet
         run: go vet ./...
 
-      - name: Install tmux
-        run: sudo apt-get update && sudo apt-get install -y tmux
-
       - name: Go test
         run: go test ./... -coverprofile=cover.out
 
       - name: Go test (race)
         run: go test ./... -race
-
-      - name: Tmux integration tests
-        run: PEAKYPANES_INTEGRATION=1 go test ./internal/tmuxctl -run Integration -count=1
 
       - name: Coverage summary
         run: go tool cover -func=cover.out | tail -n 1

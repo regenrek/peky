@@ -12,7 +12,6 @@ require (
 	github.com/charmbracelet/ultraviolet v0.0.0-20251217160852-6b0c0e26fad9
 	github.com/charmbracelet/x/ansi v0.11.3
 	github.com/charmbracelet/x/cellbuf v0.0.14
-	github.com/charmbracelet/x/vt v0.0.0-20251215102626-e0db08df7383
 	github.com/charmbracelet/x/xpty v0.1.3
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	golang.org/x/sys v0.39.0

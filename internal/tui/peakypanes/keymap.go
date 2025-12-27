@@ -93,20 +93,6 @@ func buildDashboardKeyMap(cfg layout.DashboardKeymapConfig) (*dashboardKeyMap, e
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.newSession = b },
 		},
 		{
-			name:     "open_terminal",
-			desc:     "new terminal",
-			defaults: []string{"ctrl+t"},
-			override: cfg.OpenTerminal,
-			assign:   func(m *dashboardKeyMap, b key.Binding) { m.openTerminal = b },
-		},
-		{
-			name:     "peek_pane",
-			desc:     "peek pane",
-			defaults: []string{"ctrl+y"},
-			override: cfg.PeekPane,
-			assign:   func(m *dashboardKeyMap, b key.Binding) { m.peekPane = b },
-		},
-		{
 			name:     "terminal_focus",
 			desc:     "terminal focus",
 			defaults: []string{"ctrl+\\"},

@@ -9,10 +9,10 @@ import (
 )
 
 func TestUpdateRefreshFailureSetsToast(t *testing.T) {
-	m, _ := newTestModel(t, nil)
+	m := newTestModel(t)
 	m.beginRefresh()
 
-	_, _ = m.Update(tmuxSnapshotMsg{Result: tmuxSnapshotResult{
+	_, _ = m.Update(dashboardSnapshotMsg{Result: dashboardSnapshotResult{
 		Err:      errors.New("boom"),
 		Settings: m.settings,
 		Version:  m.selectionVersion,
@@ -30,7 +30,7 @@ func TestUpdateRefreshFailureSetsToast(t *testing.T) {
 }
 
 func TestViewWithEmptyDataAndResize(t *testing.T) {
-	m, _ := newTestModel(t, nil)
+	m := newTestModel(t)
 
 	m.state = StateHelp
 	_, _ = m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
@@ -42,7 +42,7 @@ func TestViewWithEmptyDataAndResize(t *testing.T) {
 	}
 
 	m.state = StateDashboard
-	_, _ = m.Update(tmuxSnapshotMsg{Result: tmuxSnapshotResult{
+	_, _ = m.Update(dashboardSnapshotMsg{Result: dashboardSnapshotResult{
 		Data:      DashboardData{},
 		Settings:  m.settings,
 		RawConfig: m.config,

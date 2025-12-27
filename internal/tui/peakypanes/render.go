@@ -8,8 +8,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/cellbuf"
-	"github.com/regenrek/peakypanes/internal/layout"
-	"github.com/regenrek/peakypanes/internal/tmuxstream"
 	"github.com/regenrek/peakypanes/internal/tui/icons"
 	"github.com/regenrek/peakypanes/internal/tui/theme"
 )
@@ -157,7 +155,7 @@ func (m Model) viewDashboardGrid(width, height int) string {
 	}
 	selectedProject := m.dashboardSelectedProject(columns)
 	previewLines := dashboardPreviewLines(m.settings)
-	return renderDashboardColumnsWithRenderer(columns, width, height, selectedProject, m.selection, previewLines, m.renderDashboardPaneTileWithMux)
+	return renderDashboardColumnsWithRenderer(columns, width, height, selectedProject, m.selection, previewLines, m.renderDashboardPaneTileLive)
 }
 
 func (m Model) viewSidebar(width, height int) string {
@@ -286,7 +284,7 @@ func (m Model) viewPreview(width, height int) string {
 		gridHeight = 1
 	}
 	gridWidth := width
-	grid := renderPanePreviewWithRenderer(panes, gridWidth, gridHeight, m.settings.PreviewMode, m.settings.PreviewCompact, m.selection.Pane, m.renderPaneTileWithMux)
+	grid := renderPanePreviewWithRenderer(panes, gridWidth, gridHeight, m.settings.PreviewMode, m.settings.PreviewCompact, m.selection.Pane, m.renderPaneTileLive)
 	lines = append(lines, grid)
 
 	return padLines(strings.Join(lines, "\n"), width, height)
@@ -365,7 +363,7 @@ func (m Model) viewFooter(width int) string {
 		paneLabel = "project"
 	}
 	modeHint := ""
-	if m.isNativeMode() {
+	if m.supportsTerminalFocus() {
 		label := "terminal"
 		if m.terminalFocus {
 			label = "terminal on"
@@ -414,7 +412,7 @@ func (m Model) viewQuickReply(width int) string {
 	m.quickReplyInput.Width = inputWidth
 
 	hintText := "enter send • esc clear"
-	if m.isNativeMode() {
+	if m.supportsTerminalFocus() {
 		toggle := keyLabel(m.keys.terminalFocus)
 		if m.terminalFocus {
 			hintText = fmt.Sprintf("%s quick reply", toggle)
@@ -748,29 +746,19 @@ func (m Model) viewHelp() string {
 	left.WriteString("\nSession\n")
 	left.WriteString("  enter Attach/start session (when reply empty)\n")
 	left.WriteString(fmt.Sprintf("  %s New session (pick layout)\n", keyLabel(m.keys.newSession)))
-	left.WriteString(fmt.Sprintf("  %s Open in new terminal window\n", keyLabel(m.keys.openTerminal)))
 	left.WriteString(fmt.Sprintf("  %s Kill session\n", keyLabel(m.keys.kill)))
 	left.WriteString("\nPane\n")
-	if m.isNativeMode() {
-		left.WriteString("  type  Quick reply (terminal focus off)\n")
-		left.WriteString("  enter Send quick reply\n")
-		left.WriteString("  esc   Clear quick reply\n")
-		left.WriteString(fmt.Sprintf("  %s Toggle terminal focus\n", keyLabel(m.keys.terminalFocus)))
-		left.WriteString(fmt.Sprintf("  %s Scrollback mode (native panes)\n", keyLabel(m.keys.scrollback)))
-		left.WriteString(fmt.Sprintf("  %s Copy mode (native panes)\n", keyLabel(m.keys.copyMode)))
-		left.WriteString("  type  Send input to focused pane\n")
-	} else {
-		left.WriteString("  type  Quick reply is always active\n")
-		left.WriteString("  enter Send quick reply\n")
-		left.WriteString("  esc   Clear quick reply\n")
-	}
-	left.WriteString(fmt.Sprintf("  %s Peek pane in new terminal\n", keyLabel(m.keys.peekPane)))
+	left.WriteString("  type  Quick reply (terminal focus off)\n")
+	left.WriteString("  enter Send quick reply\n")
+	left.WriteString("  esc   Clear quick reply\n")
+	left.WriteString(fmt.Sprintf("  %s Toggle terminal focus (Peaky Panes sessions)\n", keyLabel(m.keys.terminalFocus)))
+	left.WriteString(fmt.Sprintf("  %s Scrollback mode (Peaky Panes sessions)\n", keyLabel(m.keys.scrollback)))
+	left.WriteString(fmt.Sprintf("  %s Copy mode (Peaky Panes sessions)\n", keyLabel(m.keys.copyMode)))
+	left.WriteString("  type  Send input to focused pane\n")
 
 	var right strings.Builder
 	right.WriteString("Window\n")
 	right.WriteString(fmt.Sprintf("  %s Toggle window list\n", keyLabel(m.keys.toggleWindows)))
-	right.WriteString("\nTmux\n")
-	right.WriteString("  prefix+g Open dashboard popup\n")
 	right.WriteString("\nOther\n")
 	right.WriteString(fmt.Sprintf("  %s Refresh\n", keyLabel(m.keys.refresh)))
 	right.WriteString(fmt.Sprintf("  %s Edit config\n", keyLabel(m.keys.editConfig)))
@@ -1287,7 +1275,7 @@ func renderDashboardPaneTile(pane DashboardPane, width, height, previewLines int
 	return style.Render(strings.Join(lines, "\n"))
 }
 
-func (m Model) renderDashboardPaneTileWithMux(pane DashboardPane, width, height, previewLines int, selected bool, iconSet icons.IconSet, iconSize icons.Size) string {
+func (m Model) renderDashboardPaneTileLive(pane DashboardPane, width, height, previewLines int, selected bool, iconSet icons.IconSet, iconSize icons.Size) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
@@ -1352,25 +1340,13 @@ func (m Model) renderDashboardPaneTileWithMux(pane DashboardPane, width, height,
 	lines := []string{header, detailLine}
 	if availablePreview > 0 {
 		var live string
-		switch pane.Pane.Multiplexer {
-		case layout.MultiplexerNative:
-			if m.native != nil {
-				if win := m.native.Window(pane.Pane.ID); win != nil {
-					_ = win.Resize(contentWidth, availablePreview)
-					if selected && m.terminalFocus {
-						live = win.ViewLipgloss(true)
-					} else {
-						live = win.ViewANSI()
-					}
-				}
-			}
-		case layout.MultiplexerTmux:
-			if m.tmuxStreams != nil {
-				if view, ok := m.tmuxStreams.View(pane.Pane.ID, tmuxstream.ViewOptions{
-					Height:     availablePreview,
-					ShowCursor: selected,
-				}); ok {
-					live = view
+		if m.native != nil {
+			if win := m.native.Window(pane.Pane.ID); win != nil {
+				_ = win.Resize(contentWidth, availablePreview)
+				if selected && m.terminalFocus {
+					live = win.ViewLipgloss(true)
+				} else {
+					live = win.ViewANSI()
 				}
 			}
 		}
@@ -1379,7 +1355,13 @@ func (m Model) renderDashboardPaneTileWithMux(pane DashboardPane, width, height,
 			live = padLines(live, contentWidth, availablePreview)
 			lines = append(lines, strings.Split(live, "\n")...)
 		} else {
-			preview := tailLines(pane.Pane.Preview, availablePreview)
+			preview := pane.Pane.Preview
+			if len(preview) == 0 {
+				if summary := paneSummaryLine(pane.Pane, 0); summary != "" {
+					preview = []string{summary}
+				}
+			}
+			preview = tailLines(preview, availablePreview)
 			for len(preview) < availablePreview {
 				preview = append(preview, "")
 			}
@@ -1466,7 +1448,7 @@ func renderPaneTile(pane PaneItem, width, height int, compact bool, target bool,
 	return style.Render(content)
 }
 
-func (m Model) renderPaneTileWithMux(pane PaneItem, width, height int, compact bool, target bool, borders tileBorders) string {
+func (m Model) renderPaneTileLive(pane PaneItem, width, height int, compact bool, target bool, borders tileBorders) string {
 	title := pane.Title
 	if target {
 		title = "TARGET " + title
@@ -1512,25 +1494,13 @@ func (m Model) renderPaneTileWithMux(pane PaneItem, width, height int, compact b
 	}
 	if maxPreview > 0 {
 		var live string
-		switch pane.Multiplexer {
-		case layout.MultiplexerNative:
-			if m.native != nil {
-				if win := m.native.Window(pane.ID); win != nil {
-					_ = win.Resize(contentWidth, maxPreview)
-					if target && m.terminalFocus {
-						live = win.ViewLipgloss(true)
-					} else {
-						live = win.ViewANSI()
-					}
-				}
-			}
-		case layout.MultiplexerTmux:
-			if m.tmuxStreams != nil {
-				if view, ok := m.tmuxStreams.View(pane.ID, tmuxstream.ViewOptions{
-					Height:     maxPreview,
-					ShowCursor: target,
-				}); ok {
-					live = view
+		if m.native != nil {
+			if win := m.native.Window(pane.ID); win != nil {
+				_ = win.Resize(contentWidth, maxPreview)
+				if target && m.terminalFocus {
+					live = win.ViewLipgloss(true)
+				} else {
+					live = win.ViewANSI()
 				}
 			}
 		}
@@ -1540,6 +1510,11 @@ func (m Model) renderPaneTileWithMux(pane PaneItem, width, height int, compact b
 			lines = append(lines, strings.Split(live, "\n")...)
 		} else {
 			previewSource := pane.Preview
+			if len(previewSource) == 0 {
+				if summary := paneSummaryLine(pane, 0); summary != "" {
+					previewSource = []string{summary}
+				}
+			}
 			if compact {
 				previewSource = compactPreviewLines(previewSource)
 			}

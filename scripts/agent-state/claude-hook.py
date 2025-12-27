@@ -70,7 +70,7 @@ def map_event_to_state(event: str, payload: dict) -> str:
 
 
 def main() -> int:
-    pane_id = os.environ.get("TMUX_PANE", "").strip()
+    pane_id = os.environ.get("PEAKYPANES_PANE_ID", "").strip()
     if not pane_id:
         return 0
     try:

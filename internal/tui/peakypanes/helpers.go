@@ -40,7 +40,7 @@ func shortenPath(p string) string {
 	return p
 }
 
-func validateTmuxName(name string) error {
+func validateSessionName(name string) error {
 	if strings.TrimSpace(name) == "" {
 		return fmt.Errorf("Name cannot be empty")
 	}
@@ -50,14 +50,6 @@ func validateTmuxName(name string) error {
 		}
 	}
 	return nil
-}
-
-func selfExecutable() string {
-	exe, err := os.Executable()
-	if err != nil || strings.TrimSpace(exe) == "" {
-		return "peakypanes"
-	}
-	return exe
 }
 
 func validateProjectPath(path string) error {

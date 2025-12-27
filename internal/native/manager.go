@@ -39,12 +39,14 @@ type SessionSpec struct {
 
 // Manager owns native sessions and panes.
 type Manager struct {
-	mu       sync.RWMutex
-	sessions map[string]*Session
-	panes    map[string]*Pane
-	events   chan PaneEvent
-	nextID   atomic.Uint64
-	closed   atomic.Bool
+	mu           sync.RWMutex
+	eventsMu     sync.Mutex
+	sessions     map[string]*Session
+	panes        map[string]*Pane
+	events       chan PaneEvent
+	eventsClosed bool
+	nextID       atomic.Uint64
+	closed       atomic.Bool
 }
 
 // Session is a native session container.
@@ -108,7 +110,6 @@ func (m *Manager) Close() {
 		return
 	}
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	for _, session := range m.sessions {
 		for _, window := range session.Windows {
 			for _, pane := range window.Panes {
@@ -118,9 +119,16 @@ func (m *Manager) Close() {
 			}
 		}
 	}
-	close(m.events)
 	m.sessions = nil
 	m.panes = nil
+	m.mu.Unlock()
+
+	m.eventsMu.Lock()
+	if !m.eventsClosed {
+		m.eventsClosed = true
+		close(m.events)
+	}
+	m.eventsMu.Unlock()
 }
 
 // Session returns a snapshot pointer for a session name.
@@ -995,6 +1003,9 @@ func (m *Manager) forwardUpdates(pane *Pane) {
 }
 
 func (m *Manager) markActive(id string) {
+	if m == nil || m.closed.Load() {
+		return
+	}
 	m.mu.Lock()
 	pane := m.panes[id]
 	if pane != nil {
@@ -1005,6 +1016,14 @@ func (m *Manager) markActive(id string) {
 }
 
 func (m *Manager) notify(id string) {
+	if m == nil || m.closed.Load() {
+		return
+	}
+	m.eventsMu.Lock()
+	defer m.eventsMu.Unlock()
+	if m.eventsClosed {
+		return
+	}
 	select {
 	case m.events <- PaneEvent{PaneID: id}:
 	default:

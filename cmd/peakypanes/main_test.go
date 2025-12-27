@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"io"
 	"os"
 	"path/filepath"
@@ -10,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/tui/peakypanes"
 )
 
 func TestExtractRepoName(t *testing.T) {
@@ -22,18 +22,6 @@ func TestExtractRepoName(t *testing.T) {
 		if got := extractRepoName(input); got != want {
 			t.Fatalf("extractRepoName(%q) = %q", input, got)
 		}
-	}
-}
-
-func TestGridSplitPercent(t *testing.T) {
-	if gridSplitPercent(1) != 0 {
-		t.Fatalf("gridSplitPercent(1) expected 0")
-	}
-	if gridSplitPercent(2) != 50 {
-		t.Fatalf("gridSplitPercent(2) expected 50")
-	}
-	if gridSplitPercent(3) == 0 {
-		t.Fatalf("gridSplitPercent(3) expected > 0")
 	}
 }
 
@@ -53,55 +41,12 @@ func TestResolveGridCommandsAndTitles(t *testing.T) {
 	}
 }
 
-func TestExpandUserPath(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	if got := expandUserPath("~"); got != home {
-		t.Fatalf("expandUserPath(~) = %q", got)
-	}
-	if got := expandUserPath("~/projects"); got != filepath.Join(home, "projects") {
-		t.Fatalf("expandUserPath(~/projects) = %q", got)
-	}
-}
-
 func TestSanitizeSessionName(t *testing.T) {
 	if got := layout.SanitizeSessionName(" My Project "); got != "my-project" {
 		t.Fatalf("SanitizeSessionName() = %q", got)
 	}
 	if got := layout.SanitizeSessionName(""); got != "session" {
 		t.Fatalf("SanitizeSessionName(empty) = %q", got)
-	}
-}
-
-func TestInsideTmux(t *testing.T) {
-	origTTY := currentTTYFn
-	origHas := hasClientOnTTYFn
-	defer func() {
-		currentTTYFn = origTTY
-		hasClientOnTTYFn = origHas
-	}()
-	currentTTYFn = func() string { return "/dev/ttys001" }
-
-	t.Setenv("TMUX", "")
-	t.Setenv("TMUX_PANE", "")
-	if insideTmux() {
-		t.Fatalf("insideTmux() should be false")
-	}
-	t.Setenv("TMUX", "/tmp/tmux")
-	t.Setenv("TMUX_PANE", "%1")
-	hasClientOnTTYFn = func(ctx context.Context, tty string) (bool, error) { return true, nil }
-	if !insideTmux() {
-		t.Fatalf("insideTmux() should be true")
-	}
-	hasClientOnTTYFn = func(ctx context.Context, tty string) (bool, error) { return false, nil }
-	if insideTmux() {
-		t.Fatalf("insideTmux() should be false when no client matches")
-	}
-}
-
-func TestCurrentDir(t *testing.T) {
-	if dir := currentDir(); strings.TrimSpace(dir) == "" {
-		t.Fatalf("currentDir() empty")
 	}
 }
 
@@ -116,95 +61,59 @@ func TestRunLayoutsHelp(t *testing.T) {
 
 func TestRunDashboardCommandHelp(t *testing.T) {
 	origRunMenu := runMenuFn
-	origPopup := runDashboardPopupFn
-	origHosted := runDashboardHostedFn
 	defer func() {
 		runMenuFn = origRunMenu
-		runDashboardPopupFn = origPopup
-		runDashboardHostedFn = origHosted
 	}()
 
-	var called bool
-	runMenuFn = func() { called = true }
-	runDashboardPopupFn = func(_ []string) { called = true }
-	runDashboardHostedFn = func(_ string) { called = true }
+	called := false
+	runMenuFn = func(_ *peakypanes.AutoStartSpec) { called = true }
 
 	out := captureStdout(func() {
 		runDashboardCommand([]string{"--help"})
 	})
 	if called {
-		t.Fatalf("runDashboardCommand(--help) should not invoke handlers")
+		t.Fatalf("runDashboardCommand(--help) should not invoke runMenu")
 	}
 	if !strings.Contains(out, "Open the Peaky Panes dashboard UI") {
 		t.Fatalf("runDashboardCommand(--help) output = %q", out)
 	}
 }
 
-func TestRunDashboardCommandPopup(t *testing.T) {
+func TestRunDashboardCommandRunsMenu(t *testing.T) {
 	origRunMenu := runMenuFn
-	origPopup := runDashboardPopupFn
-	origHosted := runDashboardHostedFn
 	defer func() {
 		runMenuFn = origRunMenu
-		runDashboardPopupFn = origPopup
-		runDashboardHostedFn = origHosted
 	}()
 
-	var called string
-	runMenuFn = func() { called = "menu" }
-	runDashboardPopupFn = func(_ []string) { called = "popup" }
-	runDashboardHostedFn = func(_ string) { called = "hosted" }
+	called := false
+	runMenuFn = func(spec *peakypanes.AutoStartSpec) {
+		called = true
+		if spec != nil {
+			t.Fatalf("runDashboardCommand should not pass autoStart")
+		}
+	}
 
-	runDashboardCommand([]string{"--popup"})
-	if called != "popup" {
-		t.Fatalf("runDashboardCommand(--popup) called %q", called)
+	runDashboardCommand(nil)
+	if !called {
+		t.Fatalf("runDashboardCommand should invoke runMenu")
 	}
 }
 
-func TestRunDashboardCommandHostedSession(t *testing.T) {
+func TestRunStartAutoStartSpec(t *testing.T) {
 	origRunMenu := runMenuFn
-	origPopup := runDashboardPopupFn
-	origHosted := runDashboardHostedFn
 	defer func() {
 		runMenuFn = origRunMenu
-		runDashboardPopupFn = origPopup
-		runDashboardHostedFn = origHosted
 	}()
 
-	var session string
-	runMenuFn = func() {}
-	runDashboardPopupFn = func(_ []string) {}
-	runDashboardHostedFn = func(name string) { session = name }
+	var got *peakypanes.AutoStartSpec
+	runMenuFn = func(spec *peakypanes.AutoStartSpec) { got = spec }
 
-	runDashboardCommand([]string{"--tmux-session", "--session", "my-dash"})
-	if session != "my-dash" {
-		t.Fatalf("runDashboardCommand(--tmux-session) session = %q", session)
+	runStart([]string{"--layout", "dev-3", "--session", "sess", "--path", "/tmp"})
+	if got == nil {
+		t.Fatalf("runStart should pass autoStart spec")
 	}
-}
-
-func TestRunDashboardCommandConflict(t *testing.T) {
-	origFatal := fatalFn
-	origRunMenu := runMenuFn
-	origPopup := runDashboardPopupFn
-	origHosted := runDashboardHostedFn
-	defer func() {
-		fatalFn = origFatal
-		runMenuFn = origRunMenu
-		runDashboardPopupFn = origPopup
-		runDashboardHostedFn = origHosted
-	}()
-
-	var got string
-	fatalFn = func(format string, args ...interface{}) {
-		got = format
-	}
-	runMenuFn = func() {}
-	runDashboardPopupFn = func(_ []string) {}
-	runDashboardHostedFn = func(_ string) {}
-
-	runDashboardCommand([]string{"--popup", "--tmux-session"})
-	if !strings.Contains(got, "choose either --popup or --tmux-session") {
-		t.Fatalf("fatalFn message = %q", got)
+	if got.Layout != "dev-3" || got.Session != "sess" || got.Path != "/tmp" || !got.Focus {
+		t.Fatalf("autoStart = %#v", got)
 	}
 }
 
@@ -242,20 +151,9 @@ func TestParseInitArgs(t *testing.T) {
 	}
 }
 
-func TestParseKillArgs(t *testing.T) {
-	opts := parseKillArgs([]string{"--help"})
-	if !opts.showHelp {
-		t.Fatalf("parseKillArgs(--help) should set showHelp")
-	}
-	opts = parseKillArgs([]string{"myapp"})
-	if opts.session != "myapp" {
-		t.Fatalf("parseKillArgs(session) = %q", opts.session)
-	}
-}
-
 func TestParseStartArgs(t *testing.T) {
-	opts := parseStartArgs([]string{"--layout", "dev-3", "--session", "sess", "--path", "/tmp", "--detach"})
-	if opts.layoutName != "dev-3" || opts.session != "sess" || opts.path != "/tmp" || !opts.detach {
+	opts := parseStartArgs([]string{"--layout", "dev-3", "--session", "sess", "--path", "/tmp"})
+	if opts.layoutName != "dev-3" || opts.session != "sess" || opts.path != "/tmp" {
 		t.Fatalf("parseStartArgs() = %#v", opts)
 	}
 	opts = parseStartArgs([]string{"fullstack"})

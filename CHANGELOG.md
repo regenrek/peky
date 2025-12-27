@@ -7,19 +7,19 @@ This format is based on Keep a Changelog.
 
 ### Added
 - Native multiplexer manager with PTY/VT panes and full-screen TUI support.
-- Live pane rendering in the dashboard and project views (native + tmux streaming).
+- Live pane rendering in the dashboard and project views for native sessions.
 - Terminal focus toggle for native panes (default `ctrl+\`, configurable).
 - Project config change detection to refresh selection without reopening projects.
 - Pane management actions: add pane (split), move pane to new window, swap panes, and close pane with a running-process confirmation.
 - Session-only jump keys (`alt+w` / `alt+s`) alongside the flat session/window navigation.
 - Native pane scrollback and copy mode (selection + yank) with configurable key bindings.
 - Scrollback reflow on resize for native panes.
-- Smoke/integration coverage for native scrollback/copy, VT alt-screen + reflow, tmux send/capture, and key TUI state transitions.
+- Smoke/integration coverage for native scrollback/copy, VT alt-screen + reflow, and key TUI state transitions.
 
 ### Changed
-- Multiplexer resolution order is now project-local → project entry → global → native default.
-- Tmux previews capture ANSI output for richer fallback rendering.
-- Dashboard selection syncs live streams on navigation.
+- Native-only sessions; tmux UI integration and commands are removed.
+- Layouts now use native split/grid definitions only (no tmux layout options or bind keys).
+- Removed the `peakypanes pipe` streaming helper and tmux streaming layer.
 - Project view navigation: `ctrl+w` / `ctrl+s` now cycles sessions and windows in a single vertical list.
 - Add pane now uses a lightweight direction prompt instead of a list picker.
 - Window rendering now supports scrollback viewports and copy-mode highlights for native panes.
@@ -28,8 +28,8 @@ This format is based on Keep a Changelog.
 ### Fixed
 - Space key now passes correctly in native terminal focus.
 - Command palette and project picker filters now reset on open/selection.
-- Tmux move-pane now uses the correct break-pane source flag.
 - Scrollback view stays anchored when new output arrives while scrolled up.
+- Native manager no longer panics on shutdown when pane updates arrive after close.
 
 ## 0.0.4 - 2025-12-25
 
