@@ -19,6 +19,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/charmbracelet/x/ansi"
 	xpty "github.com/charmbracelet/x/xpty"
 	"github.com/regenrek/peakypanes/internal/vt"
 )
@@ -33,6 +34,7 @@ type vtEmulator interface {
 	Render() string
 	CellAt(x, y int) *uv.Cell
 	CursorPosition() uv.Position
+	SendMouse(m uv.MouseEvent)
 	SetCallbacks(vt.Callbacks)
 	Height() int
 	Width() int
@@ -85,6 +87,8 @@ type Window struct {
 
 	exitStatus    atomic.Int64
 	cursorVisible atomic.Bool
+	altScreen     atomic.Bool
+	mouseMode     atomic.Uint32
 
 	writeMu sync.Mutex // serialize PTY writes from UI thread
 
@@ -194,6 +198,16 @@ func NewWindow(opts Options) (*Window, error) {
 		Title: func(title string) {
 			w.title.Store(title)
 			w.markDirty()
+		},
+		AltScreen: func(active bool) {
+			w.altScreen.Store(active)
+			w.markDirty()
+		},
+		EnableMode: func(mode ansi.Mode) {
+			w.updateMouseMode(mode, true)
+		},
+		DisableMode: func(mode ansi.Mode) {
+			w.updateMouseMode(mode, false)
 		},
 	})
 

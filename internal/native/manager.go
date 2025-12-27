@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/kballard/go-shellquote"
 
@@ -642,6 +643,26 @@ func (m *Manager) SendInput(id string, input []byte) error {
 		return err
 	}
 	m.markActive(id)
+	return nil
+}
+
+// SendMouse forwards a mouse event to a pane and updates activity timestamp.
+func (m *Manager) SendMouse(id string, event uv.MouseEvent) error {
+	if m == nil {
+		return errors.New("native: manager is nil")
+	}
+	m.mu.RLock()
+	pane := m.panes[id]
+	m.mu.RUnlock()
+	if pane == nil || pane.window == nil {
+		return fmt.Errorf("native: pane %q not found", id)
+	}
+	if event == nil {
+		return nil
+	}
+	if pane.window.SendMouse(event) {
+		m.markActive(id)
+	}
 	return nil
 }
 

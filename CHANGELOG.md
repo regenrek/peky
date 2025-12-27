@@ -9,6 +9,7 @@ This format is based on Keep a Changelog.
 - Native multiplexer manager with PTY/VT panes and full-screen TUI support.
 - Live pane rendering in the dashboard and project views for native sessions.
 - Terminal focus toggle for native panes (default `ctrl+\`, configurable).
+- Native mouse support in the dashboard: single-click selects panes, double-click toggles terminal focus, ESC exits focus, and motion forwarding is throttled to avoid CPU spikes.
 - Project config change detection to refresh selection without reopening projects.
 - Pane management actions: add pane (split), move pane to new window, swap panes, and close pane with a running-process confirmation.
 - Session-only jump keys (`alt+w` / `alt+s`) alongside the flat session/window navigation.

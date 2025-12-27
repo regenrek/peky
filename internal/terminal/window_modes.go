@@ -56,12 +56,16 @@ func (w *Window) IsAltScreen() bool {
 	if w == nil {
 		return false
 	}
+	if w.altScreen.Load() {
+		return true
+	}
 	w.termMu.Lock()
-	defer w.termMu.Unlock()
-	if w.term == nil {
+	term := w.term
+	w.termMu.Unlock()
+	if term == nil {
 		return false
 	}
-	return w.term.IsAltScreen()
+	return term.IsAltScreen()
 }
 
 func (w *Window) onScrollbackGrew(delta int) {
