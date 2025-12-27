@@ -84,6 +84,45 @@ func TestAttachSessionAndSwitchClient(t *testing.T) {
 	runner.assertDone()
 }
 
+func TestBreakPane(t *testing.T) {
+	runner := &fakeRunner{t: t, specs: []cmdSpec{{
+		name: "tmux",
+		args: []string{"break-pane", "-s", "%1", "-d", "-n", "moved"},
+		exit: 0,
+	}}}
+	client := &Client{bin: "tmux", run: runner.run}
+	if err := client.BreakPane(context.Background(), "%1", "moved", true); err != nil {
+		t.Fatalf("BreakPane() error: %v", err)
+	}
+	runner.assertDone()
+}
+
+func TestSwapPane(t *testing.T) {
+	runner := &fakeRunner{t: t, specs: []cmdSpec{{
+		name: "tmux",
+		args: []string{"swap-pane", "-s", "%1", "-t", "%2"},
+		exit: 0,
+	}}}
+	client := &Client{bin: "tmux", run: runner.run}
+	if err := client.SwapPane(context.Background(), "%1", "%2"); err != nil {
+		t.Fatalf("SwapPane() error: %v", err)
+	}
+	runner.assertDone()
+}
+
+func TestKillPane(t *testing.T) {
+	runner := &fakeRunner{t: t, specs: []cmdSpec{{
+		name: "tmux",
+		args: []string{"kill-pane", "-t", "%1"},
+		exit: 0,
+	}}}
+	client := &Client{bin: "tmux", run: runner.run}
+	if err := client.KillPane(context.Background(), "%1"); err != nil {
+		t.Fatalf("KillPane() error: %v", err)
+	}
+	runner.assertDone()
+}
+
 func TestIsNestedTmuxErr(t *testing.T) {
 	if isNestedTmuxErr(nil) {
 		t.Fatalf("isNestedTmuxErr(nil) should be false")

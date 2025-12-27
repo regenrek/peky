@@ -2,6 +2,7 @@ package peakypanes
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -19,7 +20,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/native"
 	"github.com/regenrek/peakypanes/internal/tmuxctl"
+	"github.com/regenrek/peakypanes/internal/tmuxstream"
 	"github.com/regenrek/peakypanes/internal/tui/theme"
 )
 
@@ -33,35 +36,40 @@ var (
 // Key bindings
 
 type dashboardKeyMap struct {
-	projectLeft    key.Binding
-	projectRight   key.Binding
-	sessionUp      key.Binding
-	sessionDown    key.Binding
-	paneNext       key.Binding
-	panePrev       key.Binding
-	attach         key.Binding
-	newSession     key.Binding
-	openTerminal   key.Binding
-	peekPane       key.Binding
-	toggleWindows  key.Binding
-	openProject    key.Binding
-	commandPalette key.Binding
-	refresh        key.Binding
-	editConfig     key.Binding
-	kill           key.Binding
-	closeProject   key.Binding
-	help           key.Binding
-	quit           key.Binding
-	filter         key.Binding
+	projectLeft     key.Binding
+	projectRight    key.Binding
+	sessionUp       key.Binding
+	sessionDown     key.Binding
+	sessionOnlyUp   key.Binding
+	sessionOnlyDown key.Binding
+	paneNext        key.Binding
+	panePrev        key.Binding
+	attach          key.Binding
+	newSession      key.Binding
+	openTerminal    key.Binding
+	peekPane        key.Binding
+	terminalFocus   key.Binding
+	toggleWindows   key.Binding
+	openProject     key.Binding
+	commandPalette  key.Binding
+	refresh         key.Binding
+	editConfig      key.Binding
+	kill            key.Binding
+	closeProject    key.Binding
+	help            key.Binding
+	quit            key.Binding
+	filter          key.Binding
 }
 
 // Model implements tea.Model for peakypanes TUI.
 type Model struct {
-	tmux   *tmuxctl.Client
-	state  ViewState
-	tab    DashboardTab
-	width  int
-	height int
+	tmux        *tmuxctl.Client
+	native      *native.Manager
+	tmuxStreams *tmuxstream.Manager
+	state       ViewState
+	tab         DashboardTab
+	width       int
+	height      int
 
 	configPath string
 	insideTmux bool
@@ -71,6 +79,7 @@ type Model struct {
 	selectionByProject map[string]selectionState
 	settings           DashboardConfig
 	config             *layout.Config
+	projectConfigState map[string]projectConfigState
 
 	keys *dashboardKeyMap
 
@@ -83,12 +92,19 @@ type Model struct {
 
 	projectPicker  list.Model
 	layoutPicker   list.Model
+	paneSwapPicker list.Model
 	commandPalette list.Model
 	gitProjects    []GitProject
 
-	confirmSession string
-	confirmProject string
-	confirmClose   string
+	confirmSession     string
+	confirmProject     string
+	confirmClose       string
+	confirmPaneSession string
+	confirmPaneWindow  string
+	confirmPaneIndex   string
+	confirmPaneID      string
+	confirmPaneTitle   string
+	confirmPaneRunning bool
 
 	renameInput       textinput.Model
 	renameSession     string
@@ -97,6 +113,11 @@ type Model struct {
 	renamePane        string
 	renamePaneIndex   string
 
+	swapSourceSession string
+	swapSourceWindow  string
+	swapSourcePane    string
+	swapSourcePaneID  string
+
 	projectRootInput textinput.Model
 
 	toast      toastMessage
@@ -104,14 +125,14 @@ type Model struct {
 
 	selectionVersion uint64
 	refreshInFlight  int
+
+	muxMode       string
+	terminalFocus bool
+	streamInitErr error
 }
 
 // NewModel creates a new peakypanes TUI model.
 func NewModel(client *tmuxctl.Client) (*Model, error) {
-	if client == nil {
-		return nil, fmt.Errorf("tmux client is required")
-	}
-
 	configPath, err := layout.DefaultConfigPath()
 	if err != nil {
 		return nil, err
@@ -119,12 +140,21 @@ func NewModel(client *tmuxctl.Client) (*Model, error) {
 
 	m := &Model{
 		tmux:               client,
+		native:             native.NewManager(),
 		state:              StateDashboard,
 		tab:                TabDashboard,
 		insideTmux:         detectInsideTmux(client),
 		configPath:         configPath,
 		expandedSessions:   make(map[string]bool),
 		selectionByProject: make(map[string]selectionState),
+	}
+	if client != nil {
+		streams, err := tmuxstream.New(client, tmuxstream.Options{})
+		if err != nil {
+			m.streamInitErr = err
+		} else {
+			m.tmuxStreams = streams
+		}
 	}
 
 	m.filterInput = textinput.New()
@@ -150,6 +180,7 @@ func NewModel(client *tmuxctl.Client) (*Model, error) {
 
 	m.setupProjectPicker()
 	m.setupLayoutPicker()
+	m.setupPaneSwapPicker()
 	m.setupCommandPalette()
 
 	configExists := true
@@ -172,6 +203,7 @@ func NewModel(client *tmuxctl.Client) (*Model, error) {
 		return nil, err
 	}
 	m.keys = keys
+	m.muxMode = layout.ResolveMultiplexer(nil, nil, cfg)
 
 	if needsProjectRootSetup(cfg, configExists) {
 		m.openProjectRootSetup()
@@ -182,13 +214,46 @@ func NewModel(client *tmuxctl.Client) (*Model, error) {
 
 func (m *Model) Init() tea.Cmd {
 	m.beginRefresh()
-	return tea.Batch(m.refreshCmd(), tickCmd(m.settings.RefreshInterval))
+	cmds := []tea.Cmd{m.refreshCmd(), tickCmd(m.settings.RefreshInterval)}
+	if m.native != nil {
+		cmds = append(cmds, waitNativePaneUpdate(m.native))
+	}
+	if m.tmuxStreams != nil {
+		cmds = append(cmds, waitTmuxStreamUpdate(m.tmuxStreams))
+	}
+	return tea.Batch(cmds...)
 }
 
 func tickCmd(interval time.Duration) tea.Cmd {
 	return tea.Tick(interval, func(time.Time) tea.Msg {
 		return refreshTickMsg{}
 	})
+}
+
+func waitNativePaneUpdate(manager *native.Manager) tea.Cmd {
+	if manager == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		event, ok := <-manager.Events()
+		if !ok {
+			return nil
+		}
+		return nativePaneUpdatedMsg{PaneID: event.PaneID}
+	}
+}
+
+func waitTmuxStreamUpdate(manager *tmuxstream.Manager) tea.Cmd {
+	if manager == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		_, ok := <-manager.Events()
+		if !ok {
+			return nil
+		}
+		return tmuxStreamUpdatedMsg{}
+	}
 }
 
 func (m *Model) selectionRefreshCmd() tea.Cmd {
@@ -248,6 +313,7 @@ func (m Model) refreshCmd() tea.Cmd {
 			Version:   version,
 			Config:    cfg,
 			Settings:  settings,
+			Native:    m.native,
 		})
 		result.Keymap = keys
 		result.Warning = warning
@@ -262,9 +328,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.projectPicker.SetSize(msg.Width-4, msg.Height-4)
 		m.setLayoutPickerSize()
+		m.setPaneSwapPickerSize()
 		m.setCommandPaletteSize()
 		m.setQuickReplySize()
-		return m, nil
+		return m, m.syncTmuxStreamsCmd()
 	case refreshTickMsg:
 		if m.refreshInFlight == 0 {
 			m.beginRefresh()
@@ -298,7 +365,36 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.applySelection(resolveSelection(m.data.Projects, m.selection))
 		}
 		m.syncExpandedSessions()
+		if m.refreshSelectionForProjectConfig() {
+			m.setToast("Project config changed: selection refreshed", toastInfo)
+		}
+		if m.streamInitErr != nil {
+			m.setToast("tmux stream disabled: "+m.streamInitErr.Error(), toastWarning)
+			m.streamInitErr = nil
+		}
+		return m, m.syncTmuxStreamsCmd()
+	case nativePaneUpdatedMsg:
+		return m, waitNativePaneUpdate(m.native)
+	case tmuxStreamUpdatedMsg:
+		return m, waitTmuxStreamUpdate(m.tmuxStreams)
+	case tmuxStreamSyncMsg:
+		if msg.Err != nil {
+			m.setToast("tmux stream: "+msg.Err.Error(), toastWarning)
+		}
 		return m, nil
+	case nativeSessionStartedMsg:
+		if msg.Err != nil {
+			m.setToast("Start failed: "+msg.Err.Error(), toastError)
+			return m, nil
+		}
+		if msg.Name != "" {
+			m.setToast("Session started: "+msg.Name, toastSuccess)
+		} else {
+			m.setToast("Session started", toastSuccess)
+		}
+		m.setTerminalFocus(msg.Focus)
+		m.beginRefresh()
+		return m, m.refreshCmd()
 	case SuccessMsg:
 		m.setToast(msg.Message, toastSuccess)
 		return m, nil
@@ -312,7 +408,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.setToast(msg.Error(), toastError)
 		return m, nil
 	case exitAfterAttachMsg:
-		return m, tea.Quit
+		return m, tea.Sequence(m.shutdownCmd(), tea.Quit)
 	case tea.KeyMsg:
 		switch m.state {
 		case StateDashboard:
@@ -321,10 +417,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateProjectPicker(msg)
 		case StateLayoutPicker:
 			return m.updateLayoutPicker(msg)
+		case StatePaneSplitPicker:
+			return m.updatePaneSplitPicker(msg)
+		case StatePaneSwapPicker:
+			return m.updatePaneSwapPicker(msg)
 		case StateConfirmKill:
 			return m.updateConfirmKill(msg)
 		case StateConfirmCloseProject:
 			return m.updateConfirmCloseProject(msg)
+		case StateConfirmClosePane:
+			return m.updateConfirmClosePane(msg)
 		case StateHelp:
 			return m.updateHelp(msg)
 		case StateCommandPalette:
@@ -345,6 +447,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.state == StateLayoutPicker {
 		var cmd tea.Cmd
 		m.layoutPicker, cmd = m.layoutPicker.Update(msg)
+		return m, cmd
+	}
+	if m.state == StatePaneSwapPicker {
+		var cmd tea.Cmd
+		m.paneSwapPicker, cmd = m.paneSwapPicker.Update(msg)
 		return m, cmd
 	}
 	if m.state == StateCommandPalette {
@@ -382,7 +489,25 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
+	if m.isNativeMode() && m.terminalFocus {
+		if key.Matches(msg, m.keys.terminalFocus) {
+			m.setTerminalFocus(false)
+			return m, nil
+		}
+		if err := m.sendNativeKey(msg); err != nil {
+			m.setToast("Input failed: "+err.Error(), toastError)
+		}
+		return m, nil
+	}
+
 	switch {
+	case key.Matches(msg, m.keys.terminalFocus):
+		if !m.isNativeMode() {
+			m.setToast("Terminal focus is only available in native mode", toastInfo)
+			return m, nil
+		}
+		m.setTerminalFocus(!m.terminalFocus)
+		return m, nil
 	case key.Matches(msg, m.keys.projectLeft):
 		m.selectTab(-1)
 		return m, m.selectionRefreshCmd()
@@ -392,27 +517,41 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.sessionUp):
 		if m.tab == TabDashboard {
 			m.selectDashboardPane(-1)
-			return m, nil
+			return m, m.syncTmuxStreamsCmd()
 		}
-		m.selectSession(-1)
+		m.selectSessionOrWindow(-1)
 		return m, m.selectionRefreshCmd()
 	case key.Matches(msg, m.keys.sessionDown):
 		if m.tab == TabDashboard {
 			m.selectDashboardPane(1)
-			return m, nil
+			return m, m.syncTmuxStreamsCmd()
+		}
+		m.selectSessionOrWindow(1)
+		return m, m.selectionRefreshCmd()
+	case key.Matches(msg, m.keys.sessionOnlyUp):
+		if m.tab == TabDashboard {
+			m.selectDashboardPane(-1)
+			return m, m.syncTmuxStreamsCmd()
+		}
+		m.selectSession(-1)
+		return m, m.selectionRefreshCmd()
+	case key.Matches(msg, m.keys.sessionOnlyDown):
+		if m.tab == TabDashboard {
+			m.selectDashboardPane(1)
+			return m, m.syncTmuxStreamsCmd()
 		}
 		m.selectSession(1)
 		return m, m.selectionRefreshCmd()
 	case key.Matches(msg, m.keys.paneNext):
 		if m.tab == TabDashboard {
 			m.selectDashboardProject(1)
-			return m, nil
+			return m, m.syncTmuxStreamsCmd()
 		}
 		return m, m.cyclePane(1)
 	case key.Matches(msg, m.keys.panePrev):
 		if m.tab == TabDashboard {
 			m.selectDashboardProject(-1)
-			return m, nil
+			return m, m.syncTmuxStreamsCmd()
 		}
 		return m, m.cyclePane(-1)
 	case key.Matches(msg, m.keys.newSession):
@@ -450,7 +589,7 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.setState(StateHelp)
 		return m, nil
 	case key.Matches(msg, m.keys.quit):
-		return m, tea.Quit
+		return m, tea.Sequence(m.shutdownCmd(), tea.Quit)
 	}
 
 	return m.updateQuickReply(msg)
@@ -458,6 +597,7 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *Model) openProjectPicker() {
 	m.scanGitProjects()
+	m.projectPicker.ResetFilter()
 	m.projectPicker.SetItems(m.gitProjectsToItems())
 	m.setState(StateProjectPicker)
 }
@@ -471,6 +611,7 @@ func (m *Model) updateProjectPicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "esc":
+		m.projectPicker.ResetFilter()
 		m.setState(StateDashboard)
 		return m, nil
 	case "enter":
@@ -483,6 +624,7 @@ func (m *Model) updateProjectPicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if _, err := m.unhideProjectInConfig(layout.HiddenProjectConfig{Name: projectName, Path: item.Path}); err != nil {
 				m.setToast("Unhide failed: "+err.Error(), toastError)
 			}
+			m.projectPicker.ResetFilter()
 			m.setState(StateDashboard)
 			m.rememberSelection(m.selection)
 			m.selection.Project = projectName
@@ -493,9 +635,11 @@ func (m *Model) updateProjectPicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.rememberSelection(m.selection)
 			return m, tea.Batch(m.startSessionAtPathDetached(item.Path), m.selectionRefreshCmd())
 		}
+		m.projectPicker.ResetFilter()
 		m.setState(StateDashboard)
 		return m, nil
 	case "q":
+		m.projectPicker.ResetFilter()
 		m.setState(StateDashboard)
 		return m, nil
 	}
@@ -536,15 +680,18 @@ func (m *Model) updateLayoutPicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *Model) updateCommandPalette(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q":
+		m.commandPalette.ResetFilter()
 		m.setState(StateDashboard)
 		return m, nil
 	case "enter":
 		if item, ok := m.commandPalette.SelectedItem().(CommandItem); ok {
+			m.commandPalette.ResetFilter()
 			m.setState(StateDashboard)
 			if item.Run != nil {
 				return m, item.Run(m)
 			}
 		}
+		m.commandPalette.ResetFilter()
 		m.setState(StateDashboard)
 		return m, nil
 	}
@@ -643,8 +790,28 @@ func (m *Model) openNewWindow() tea.Cmd {
 		}
 	}
 
+	if m.isNativeSession(session) {
+		if m.native == nil {
+			m.setToast("New window failed: native manager unavailable", toastError)
+			return nil
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if _, err := m.native.NewWindow(ctx, session.Name, "", startDir); err != nil {
+			m.setToast("New window failed: "+err.Error(), toastError)
+			return nil
+		}
+		m.selectionVersion++
+		m.setToast("Opened new window", toastSuccess)
+		return m.refreshCmd()
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
+	if m.tmux == nil {
+		m.setToast("New window failed: tmux unavailable", toastError)
+		return nil
+	}
 	if err := m.tmux.NewWindow(ctx, session.Name, "", startDir, ""); err != nil {
 		m.setToast("New window failed: "+err.Error(), toastError)
 		return nil
@@ -683,6 +850,260 @@ func (m *Model) openRenamePane() {
 	m.setState(StateRenamePane)
 }
 
+func (m *Model) addPaneSplit(vertical bool) tea.Cmd {
+	session := m.selectedSession()
+	if session == nil {
+		m.setToast("No session selected", toastWarning)
+		return nil
+	}
+	if session.Status == StatusStopped {
+		m.setToast("Session not running", toastWarning)
+		return nil
+	}
+	if m.selectedPane() == nil {
+		m.setToast("No pane selected", toastWarning)
+		return nil
+	}
+	startDir := strings.TrimSpace(session.Path)
+	if startDir == "" {
+		if project := m.selectedProject(); project != nil {
+			startDir = strings.TrimSpace(project.Path)
+		}
+	}
+	if startDir != "" {
+		if err := validateProjectPath(startDir); err != nil {
+			m.setToast("Start failed: "+err.Error(), toastError)
+			return nil
+		}
+	}
+
+	if m.isNativeSession(session) {
+		if m.native == nil {
+			m.setToast("Add pane failed: native manager unavailable", toastError)
+			return nil
+		}
+		window := selectedWindow(session, m.selection.Window)
+		if window == nil {
+			m.setToast("No window selected", toastWarning)
+			return nil
+		}
+		pane := m.selectedPane()
+		if pane == nil {
+			m.setToast("No pane selected", toastWarning)
+			return nil
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		newIndex, err := m.native.SplitPane(ctx, session.Name, window.Index, pane.Index, vertical, 0)
+		if err != nil {
+			m.setToast("Add pane failed: "+err.Error(), toastError)
+			return nil
+		}
+		m.selection.Session = session.Name
+		m.selection.Window = window.Index
+		m.selection.Pane = newIndex
+		m.selectionVersion++
+		m.rememberSelection(m.selection)
+		m.setToast("Added pane", toastSuccess)
+		return m.refreshCmd()
+	}
+
+	if m.tmux == nil {
+		m.setToast("Add pane failed: tmux unavailable", toastError)
+		return nil
+	}
+	target, _, ok := m.selectedPaneTarget()
+	if !ok {
+		m.setToast("No pane selected", toastWarning)
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	paneID, err := m.tmux.SplitWindowWithCmd(ctx, target, startDir, vertical, 0, "", true)
+	if err != nil {
+		m.setToast("Add pane failed: "+err.Error(), toastError)
+		return nil
+	}
+	if strings.TrimSpace(paneID) != "" {
+		if loc, locErr := m.tmux.PaneLocation(ctx, paneID); locErr == nil {
+			m.selection.Session = loc.Session
+			m.selection.Window = loc.Window
+			m.selection.Pane = loc.Pane
+		} else {
+			m.selection.Pane = ""
+		}
+	} else {
+		m.selection.Pane = ""
+	}
+	m.selectionVersion++
+	m.rememberSelection(m.selection)
+	m.setToast("Added pane", toastSuccess)
+	return m.refreshCmd()
+}
+
+func (m *Model) movePaneToNewWindow() tea.Cmd {
+	session := m.selectedSession()
+	if session == nil {
+		m.setToast("No session selected", toastWarning)
+		return nil
+	}
+	if session.Status == StatusStopped {
+		m.setToast("Session not running", toastWarning)
+		return nil
+	}
+	pane := m.selectedPane()
+	if pane == nil {
+		m.setToast("No pane selected", toastWarning)
+		return nil
+	}
+	window := selectedWindow(session, m.selection.Window)
+	if window == nil {
+		m.setToast("No window selected", toastWarning)
+		return nil
+	}
+
+	if m.isNativeSession(session) {
+		if m.native == nil {
+			m.setToast("Move pane failed: native manager unavailable", toastError)
+			return nil
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		newWindow, newPane, err := m.native.MovePaneToNewWindow(ctx, session.Name, window.Index, pane.Index)
+		if err != nil {
+			m.setToast("Move pane failed: "+err.Error(), toastError)
+			return nil
+		}
+		m.selection.Session = session.Name
+		m.selection.Window = newWindow
+		m.selection.Pane = newPane
+		m.selectionVersion++
+		m.rememberSelection(m.selection)
+		m.setToast("Moved pane to new window", toastSuccess)
+		return m.refreshCmd()
+	}
+
+	if m.tmux == nil {
+		m.setToast("Move pane failed: tmux unavailable", toastError)
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	targetID := strings.TrimSpace(pane.ID)
+	if targetID == "" {
+		target, _, ok := m.selectedPaneTarget()
+		if !ok {
+			m.setToast("No pane selected", toastWarning)
+			return nil
+		}
+		if err := m.tmux.BreakPane(ctx, target, "", true); err != nil {
+			m.setToast("Move pane failed: "+err.Error(), toastError)
+			return nil
+		}
+		m.selection.Window = ""
+		m.selection.Pane = ""
+		m.selectionVersion++
+		m.rememberSelection(m.selection)
+		m.setToast("Moved pane to new window", toastSuccess)
+		return m.refreshCmd()
+	}
+	if err := m.tmux.BreakPane(ctx, targetID, "", true); err != nil {
+		m.setToast("Move pane failed: "+err.Error(), toastError)
+		return nil
+	}
+	if loc, err := m.tmux.PaneLocation(ctx, targetID); err == nil {
+		m.selection.Session = loc.Session
+		m.selection.Window = loc.Window
+		m.selection.Pane = loc.Pane
+	} else {
+		m.selection.Window = ""
+		m.selection.Pane = ""
+	}
+	m.selectionVersion++
+	m.rememberSelection(m.selection)
+	m.setToast("Moved pane to new window", toastSuccess)
+	return m.refreshCmd()
+}
+
+func (m *Model) swapPaneWith(target PaneSwapChoice) tea.Cmd {
+	session := m.selectedSession()
+	if session == nil {
+		m.setToast("No session selected", toastWarning)
+		return nil
+	}
+	if session.Status == StatusStopped {
+		m.setToast("Session not running", toastWarning)
+		return nil
+	}
+	sourceSession := strings.TrimSpace(m.swapSourceSession)
+	sourceWindow := strings.TrimSpace(m.swapSourceWindow)
+	sourcePane := strings.TrimSpace(m.swapSourcePane)
+	if sourceSession == "" {
+		sourceSession = session.Name
+	}
+	if sourceWindow == "" {
+		sourceWindow = strings.TrimSpace(m.selection.Window)
+	}
+	if sourcePane == "" {
+		if pane := m.selectedPane(); pane != nil {
+			sourcePane = pane.Index
+		}
+	}
+	if sourceSession == "" || sourceWindow == "" || sourcePane == "" {
+		m.setToast("No pane selected", toastWarning)
+		return nil
+	}
+
+	if m.isNativeSession(session) {
+		if m.native == nil {
+			m.setToast("Swap pane failed: native manager unavailable", toastError)
+			return nil
+		}
+		if err := m.native.SwapPanes(session.Name, sourceWindow, sourcePane, target.PaneIndex); err != nil {
+			m.setToast("Swap pane failed: "+err.Error(), toastError)
+			return nil
+		}
+		m.selection.Session = session.Name
+		m.selection.Window = sourceWindow
+		m.selection.Pane = target.PaneIndex
+		m.selectionVersion++
+		m.rememberSelection(m.selection)
+		m.setToast("Swapped panes", toastSuccess)
+		return m.refreshCmd()
+	}
+
+	if m.tmux == nil {
+		m.setToast("Swap pane failed: tmux unavailable", toastError)
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	sourceTarget := fmt.Sprintf("%s:%s.%s", sourceSession, sourceWindow, sourcePane)
+	destTarget := fmt.Sprintf("%s:%s.%s", sourceSession, target.WindowIndex, target.PaneIndex)
+	if err := m.tmux.SwapPane(ctx, sourceTarget, destTarget); err != nil {
+		m.setToast("Swap pane failed: "+err.Error(), toastError)
+		return nil
+	}
+	sourceID := strings.TrimSpace(m.swapSourcePaneID)
+	if sourceID != "" {
+		if loc, err := m.tmux.PaneLocation(ctx, sourceID); err == nil {
+			m.selection.Session = loc.Session
+			m.selection.Window = loc.Window
+			m.selection.Pane = loc.Pane
+		} else {
+			m.selection.Window = sourceWindow
+			m.selection.Pane = target.PaneIndex
+		}
+	} else {
+		m.selection.Window = sourceWindow
+		m.selection.Pane = target.PaneIndex
+	}
+	m.selectionVersion++
+	m.rememberSelection(m.selection)
+	m.setToast("Swapped panes", toastSuccess)
+	return m.refreshCmd()
+}
+
 func (m *Model) updateRename(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
@@ -703,9 +1124,8 @@ func (m *Model) applyRename() tea.Cmd {
 		m.setToast(err.Error(), toastWarning)
 		return nil
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
+	session := m.selectedSession()
+	useNative := m.isNativeSession(session)
 
 	switch m.state {
 	case StateRenameSession:
@@ -714,9 +1134,22 @@ func (m *Model) applyRename() tea.Cmd {
 			m.setToast("Session name unchanged", toastInfo)
 			return nil
 		}
-		if err := m.tmux.RenameSession(ctx, m.renameSession, newName); err != nil {
-			m.setToast("Rename failed: "+err.Error(), toastError)
-			return nil
+		if useNative {
+			if m.native == nil {
+				m.setToast("Rename failed: native manager unavailable", toastError)
+				return nil
+			}
+			if err := m.native.RenameSession(m.renameSession, newName); err != nil {
+				m.setToast("Rename failed: "+err.Error(), toastError)
+				return nil
+			}
+		} else {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			if err := m.tmux.RenameSession(ctx, m.renameSession, newName); err != nil {
+				m.setToast("Rename failed: "+err.Error(), toastError)
+				return nil
+			}
 		}
 		if m.selection.Session == m.renameSession {
 			m.selection.Session = newName
@@ -736,9 +1169,22 @@ func (m *Model) applyRename() tea.Cmd {
 			m.setToast("Window name unchanged", toastInfo)
 			return nil
 		}
-		if err := m.tmux.RenameWindow(ctx, m.renameSession, m.renameWindowIndex, newName); err != nil {
-			m.setToast("Rename failed: "+err.Error(), toastError)
-			return nil
+		if useNative {
+			if m.native == nil {
+				m.setToast("Rename failed: native manager unavailable", toastError)
+				return nil
+			}
+			if err := m.native.RenameWindow(m.renameSession, m.renameWindowIndex, newName); err != nil {
+				m.setToast("Rename failed: "+err.Error(), toastError)
+				return nil
+			}
+		} else {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			if err := m.tmux.RenameWindow(ctx, m.renameSession, m.renameWindowIndex, newName); err != nil {
+				m.setToast("Rename failed: "+err.Error(), toastError)
+				return nil
+			}
 		}
 		m.selectionVersion++
 		m.rememberSelection(m.selection)
@@ -767,10 +1213,23 @@ func (m *Model) applyRename() tea.Cmd {
 			m.setToast("No pane selected", toastWarning)
 			return nil
 		}
-		target := fmt.Sprintf("%s:%s.%s", session, window, pane)
-		if err := m.tmux.SelectPane(ctx, target, newName); err != nil {
-			m.setToast("Rename failed: "+err.Error(), toastError)
-			return nil
+		if useNative {
+			if m.native == nil {
+				m.setToast("Rename failed: native manager unavailable", toastError)
+				return nil
+			}
+			if err := m.native.RenamePane(session, window, pane, newName); err != nil {
+				m.setToast("Rename failed: "+err.Error(), toastError)
+				return nil
+			}
+		} else {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			target := fmt.Sprintf("%s:%s.%s", session, window, pane)
+			if err := m.tmux.SelectPane(ctx, target, newName); err != nil {
+				m.setToast("Rename failed: "+err.Error(), toastError)
+				return nil
+			}
 		}
 		m.selectionVersion++
 		m.setState(StateDashboard)
@@ -1027,12 +1486,31 @@ func (m *Model) updateConfirmKill(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "y", "enter":
 		if m.confirmSession != "" {
-			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			defer cancel()
-			if err := m.tmux.KillSession(ctx, m.confirmSession); err != nil {
-				m.setToast("Kill failed: "+err.Error(), toastError)
-				m.setState(StateDashboard)
-				return m, nil
+			session := findSessionByName(m.data.Projects, m.confirmSession)
+			if session != nil && m.isNativeSession(session) {
+				if m.native == nil {
+					m.setToast("Kill failed: native manager unavailable", toastError)
+					m.setState(StateDashboard)
+					return m, nil
+				}
+				if err := m.native.KillSession(m.confirmSession); err != nil {
+					m.setToast("Kill failed: "+err.Error(), toastError)
+					m.setState(StateDashboard)
+					return m, nil
+				}
+			} else {
+				if m.tmux == nil {
+					m.setToast("Kill failed: tmux unavailable", toastError)
+					m.setState(StateDashboard)
+					return m, nil
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+				defer cancel()
+				if err := m.tmux.KillSession(ctx, m.confirmSession); err != nil {
+					m.setToast("Kill failed: "+err.Error(), toastError)
+					m.setState(StateDashboard)
+					return m, nil
+				}
 			}
 			m.setToast("Killed session "+m.confirmSession, toastSuccess)
 			m.confirmSession = ""
@@ -1073,10 +1551,16 @@ func (m *Model) View() string {
 		return appStyle.Render(m.projectPicker.View())
 	case StateLayoutPicker:
 		return m.viewLayoutPicker()
+	case StatePaneSplitPicker:
+		return m.viewPaneSplitPicker()
+	case StatePaneSwapPicker:
+		return m.viewPaneSwapPicker()
 	case StateConfirmKill:
 		return m.viewConfirmKill()
 	case StateConfirmCloseProject:
 		return m.viewConfirmCloseProject()
+	case StateConfirmClosePane:
+		return m.viewConfirmClosePane()
 	case StateHelp:
 		return m.viewHelp()
 	case StateCommandPalette:
@@ -1112,11 +1596,69 @@ func detectInsideTmux(client *tmuxctl.Client) bool {
 
 func (m *Model) setState(state ViewState) {
 	m.state = state
-	if state == StateDashboard && !m.filterActive {
+	if state == StateDashboard && !m.filterActive && !m.terminalFocus {
 		m.quickReplyInput.Focus()
 	} else {
 		m.quickReplyInput.Blur()
 	}
+}
+
+func (m *Model) resolveMuxMode() string {
+	if session := m.selectedSession(); session != nil {
+		if resolved := layout.NormalizeMultiplexer(session.Multiplexer); resolved != "" {
+			return resolved
+		}
+	}
+	return layout.ResolveMultiplexer(nil, nil, m.config)
+}
+
+func (m *Model) setMuxMode(mode string) {
+	resolved := layout.NormalizeMultiplexer(mode)
+	if resolved == "" {
+		resolved = layout.MultiplexerNative
+	}
+	if m.muxMode == resolved {
+		return
+	}
+	m.muxMode = resolved
+	if resolved != layout.MultiplexerNative {
+		m.setTerminalFocus(false)
+	}
+}
+
+func (m *Model) setTerminalFocus(enabled bool) {
+	if m.terminalFocus == enabled {
+		return
+	}
+	m.terminalFocus = enabled
+	if enabled {
+		m.quickReplyInput.Blur()
+		return
+	}
+	if m.state == StateDashboard && !m.filterActive {
+		m.quickReplyInput.Focus()
+	}
+}
+
+func (m *Model) isNativeMode() bool {
+	return m.muxMode == layout.MultiplexerNative
+}
+
+func (m *Model) defaultMultiplexer() string {
+	return layout.ResolveMultiplexer(nil, nil, m.config)
+}
+
+func (m *Model) sessionMultiplexer(session *SessionItem) string {
+	if session != nil {
+		if resolved := layout.NormalizeMultiplexer(session.Multiplexer); resolved != "" {
+			return resolved
+		}
+	}
+	return m.defaultMultiplexer()
+}
+
+func (m *Model) isNativeSession(session *SessionItem) bool {
+	return m.sessionMultiplexer(session) == layout.MultiplexerNative
 }
 
 func (m *Model) syncExpandedSessions() {
@@ -1167,6 +1709,45 @@ func (m *Model) selectionForProject(project string) selectionState {
 func (m *Model) applySelection(sel selectionState) {
 	m.selection = sel
 	m.rememberSelection(sel)
+	m.setMuxMode(m.resolveMuxMode())
+}
+
+func (m *Model) refreshSelectionForProjectConfig() bool {
+	project := m.selectedProject()
+	if project == nil {
+		return false
+	}
+	projectPath := normalizeProjectPath(project.Path)
+	if projectPath == "" {
+		return false
+	}
+	if m.projectConfigState == nil {
+		m.projectConfigState = make(map[string]projectConfigState)
+	}
+	state := projectConfigStateForPath(projectPath)
+	prev, ok := m.projectConfigState[projectPath]
+	m.projectConfigState[projectPath] = state
+	if !ok || prev.equal(state) {
+		return false
+	}
+
+	delete(m.selectionByProject, project.Name)
+	desired := selectionState{Project: project.Name}
+	var resolved selectionState
+	if m.tab == TabDashboard {
+		resolved = resolveDashboardSelection(m.data.Projects, desired)
+		if resolved.Project == "" {
+			resolved = resolveSelection(m.data.Projects, desired)
+		}
+	} else {
+		resolved = resolveSelection(m.data.Projects, desired)
+	}
+	if resolved.Project == "" {
+		return false
+	}
+	m.applySelection(resolved)
+	m.selectionVersion++
+	return true
 }
 
 func (m *Model) selectTab(delta int) {
@@ -1177,20 +1758,11 @@ func (m *Model) selectTab(delta int) {
 	}
 
 	if m.tab == TabDashboard {
-		if delta < 0 {
-			m.tab = TabProject
-			projectName := m.data.Projects[len(m.data.Projects)-1].Name
-			resolved := resolveSelection(m.data.Projects, m.selectionForProject(projectName))
-			m.applySelection(resolved)
-			m.selectionVersion++
-			return
-		}
-		idx, ok := m.projectIndexFor(m.selection.Project)
-		if !ok {
-			idx = 0
-		}
 		m.tab = TabProject
-		projectName := m.data.Projects[idx].Name
+		projectName := m.data.Projects[0].Name
+		if delta < 0 {
+			projectName = m.data.Projects[len(m.data.Projects)-1].Name
+		}
 		resolved := resolveSelection(m.data.Projects, m.selectionForProject(projectName))
 		m.applySelection(resolved)
 		m.selectionVersion++
@@ -1226,7 +1798,63 @@ func (m *Model) selectSession(delta int) {
 	idx := sessionIndex(filtered, m.selection.Session)
 	idx = wrapIndex(idx+delta, len(filtered))
 	m.selection.Session = filtered[idx].Name
-	m.selection.Window = filtered[idx].ActiveWindow
+	m.selection.Window = ""
+	m.selection.Pane = ""
+	m.selectionVersion++
+	m.rememberSelection(m.selection)
+}
+
+func (m *Model) selectSessionOrWindow(delta int) {
+	project := m.selectedProject()
+	if project == nil || len(project.Sessions) == 0 {
+		return
+	}
+	filtered := m.filteredSessions(project.Sessions)
+	if len(filtered) == 0 {
+		return
+	}
+	type entry struct {
+		session string
+		window  string
+	}
+	items := make([]entry, 0, len(filtered))
+	for _, session := range filtered {
+		items = append(items, entry{session: session.Name})
+		if !m.sessionExpanded(session.Name) {
+			continue
+		}
+		for _, window := range session.Windows {
+			items = append(items, entry{session: session.Name, window: window.Index})
+		}
+	}
+	if len(items) == 0 {
+		return
+	}
+
+	current := -1
+	if m.selection.Window != "" {
+		for i, item := range items {
+			if item.session == m.selection.Session && item.window == m.selection.Window {
+				current = i
+				break
+			}
+		}
+	}
+	if current == -1 {
+		for i, item := range items {
+			if item.session == m.selection.Session && item.window == "" {
+				current = i
+				break
+			}
+		}
+	}
+	if current == -1 {
+		current = 0
+	}
+
+	next := items[wrapIndex(current+delta, len(items))]
+	m.selection.Session = next.session
+	m.selection.Window = next.window
 	m.selection.Pane = ""
 	m.selectionVersion++
 	m.rememberSelection(m.selection)
@@ -1383,6 +2011,17 @@ func (m *Model) attachOrStart() tea.Cmd {
 	if session == nil {
 		return nil
 	}
+	if m.isNativeSession(session) {
+		if session.Status == StatusStopped {
+			if session.Path == "" {
+				m.setToast("No project path configured", toastWarning)
+				return nil
+			}
+			return m.startProjectNative(*session, true)
+		}
+		m.setTerminalFocus(true)
+		return nil
+	}
 	switch m.settings.AttachBehavior {
 	case AttachBehaviorNewTerminal:
 		return m.openSessionInNewTerminal(true)
@@ -1406,6 +2045,12 @@ func (m *Model) openSessionInNewTerminal(forceNew bool) tea.Cmd {
 	session := m.selectedSession()
 	if session == nil {
 		return nil
+	}
+	if m.isNativeSession(session) {
+		return NewWarningCmd("Open in new terminal is only supported for tmux sessions")
+	}
+	if m.tmux == nil {
+		return NewWarningCmd("tmux unavailable")
 	}
 	tmuxEnv := ""
 	if m.insideTmux {
@@ -1475,6 +2120,9 @@ func (m *Model) openPaneInNewTerminal() tea.Cmd {
 		m.setToast("No session selected", toastWarning)
 		return nil
 	}
+	if m.isNativeSession(session) {
+		return NewWarningCmd("Peek pane is only supported for tmux sessions")
+	}
 	if session.Status == StatusStopped {
 		m.setToast("Session not running", toastWarning)
 		return nil
@@ -1488,6 +2136,9 @@ func (m *Model) openPaneInNewTerminal() tea.Cmd {
 	if pane == nil {
 		m.setToast("No pane selected", toastWarning)
 		return nil
+	}
+	if m.tmux == nil {
+		return NewWarningCmd("tmux unavailable")
 	}
 	target, label, ok := m.selectedPaneTarget()
 	if !ok {
@@ -1623,8 +2274,23 @@ func (m *Model) startNewSessionWithLayout(layoutName string) tea.Cmd {
 	}
 	base = layout.SanitizeSessionName(base)
 
+	if m.defaultMultiplexer() == layout.MultiplexerNative {
+		if m.native == nil {
+			m.setToast("Start failed: native manager unavailable", toastError)
+			return nil
+		}
+		existing := m.native.SessionNames()
+		newName := nextSessionName(base, existing)
+		focus := m.settings.AttachBehavior != AttachBehaviorDetached
+		return m.startSessionNative(newName, path, layoutName, focus)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
+	if m.tmux == nil {
+		m.setToast("Start failed: tmux unavailable", toastError)
+		return nil
+	}
 	existing, err := m.tmux.ListSessions(ctx)
 	if err != nil {
 		m.setToast("Start failed: "+err.Error(), toastError)
@@ -1636,6 +2302,10 @@ func (m *Model) startNewSessionWithLayout(layoutName string) tea.Cmd {
 }
 
 func (m *Model) attachSession(session SessionItem) tea.Cmd {
+	if m.isNativeSession(&session) {
+		m.setTerminalFocus(true)
+		return nil
+	}
 	target := session.Name
 	if m.selection.Window != "" {
 		target = fmt.Sprintf("%s:%s", session.Name, m.selection.Window)
@@ -1644,6 +2314,9 @@ func (m *Model) attachSession(session SessionItem) tea.Cmd {
 		return tea.ExecProcess(exec.Command("tmux", "switch-client", "-t", target), func(error) tea.Msg { return nil })
 	}
 	return func() tea.Msg {
+		if m.tmux == nil {
+			return ErrorMsg{Err: errors.New("tmux unavailable"), Context: "attach"}
+		}
 		tmuxPath := m.tmux.Binary()
 		if tmuxPath == "" {
 			tmuxPath = "tmux"
@@ -1674,7 +2347,30 @@ func withoutTmuxEnv(env []string) []string {
 	return out
 }
 
+func (m *Model) shutdownCmd() tea.Cmd {
+	streams := m.tmuxStreams
+	nativeMgr := m.native
+	return func() tea.Msg {
+		if streams == nil {
+			if nativeMgr != nil {
+				nativeMgr.Close()
+			}
+			return nil
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = streams.Close(ctx)
+		if nativeMgr != nil {
+			nativeMgr.Close()
+		}
+		return nil
+	}
+}
+
 func (m *Model) startProject(session SessionItem) tea.Cmd {
+	if m.isNativeSession(&session) {
+		return m.startProjectNative(session, m.settings.AttachBehavior != AttachBehaviorDetached)
+	}
 	args := []string{"start", "--session", session.Name}
 	if session.Path != "" {
 		if err := validateProjectPath(session.Path); err != nil {
@@ -1695,6 +2391,9 @@ func (m *Model) startProject(session SessionItem) tea.Cmd {
 }
 
 func (m *Model) startProjectDetached(session SessionItem) tea.Cmd {
+	if m.isNativeSession(&session) {
+		return m.startProjectNative(session, false)
+	}
 	args := []string{"start", "--session", session.Name, "--detach"}
 	if session.Path != "" {
 		if err := validateProjectPath(session.Path); err != nil {
@@ -1714,7 +2413,85 @@ func (m *Model) startProjectDetached(session SessionItem) tea.Cmd {
 	})
 }
 
+func (m *Model) startProjectNative(session SessionItem, focus bool) tea.Cmd {
+	path := strings.TrimSpace(session.Path)
+	if path == "" {
+		if project := m.selectedProject(); project != nil {
+			path = strings.TrimSpace(project.Path)
+		}
+	}
+	if path == "" {
+		m.setToast("No project path configured", toastWarning)
+		return nil
+	}
+	if err := validateProjectPath(path); err != nil {
+		m.setToast("Start failed: "+err.Error(), toastError)
+		return nil
+	}
+	return m.startSessionNative(session.Name, path, session.LayoutName, focus)
+}
+
+func (m *Model) startSessionNative(sessionName, path, layoutName string, focus bool) tea.Cmd {
+	return func() tea.Msg {
+		if m.native == nil {
+			return nativeSessionStartedMsg{Err: errors.New("native manager unavailable"), Focus: focus}
+		}
+		loader, err := layout.NewLoader()
+		if err != nil {
+			return nativeSessionStartedMsg{Err: err, Focus: focus}
+		}
+		loader.SetProjectDir(path)
+		if err := loader.LoadAll(); err != nil {
+			return nativeSessionStartedMsg{Err: err, Focus: focus}
+		}
+
+		sessionName = layout.ResolveSessionName(path, sessionName, loader.GetProjectConfig())
+		if strings.TrimSpace(sessionName) == "" {
+			return nativeSessionStartedMsg{Err: errors.New("session name is required"), Focus: focus}
+		}
+
+		var selectedLayout *layout.LayoutConfig
+		if layoutName != "" {
+			selectedLayout, _, err = loader.GetLayout(layoutName)
+			if err != nil {
+				return nativeSessionStartedMsg{Err: err, Focus: focus}
+			}
+		} else if loader.HasProjectConfig() {
+			selectedLayout = loader.GetProjectLayout()
+			if selectedLayout == nil {
+				selectedLayout, _, _ = loader.GetLayout("dev-3")
+			}
+		} else {
+			selectedLayout, _, _ = loader.GetLayout("dev-3")
+		}
+		if selectedLayout == nil {
+			return nativeSessionStartedMsg{Err: errors.New("no layout found"), Focus: focus}
+		}
+
+		projectName := filepath.Base(path)
+		var projectVars map[string]string
+		if loader.GetProjectConfig() != nil {
+			projectVars = loader.GetProjectConfig().Vars
+		}
+		expanded := layout.ExpandLayoutVars(selectedLayout, projectVars, path, projectName)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_, err = m.native.StartSession(ctx, native.SessionSpec{
+			Name:       sessionName,
+			Path:       path,
+			Layout:     expanded,
+			LayoutName: selectedLayout.Name,
+		})
+		return nativeSessionStartedMsg{Name: sessionName, Err: err, Focus: focus}
+	}
+}
+
 func (m *Model) startSessionWithBehavior(sessionName, path, layoutName string) tea.Cmd {
+	if m.defaultMultiplexer() == layout.MultiplexerNative {
+		focus := m.settings.AttachBehavior != AttachBehaviorDetached
+		return m.startSessionNative(sessionName, path, layoutName, focus)
+	}
 	switch m.settings.AttachBehavior {
 	case AttachBehaviorNewTerminal:
 		return m.startSessionInNewTerminal(sessionName, path, layoutName)
@@ -1744,6 +2521,9 @@ func (m *Model) startSessionWithBehavior(sessionName, path, layoutName string) t
 }
 
 func (m *Model) startSessionInNewTerminal(sessionName, path, layoutName string) tea.Cmd {
+	if m.tmux == nil {
+		return NewWarningCmd("tmux unavailable")
+	}
 	args := []string{"start", "--session", sessionName, "--path", path}
 	if strings.TrimSpace(layoutName) != "" {
 		args = append(args, "--layout", layoutName)
@@ -1765,6 +2545,9 @@ func (m *Model) startSessionAtPathDetached(path string) tea.Cmd {
 	if err := validateProjectPath(path); err != nil {
 		m.setToast("Start failed: "+err.Error(), toastError)
 		return nil
+	}
+	if m.defaultMultiplexer() == layout.MultiplexerNative {
+		return m.startSessionNative("", path, "", false)
 	}
 	return tea.ExecProcess(exec.Command(selfExecutable(), "start", "--path", path, "--detach"), func(err error) tea.Msg {
 		if err != nil {
@@ -1803,6 +2586,49 @@ func (m *Model) openCloseProjectConfirm() {
 	m.setState(StateConfirmCloseProject)
 }
 
+func (m *Model) openClosePaneConfirm() tea.Cmd {
+	session := m.selectedSession()
+	if session == nil {
+		m.setToast("No session selected", toastWarning)
+		return nil
+	}
+	if session.Status == StatusStopped {
+		m.setToast("Session not running", toastWarning)
+		return nil
+	}
+	window := selectedWindow(session, m.selection.Window)
+	if window == nil {
+		m.setToast("No window selected", toastWarning)
+		return nil
+	}
+	pane := m.selectedPane()
+	if pane == nil {
+		m.setToast("No pane selected", toastWarning)
+		return nil
+	}
+	running := !pane.Dead
+	if !running {
+		m.setState(StateDashboard)
+		m.setToast("Closing pane...", toastInfo)
+		return m.closePane(session.Name, window.Index, pane.Index, pane.ID)
+	}
+	title := strings.TrimSpace(pane.Title)
+	if title == "" {
+		title = strings.TrimSpace(pane.Command)
+	}
+	if title == "" {
+		title = fmt.Sprintf("pane %s", pane.Index)
+	}
+	m.confirmPaneSession = session.Name
+	m.confirmPaneWindow = window.Index
+	m.confirmPaneIndex = pane.Index
+	m.confirmPaneID = pane.ID
+	m.confirmPaneTitle = title
+	m.confirmPaneRunning = running
+	m.setState(StateConfirmClosePane)
+	return nil
+}
+
 func (m *Model) updateConfirmCloseProject(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "y", "enter":
@@ -1815,6 +2641,27 @@ func (m *Model) updateConfirmCloseProject(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m, nil
+}
+
+func (m *Model) updateConfirmClosePane(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "enter":
+		return m, m.applyClosePane()
+	case "n", "esc":
+		m.resetConfirmPane()
+		m.setState(StateDashboard)
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m *Model) resetConfirmPane() {
+	m.confirmPaneSession = ""
+	m.confirmPaneWindow = ""
+	m.confirmPaneIndex = ""
+	m.confirmPaneID = ""
+	m.confirmPaneTitle = ""
+	m.confirmPaneRunning = false
 }
 
 func (m *Model) applyCloseProject() tea.Cmd {
@@ -1842,6 +2689,81 @@ func (m *Model) applyCloseProject() tea.Cmd {
 	return m.refreshCmd()
 }
 
+func (m *Model) applyClosePane() tea.Cmd {
+	session := strings.TrimSpace(m.confirmPaneSession)
+	window := strings.TrimSpace(m.confirmPaneWindow)
+	pane := strings.TrimSpace(m.confirmPaneIndex)
+	paneID := strings.TrimSpace(m.confirmPaneID)
+	m.resetConfirmPane()
+	m.setState(StateDashboard)
+	if session == "" || window == "" || pane == "" {
+		m.setToast("No pane selected", toastWarning)
+		return nil
+	}
+	return m.closePane(session, window, pane, paneID)
+}
+
+func (m *Model) closePane(sessionName, windowIndex, paneIndex, paneID string) tea.Cmd {
+	sessionName = strings.TrimSpace(sessionName)
+	windowIndex = strings.TrimSpace(windowIndex)
+	paneIndex = strings.TrimSpace(paneIndex)
+	if sessionName == "" || windowIndex == "" || paneIndex == "" {
+		m.setToast("No pane selected", toastWarning)
+		return nil
+	}
+	session := m.selectedSession()
+	if session == nil || session.Name != sessionName {
+		if session = findSessionByName(m.data.Projects, sessionName); session == nil {
+			m.setToast("Session not found", toastWarning)
+			return nil
+		}
+	}
+
+	if m.isNativeSession(session) {
+		if m.native == nil {
+			m.setToast("Close pane failed: native manager unavailable", toastError)
+			return nil
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := m.native.ClosePane(ctx, sessionName, windowIndex, paneIndex); err != nil {
+			m.setToast("Close pane failed: "+err.Error(), toastError)
+			return nil
+		}
+		m.selection.Pane = ""
+		if m.selection.Window == windowIndex {
+			m.selection.Window = ""
+		}
+		m.selectionVersion++
+		m.rememberSelection(m.selection)
+		m.setToast("Closed pane", toastSuccess)
+		return m.refreshCmd()
+	}
+
+	if m.tmux == nil {
+		m.setToast("Close pane failed: tmux unavailable", toastError)
+		return nil
+	}
+	target := strings.TrimSpace(paneID)
+	if target == "" {
+		target = fmt.Sprintf("%s:%s.%s", sessionName, windowIndex, paneIndex)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := m.tmux.KillPane(ctx, target); err != nil {
+		m.setToast("Close pane failed: "+err.Error(), toastError)
+		return nil
+	}
+	m.selection.Pane = ""
+	if m.selection.Window == windowIndex {
+		m.selection.Window = ""
+	}
+	m.selectionVersion++
+	m.rememberSelection(m.selection)
+	m.setToast("Closed pane", toastSuccess)
+	return m.refreshCmd()
+}
+
 func (m *Model) killProjectSessions() tea.Cmd {
 	name := strings.TrimSpace(m.confirmClose)
 	m.confirmClose = ""
@@ -1864,13 +2786,27 @@ func (m *Model) killProjectSessions() tea.Cmd {
 		m.setToast("No running sessions to kill", toastInfo)
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
 	var failed []string
 	for _, s := range running {
+		if m.isNativeSession(&s) {
+			if m.native == nil {
+				failed = append(failed, s.Name)
+				continue
+			}
+			if err := m.native.KillSession(s.Name); err != nil {
+				failed = append(failed, s.Name)
+			}
+			continue
+		}
+		if m.tmux == nil {
+			failed = append(failed, s.Name)
+			continue
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		if err := m.tmux.KillSession(ctx, s.Name); err != nil {
 			failed = append(failed, s.Name)
 		}
+		cancel()
 	}
 	if len(failed) > 0 {
 		m.setToast("Kill failed: "+strings.Join(failed, ", "), toastError)
@@ -2047,6 +2983,172 @@ func (m *Model) setLayoutPickerSize() {
 	m.layoutPicker.SetSize(listW, listH)
 }
 
+// ===== Pane split picker =====
+
+func (m *Model) openPaneSplitPicker() {
+	session := m.selectedSession()
+	if session == nil {
+		m.setToast("No session selected", toastWarning)
+		return
+	}
+	if session.Status == StatusStopped {
+		m.setToast("Session not running", toastWarning)
+		return
+	}
+	if m.selectedPane() == nil {
+		m.setToast("No pane selected", toastWarning)
+		return
+	}
+	m.setState(StatePaneSplitPicker)
+}
+
+func (m *Model) updatePaneSplitPicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "q":
+		m.setState(StateDashboard)
+		return m, nil
+	case "r":
+		m.setState(StateDashboard)
+		return m, m.addPaneSplit(false)
+	case "d":
+		m.setState(StateDashboard)
+		return m, m.addPaneSplit(true)
+	}
+	return m, nil
+}
+
+// ===== Pane swap picker =====
+
+func (m *Model) setupPaneSwapPicker() {
+	delegate := list.NewDefaultDelegate()
+	delegate.Styles.SelectedTitle = delegate.Styles.SelectedTitle.
+		Foreground(theme.TextPrimary).
+		BorderLeftForeground(theme.AccentAlt)
+	delegate.Styles.SelectedDesc = delegate.Styles.SelectedDesc.
+		Foreground(theme.TextSecondary).
+		BorderLeftForeground(theme.AccentAlt)
+
+	l := list.New(nil, delegate, 0, 0)
+	l.Title = "🔁 Swap Pane"
+	l.Styles.Title = theme.TitleAlt
+	l.SetShowStatusBar(true)
+	l.SetFilteringEnabled(true)
+	l.SetStatusBarItemName("pane", "panes")
+	m.paneSwapPicker = l
+}
+
+func (m *Model) openPaneSwapPicker() {
+	session := m.selectedSession()
+	if session == nil {
+		m.setToast("No session selected", toastWarning)
+		return
+	}
+	if session.Status == StatusStopped {
+		m.setToast("Session not running", toastWarning)
+		return
+	}
+	window := selectedWindow(session, m.selection.Window)
+	if window == nil || len(window.Panes) == 0 {
+		m.setToast("No window selected", toastWarning)
+		return
+	}
+	source := m.selectedPane()
+	if source == nil {
+		m.setToast("No pane selected", toastWarning)
+		return
+	}
+	if len(window.Panes) < 2 {
+		m.setToast("Not enough panes to swap", toastInfo)
+		return
+	}
+	var items []list.Item
+	for _, pane := range window.Panes {
+		if pane.Index == source.Index {
+			continue
+		}
+		title := strings.TrimSpace(pane.Title)
+		if title == "" {
+			title = strings.TrimSpace(pane.Command)
+		}
+		if title == "" {
+			title = fmt.Sprintf("pane %s", pane.Index)
+		}
+		label := fmt.Sprintf("pane %s — %s", pane.Index, title)
+		desc := strings.TrimSpace(pane.Command)
+		if desc == "" {
+			desc = "swap target"
+		}
+		items = append(items, PaneSwapChoice{
+			Label:       label,
+			Desc:        desc,
+			WindowIndex: window.Index,
+			PaneIndex:   pane.Index,
+		})
+	}
+	if len(items) == 0 {
+		m.setToast("No pane selected", toastWarning)
+		return
+	}
+	m.swapSourceSession = session.Name
+	m.swapSourceWindow = window.Index
+	m.swapSourcePane = source.Index
+	m.swapSourcePaneID = source.ID
+	m.paneSwapPicker.SetItems(items)
+	m.setPaneSwapPickerSize()
+	m.setState(StatePaneSwapPicker)
+}
+
+func (m *Model) setPaneSwapPickerSize() {
+	if m.width <= 0 || m.height <= 0 {
+		return
+	}
+	hFrame, vFrame := dialogStyle.GetFrameSize()
+	availableW := m.width - 6
+	availableH := m.height - 4
+	if availableW < 30 {
+		availableW = m.width
+	}
+	if availableH < 10 {
+		availableH = m.height
+	}
+	desiredW := clamp(availableW, 46, 100)
+	desiredH := clamp(availableH, 12, 24)
+	listW := desiredW - hFrame
+	listH := desiredH - vFrame
+	if listW < 20 {
+		listW = clamp(m.width-hFrame, 20, m.width)
+	}
+	if listH < 6 {
+		listH = clamp(m.height-vFrame, 6, m.height)
+	}
+	m.paneSwapPicker.SetSize(listW, listH)
+}
+
+func (m *Model) updatePaneSwapPicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.paneSwapPicker.FilterState() == list.Filtering {
+		var cmd tea.Cmd
+		m.paneSwapPicker, cmd = m.paneSwapPicker.Update(msg)
+		return m, cmd
+	}
+
+	switch msg.String() {
+	case "esc", "q":
+		m.setState(StateDashboard)
+		return m, nil
+	case "enter":
+		if item, ok := m.paneSwapPicker.SelectedItem().(PaneSwapChoice); ok {
+			m.setState(StateDashboard)
+			return m, m.swapPaneWith(item)
+		}
+		m.setState(StateDashboard)
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.paneSwapPicker, cmd = m.paneSwapPicker.Update(msg)
+	return m, cmd
+}
+
 // ===== Command palette =====
 
 func (m *Model) setupCommandPalette() {
@@ -2068,6 +3170,7 @@ func (m *Model) setupCommandPalette() {
 
 func (m *Model) openCommandPalette() tea.Cmd {
 	m.setCommandPaletteSize()
+	m.commandPalette.ResetFilter()
 	m.commandPalette.SetFilterState(list.Filtering)
 	cmd := m.commandPalette.SetItems(m.commandPaletteItems())
 	m.setState(StateCommandPalette)
@@ -2159,6 +3262,20 @@ func (m *Model) commandPaletteItems() []list.Item {
 			m.openKillConfirm()
 			return nil
 		}},
+		{Label: "Pane: Add pane", Desc: "Split the selected pane", Run: func(m *Model) tea.Cmd {
+			m.openPaneSplitPicker()
+			return nil
+		}},
+		{Label: "Pane: Move to new window", Desc: "Move the selected pane into a new window", Run: func(m *Model) tea.Cmd {
+			return m.movePaneToNewWindow()
+		}},
+		{Label: "Pane: Swap pane", Desc: "Swap the selected pane with another", Run: func(m *Model) tea.Cmd {
+			m.openPaneSwapPicker()
+			return nil
+		}},
+		{Label: "Pane: Close pane", Desc: "Close the selected pane", Run: func(m *Model) tea.Cmd {
+			return m.openClosePaneConfirm()
+		}},
 		{Label: "Pane: Quick reply", Desc: "Send a short follow-up to the selected pane", Run: func(m *Model) tea.Cmd {
 			return m.openQuickReply()
 		}},
@@ -2233,6 +3350,7 @@ func (m *Model) openQuickReply() tea.Cmd {
 		m.setToast("No pane selected", toastWarning)
 		return nil
 	}
+	m.setTerminalFocus(false)
 	m.quickReplyInput.SetValue("")
 	m.quickReplyInput.Focus()
 	return nil
@@ -2261,17 +3379,56 @@ func (m *Model) updateQuickReply(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m *Model) sendNativeKey(msg tea.KeyMsg) error {
+	if m.native == nil {
+		return errors.New("native manager unavailable")
+	}
+	pane := m.selectedPane()
+	if pane == nil || strings.TrimSpace(pane.ID) == "" {
+		return errors.New("no pane selected")
+	}
+	payload := encodeKeyMsg(msg)
+	if len(payload) == 0 {
+		return nil
+	}
+	return m.native.SendInput(pane.ID, payload)
+}
+
 func (m *Model) sendQuickReply() tea.Cmd {
 	text := strings.TrimSpace(m.quickReplyInput.Value())
 	if text == "" {
 		return NewInfoCmd("Nothing to send")
 	}
 	m.quickReplyInput.SetValue("")
+	pane := m.selectedPane()
+	if pane != nil && pane.Multiplexer == layout.MultiplexerNative {
+		label := strings.TrimSpace(pane.Title)
+		if label == "" {
+			label = fmt.Sprintf("pane %s", pane.Index)
+		}
+		return func() tea.Msg {
+			if m.native == nil {
+				return ErrorMsg{Err: errors.New("native manager unavailable"), Context: "send to pane"}
+			}
+			if err := m.native.SendInput(pane.ID, []byte(text)); err != nil {
+				return ErrorMsg{Err: err, Context: "send to pane"}
+			}
+			if err := m.native.SendInput(pane.ID, []byte{'\r'}); err != nil {
+				return ErrorMsg{Err: err, Context: "send to pane"}
+			}
+			if label != "" {
+				return SuccessMsg{Message: "Sent to " + label}
+			}
+			return SuccessMsg{Message: "Sent"}
+		}
+	}
 	target, label, ok := m.selectedPaneTarget()
 	if !ok {
 		return NewWarningCmd("No pane selected")
 	}
-	pane := m.selectedPane()
+	if m.tmux == nil {
+		return NewWarningCmd("tmux unavailable")
+	}
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -2318,7 +3475,7 @@ func paneLooksLikeCodex(ctx context.Context, pane *PaneItem) bool {
 		return true
 	}
 	for _, line := range pane.Preview {
-		if strings.Contains(strings.ToLower(line), "codex") {
+		if strings.Contains(strings.ToLower(stripANSI(line)), "codex") {
 			return true
 		}
 	}

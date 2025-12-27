@@ -96,26 +96,29 @@ type AgentDetectionConfig struct {
 
 // DashboardKeymapConfig defines dashboard key bindings.
 type DashboardKeymapConfig struct {
-	ProjectLeft    []string `yaml:"project_left,omitempty"`
-	ProjectRight   []string `yaml:"project_right,omitempty"`
-	SessionUp      []string `yaml:"session_up,omitempty"`
-	SessionDown    []string `yaml:"session_down,omitempty"`
-	PaneNext       []string `yaml:"pane_next,omitempty"`
-	PanePrev       []string `yaml:"pane_prev,omitempty"`
-	Attach         []string `yaml:"attach,omitempty"`
-	NewSession     []string `yaml:"new_session,omitempty"`
-	OpenTerminal   []string `yaml:"open_terminal,omitempty"`
-	PeekPane       []string `yaml:"peek_pane,omitempty"`
-	ToggleWindows  []string `yaml:"toggle_windows,omitempty"`
-	OpenProject    []string `yaml:"open_project,omitempty"`
-	CommandPalette []string `yaml:"command_palette,omitempty"`
-	Refresh        []string `yaml:"refresh,omitempty"`
-	EditConfig     []string `yaml:"edit_config,omitempty"`
-	Kill           []string `yaml:"kill,omitempty"`
-	CloseProject   []string `yaml:"close_project,omitempty"`
-	Help           []string `yaml:"help,omitempty"`
-	Quit           []string `yaml:"quit,omitempty"`
-	Filter         []string `yaml:"filter,omitempty"`
+	ProjectLeft     []string `yaml:"project_left,omitempty"`
+	ProjectRight    []string `yaml:"project_right,omitempty"`
+	SessionUp       []string `yaml:"session_up,omitempty"`
+	SessionDown     []string `yaml:"session_down,omitempty"`
+	SessionOnlyUp   []string `yaml:"session_only_up,omitempty"`
+	SessionOnlyDown []string `yaml:"session_only_down,omitempty"`
+	PaneNext        []string `yaml:"pane_next,omitempty"`
+	PanePrev        []string `yaml:"pane_prev,omitempty"`
+	Attach          []string `yaml:"attach,omitempty"`
+	NewSession      []string `yaml:"new_session,omitempty"`
+	OpenTerminal    []string `yaml:"open_terminal,omitempty"`
+	PeekPane        []string `yaml:"peek_pane,omitempty"`
+	TerminalFocus   []string `yaml:"terminal_focus,omitempty"`
+	ToggleWindows   []string `yaml:"toggle_windows,omitempty"`
+	OpenProject     []string `yaml:"open_project,omitempty"`
+	CommandPalette  []string `yaml:"command_palette,omitempty"`
+	Refresh         []string `yaml:"refresh,omitempty"`
+	EditConfig      []string `yaml:"edit_config,omitempty"`
+	Kill            []string `yaml:"kill,omitempty"`
+	CloseProject    []string `yaml:"close_project,omitempty"`
+	Help            []string `yaml:"help,omitempty"`
+	Quit            []string `yaml:"quit,omitempty"`
+	Filter          []string `yaml:"filter,omitempty"`
 }
 
 // HiddenProjectConfig stores a project hidden from the dashboard.

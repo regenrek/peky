@@ -335,6 +335,53 @@ func (c *Client) SplitWindow(ctx context.Context, target, startDir string, verti
 	return nil
 }
 
+// BreakPane moves a pane into a new window.
+func (c *Client) BreakPane(ctx context.Context, source, windowName string, detached bool) error {
+	source = strings.TrimSpace(source)
+	if source == "" {
+		return errors.New("break-pane source cannot be empty")
+	}
+	args := []string{"break-pane", "-s", source}
+	if detached {
+		args = append(args, "-d")
+	}
+	if strings.TrimSpace(windowName) != "" {
+		args = append(args, "-n", windowName)
+	}
+	cmd := c.run(ctx, c.bin, args...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return wrapTmuxErr("break-pane", err, out)
+	}
+	return nil
+}
+
+// SwapPane swaps two panes.
+func (c *Client) SwapPane(ctx context.Context, source, target string) error {
+	if source == "" || target == "" {
+		return errors.New("swap-pane source and target cannot be empty")
+	}
+	args := []string{"swap-pane", "-s", source, "-t", target}
+	cmd := c.run(ctx, c.bin, args...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return wrapTmuxErr("swap-pane", err, out)
+	}
+	return nil
+}
+
+// KillPane closes a pane.
+func (c *Client) KillPane(ctx context.Context, target string) error {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return errors.New("kill-pane target cannot be empty")
+	}
+	args := []string{"kill-pane", "-t", target}
+	cmd := c.run(ctx, c.bin, args...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return wrapTmuxErr("kill-pane", err, out)
+	}
+	return nil
+}
+
 func (c *Client) sessionExists(ctx context.Context, session string) (bool, error) {
 	cmd := c.run(ctx, c.bin, "has-session", "-t", session)
 	out, err := cmd.CombinedOutput()

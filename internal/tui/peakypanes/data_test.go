@@ -294,9 +294,9 @@ func TestBuildDashboardData(t *testing.T) {
 		{name: "tmux", args: []string{"list-panes", "-t", "app:0", "-F", fullFormat}, stdout: paneLine, exit: 0},
 		{name: "tmux", args: []string{"list-panes", "-t", "app:1", "-F", fullFormat}, stdout: paneLine, exit: 0},
 		{name: "tmux", args: []string{"list-panes", "-t", "app:0", "-F", fullFormat}, stdout: paneLine, exit: 0},
-		{name: "tmux", args: []string{"capture-pane", "-p", "-J", "-a", "-t", "app:0.0", "-S", "0", "-E", "-"}, stdout: "done\n", exit: 0},
+		{name: "tmux", args: []string{"capture-pane", "-p", "-J", "-e", "-a", "-t", "app:0.0", "-S", "0", "-E", "-"}, stdout: "done\n", exit: 0},
 		{name: "tmux", args: []string{"list-panes", "-t", "app:0", "-F", fullFormat}, stdout: paneLine, exit: 0},
-		{name: "tmux", args: []string{"capture-pane", "-p", "-J", "-a", "-t", "app:0.0", "-S", "0", "-E", "-"}, stdout: "line1\nline2\n", exit: 0},
+		{name: "tmux", args: []string{"capture-pane", "-p", "-J", "-e", "-a", "-t", "app:0.0", "-S", "0", "-E", "-"}, stdout: "line1\nline2\n", exit: 0},
 	}}
 
 	client, err := tmuxctl.NewClient("tmux")
@@ -331,7 +331,7 @@ func TestBuildDashboardData(t *testing.T) {
 	if len(session.Windows) == 0 || len(session.Windows[0].Panes) == 0 {
 		t.Fatalf("panes not attached: %#v", session.Windows)
 	}
-	if result.Resolved.Session != "app" || result.Resolved.Window != "0" {
+	if result.Resolved.Session != "app" || result.Resolved.Window != "" {
 		t.Fatalf("Resolved = %#v", result.Resolved)
 	}
 

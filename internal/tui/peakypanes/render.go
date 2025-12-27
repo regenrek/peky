@@ -8,6 +8,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/cellbuf"
+	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/tmuxstream"
 	"github.com/regenrek/peakypanes/internal/tui/icons"
 	"github.com/regenrek/peakypanes/internal/tui/theme"
 )
@@ -155,7 +157,7 @@ func (m Model) viewDashboardGrid(width, height int) string {
 	}
 	selectedProject := m.dashboardSelectedProject(columns)
 	previewLines := dashboardPreviewLines(m.settings)
-	return renderDashboardColumns(columns, width, height, selectedProject, m.selection, previewLines)
+	return renderDashboardColumnsWithRenderer(columns, width, height, selectedProject, m.selection, previewLines, m.renderDashboardPaneTileWithMux)
 }
 
 func (m Model) viewSidebar(width, height int) string {
@@ -284,7 +286,7 @@ func (m Model) viewPreview(width, height int) string {
 		gridHeight = 1
 	}
 	gridWidth := width
-	grid := renderPanePreview(panes, gridWidth, gridHeight, m.settings.PreviewMode, m.settings.PreviewCompact, m.selection.Pane)
+	grid := renderPanePreviewWithRenderer(panes, gridWidth, gridHeight, m.settings.PreviewMode, m.settings.PreviewCompact, m.selection.Pane, m.renderPaneTileWithMux)
 	lines = append(lines, grid)
 
 	return padLines(strings.Join(lines, "\n"), width, height)
@@ -356,14 +358,22 @@ func (m Model) viewFooter(width int) string {
 	projectKeys := joinKeyLabels(m.keys.projectLeft, m.keys.projectRight)
 	sessionKeys := joinKeyLabels(m.keys.sessionUp, m.keys.sessionDown)
 	paneKeys := joinKeyLabels(m.keys.paneNext, m.keys.panePrev)
-	sessionLabel := "session"
+	sessionLabel := "session/window"
 	paneLabel := "pane"
 	if m.tab == TabDashboard {
 		sessionLabel = "pane"
 		paneLabel = "project"
 	}
+	modeHint := ""
+	if m.isNativeMode() {
+		label := "terminal"
+		if m.terminalFocus {
+			label = "terminal on"
+		}
+		modeHint = fmt.Sprintf(" · %s %s", keyLabel(m.keys.terminalFocus), label)
+	}
 	base := fmt.Sprintf(
-		"%s ←/→ project · %s ↑/↓ %s · %s %s · %s commands · %s help · %s quit",
+		"%s ←/→ project · %s ↑/↓ %s · %s %s · %s commands · %s help · %s quit%s",
 		projectKeys,
 		sessionKeys,
 		sessionLabel,
@@ -372,6 +382,7 @@ func (m Model) viewFooter(width int) string {
 		keyLabel(m.keys.commandPalette),
 		keyLabel(m.keys.help),
 		keyLabel(m.keys.quit),
+		modeHint,
 	)
 	base = theme.ListDimmed.Render(base)
 	toast := m.toastText()
@@ -403,6 +414,14 @@ func (m Model) viewQuickReply(width int) string {
 	m.quickReplyInput.Width = inputWidth
 
 	hintText := "enter send • esc clear"
+	if m.isNativeMode() {
+		toggle := keyLabel(m.keys.terminalFocus)
+		if m.terminalFocus {
+			hintText = fmt.Sprintf("%s quick reply", toggle)
+		} else {
+			hintText = fmt.Sprintf("%s terminal focus • %s", toggle, hintText)
+		}
+	}
 
 	base := lipgloss.NewStyle().
 		Foreground(theme.TextPrimary).
@@ -497,6 +516,42 @@ func (m Model) viewConfirmCloseProject() string {
 	dialogContent.WriteString(theme.DialogChoiceSep.Render(" close • "))
 	dialogContent.WriteString(theme.DialogChoiceKey.Render("k"))
 	dialogContent.WriteString(theme.DialogChoiceSep.Render(" kill sessions • "))
+	dialogContent.WriteString(theme.DialogChoiceKey.Render("n"))
+	dialogContent.WriteString(theme.DialogChoiceSep.Render(" cancel"))
+
+	dialog := dialogStyle.Render(dialogContent.String())
+	return m.overlayDialog(dialog)
+}
+
+func (m Model) viewConfirmClosePane() string {
+	var dialogContent strings.Builder
+
+	dialogContent.WriteString(dialogTitleStyle.Render("⚠️  Close Pane?"))
+	dialogContent.WriteString("\n\n")
+	if m.confirmPaneTitle != "" {
+		dialogContent.WriteString(theme.DialogLabel.Render("Pane: "))
+		dialogContent.WriteString(theme.DialogValue.Render(m.confirmPaneTitle))
+		dialogContent.WriteString("\n")
+	}
+	if m.confirmPaneWindow != "" {
+		dialogContent.WriteString(theme.DialogLabel.Render("Window: "))
+		dialogContent.WriteString(theme.DialogValue.Render(m.confirmPaneWindow))
+		dialogContent.WriteString("\n")
+	}
+	if m.confirmPaneSession != "" {
+		dialogContent.WriteString(theme.DialogLabel.Render("Session: "))
+		dialogContent.WriteString(theme.DialogValue.Render(m.confirmPaneSession))
+		dialogContent.WriteString("\n")
+	}
+	dialogContent.WriteString("\n")
+
+	if m.confirmPaneRunning {
+		dialogContent.WriteString(theme.DialogNote.Render("The pane is still running. Closing it will stop the process."))
+		dialogContent.WriteString("\n\n")
+	}
+
+	dialogContent.WriteString(theme.DialogChoiceKey.Render("y"))
+	dialogContent.WriteString(theme.DialogChoiceSep.Render(" close • "))
 	dialogContent.WriteString(theme.DialogChoiceKey.Render("n"))
 	dialogContent.WriteString(theme.DialogChoiceSep.Render(" cancel"))
 
@@ -627,6 +682,42 @@ func (m Model) viewLayoutPicker() string {
 	return overlayCenteredSized(base, dialog, m.width, m.height, overlayW, overlayH)
 }
 
+func (m Model) viewPaneSplitPicker() string {
+	if m.width == 0 || m.height == 0 {
+		return ""
+	}
+	base := appStyle.Render(theme.ListDimmed.Render(m.viewDashboardContent()))
+	var dialogContent strings.Builder
+	dialogContent.WriteString(dialogTitleStyle.Render("➕ Add Pane"))
+	dialogContent.WriteString("\n\n")
+	dialogContent.WriteString(theme.DialogNote.Render("Choose split direction"))
+	dialogContent.WriteString("\n\n")
+	dialogContent.WriteString(theme.DialogChoiceKey.Render("r"))
+	dialogContent.WriteString(theme.DialogChoiceSep.Render(" split right • "))
+	dialogContent.WriteString(theme.DialogChoiceKey.Render("d"))
+	dialogContent.WriteString(theme.DialogChoiceSep.Render(" split down • "))
+	dialogContent.WriteString(theme.DialogChoiceKey.Render("esc"))
+	dialogContent.WriteString(theme.DialogChoiceSep.Render(" cancel"))
+
+	dialog := dialogStyle.Render(dialogContent.String())
+	return overlayCentered(base, dialog, m.width, m.height)
+}
+
+func (m Model) viewPaneSwapPicker() string {
+	if m.width == 0 || m.height == 0 {
+		return ""
+	}
+	base := appStyle.Render(theme.ListDimmed.Render(m.viewDashboardContent()))
+	listW := m.paneSwapPicker.Width()
+	listH := m.paneSwapPicker.Height()
+	frameW, frameH := dialogStyle.GetFrameSize()
+	overlayW := listW + frameW
+	overlayH := listH + frameH
+	content := lipgloss.NewStyle().Width(listW).Height(listH).Render(m.paneSwapPicker.View())
+	dialog := dialogStyle.Width(overlayW).Height(overlayH).Render(content)
+	return overlayCenteredSized(base, dialog, m.width, m.height, overlayW, overlayH)
+}
+
 func (m Model) viewCommandPalette() string {
 	if m.width == 0 || m.height == 0 {
 		return ""
@@ -646,7 +737,8 @@ func (m Model) viewHelp() string {
 	var left strings.Builder
 	left.WriteString("Navigation\n")
 	left.WriteString(fmt.Sprintf("  %s Switch projects\n", joinKeyLabels(m.keys.projectLeft, m.keys.projectRight)))
-	left.WriteString(fmt.Sprintf("  %s Switch sessions (project view)\n", joinKeyLabels(m.keys.sessionUp, m.keys.sessionDown)))
+	left.WriteString(fmt.Sprintf("  %s Switch sessions/windows (project view)\n", joinKeyLabels(m.keys.sessionUp, m.keys.sessionDown)))
+	left.WriteString(fmt.Sprintf("  %s Switch sessions only (project view)\n", joinKeyLabels(m.keys.sessionOnlyUp, m.keys.sessionOnlyDown)))
 	left.WriteString(fmt.Sprintf("  %s Switch panes (project view)\n", joinKeyLabels(m.keys.paneNext, m.keys.panePrev)))
 	left.WriteString(fmt.Sprintf("  %s Switch panes (dashboard)\n", joinKeyLabels(m.keys.sessionUp, m.keys.sessionDown)))
 	left.WriteString(fmt.Sprintf("  %s Switch project column (dashboard)\n", joinKeyLabels(m.keys.paneNext, m.keys.panePrev)))
@@ -659,9 +751,17 @@ func (m Model) viewHelp() string {
 	left.WriteString(fmt.Sprintf("  %s Open in new terminal window\n", keyLabel(m.keys.openTerminal)))
 	left.WriteString(fmt.Sprintf("  %s Kill session\n", keyLabel(m.keys.kill)))
 	left.WriteString("\nPane\n")
-	left.WriteString("  type  Quick reply is always active\n")
-	left.WriteString("  enter Send quick reply\n")
-	left.WriteString("  esc   Clear quick reply\n")
+	if m.isNativeMode() {
+		left.WriteString("  type  Quick reply (terminal focus off)\n")
+		left.WriteString("  enter Send quick reply\n")
+		left.WriteString("  esc   Clear quick reply\n")
+		left.WriteString(fmt.Sprintf("  %s Toggle terminal focus\n", keyLabel(m.keys.terminalFocus)))
+		left.WriteString("  type  Send input to focused pane\n")
+	} else {
+		left.WriteString("  type  Quick reply is always active\n")
+		left.WriteString("  enter Send quick reply\n")
+		left.WriteString("  esc   Clear quick reply\n")
+	}
 	left.WriteString(fmt.Sprintf("  %s Peek pane in new terminal\n", keyLabel(m.keys.peekPane)))
 
 	var right strings.Builder
@@ -764,11 +864,17 @@ func (c *canvas) String() string {
 	return strings.Join(lines, "\n")
 }
 
+type paneTileRenderer func(pane PaneItem, width, height int, compact bool, target bool, borders tileBorders) string
+
 func renderPanePreview(panes []PaneItem, width, height int, mode string, compact bool, targetPane string) string {
+	return renderPanePreviewWithRenderer(panes, width, height, mode, compact, targetPane, nil)
+}
+
+func renderPanePreviewWithRenderer(panes []PaneItem, width, height int, mode string, compact bool, targetPane string, renderer paneTileRenderer) string {
 	if mode == "layout" {
 		return renderPaneLayout(panes, width, height, targetPane)
 	}
-	return renderPaneTiles(panes, width, height, compact, targetPane)
+	return renderPaneTilesWithRenderer(panes, width, height, compact, targetPane, renderer)
 }
 
 func renderPaneLayout(panes []PaneItem, width, height int, targetPane string) string {
@@ -845,11 +951,18 @@ func maxBorderLevel(a, b int) int {
 }
 
 func renderPaneTiles(panes []PaneItem, width, height int, compact bool, targetPane string) string {
+	return renderPaneTilesWithRenderer(panes, width, height, compact, targetPane, renderPaneTile)
+}
+
+func renderPaneTilesWithRenderer(panes []PaneItem, width, height int, compact bool, targetPane string, renderer paneTileRenderer) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
 	if len(panes) == 0 {
 		return padLines("No panes", width, height)
+	}
+	if renderer == nil {
+		renderer = renderPaneTile
 	}
 
 	cols := 3
@@ -929,7 +1042,7 @@ func renderPaneTiles(panes []PaneItem, width, height int, compact bool, targetPa
 				bottom: true,
 				colors: colors,
 			}
-			tiles = append(tiles, renderPaneTile(panes[idx], tileWidth, rowHeight, compact, panes[idx].Index == targetPane, borders))
+			tiles = append(tiles, renderer(panes[idx], tileWidth, rowHeight, compact, panes[idx].Index == targetPane, borders))
 		}
 		row := lipgloss.JoinHorizontal(lipgloss.Top, tiles...)
 		renderedRows = append(renderedRows, row)
@@ -960,7 +1073,9 @@ func (m Model) dashboardSelectedProject(columns []DashboardProjectColumn) string
 	return columns[0].ProjectName
 }
 
-func renderDashboardColumns(columns []DashboardProjectColumn, width, height int, selectedProject string, selection selectionState, previewLines int) string {
+type dashboardPaneRenderer func(pane DashboardPane, width, height, previewLines int, selected bool, iconSet icons.IconSet, iconSize icons.Size) string
+
+func renderDashboardColumnsWithRenderer(columns []DashboardProjectColumn, width, height int, selectedProject string, selection selectionState, previewLines int, renderer dashboardPaneRenderer) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
@@ -1007,12 +1122,12 @@ func renderDashboardColumns(columns []DashboardProjectColumn, width, height int,
 			parts = append(parts, strings.Repeat(" ", gap))
 		}
 		selected := i == selectedIndex
-		parts = append(parts, renderDashboardColumn(column, colWidth, height, selected, selection, previewLines, iconSet, iconSize))
+		parts = append(parts, renderDashboardColumn(column, colWidth, height, selected, selection, previewLines, iconSet, iconSize, renderer))
 	}
 	return padLines(lipgloss.JoinHorizontal(lipgloss.Top, parts...), width, height)
 }
 
-func renderDashboardColumn(column DashboardProjectColumn, width, height int, selected bool, selection selectionState, previewLines int, iconSet icons.IconSet, iconSize icons.Size) string {
+func renderDashboardColumn(column DashboardProjectColumn, width, height int, selected bool, selection selectionState, previewLines int, iconSet icons.IconSet, iconSize icons.Size, renderer dashboardPaneRenderer) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
@@ -1078,7 +1193,10 @@ func renderDashboardColumn(column DashboardProjectColumn, width, height int, sel
 	blocks := make([]string, 0, visibleBlocks)
 	for i := start; i < end; i++ {
 		selectedPane := selected && i == selectedIndex
-		blocks = append(blocks, renderDashboardPaneTile(column.Panes[i], width, blockHeight, previewLines, selectedPane, iconSet, iconSize))
+		if renderer == nil {
+			renderer = renderDashboardPaneTile
+		}
+		blocks = append(blocks, renderer(column.Panes[i], width, blockHeight, previewLines, selectedPane, iconSet, iconSize))
 	}
 	body := padLines(strings.Join(blocks, "\n"), width, bodyHeight)
 	return strings.Join(append(headerLines, body), "\n")
@@ -1167,6 +1285,113 @@ func renderDashboardPaneTile(pane DashboardPane, width, height, previewLines int
 	return style.Render(strings.Join(lines, "\n"))
 }
 
+func (m Model) renderDashboardPaneTileWithMux(pane DashboardPane, width, height, previewLines int, selected bool, iconSet icons.IconSet, iconSize icons.Size) string {
+	if width <= 0 || height <= 0 {
+		return ""
+	}
+	if previewLines < 0 {
+		previewLines = 0
+	}
+	borderColor := theme.Border
+	if selected {
+		borderColor = theme.BorderTarget
+	}
+	style := lipgloss.NewStyle().
+		Width(width).
+		Height(height).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(borderColor).
+		Padding(0, 1)
+
+	frameW, frameH := style.GetFrameSize()
+	contentWidth := width - frameW
+	if contentWidth < 1 {
+		contentWidth = 1
+	}
+	contentHeight := height - frameH
+	if contentHeight < 1 {
+		contentHeight = 1
+	}
+	availablePreview := previewLines
+	if contentHeight-2 < availablePreview {
+		availablePreview = contentHeight - 2
+	}
+	if availablePreview < 0 {
+		availablePreview = 0
+	}
+
+	marker := " "
+	if selected {
+		marker = theme.SidebarCaret.Render(iconSet.Caret.BySize(iconSize))
+	}
+	window := windowLabel(WindowItem{Index: pane.WindowIndex, Name: pane.WindowName})
+	label := fmt.Sprintf("%s / %s / %s", pane.SessionName, window, paneLabel(pane.Pane))
+	header := fmt.Sprintf("%s %s %s", marker, renderBadge(pane.Pane.Status), label)
+	if selected {
+		header = theme.SidebarSessionSelected.Render(header)
+	}
+	header = truncateTileLine(header, contentWidth)
+
+	detail := strings.TrimSpace(pane.Pane.Command)
+	if detail == "" {
+		detail = strings.TrimSpace(pane.Pane.Title)
+	}
+	if detail == "" {
+		detail = "-"
+	}
+	detail = "cmd: " + detail
+	if selected {
+		detail = theme.SidebarWindowSelected.Render(detail)
+	} else {
+		detail = theme.SidebarWindow.Render(detail)
+	}
+	detailLine := truncateTileLine(detail, contentWidth)
+
+	lines := []string{header, detailLine}
+	if availablePreview > 0 {
+		var live string
+		switch pane.Pane.Multiplexer {
+		case layout.MultiplexerNative:
+			if m.native != nil {
+				if win := m.native.Window(pane.Pane.ID); win != nil {
+					_ = win.Resize(contentWidth, availablePreview)
+					if selected && m.terminalFocus {
+						live = win.ViewLipgloss(true)
+					} else {
+						live = win.ViewANSI()
+					}
+				}
+			}
+		case layout.MultiplexerTmux:
+			if m.tmuxStreams != nil {
+				if view, ok := m.tmuxStreams.View(pane.Pane.ID, tmuxstream.ViewOptions{
+					Height:     availablePreview,
+					ShowCursor: selected,
+				}); ok {
+					live = view
+				}
+			}
+		}
+
+		if live != "" {
+			live = padLines(live, contentWidth, availablePreview)
+			lines = append(lines, strings.Split(live, "\n")...)
+		} else {
+			preview := tailLines(pane.Pane.Preview, availablePreview)
+			for len(preview) < availablePreview {
+				preview = append(preview, "")
+			}
+			for i := 0; i < availablePreview; i++ {
+				lines = append(lines, truncateTileLine(preview[i], contentWidth))
+			}
+		}
+	}
+	if len(lines) > contentHeight {
+		lines = lines[:contentHeight]
+	}
+	return style.Render(strings.Join(lines, "\n"))
+}
+
 type tileBorderColors struct {
 	top    lipgloss.TerminalColor
 	right  lipgloss.TerminalColor
@@ -1236,6 +1461,93 @@ func renderPaneTile(pane PaneItem, width, height int, compact bool, target bool,
 	lines = append(lines, truncateTileLines(previewLines, contentWidth)...)
 
 	content := strings.Join(lines, "\n")
+	return style.Render(content)
+}
+
+func (m Model) renderPaneTileWithMux(pane PaneItem, width, height int, compact bool, target bool, borders tileBorders) string {
+	title := pane.Title
+	if target {
+		title = "TARGET " + title
+	}
+	if pane.Active {
+		title = "▶ " + title
+	}
+
+	style := lipgloss.NewStyle().
+		Width(width).
+		Height(height).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderTop(borders.top).
+		BorderRight(borders.right).
+		BorderBottom(borders.bottom).
+		BorderLeft(borders.left).
+		BorderForeground(theme.Border).
+		BorderTopForeground(borders.colors.top).
+		BorderRightForeground(borders.colors.right).
+		BorderBottomForeground(borders.colors.bottom).
+		BorderLeftForeground(borders.colors.left).
+		Padding(0, 1)
+
+	frameW, frameH := style.GetFrameSize()
+	contentWidth := width - frameW
+	if contentWidth < 1 {
+		contentWidth = 1
+	}
+	innerHeight := height - frameH
+	if innerHeight < 1 {
+		innerHeight = 1
+	}
+
+	header := fmt.Sprintf("%s %s", renderBadge(pane.Status), title)
+	lines := []string{truncateTileLine(header, contentWidth)}
+	if strings.TrimSpace(pane.Command) != "" {
+		lines = append(lines, truncateTileLine(pane.Command, contentWidth))
+	}
+
+	maxPreview := innerHeight - len(lines)
+	if maxPreview < 0 {
+		maxPreview = 0
+	}
+	if maxPreview > 0 {
+		var live string
+		switch pane.Multiplexer {
+		case layout.MultiplexerNative:
+			if m.native != nil {
+				if win := m.native.Window(pane.ID); win != nil {
+					_ = win.Resize(contentWidth, maxPreview)
+					if target && m.terminalFocus {
+						live = win.ViewLipgloss(true)
+					} else {
+						live = win.ViewANSI()
+					}
+				}
+			}
+		case layout.MultiplexerTmux:
+			if m.tmuxStreams != nil {
+				if view, ok := m.tmuxStreams.View(pane.ID, tmuxstream.ViewOptions{
+					Height:     maxPreview,
+					ShowCursor: target,
+				}); ok {
+					live = view
+				}
+			}
+		}
+
+		if live != "" {
+			live = padLines(live, contentWidth, maxPreview)
+			lines = append(lines, strings.Split(live, "\n")...)
+		} else {
+			previewSource := pane.Preview
+			if compact {
+				previewSource = compactPreviewLines(previewSource)
+			}
+			previewSource = trimTrailingBlankLines(previewSource)
+			previewLines := tailLines(previewSource, maxPreview)
+			lines = append(lines, truncateTileLines(previewLines, contentWidth)...)
+		}
+	}
+
+	content := padLines(strings.Join(lines, "\n"), contentWidth, innerHeight)
 	return style.Render(content)
 }
 
@@ -1381,7 +1693,7 @@ func tailLines(lines []string, max int) []string {
 func trimTrailingBlankLines(lines []string) []string {
 	end := len(lines)
 	for end > 0 {
-		if strings.TrimSpace(lines[end-1]) != "" {
+		if !isBlankANSI(lines[end-1]) {
 			break
 		}
 		end--
@@ -1395,7 +1707,7 @@ func compactPreviewLines(lines []string) []string {
 	}
 	compact := make([]string, 0, len(lines))
 	for _, line := range lines {
-		if strings.TrimSpace(line) == "" {
+		if isBlankANSI(line) {
 			continue
 		}
 		compact = append(compact, line)
@@ -1433,8 +1745,12 @@ func selectedWindow(session *SessionItem, windowIndex string) *WindowItem {
 	if session == nil {
 		return nil
 	}
+	resolved := strings.TrimSpace(windowIndex)
+	if resolved == "" {
+		resolved = strings.TrimSpace(session.ActiveWindow)
+	}
 	for i := range session.Windows {
-		if session.Windows[i].Index == windowIndex {
+		if session.Windows[i].Index == resolved {
 			return &session.Windows[i]
 		}
 	}

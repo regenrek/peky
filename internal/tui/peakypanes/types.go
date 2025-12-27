@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/native"
 	"github.com/regenrek/peakypanes/internal/tmuxctl"
 )
 
@@ -16,8 +17,11 @@ const (
 	StateDashboard ViewState = iota
 	StateProjectPicker
 	StateLayoutPicker
+	StatePaneSplitPicker
+	StatePaneSwapPicker
 	StateConfirmKill
 	StateConfirmCloseProject
+	StateConfirmClosePane
 	StateHelp
 	StateCommandPalette
 	StateRenameSession
@@ -78,6 +82,7 @@ type SessionItem struct {
 	Name         string
 	Path         string
 	LayoutName   string
+	Multiplexer  string
 	Status       Status
 	WindowCount  int
 	ActiveWindow string
@@ -114,6 +119,7 @@ type WindowItem struct {
 // PaneItem represents a tmux pane with preview content.
 type PaneItem struct {
 	ID           string
+	Multiplexer  string
 	Index        string
 	Title        string
 	Command      string
@@ -174,6 +180,7 @@ type tmuxSnapshotInput struct {
 	Version   uint64
 	Config    *layout.Config
 	Settings  DashboardConfig
+	Native    *native.Manager
 }
 
 // tmuxSnapshotResult is returned by a refresh.
@@ -204,6 +211,26 @@ type selectionRefreshMsg struct {
 // exitAfterAttachMsg exits the dashboard after a tmux attach returns.
 type exitAfterAttachMsg struct{}
 
+// nativePaneUpdatedMsg is emitted when a native pane updates.
+type nativePaneUpdatedMsg struct {
+	PaneID string
+}
+
+// nativeSessionStartedMsg signals a native session creation result.
+type nativeSessionStartedMsg struct {
+	Name  string
+	Err   error
+	Focus bool
+}
+
+// tmuxStreamUpdatedMsg triggers a redraw when any streamed pane updates.
+type tmuxStreamUpdatedMsg struct{}
+
+// tmuxStreamSyncMsg reports tmux stream sync errors.
+type tmuxStreamSyncMsg struct {
+	Err error
+}
+
 // GitProject represents a project directory with .git.
 type GitProject struct {
 	Name string
@@ -225,6 +252,18 @@ func (l LayoutChoice) Title() string       { return l.Label }
 func (l LayoutChoice) Description() string { return l.Desc }
 func (l LayoutChoice) FilterValue() string { return l.Label }
 
+// PaneSwapChoice represents a target pane for swapping.
+type PaneSwapChoice struct {
+	Label       string
+	Desc        string
+	WindowIndex string
+	PaneIndex   string
+}
+
+func (p PaneSwapChoice) Title() string       { return p.Label }
+func (p PaneSwapChoice) Description() string { return p.Desc }
+func (p PaneSwapChoice) FilterValue() string { return strings.ToLower(p.Label + " " + p.Desc) }
+
 // CommandItem represents a selectable command in the palette.
 type CommandItem struct {
 	Label string
@@ -240,6 +279,7 @@ func (c CommandItem) FilterValue() string { return strings.ToLower(c.Label + " "
 func paneFromTmux(p tmuxctl.PaneInfo) PaneItem {
 	return PaneItem{
 		ID:           p.ID,
+		Multiplexer:  layout.MultiplexerTmux,
 		Index:        p.Index,
 		Title:        p.Title,
 		Command:      p.Command,
