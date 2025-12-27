@@ -253,9 +253,6 @@ Pane
 - `f7` scrollback mode (native only; configurable via `dashboard.keymap.scrollback`)
 - `f8` copy mode (native only; configurable via `dashboard.keymap.copy_mode`)
 
-Tmux (inside session)
-- `prefix+g` open dashboard popup (tmux prefix is yours)
-
 Other
 - `ctrl+p` command palette
 - `ctrl+r` refresh, `ctrl+e` edit config, `ctrl+f` filter, `ctrl+c` quit
