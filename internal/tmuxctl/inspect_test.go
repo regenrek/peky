@@ -120,7 +120,7 @@ func TestListPanesDetailedFallback(t *testing.T) {
 func TestCapturePaneLinesAlternateScreen(t *testing.T) {
 	runner := &fakeRunner{t: t, specs: []cmdSpec{{
 		name:   "tmux",
-		args:   []string{"capture-pane", "-p", "-J", "-a", "-t", "demo:0.0", "-S", "0", "-E", "-"},
+		args:   []string{"capture-pane", "-p", "-J", "-e", "-a", "-t", "demo:0.0", "-S", "0", "-E", "-"},
 		stdout: "a\nb\nc\nd\n",
 		exit:   0,
 	}}}
@@ -137,8 +137,8 @@ func TestCapturePaneLinesAlternateScreen(t *testing.T) {
 
 func TestCapturePaneLinesFallback(t *testing.T) {
 	runner := &fakeRunner{t: t, specs: []cmdSpec{
-		{name: "tmux", args: []string{"capture-pane", "-p", "-J", "-a", "-t", "demo:0.0", "-S", "0", "-E", "-"}, exit: 1},
-		{name: "tmux", args: []string{"capture-pane", "-p", "-J", "-t", "demo:0.0", "-S", "-3", "-E", "-"}, stdout: "x\ny\nz\n", exit: 0},
+		{name: "tmux", args: []string{"capture-pane", "-p", "-J", "-e", "-a", "-t", "demo:0.0", "-S", "0", "-E", "-"}, exit: 1},
+		{name: "tmux", args: []string{"capture-pane", "-p", "-J", "-e", "-t", "demo:0.0", "-S", "-3", "-E", "-"}, stdout: "x\ny\nz\n", exit: 0},
 	}}
 	client := &Client{bin: "tmux", run: runner.run}
 	lines, err := client.CapturePaneLines(context.Background(), "demo:0.0", 3)

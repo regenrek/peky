@@ -380,7 +380,7 @@ func (c *Client) CapturePaneLines(ctx context.Context, target string, lines int)
 	}
 
 	// Try alternate screen first (useful for full-screen TUIs).
-	cmd := c.run(ctx, c.bin, "capture-pane", "-p", "-J", "-a", "-t", target, "-S", "0", "-E", "-")
+	cmd := c.run(ctx, c.bin, "capture-pane", "-p", "-J", "-e", "-a", "-t", target, "-S", "0", "-E", "-")
 	out, err := cmd.CombinedOutput()
 	if err == nil {
 		if parsed := parse(out); len(parsed) > 0 {
@@ -392,7 +392,7 @@ func (c *Client) CapturePaneLines(ctx context.Context, target string, lines int)
 	}
 
 	// Fallback to default screen if -a is unsupported or returns empty content.
-	cmd = c.run(ctx, c.bin, "capture-pane", "-p", "-J", "-t", target, "-S", start, "-E", "-")
+	cmd = c.run(ctx, c.bin, "capture-pane", "-p", "-J", "-e", "-t", target, "-S", start, "-E", "-")
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		return nil, wrapTmuxErr("capture-pane", err, out)

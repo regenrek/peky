@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/native"
 	"github.com/regenrek/peakypanes/internal/tmuxctl"
 	"gopkg.in/yaml.v3"
 )
@@ -254,11 +255,25 @@ func buildDashboardData(ctx context.Context, client *tmuxctl.Client, input tmuxS
 	settings := input.Settings
 	selected := input.Selection
 
-	currentSession, _ := client.CurrentSession(ctx)
-	info, err := client.ListSessionsInfo(ctx)
-	if err != nil {
-		result.Err = err
-		return result
+	var currentSession string
+	var info []tmuxctl.SessionInfo
+	if client != nil {
+		currentSession, _ = client.CurrentSession(ctx)
+		var err error
+		info, err = client.ListSessionsInfo(ctx)
+		if err != nil {
+			result.Err = err
+			return result
+		}
+	}
+
+	var nativeSessions []native.SessionSnapshot
+	if input.Native != nil {
+		previewLines := settings.PreviewLines
+		if dashboard := dashboardPreviewLines(settings); dashboard > previewLines {
+			previewLines = dashboard
+		}
+		nativeSessions = input.Native.Snapshot(previewLines)
 	}
 
 	groups := make([]ProjectGroup, 0)
@@ -272,6 +287,26 @@ func buildDashboardData(ctx context.Context, client *tmuxctl.Client, input tmuxS
 
 	projectBySession := make(map[string]*ProjectGroup)
 	projectByPath := make(map[string]*ProjectGroup)
+	localConfigs := make(map[string]*layout.ProjectLocalConfig)
+	resolveMux := func(pc *layout.ProjectConfig) string {
+		if pc == nil {
+			return layout.ResolveMultiplexer(nil, nil, cfg)
+		}
+		path := normalizeProjectPath(pc.Path)
+		if path == "" {
+			return layout.ResolveMultiplexer(nil, pc, cfg)
+		}
+		if cached, ok := localConfigs[path]; ok {
+			return layout.ResolveMultiplexer(cached, pc, cfg)
+		}
+		localCfg, err := layout.LoadProjectLocal(path)
+		if err != nil {
+			localConfigs[path] = nil
+			return layout.ResolveMultiplexer(nil, pc, cfg)
+		}
+		localConfigs[path] = localCfg
+		return layout.ResolveMultiplexer(localCfg, pc, cfg)
+	}
 
 	for i := range cfg.Projects {
 		pc := &cfg.Projects[i]
@@ -286,11 +321,12 @@ func buildDashboardData(ctx context.Context, client *tmuxctl.Client, input tmuxS
 			FromConfig: true,
 		})
 		group.Sessions = append(group.Sessions, SessionItem{
-			Name:       session,
-			Path:       path,
-			LayoutName: layoutName(pc.Layout),
-			Status:     StatusStopped,
-			Config:     pc,
+			Name:        session,
+			Path:        path,
+			LayoutName:  layoutName(pc.Layout),
+			Multiplexer: resolveMux(pc),
+			Status:      StatusStopped,
+			Config:      pc,
 		})
 		projectBySession[session] = group
 		if path != "" {
@@ -340,6 +376,7 @@ func buildDashboardData(ctx context.Context, client *tmuxctl.Client, input tmuxS
 			group.Sessions = append(group.Sessions, SessionItem{
 				Name:         s.Name,
 				Path:         path,
+				Multiplexer:  layout.MultiplexerTmux,
 				Status:       status,
 				WindowCount:  windowCount,
 				ActiveWindow: activeWindow,
@@ -349,9 +386,67 @@ func buildDashboardData(ctx context.Context, client *tmuxctl.Client, input tmuxS
 		} else {
 			item.Status = status
 			item.Path = path
+			item.Multiplexer = layout.MultiplexerTmux
 			item.WindowCount = windowCount
 			item.ActiveWindow = activeWindow
 			item.Windows = windowsToItems(windows)
+		}
+	}
+
+	for _, s := range nativeSessions {
+		status := StatusRunning
+		path := normalizeProjectPath(s.Path)
+		name := groupNameFromPath(path, s.Name)
+		if isHiddenProject(settings, path, name) {
+			continue
+		}
+		var group *ProjectGroup
+		if g := projectBySession[s.Name]; g != nil {
+			group = g
+		} else if path != "" {
+			if g := projectByPath[path]; g != nil {
+				group = g
+			}
+		}
+		if group == nil {
+			group = addGroup(projectKey(path, name), ProjectGroup{
+				Name:       name,
+				Path:       path,
+				FromConfig: false,
+			})
+			if path != "" {
+				projectByPath[path] = group
+			}
+		}
+
+		activeWindow := ""
+		if len(s.Windows) > 0 {
+			activeWindow = s.Windows[0].Index
+		}
+		windows := windowsFromNative(s.Windows, activeWindow, settings)
+		windowCount := len(windows)
+
+		item := findSession(group, s.Name)
+		if item == nil {
+			group.Sessions = append(group.Sessions, SessionItem{
+				Name:         s.Name,
+				Path:         path,
+				LayoutName:   s.LayoutName,
+				Multiplexer:  layout.MultiplexerNative,
+				Status:       status,
+				WindowCount:  windowCount,
+				ActiveWindow: activeWindow,
+				Windows:      windows,
+			})
+			item = &group.Sessions[len(group.Sessions)-1]
+		} else {
+			item.Status = status
+			item.Path = path
+			item.LayoutName = s.LayoutName
+			item.Multiplexer = layout.MultiplexerNative
+			item.WindowCount = windowCount
+			item.ActiveWindow = activeWindow
+			item.Windows = windows
 		}
 	}
 
@@ -387,6 +482,10 @@ func buildDashboardData(ctx context.Context, client *tmuxctl.Client, input tmuxS
 				session.Thumbnail = sessionThumbnailFromData(session)
 				continue
 			}
+			if session.Multiplexer == layout.MultiplexerNative || client == nil {
+				session.Thumbnail = sessionThumbnailFromData(session)
+				continue
+			}
 			thumb, err := sessionThumbnail(ctx, client, *session, settings)
 			if err != nil {
 				result.Err = err
@@ -403,16 +502,23 @@ func buildDashboardData(ctx context.Context, client *tmuxctl.Client, input tmuxS
 				windowIndex = target.ActiveWindow
 			}
 			if windowIndex != "" {
-				panes, err := sessionWindowPanes(ctx, client, target.Name, windowIndex, settings.PreviewLines)
-				if err != nil {
-					result.Err = err
-					return result
+				if target.Multiplexer == layout.MultiplexerNative || client == nil {
+					window := selectedWindow(target, windowIndex)
+					if window != nil {
+						resolved.Pane = resolvePaneSelection(resolved.Pane, window.Panes)
+					}
+				} else {
+					panes, err := sessionWindowPanes(ctx, client, target.Name, windowIndex, settings.PreviewLines)
+					if err != nil {
+						result.Err = err
+						return result
+					}
+					for i := range panes {
+						panes[i].Status = classifyPane(panes[i], panes[i].Preview, settings, time.Now())
+					}
+					attachPanesToWindow(groups, resolved.Session, windowIndex, panes)
+					resolved.Pane = resolvePaneSelection(resolved.Pane, panes)
 				}
-				for i := range panes {
-					panes[i].Status = classifyPane(panes[i], panes[i].Preview, settings, time.Now())
-				}
-				attachPanesToWindow(groups, resolved.Session, windowIndex, panes)
-				resolved.Pane = resolvePaneSelection(resolved.Pane, panes)
 			}
 		}
 	}
@@ -617,6 +723,57 @@ func windowsToItems(windows []tmuxctl.WindowInfo) []WindowItem {
 	return items
 }
 
+func windowsFromNative(windows []native.WindowSnapshot, activeWindow string, settings DashboardConfig) []WindowItem {
+	if len(windows) == 0 {
+		return nil
+	}
+	if strings.TrimSpace(activeWindow) == "" {
+		activeWindow = windows[0].Index
+	}
+	items := make([]WindowItem, len(windows))
+	now := time.Now()
+	for i, w := range windows {
+		panes := panesFromNative(w.Panes, settings, now)
+		items[i] = WindowItem{
+			Index:  w.Index,
+			Name:   w.Name,
+			Active: w.Index == activeWindow,
+			Panes:  panes,
+		}
+	}
+	return items
+}
+
+func panesFromNative(panes []native.PaneSnapshot, settings DashboardConfig, now time.Time) []PaneItem {
+	if len(panes) == 0 {
+		return nil
+	}
+	items := make([]PaneItem, len(panes))
+	for i, p := range panes {
+		item := PaneItem{
+			ID:           p.ID,
+			Multiplexer:  layout.MultiplexerNative,
+			Index:        p.Index,
+			Title:        p.Title,
+			Command:      p.Command,
+			StartCommand: p.StartCommand,
+			PID:          p.PID,
+			Active:       p.Active,
+			Left:         p.Left,
+			Top:          p.Top,
+			Width:        p.Width,
+			Height:       p.Height,
+			Dead:         p.Dead,
+			DeadStatus:   p.DeadStatus,
+			LastActive:   p.LastActive,
+			Preview:      p.Preview,
+		}
+		item.Status = classifyPane(item, item.Preview, settings, now)
+		items[i] = item
+	}
+	return items
+}
+
 func windowExists(windows []WindowItem, index string) bool {
 	for _, w := range windows {
 		if w.Index == index {
@@ -774,13 +931,13 @@ func classifyPane(pane PaneItem, lines []string, settings DashboardConfig, now t
 		if status != PaneStatusIdle {
 			return status
 		}
-		joined := strings.Join(lines, "\n")
+		joined := stripANSI(strings.Join(lines, "\n"))
 		if joined != "" && matcher.running != nil && matcher.running.MatchString(joined) {
 			return PaneStatusRunning
 		}
 		return status
 	}
-	joined := strings.Join(lines, "\n")
+	joined := stripANSI(strings.Join(lines, "\n"))
 	if joined != "" {
 		if matcher.error != nil && matcher.error.MatchString(joined) {
 			return PaneStatusError
@@ -800,7 +957,7 @@ func classifyPane(pane PaneItem, lines []string, settings DashboardConfig, now t
 
 func lastNonEmpty(lines []string) string {
 	for i := len(lines) - 1; i >= 0; i-- {
-		line := strings.TrimSpace(lines[i])
+		line := strings.TrimSpace(stripANSI(lines[i]))
 		if line != "" {
 			return line
 		}
@@ -816,6 +973,9 @@ func populateProjectPanes(ctx context.Context, client *tmuxctl.Client, groups []
 	for si := range project.Sessions {
 		session := &project.Sessions[si]
 		if session.Status == StatusStopped {
+			continue
+		}
+		if session.Multiplexer != layout.MultiplexerTmux {
 			continue
 		}
 		if strings.TrimSpace(session.Name) == "" {

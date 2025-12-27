@@ -93,6 +93,13 @@ func buildDashboardKeyMap(cfg layout.DashboardKeymapConfig) (*dashboardKeyMap, e
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.peekPane = b },
 		},
 		{
+			name:     "terminal_focus",
+			desc:     "terminal focus",
+			defaults: []string{"ctrl+\\"},
+			override: cfg.TerminalFocus,
+			assign:   func(m *dashboardKeyMap, b key.Binding) { m.terminalFocus = b },
+		},
+		{
 			name:     "toggle_windows",
 			desc:     "windows",
 			defaults: []string{"ctrl+u"},

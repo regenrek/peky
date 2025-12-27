@@ -294,9 +294,9 @@ func TestBuildDashboardData(t *testing.T) {
 		{name: "tmux", args: []string{"list-panes", "-t", "app:0", "-F", fullFormat}, stdout: paneLine, exit: 0},
 		{name: "tmux", args: []string{"list-panes", "-t", "app:1", "-F", fullFormat}, stdout: paneLine, exit: 0},
 		{name: "tmux", args: []string{"list-panes", "-t", "app:0", "-F", fullFormat}, stdout: paneLine, exit: 0},
-		{name: "tmux", args: []string{"capture-pane", "-p", "-J", "-a", "-t", "app:0.0", "-S", "0", "-E", "-"}, stdout: "done\n", exit: 0},
+		{name: "tmux", args: []string{"capture-pane", "-p", "-J", "-e", "-a", "-t", "app:0.0", "-S", "0", "-E", "-"}, stdout: "done\n", exit: 0},
 		{name: "tmux", args: []string{"list-panes", "-t", "app:0", "-F", fullFormat}, stdout: paneLine, exit: 0},
-		{name: "tmux", args: []string{"capture-pane", "-p", "-J", "-a", "-t", "app:0.0", "-S", "0", "-E", "-"}, stdout: "line1\nline2\n", exit: 0},
+		{name: "tmux", args: []string{"capture-pane", "-p", "-J", "-e", "-a", "-t", "app:0.0", "-S", "0", "-E", "-"}, stdout: "line1\nline2\n", exit: 0},
 	}}
 
 	client, err := tmuxctl.NewClient("tmux")

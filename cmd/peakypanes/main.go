@@ -17,6 +17,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/tmuxctl"
+	"github.com/regenrek/peakypanes/internal/tmuxstream"
 	"github.com/regenrek/peakypanes/internal/tui/peakypanes"
 )
 
@@ -218,6 +219,8 @@ func main() {
 		runClone(os.Args[2:])
 	case "setup":
 		runSetup(os.Args[2:])
+	case "pipe":
+		runPipe(os.Args[2:])
 	case "version", "-v", "--version":
 		fmt.Printf("peakypanes %s\n", version)
 	case "help", "-h", "--help":
@@ -235,7 +238,8 @@ func main() {
 func runMenu() {
 	client, err := tmuxctl.NewClient("")
 	if err != nil {
-		fatal("tmux not found: %v", err)
+		fmt.Fprintf(os.Stderr, "peakypanes: tmux not found (tmux sessions unavailable): %v\n", err)
+		client = nil
 	}
 
 	model, err := peakypanes.NewModel(client)
@@ -303,6 +307,13 @@ type initOptions struct {
 	layout   string
 	force    bool
 	showHelp bool
+}
+
+type pipeOptions struct {
+	socketPath string
+	token      string
+	paneID     string
+	showHelp   bool
 }
 
 func runDashboardCommand(args []string) {
@@ -585,7 +596,7 @@ func initLocal(layoutName string, force bool) {
 # Use ${VAR:-default} for defaults
 
 session: %s
-multiplexer: tmux
+multiplexer: native
 
 layout:
 `, projectName)
@@ -651,7 +662,7 @@ func initGlobal(layoutName string, force bool) {
 	configContent := `# Peaky Panes - Global Configuration
 # https://github.com/regenrek/peakypanes
 
-multiplexer: tmux
+multiplexer: native
 
 tmux:
   config: ~/.config/tmux/tmux.conf
@@ -1008,6 +1019,23 @@ func runStart(args []string) {
 	attachToSession(client, sessionName)
 }
 
+func runPipe(args []string) {
+	opts := parsePipeArgs(args)
+	if opts.showHelp {
+		return
+	}
+	if opts.socketPath == "" || opts.token == "" || opts.paneID == "" {
+		os.Exit(2)
+	}
+	if err := tmuxstream.RunPipe(context.Background(), tmuxstream.PipeOptions{
+		SocketPath: opts.socketPath,
+		Token:      opts.token,
+		PaneID:     opts.paneID,
+	}); err != nil {
+		os.Exit(1)
+	}
+}
+
 func parseInitArgs(args []string) initOptions {
 	opts := initOptions{layout: "dev-3"}
 	for i := 0; i < len(args); i++ {
@@ -1070,6 +1098,32 @@ func parseStartArgs(args []string) startOptions {
 			if !strings.HasPrefix(args[i], "-") && opts.layoutName == "" {
 				opts.layoutName = args[i]
 			}
+		}
+	}
+	return opts
+}
+
+func parsePipeArgs(args []string) pipeOptions {
+	opts := pipeOptions{}
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--socket":
+			if i+1 < len(args) {
+				opts.socketPath = args[i+1]
+				i++
+			}
+		case "--token":
+			if i+1 < len(args) {
+				opts.token = args[i+1]
+				i++
+			}
+		case "--pane-id":
+			if i+1 < len(args) {
+				opts.paneID = args[i+1]
+				i++
+			}
+		case "-h", "--help":
+			opts.showHelp = true
 		}
 	}
 	return opts
@@ -1283,8 +1337,8 @@ func createSessionWithGridLayout(ctx context.Context, client *tmuxctl.Client, se
 		return fmt.Errorf("expected %d panes, found %d panes", grid.Panes(), len(panes))
 	}
 
-	commands := resolveGridCommands(layoutCfg, grid.Panes())
-	titles := resolveGridTitles(layoutCfg, grid.Panes())
+	commands := layout.ResolveGridCommands(layoutCfg, grid.Panes())
+	titles := layout.ResolveGridTitles(layoutCfg, grid.Panes())
 
 	for i := 0; i < grid.Panes(); i++ {
 		pane := panes[i]
@@ -1339,47 +1393,6 @@ func gridSplitPercent(remaining int) int {
 		return 99
 	}
 	return percent
-}
-
-func resolveGridCommands(layoutCfg *layout.LayoutConfig, count int) []string {
-	commands := make([]string, 0, count)
-	fallback := strings.TrimSpace(layoutCfg.Command)
-	if len(layoutCfg.Commands) > 0 {
-		for i := 0; i < count; i++ {
-			if i < len(layoutCfg.Commands) {
-				commands = append(commands, layoutCfg.Commands[i])
-				continue
-			}
-			if fallback != "" {
-				commands = append(commands, fallback)
-			} else {
-				commands = append(commands, "")
-			}
-		}
-		return commands
-	}
-	if fallback == "" {
-		for i := 0; i < count; i++ {
-			commands = append(commands, "")
-		}
-		return commands
-	}
-	for i := 0; i < count; i++ {
-		commands = append(commands, fallback)
-	}
-	return commands
-}
-
-func resolveGridTitles(layoutCfg *layout.LayoutConfig, count int) []string {
-	titles := make([]string, 0, count)
-	for i := 0; i < count; i++ {
-		if i < len(layoutCfg.Titles) {
-			titles = append(titles, layoutCfg.Titles[i])
-		} else {
-			titles = append(titles, "")
-		}
-	}
-	return titles
 }
 
 func applyLayoutBindings(ctx context.Context, client *tmuxctl.Client, layoutCfg *layout.LayoutConfig) {

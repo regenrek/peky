@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/native"
 	"github.com/regenrek/peakypanes/internal/tmuxctl"
 )
 
@@ -78,6 +79,7 @@ type SessionItem struct {
 	Name         string
 	Path         string
 	LayoutName   string
+	Multiplexer  string
 	Status       Status
 	WindowCount  int
 	ActiveWindow string
@@ -114,6 +116,7 @@ type WindowItem struct {
 // PaneItem represents a tmux pane with preview content.
 type PaneItem struct {
 	ID           string
+	Multiplexer  string
 	Index        string
 	Title        string
 	Command      string
@@ -174,6 +177,7 @@ type tmuxSnapshotInput struct {
 	Version   uint64
 	Config    *layout.Config
 	Settings  DashboardConfig
+	Native    *native.Manager
 }
 
 // tmuxSnapshotResult is returned by a refresh.
@@ -203,6 +207,26 @@ type selectionRefreshMsg struct {
 
 // exitAfterAttachMsg exits the dashboard after a tmux attach returns.
 type exitAfterAttachMsg struct{}
+
+// nativePaneUpdatedMsg is emitted when a native pane updates.
+type nativePaneUpdatedMsg struct {
+	PaneID string
+}
+
+// nativeSessionStartedMsg signals a native session creation result.
+type nativeSessionStartedMsg struct {
+	Name  string
+	Err   error
+	Focus bool
+}
+
+// tmuxStreamUpdatedMsg triggers a redraw when any streamed pane updates.
+type tmuxStreamUpdatedMsg struct{}
+
+// tmuxStreamSyncMsg reports tmux stream sync errors.
+type tmuxStreamSyncMsg struct {
+	Err error
+}
 
 // GitProject represents a project directory with .git.
 type GitProject struct {
@@ -240,6 +264,7 @@ func (c CommandItem) FilterValue() string { return strings.ToLower(c.Label + " "
 func paneFromTmux(p tmuxctl.PaneInfo) PaneItem {
 	return PaneItem{
 		ID:           p.ID,
+		Multiplexer:  layout.MultiplexerTmux,
 		Index:        p.Index,
 		Title:        p.Title,
 		Command:      p.Command,

@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/tmuxctl"
 )
 
@@ -98,6 +99,10 @@ func newTestModel(t *testing.T, specs []cmdSpec) (*Model, *fakeRunner) {
 	model, err := NewModel(client)
 	if err != nil {
 		t.Fatalf("NewModel() error: %v", err)
+	}
+	if specs != nil {
+		model.config.Multiplexer = layout.MultiplexerTmux
+		model.setMuxMode(layout.MultiplexerTmux)
 	}
 	model.width = 80
 	model.height = 24

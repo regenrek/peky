@@ -43,11 +43,11 @@ func TestResolveGridCommandsAndTitles(t *testing.T) {
 		Commands: []string{"a", "b"},
 		Titles:   []string{"one"},
 	}
-	commands := resolveGridCommands(cfg, 3)
+	commands := layout.ResolveGridCommands(cfg, 3)
 	if !reflect.DeepEqual(commands, []string{"a", "b", "echo"}) {
 		t.Fatalf("resolveGridCommands() = %#v", commands)
 	}
-	titles := resolveGridTitles(cfg, 3)
+	titles := layout.ResolveGridTitles(cfg, 3)
 	if !reflect.DeepEqual(titles, []string{"one", "", ""}) {
 		t.Fatalf("resolveGridTitles() = %#v", titles)
 	}
