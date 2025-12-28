@@ -33,10 +33,10 @@ type LayoutConfig struct {
 	Vars        map[string]string `yaml:"vars,omitempty"`
 	Settings    LayoutSettings    `yaml:"settings,omitempty"`
 	// Grid layouts (optional). If Grid is set, Panes is ignored.
-	Grid     string   `yaml:"grid,omitempty"`     // e.g., "2x3"
-	Command  string   `yaml:"command,omitempty"`  // run in every pane
-	Commands []string `yaml:"commands,omitempty"` // per-pane commands (row-major)
-	Titles   []string `yaml:"titles,omitempty"`   // optional per-pane titles (row-major)
+	Grid     string    `yaml:"grid,omitempty"`     // e.g., "2x3"
+	Command  string    `yaml:"command,omitempty"`  // run in every pane
+	Commands []string  `yaml:"commands,omitempty"` // per-pane commands (row-major)
+	Titles   []string  `yaml:"titles,omitempty"`   // optional per-pane titles (row-major)
 	Panes    []PaneDef `yaml:"panes,omitempty"`
 }
 
@@ -52,8 +52,8 @@ type ProjectConfig struct {
 
 // ToolConfig defines an external tool command.
 type ToolConfig struct {
-	Cmd        string `yaml:"cmd"`
-	PaneTitle  string `yaml:"pane_title,omitempty"`
+	Cmd       string `yaml:"cmd"`
+	PaneTitle string `yaml:"pane_title,omitempty"`
 }
 
 // ToolsConfig groups tool definitions.

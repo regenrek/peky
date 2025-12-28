@@ -40,10 +40,10 @@ func (v Variants) BySize(size Size) string {
 }
 
 type IconSet struct {
-	Caret       Variants
-	PaneDot     Variants
-	PaneLabel   string
-	Spinner     []string
+	Caret     Variants
+	PaneDot   Variants
+	PaneLabel string
+	Spinner   []string
 }
 
 var Unicode = IconSet{
@@ -57,8 +57,8 @@ var Unicode = IconSet{
 		Medium: "•",
 		Large:  "●",
 	},
-	PaneLabel:   "pane",
-	Spinner:     []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"},
+	PaneLabel: "pane",
+	Spinner:   []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"},
 }
 
 var ASCII = IconSet{
@@ -72,8 +72,8 @@ var ASCII = IconSet{
 		Medium: "*",
 		Large:  "o",
 	},
-	PaneLabel:   "pane",
-	Spinner:     []string{"-", "\\", "|", "/"},
+	PaneLabel: "pane",
+	Spinner:   []string{"-", "\\", "|", "/"},
 }
 
 func Active() IconSet {
