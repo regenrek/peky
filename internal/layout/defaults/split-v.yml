@@ -1,12 +1,10 @@
 name: split-v
 description: "Two vertical panes (left/right)"
 
-windows:
-  - name: dev
-    panes:
-      - title: left
-        cmd: ""
-        size: "50%"
-      - title: right
-        cmd: ""
-        split: horizontal
+panes:
+  - title: left
+    cmd: ""
+    size: "50%"
+  - title: right
+    cmd: ""
+    split: horizontal

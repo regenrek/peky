@@ -14,32 +14,26 @@ import (
 func TestSendQuickReplyNative(t *testing.T) {
 	m := newTestModel(t)
 	snap := startNativeSession(t, m, "sess")
-	if len(snap.Windows) == 0 || len(snap.Windows[0].Panes) == 0 {
+	if len(snap.Panes) == 0 {
 		t.Fatalf("session snapshot missing panes")
 	}
-	windowSnap := snap.Windows[0]
-	paneSnap := windowSnap.Panes[0]
+	paneSnap := snap.Panes[0]
 
 	m.data = DashboardData{Projects: []ProjectGroup{{
 		Name: "Proj",
 		Sessions: []SessionItem{{
-			Name:         snap.Name,
-			Status:       StatusRunning,
-			ActiveWindow: windowSnap.Index,
-			Windows: []WindowItem{{
-				Index:  windowSnap.Index,
-				Name:   windowSnap.Name,
+			Name:       snap.Name,
+			Status:     StatusRunning,
+			ActivePane: paneSnap.Index,
+			Panes: []PaneItem{{
+				ID:     paneSnap.ID,
+				Index:  paneSnap.Index,
+				Title:  paneSnap.Title,
 				Active: true,
-				Panes: []PaneItem{{
-					ID:     paneSnap.ID,
-					Index:  paneSnap.Index,
-					Title:  paneSnap.Title,
-					Active: true,
-				}},
 			}},
 		}},
 	}}}
-	m.selection = selectionState{Project: "Proj", Session: snap.Name, Window: windowSnap.Index, Pane: paneSnap.Index}
+	m.selection = selectionState{Project: "Proj", Session: snap.Name, Pane: paneSnap.Index}
 
 	m.quickReplyInput.SetValue("hello")
 	cmd := m.sendQuickReply()
@@ -62,7 +56,7 @@ func TestRenameSession(t *testing.T) {
 	m := newTestModel(t)
 	startNativeSession(t, m, "old")
 
-	m.selection = selectionState{Project: "Proj", Session: "old", Window: "0"}
+	m.selection = selectionState{Project: "Proj", Session: "old"}
 	m.expandedSessions["old"] = true
 	m.renameSession = "old"
 	m.state = StateRenameSession
@@ -78,27 +72,15 @@ func TestRenameSession(t *testing.T) {
 	}
 }
 
-func TestRenameWindowAndPane(t *testing.T) {
+func TestRenamePane(t *testing.T) {
 	m := newTestModel(t)
 	snap := startNativeSession(t, m, "sess")
-	windowSnap := snap.Windows[0]
-	paneSnap := windowSnap.Panes[0]
-
-	m.renameSession = "sess"
-	m.renameWindowIndex = windowSnap.Index
-	m.renameWindow = windowSnap.Name
-	m.state = StateRenameWindow
-	m.renameInput = textinput.New()
-	m.renameInput.SetValue("win")
-	m.applyRename()
-
-	session := m.native.Session("sess")
-	if session == nil || len(session.Windows) == 0 || session.Windows[0].Name != "win" {
-		t.Fatalf("window rename failed: %#v", session)
+	if len(snap.Panes) == 0 {
+		t.Fatalf("session snapshot missing panes")
 	}
+	paneSnap := snap.Panes[0]
 
 	m.renameSession = "sess"
-	m.renameWindowIndex = windowSnap.Index
 	m.renamePaneIndex = paneSnap.Index
 	m.renamePane = paneSnap.Title
 	m.state = StateRenamePane
@@ -106,12 +88,12 @@ func TestRenameWindowAndPane(t *testing.T) {
 	m.renameInput.SetValue("pane")
 	m.applyRename()
 
-	session = m.native.Session("sess")
-	if session == nil || len(session.Windows) == 0 || len(session.Windows[0].Panes) == 0 {
+	session := m.native.Session("sess")
+	if session == nil || len(session.Panes) == 0 {
 		t.Fatalf("pane rename failed: %#v", session)
 	}
-	if session.Windows[0].Panes[0].Title != "pane" {
-		t.Fatalf("pane title = %q", session.Windows[0].Panes[0].Title)
+	if session.Panes[0].Title != "pane" {
+		t.Fatalf("pane title = %q", session.Panes[0].Title)
 	}
 }
 
@@ -196,29 +178,36 @@ func TestUpdateConfirmCloseProjectKillsSessions(t *testing.T) {
 	}
 }
 
-func TestOpenNewWindow(t *testing.T) {
+func TestAddPaneSplit(t *testing.T) {
 	m := newTestModel(t)
 	snap := startNativeSession(t, m, "sess")
-	if len(snap.Windows) == 0 {
-		t.Fatalf("session snapshot missing windows")
+	if len(snap.Panes) == 0 {
+		t.Fatalf("session snapshot missing panes")
 	}
+	paneSnap := snap.Panes[0]
 	m.data = DashboardData{Projects: []ProjectGroup{{
 		Name: "Proj",
 		Path: snap.Path,
 		Sessions: []SessionItem{{
-			Name:         snap.Name,
-			Status:       StatusRunning,
-			Path:         snap.Path,
-			ActiveWindow: snap.Windows[0].Index,
+			Name:       snap.Name,
+			Status:     StatusRunning,
+			Path:       snap.Path,
+			ActivePane: paneSnap.Index,
+			Panes: []PaneItem{{
+				ID:     paneSnap.ID,
+				Index:  paneSnap.Index,
+				Title:  paneSnap.Title,
+				Active: true,
+			}},
 		}},
 	}}}
-	m.selection = selectionState{Project: "Proj", Session: snap.Name, Window: snap.Windows[0].Index}
+	m.selection = selectionState{Project: "Proj", Session: snap.Name, Pane: paneSnap.Index}
 
-	_ = m.openNewWindow()
+	_ = m.addPaneSplit(false)
 
 	session := m.native.Session(snap.Name)
-	if session == nil || len(session.Windows) < 2 {
-		t.Fatalf("expected new window, got %#v", session)
+	if session == nil || len(session.Panes) < 2 {
+		t.Fatalf("expected new pane, got %#v", session)
 	}
 }
 

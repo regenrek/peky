@@ -473,20 +473,18 @@ layout_dirs:
 # Define custom layouts inline (or put in layouts/ directory)
 # layouts:
 #   my-custom:
-#     windows:
-#       - name: dev
-#         panes:
-#           - title: editor
-#             cmd: "${EDITOR:-}"
-#           - title: shell
-#             cmd: ""
+#     panes:
+#       - title: editor
+#         cmd: "${EDITOR:-}"
+#       - title: shell
+#         cmd: ""
 
 tools:
   cursor_agent:
-    window_name: cursor
+    pane_title: cursor
     cmd: ""
   codex_new:
-    window_name: codex
+    pane_title: codex
     cmd: ""
 `
 

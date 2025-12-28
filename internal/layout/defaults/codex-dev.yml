@@ -2,7 +2,6 @@ name: codex-dev
 description: "Codex dev grid (shell + codex panes)"
 
 grid: 2x3
-window: codex
 commands:
   - "${SHELL:-bash}"
   - "codex"

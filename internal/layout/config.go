@@ -10,7 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// PaneDef defines a single pane within a window.
+// PaneDef defines a single pane within a layout.
 type PaneDef struct {
 	Title   string   `yaml:"title,omitempty"`
 	Cmd     string   `yaml:"cmd,omitempty"`
@@ -18,12 +18,6 @@ type PaneDef struct {
 	Split   string   `yaml:"split,omitempty"`   // "horizontal" or "vertical"
 	Setup   []string `yaml:"setup,omitempty"`   // commands to run before main cmd
 	Enabled string   `yaml:"enabled,omitempty"` // expression like "${VAR:-true}"
-}
-
-// WindowDef defines a window (tab) with its panes.
-type WindowDef struct {
-	Name  string    `yaml:"name"`
-	Panes []PaneDef `yaml:"panes"`
 }
 
 // LayoutSettings contains optional layout configuration.
@@ -38,13 +32,12 @@ type LayoutConfig struct {
 	Description string            `yaml:"description,omitempty"`
 	Vars        map[string]string `yaml:"vars,omitempty"`
 	Settings    LayoutSettings    `yaml:"settings,omitempty"`
-	// Grid layouts (optional). If Grid is set, Windows is ignored.
+	// Grid layouts (optional). If Grid is set, Panes is ignored.
 	Grid     string   `yaml:"grid,omitempty"`     // e.g., "2x3"
 	Command  string   `yaml:"command,omitempty"`  // run in every pane
 	Commands []string `yaml:"commands,omitempty"` // per-pane commands (row-major)
 	Titles   []string `yaml:"titles,omitempty"`   // optional per-pane titles (row-major)
-	Window   string   `yaml:"window,omitempty"`   // window name for grid layouts
-	Windows  []WindowDef
+	Panes    []PaneDef `yaml:"panes,omitempty"`
 }
 
 // ProjectConfig represents a project entry in the config file.
@@ -60,7 +53,7 @@ type ProjectConfig struct {
 // ToolConfig defines an external tool command.
 type ToolConfig struct {
 	Cmd        string `yaml:"cmd"`
-	WindowName string `yaml:"window_name"`
+	PaneTitle  string `yaml:"pane_title,omitempty"`
 }
 
 // ToolsConfig groups tool definitions.
@@ -96,7 +89,7 @@ type DashboardKeymapConfig struct {
 	Attach          []string `yaml:"attach,omitempty"`
 	NewSession      []string `yaml:"new_session,omitempty"`
 	TerminalFocus   []string `yaml:"terminal_focus,omitempty"`
-	ToggleWindows   []string `yaml:"toggle_windows,omitempty"`
+	TogglePanes     []string `yaml:"toggle_panes,omitempty"`
 	OpenProject     []string `yaml:"open_project,omitempty"`
 	CommandPalette  []string `yaml:"command_palette,omitempty"`
 	Refresh         []string `yaml:"refresh,omitempty"`
@@ -210,11 +203,11 @@ func LoadProjectLocal(dir string) (*ProjectLocalConfig, error) {
 		return nil, fmt.Errorf("parse %q: %w", path, err)
 	}
 
-	// If layout is nil but we have windows or name at top level,
+	// If layout is nil but we have panes or grid at top level,
 	// treat the whole file as a LayoutConfig.
 	if cfg.Layout == nil {
 		var layout LayoutConfig
-		if err := yaml.Unmarshal(data, &layout); err == nil && (len(layout.Windows) > 0 || strings.TrimSpace(layout.Grid) != "") {
+		if err := yaml.Unmarshal(data, &layout); err == nil && (len(layout.Panes) > 0 || strings.TrimSpace(layout.Grid) != "") {
 			cfg.Layout = &layout
 		}
 	}
@@ -302,7 +295,6 @@ func ExpandLayoutVars(layout *LayoutConfig, extraVars map[string]string, project
 		Vars:        vars,
 		Grid:        ExpandVars(layout.Grid, vars, projectPath, projectName),
 		Command:     ExpandVars(layout.Command, vars, projectPath, projectName),
-		Window:      ExpandVars(layout.Window, vars, projectPath, projectName),
 	}
 
 	for _, cmd := range layout.Commands {
@@ -312,24 +304,18 @@ func ExpandLayoutVars(layout *LayoutConfig, extraVars map[string]string, project
 		expanded.Titles = append(expanded.Titles, ExpandVars(title, vars, projectPath, projectName))
 	}
 
-	for _, win := range layout.Windows {
-		expandedWin := WindowDef{
-			Name: ExpandVars(win.Name, vars, projectPath, projectName),
+	for _, pane := range layout.Panes {
+		expandedPane := PaneDef{
+			Title:   ExpandVars(pane.Title, vars, projectPath, projectName),
+			Cmd:     ExpandVars(pane.Cmd, vars, projectPath, projectName),
+			Size:    pane.Size,
+			Split:   pane.Split,
+			Enabled: pane.Enabled,
 		}
-		for _, pane := range win.Panes {
-			expandedPane := PaneDef{
-				Title:   ExpandVars(pane.Title, vars, projectPath, projectName),
-				Cmd:     ExpandVars(pane.Cmd, vars, projectPath, projectName),
-				Size:    pane.Size,
-				Split:   pane.Split,
-				Enabled: pane.Enabled,
-			}
-			for _, setup := range pane.Setup {
-				expandedPane.Setup = append(expandedPane.Setup, ExpandVars(setup, vars, projectPath, projectName))
-			}
-			expandedWin.Panes = append(expandedWin.Panes, expandedPane)
+		for _, setup := range pane.Setup {
+			expandedPane.Setup = append(expandedPane.Setup, ExpandVars(setup, vars, projectPath, projectName))
 		}
-		expanded.Windows = append(expanded.Windows, expandedWin)
+		expanded.Panes = append(expanded.Panes, expandedPane)
 	}
 
 	return expanded

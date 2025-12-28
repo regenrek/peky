@@ -46,19 +46,13 @@ func TestExpandLayoutVars(t *testing.T) {
 		},
 		Grid:    "${FOO}",
 		Command: "${EXTRA}",
-		Window:  "${PROJECT_NAME}",
 		Commands: []string{
 			"${FOO}",
 			"${BAR}",
 		},
 		Titles: []string{"${PROJECT_PATH}"},
-		Windows: []WindowDef{
-			{
-				Name: "win-${FOO}",
-				Panes: []PaneDef{
-					{Title: "${BAR}", Cmd: "${EXTRA}", Setup: []string{"${FOO}"}},
-				},
-			},
+		Panes: []PaneDef{
+			{Title: "${BAR}", Cmd: "${EXTRA}", Setup: []string{"${FOO}"}},
 		},
 	}
 
@@ -83,26 +77,20 @@ func TestExpandLayoutVars(t *testing.T) {
 	if expanded.Command != "extra" {
 		t.Fatalf("expanded.Command = %q", expanded.Command)
 	}
-	if expanded.Window != "myapp" {
-		t.Fatalf("expanded.Window = %q", expanded.Window)
-	}
 	if !reflect.DeepEqual(expanded.Commands, []string{"override", "two"}) {
 		t.Fatalf("expanded.Commands = %#v", expanded.Commands)
 	}
 	if !reflect.DeepEqual(expanded.Titles, []string{"/work/app"}) {
 		t.Fatalf("expanded.Titles = %#v", expanded.Titles)
 	}
-	if len(expanded.Windows) != 1 || expanded.Windows[0].Name != "win-override" {
-		t.Fatalf("expanded.Windows = %#v", expanded.Windows)
+	if len(expanded.Panes) != 1 || expanded.Panes[0].Title != "two" {
+		t.Fatalf("expanded.Panes = %#v", expanded.Panes)
 	}
-	if len(expanded.Windows[0].Panes) != 1 || expanded.Windows[0].Panes[0].Title != "two" {
-		t.Fatalf("expanded.Windows[0].Panes = %#v", expanded.Windows[0].Panes)
+	if expanded.Panes[0].Cmd != "extra" {
+		t.Fatalf("expanded.Panes[0].Cmd = %q", expanded.Panes[0].Cmd)
 	}
-	if expanded.Windows[0].Panes[0].Cmd != "extra" {
-		t.Fatalf("expanded.Windows[0].Panes[0].Cmd = %q", expanded.Windows[0].Panes[0].Cmd)
-	}
-	if !reflect.DeepEqual(expanded.Windows[0].Panes[0].Setup, []string{"override"}) {
-		t.Fatalf("expanded.Windows[0].Panes[0].Setup = %#v", expanded.Windows[0].Panes[0].Setup)
+	if !reflect.DeepEqual(expanded.Panes[0].Setup, []string{"override"}) {
+		t.Fatalf("expanded.Panes[0].Setup = %#v", expanded.Panes[0].Setup)
 	}
 }
 

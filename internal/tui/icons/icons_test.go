@@ -5,16 +5,16 @@ import "testing"
 func TestActiveDefaultsToUnicode(t *testing.T) {
 	t.Setenv("PEAKYPANES_ICON_SET", "")
 	set := Active()
-	if set.WindowLabel != Unicode.WindowLabel {
-		t.Fatalf("Active() = %#v, want Unicode", set.WindowLabel)
+	if set.PaneLabel != Unicode.PaneLabel {
+		t.Fatalf("Active() = %#v, want Unicode", set.PaneLabel)
 	}
 }
 
 func TestActiveUsesASCII(t *testing.T) {
 	t.Setenv("PEAKYPANES_ICON_SET", "ascii")
 	set := Active()
-	if set.WindowLabel != ASCII.WindowLabel {
-		t.Fatalf("Active() = %#v, want ASCII", set.WindowLabel)
+	if set.PaneLabel != ASCII.PaneLabel {
+		t.Fatalf("Active() = %#v, want ASCII", set.PaneLabel)
 	}
 }
 

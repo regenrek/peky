@@ -2,7 +2,6 @@ name: codex-grid
 description: "2x4 grid with 8 codex instances for parallel AI coding"
 
 grid: 2x4
-window: codex
 command: "codex"
 titles:
   - codex-1

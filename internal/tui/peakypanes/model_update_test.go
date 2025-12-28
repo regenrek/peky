@@ -56,17 +56,14 @@ func TestUpdateDashboardKeys(t *testing.T) {
 	m.data = DashboardData{Projects: []ProjectGroup{{
 		Name: "Proj",
 		Sessions: []SessionItem{{
-			Name:         "sess",
-			Status:       StatusRunning,
-			ActiveWindow: "1",
-			Path:         m.configPath,
-			Windows: []WindowItem{{
-				Index: "1",
-				Panes: []PaneItem{{Index: "0", Active: true}},
-			}},
+			Name:       "sess",
+			Status:     StatusRunning,
+			ActivePane: "0",
+			Path:       m.configPath,
+			Panes:      []PaneItem{{Index: "0", Active: true}},
 		}},
 	}}}
-	m.selection = selectionState{Project: "Proj", Session: "sess", Window: "1"}
+	m.selection = selectionState{Project: "Proj", Session: "sess", Pane: "0"}
 
 	m.filterActive = true
 	_, _ = m.updateDashboard(tea.KeyMsg{Type: tea.KeyEsc})
@@ -86,21 +83,16 @@ func TestPickersAndRenamePaths(t *testing.T) {
 	m.data = DashboardData{Projects: []ProjectGroup{{
 		Name: "Proj",
 		Sessions: []SessionItem{{
-			Name:         "sess",
-			Status:       StatusRunning,
-			ActiveWindow: "1",
-			Path:         m.configPath,
-			Windows: []WindowItem{{
-				Index: "1",
-				Name:  "win",
-				Panes: []PaneItem{{Index: "0", Title: "pane"}},
-			}},
+			Name:       "sess",
+			Status:     StatusRunning,
+			ActivePane: "0",
+			Path:       m.configPath,
+			Panes:      []PaneItem{{Index: "0", Title: "pane"}},
 		}},
 	}}}
-	m.selection = selectionState{Project: "Proj", Session: "sess", Window: "1"}
+	m.selection = selectionState{Project: "Proj", Session: "sess", Pane: "0"}
 
 	m.openRenameSession()
-	m.openRenameWindow()
 	m.openRenamePane()
 	_, _ = m.updateRename(tea.KeyMsg{Type: tea.KeyEsc})
 
@@ -146,7 +138,7 @@ func TestMiscHelpers(t *testing.T) {
 	m.setLayoutPickerSize()
 	m.setCommandPaletteSize()
 	m.setQuickReplySize()
-	m.toggleWindows()
+	m.togglePanes()
 
 	if out := layoutChoicesToItems([]LayoutChoice{{Label: "dev"}}); len(out) != 1 {
 		t.Fatalf("layoutChoicesToItems() = %#v", out)

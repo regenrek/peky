@@ -177,14 +177,6 @@ var SidebarSessionSelected = lipgloss.NewStyle().
 var SidebarSessionStopped = lipgloss.NewStyle().
 	Foreground(TextDim)
 
-// SidebarWindow for window rows.
-var SidebarWindow = lipgloss.NewStyle().
-	Foreground(TextSecondary)
-
-// SidebarWindowSelected for the active window.
-var SidebarWindowSelected = lipgloss.NewStyle().
-	Foreground(TextPrimary)
-
 // SidebarPane for pane rows.
 var SidebarPane = lipgloss.NewStyle().
 	Foreground(TextMuted)
@@ -195,10 +187,6 @@ var SidebarPaneSelected = lipgloss.NewStyle().
 
 // SidebarMeta for counts or metadata.
 var SidebarMeta = lipgloss.NewStyle().
-	Foreground(TextDim)
-
-// SidebarPrefix for row labels like "win"/"pane".
-var SidebarPrefix = lipgloss.NewStyle().
 	Foreground(TextDim)
 
 // ===== Shortcut/Help Styles =====
@@ -224,7 +212,7 @@ var ShortcutHint = lipgloss.NewStyle().
 
 // ===== Tabs and Sections =====
 
-// TabActive for active tabs (projects/windows).
+// TabActive for active tabs (projects/views).
 var TabActive = lipgloss.NewStyle().
 	Bold(true).
 	Foreground(TextPrimary).

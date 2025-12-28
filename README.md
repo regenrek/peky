@@ -22,9 +22,9 @@ Define your layouts in YAML, share them with your team via git, and get consiste
 - 🔄 **Variable expansion** - Use `${EDITOR}`, `${PROJECT_PATH}`, etc.
 - 🎯 **Zero config** - Just run `peakypanes` in any directory
 - 🧠 **Native live previews** - Full TUI support (vim/htop) with live panes
-- 🧭 **Native session manager** - Multi-window sessions with configurable layouts
+- 🧭 **Native session manager** - Multi-pane sessions with configurable layouts
 - 📜 **Scrollback + copy mode** - Navigate output and yank from native panes
-- ⌘ **Command palette** - Quick actions, including renaming sessions/windows
+- ⌘ **Command palette** - Quick actions, including renaming sessions/panes
 
 ## Quick Start
 
@@ -83,28 +83,22 @@ Create in your project root for team-shared layouts:
 session: my-project
 
 layout:
-  windows:
-    - name: dev
-      panes:
-        - title: editor
-          cmd: "${EDITOR:-}"
-          size: "60%"
-        - title: server
-          cmd: "npm run dev"
-          split: horizontal
-        - title: shell
-          cmd: ""
-          split: vertical
-
-    - name: logs
-      panes:
-        - title: docker
-          cmd: "docker compose logs -f"
+  panes:
+    - title: editor
+      cmd: "${EDITOR:-}"
+      size: "60%"
+    - title: server
+      cmd: "npm run dev"
+      split: horizontal
+    - title: shell
+      cmd: ""
+      split: vertical
+    - title: docker
+      cmd: "docker compose logs -f"
 
 # Or use exact grids
 # layout:
 #   grid: 2x3
-#   window: codex
 #   commands:
 #     - "${SHELL:-bash}"
 #     - "codex"
@@ -135,13 +129,11 @@ For personal layouts and multi-project management:
 # Custom layouts
 layouts:
   my-custom:
-    windows:
-      - name: main
-        panes:
-          - title: code
-            cmd: nvim
-          - title: term
-            cmd: ""
+    panes:
+      - title: code
+        cmd: nvim
+      - title: term
+        cmd: ""
 
 # Projects for quick switching
 projects:
@@ -166,10 +158,8 @@ Use variables in your layouts:
 layout:
   vars:
     log_file: "${HOME}/logs/${PROJECT_NAME}.log"
-  windows:
-    - name: dev
-      panes:
-        - cmd: "tail -f ${log_file}"
+  panes:
+    - cmd: "tail -f ${log_file}"
 ```
 
 ## Commands
@@ -202,7 +192,7 @@ Core (general) layouts:
 Additional built-ins (specialized):
 - `dev-2`: editor + shell
 - `dev-3`: editor + server + shell (default fallback)
-- `fullstack`: dev + logs
+- `fullstack`: editor + server + shell + logs
 - `go-dev`: code/run/test + git
 - `codex-grid`: 2x4 grid running codex in every pane
 
@@ -220,13 +210,13 @@ Running `peakypanes` with no subcommand opens the dashboard UI in the current te
 
 The dashboard shows:
 - Projects on top (tabs)
-- Sessions on the left (with window counts and expandable windows)
+- Sessions on the left (with pane counts and expandable panes)
 - Live pane preview on the right (native panes are fully interactive)
 - Lightweight session thumbnails at the bottom (last activity per session)
 - Quick reply bar (always visible) and target pane highlight for follow-ups
 
 Navigation (always visible):
-- `ctrl+a/ctrl+d` project, `ctrl+w/ctrl+s` session/window, `alt+w/alt+s` session only, `tab/⇧tab` pane (across windows), `ctrl+g` help
+- `ctrl+a/ctrl+d` project, `ctrl+w/ctrl+s` session/panes, `alt+w/alt+s` session only, `tab/⇧tab` pane, `ctrl+g` help
 
 Key bindings (also shown in the help view):
 Keymap overrides are available in the global config (`~/.config/peakypanes/config.yml`).
@@ -242,8 +232,8 @@ Session
 - rename session via command palette (`ctrl+p`)
 
 Window
-- `ctrl+u` toggle window list
-- rename window via command palette (`ctrl+p`)
+Pane list
+- `ctrl+u` toggle pane list
 
 Pane
 - rename pane via command palette (`ctrl+p`)
@@ -283,7 +273,7 @@ dashboard:
     terminal_focus: ["ctrl+\\"]
     scrollback: ["f7"]
     copy_mode: ["f8"]
-    toggle_windows: ["ctrl+u"]
+    toggle_panes: ["ctrl+u"]
     command_palette: ["ctrl+p"]
     help: ["ctrl+g"]
     quit: ["ctrl+c"]

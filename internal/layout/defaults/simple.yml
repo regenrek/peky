@@ -1,8 +1,6 @@
 name: simple
-description: "Single window with one pane - minimal setup"
+description: "Single pane - minimal setup"
 
-windows:
-  - name: main
-    panes:
-      - title: shell
-        cmd: ""
+panes:
+  - title: shell
+    cmd: ""

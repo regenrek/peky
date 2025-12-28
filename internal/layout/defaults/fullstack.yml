@@ -1,24 +1,18 @@
 name: fullstack
-description: "Fullstack development: editor, dev server, and logs"
+description: "Fullstack development: editor, dev server, shell, and logs"
 
-windows:
-  - name: dev
-    panes:
-      - title: editor
-        cmd: "${EDITOR:-}"
-        size: "50%"
-      - title: server
-        cmd: "npm run dev"
-        split: horizontal
-      - title: shell
-        cmd: ""
-        split: vertical
-
-  - name: logs
-    panes:
-      - title: app-logs
-        cmd: ""
-        size: "50%"
-      - title: docker
-        cmd: "docker compose logs -f 2>/dev/null || echo 'No docker compose found'"
-        split: horizontal
+grid: 2x3
+commands:
+  - "${EDITOR:-}"
+  - "npm run dev"
+  - ""
+  - ""
+  - "docker compose logs -f 2>/dev/null || echo 'No docker compose found'"
+  - ""
+titles:
+  - editor
+  - server
+  - shell
+  - app-logs
+  - docker
+  - ""

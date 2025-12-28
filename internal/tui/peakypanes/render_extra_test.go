@@ -16,25 +16,20 @@ func TestViewDashboardContentRenders(t *testing.T) {
 	m.data = DashboardData{Projects: []ProjectGroup{{
 		Name: "Proj",
 		Sessions: []SessionItem{{
-			Name:         "sess",
-			Status:       StatusRunning,
-			WindowCount:  1,
-			ActiveWindow: "1",
-			Windows: []WindowItem{{
-				Index:  "1",
-				Name:   "main",
+			Name:       "sess",
+			Status:     StatusRunning,
+			PaneCount:  1,
+			ActivePane: "0",
+			Panes: []PaneItem{{
+				Index:  "0",
+				Title:  "shell",
 				Active: true,
-				Panes: []PaneItem{{
-					Index:  "0",
-					Title:  "shell",
-					Active: true,
-					Width:  80,
-					Height: 24,
-				}},
+				Width:  80,
+				Height: 24,
 			}},
 		}},
 	}}}
-	m.selection = selectionState{Project: "Proj", Session: "sess", Window: "1", Pane: "0"}
+	m.selection = selectionState{Project: "Proj", Session: "sess", Pane: "0"}
 
 	out := m.viewDashboardContent()
 	if !strings.Contains(out, "Peaky Panes") {
@@ -83,9 +78,6 @@ func TestRenderHelpers(t *testing.T) {
 }
 
 func TestLayoutAndPathHelpers(t *testing.T) {
-	if windowNameOrDash("") != "-" {
-		t.Fatalf("windowNameOrDash(empty)")
-	}
 	if pathOrDash("") != "-" {
 		t.Fatalf("pathOrDash(empty)")
 	}
@@ -133,7 +125,6 @@ func TestViewStates(t *testing.T) {
 	}
 
 	m.renameSession = "sess"
-	m.renameWindowIndex = "1"
 	m.renamePaneIndex = "0"
 	m.initRenameInput("pane", "new name")
 	m.state = StateRenamePane

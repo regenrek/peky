@@ -1,15 +1,13 @@
 name: dev-3
 description: "Three-pane layout: large editor left, two stacked panes right"
 
-windows:
-  - name: dev
-    panes:
-      - title: editor
-        cmd: "${EDITOR:-}"
-        size: "60%"
-      - title: server
-        cmd: ""
-        split: horizontal
-      - title: shell
-        cmd: ""
-        split: vertical
+panes:
+  - title: editor
+    cmd: "${EDITOR:-}"
+    size: "60%"
+  - title: server
+    cmd: ""
+    split: horizontal
+  - title: shell
+    cmd: ""
+    split: vertical

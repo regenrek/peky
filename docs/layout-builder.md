@@ -8,7 +8,6 @@ This guide covers everything you need to know about creating custom layouts in P
 - [Pane Layouts](#pane-layouts)
 - [Split Directions](#split-directions)
 - [Variables](#variables)
-- [Multi-Window Layouts](#multi-window-layouts)
 - [Examples](#examples)
 - [Configuration Precedence](#configuration-precedence)
 - [Tips](#tips)
@@ -35,18 +34,16 @@ layout:
     width: 240          # Terminal width hint
     height: 84          # Terminal height hint
 
-  windows:
-    - name: dev
-      panes:
-        - title: editor
-          cmd: "${EDITOR:-}"
-          size: "60%"
-        - title: server
-          cmd: "npm run dev"
-          split: horizontal
-        - title: shell
-          cmd: ""
-          split: vertical
+  panes:
+    - title: editor
+      cmd: "${EDITOR:-}"
+      size: "60%"
+    - title: server
+      cmd: "npm run dev"
+      split: horizontal
+    - title: shell
+      cmd: ""
+      split: vertical
 ```
 
 ---
@@ -55,21 +52,19 @@ layout:
 
 ### Split Layouts (Recommended)
 
-Use `split` on panes after the first to control how the window is divided. The first pane defines the base area; each subsequent pane splits the remaining space of that base pane, so order matters.
+Use `split` on panes after the first to control how the layout is divided. The first pane defines the base area; each subsequent pane splits the remaining space of that base pane, so order matters.
 
 ```yaml
-windows:
-  - name: dev
-    panes:
-      - title: editor
-        cmd: "${EDITOR:-}"
-        size: "60%"
-      - title: server
-        cmd: "npm run dev"
-        split: horizontal
-      - title: shell
-        cmd: ""
-        split: vertical
+panes:
+  - title: editor
+    cmd: "${EDITOR:-}"
+    size: "60%"
+  - title: server
+    cmd: "npm run dev"
+    split: horizontal
+  - title: shell
+    cmd: ""
+    split: vertical
 ```
 
 ### Exact Grid Example (2x2)
@@ -78,7 +73,6 @@ Use `grid` when you need predictable rows/columns:
 
 ```yaml
 grid: 2x2
-window: main
 commands:
   - "codex"
   - "npm run dev"
@@ -103,18 +97,16 @@ For precise control, use `split` on individual panes:
 | `vertical` | Creates top/bottom panes |
 
 ```yaml
-windows:
-  - name: dev
-    panes:
-      - title: editor        # First pane (no split)
-        cmd: "${EDITOR:-}"
-        size: "60%"
-      - title: server        # Splits horizontally from editor
-        cmd: "npm run dev"
-        split: horizontal
-      - title: shell         # Splits vertically from editor's remaining space
-        cmd: ""
-        split: vertical
+panes:
+  - title: editor        # First pane (no split)
+    cmd: "${EDITOR:-}"
+    size: "60%"
+  - title: server        # Splits horizontally from editor
+    cmd: "npm run dev"
+    split: horizontal
+  - title: shell         # Splits vertically from editor's remaining space
+    cmd: ""
+    split: vertical
 ```
 
 This creates:
@@ -175,53 +167,18 @@ layout:
     rust_log: "${HOME}/Library/Logs/${PROJECT_NAME}/rust.log"
     codex_log: "${HOME}/.spezi/codex/log/app-server.log"
 
-  windows:
-    - name: logs
-      panes:
-        - title: rust
-          cmd: "tail -F ${rust_log}"
-        - title: codex
-          cmd: "tail -F ${codex_log}"
+  panes:
+    - title: rust
+      cmd: "tail -F ${rust_log}"
+    - title: codex
+      cmd: "tail -F ${codex_log}"
 ```
 
 ---
 
-## Multi-Window Layouts
+## Large Layouts
 
-Create multiple windows (tabs):
-
-```yaml
-layout:
-  windows:
-    # Window 1: Development
-    - name: dev
-      panes:
-        - title: editor
-          cmd: "${EDITOR:-}"
-          size: "60%"
-        - title: server
-          cmd: "npm run dev"
-          split: horizontal
-        - title: test
-          cmd: ""
-          split: vertical
-
-    # Window 2: Logs
-    - name: logs
-      panes:
-        - title: app-log
-          cmd: "tail -f logs/app.log"
-          size: "50%"
-        - title: error-log
-          cmd: "tail -f logs/error.log"
-          split: horizontal
-
-    # Window 3: Database
-    - name: db
-      panes:
-        - title: psql
-          cmd: "psql -d mydb"
-```
+When you need many panes, prefer a `grid:` layout for predictable sizing.
 
 ---
 
@@ -236,27 +193,22 @@ layout:
   name: fullstack
   description: "Full-stack development with logs"
 
-  windows:
-    - name: code
-      panes:
-        - title: editor
-          cmd: "${EDITOR:-}"
-          size: "60%"
-        - title: server
-          cmd: "npm run dev"
-          split: horizontal
-        - title: shell
-          cmd: ""
-          split: vertical
-
-    - name: logs
-      panes:
-        - title: frontend
-          cmd: "tail -f logs/frontend.log"
-          size: "50%"
-        - title: backend
-          cmd: "tail -f logs/backend.log"
-          split: horizontal
+  panes:
+    - title: editor
+      cmd: "${EDITOR:-}"
+      size: "60%"
+    - title: server
+      cmd: "npm run dev"
+      split: horizontal
+    - title: shell
+      cmd: ""
+      split: vertical
+    - title: frontend
+      cmd: "tail -f logs/frontend.log"
+      split: vertical
+    - title: backend
+      cmd: "tail -f logs/backend.log"
+      split: vertical
 ```
 
 ### Tauri/Rust Development
@@ -276,21 +228,19 @@ layout:
     width: 240
     height: 84
 
-  windows:
-    - name: dev
-      panes:
-        - title: codex
-          cmd: "RUST_LOG=debug codex"
-          size: "50%"
-        - title: bun-dev
-          cmd: "bun dev:tauri"
-          split: horizontal
-        - title: codex-logs
-          cmd: "tail -F ${codex_log} | grep -Ev '\\bINFO\\b'"
-          split: vertical
-        - title: rust-logs
-          cmd: "tail -F ${rust_log}"
-          split: vertical
+  panes:
+    - title: codex
+      cmd: "RUST_LOG=debug codex"
+      size: "50%"
+    - title: bun-dev
+      cmd: "bun dev:tauri"
+      split: horizontal
+    - title: codex-logs
+      cmd: "tail -F ${codex_log} | grep -Ev '\\bINFO\\b'"
+      split: vertical
+    - title: rust-logs
+      cmd: "tail -F ${rust_log}"
+      split: vertical
 ```
 
 ### Go Development
@@ -301,38 +251,31 @@ session: go-project
 layout:
   name: go-dev
 
-  windows:
-    - name: dev
-      panes:
-        - title: editor
-          cmd: "${EDITOR:-}"
-          size: "60%"
-        - title: run
-          cmd: ""
-          split: horizontal
-        - title: test
-          cmd: ""
-          split: vertical
-
-    - name: git
-      panes:
-        - title: lazygit
-          cmd: "lazygit"
+  panes:
+    - title: editor
+      cmd: "${EDITOR:-}"
+      size: "60%"
+    - title: run
+      cmd: ""
+      split: horizontal
+    - title: test
+      cmd: ""
+      split: vertical
+    - title: lazygit
+      cmd: "lazygit"
 ```
 
 ### Simple 2-Pane Layout
 
 ```yaml
 layout:
-  windows:
-    - name: dev
-      panes:
-        - title: editor
-          cmd: "${EDITOR:-}"
-          size: "60%"
-        - title: terminal
-          cmd: ""
-          split: horizontal
+  panes:
+    - title: editor
+      cmd: "${EDITOR:-}"
+      size: "60%"
+    - title: terminal
+      cmd: ""
+      split: horizontal
 ```
 
 ---

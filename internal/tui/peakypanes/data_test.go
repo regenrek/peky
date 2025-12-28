@@ -205,23 +205,23 @@ func TestResolveSelection(t *testing.T) {
 		{
 			Name: "A",
 			Sessions: []SessionItem{
-				{Name: "s1", ActiveWindow: "0", Windows: []WindowItem{{Index: "0"}, {Index: "1"}}},
+				{Name: "s1", ActivePane: "0", Panes: []PaneItem{{Index: "0"}, {Index: "1"}}},
 			},
 		},
 		{
 			Name: "B",
 			Sessions: []SessionItem{
-				{Name: "s2", ActiveWindow: "2", Windows: []WindowItem{{Index: "2"}}},
+				{Name: "s2", ActivePane: "2", Panes: []PaneItem{{Index: "2"}}},
 			},
 		},
 	}
-	resolved := resolveSelection(groups, selectionState{Project: "B", Session: "s2", Window: "2"})
-	if resolved.Project != "B" || resolved.Session != "s2" || resolved.Window != "2" {
+	resolved := resolveSelection(groups, selectionState{Project: "B", Session: "s2", Pane: "2"})
+	if resolved.Project != "B" || resolved.Session != "s2" || resolved.Pane != "2" {
 		t.Fatalf("resolveSelection() = %#v", resolved)
 	}
-	resolved = resolveSelection(groups, selectionState{Project: "B", Session: "s2", Window: "missing"})
-	if resolved.Window != "2" {
-		t.Fatalf("resolveSelection() window fallback = %#v", resolved)
+	resolved = resolveSelection(groups, selectionState{Project: "B", Session: "s2", Pane: "missing"})
+	if resolved.Pane != "missing" {
+		t.Fatalf("resolveSelection() pane passthrough = %#v", resolved)
 	}
 }
 
@@ -233,10 +233,7 @@ func TestResolveDashboardSelection(t *testing.T) {
 				{
 					Name:   "s1",
 					Status: StatusRunning,
-					Windows: []WindowItem{{
-						Index: "0",
-						Panes: []PaneItem{{Index: "0", Active: true}},
-					}},
+					Panes: []PaneItem{{Index: "0", Active: true}},
 				},
 			},
 		},
@@ -246,17 +243,14 @@ func TestResolveDashboardSelection(t *testing.T) {
 				{
 					Name:   "s2",
 					Status: StatusRunning,
-					Windows: []WindowItem{{
-						Index: "1",
-						Panes: []PaneItem{{Index: "2", Active: true}},
-					}},
+					Panes: []PaneItem{{Index: "2", Active: true}},
 				},
 			},
 		},
 	}
-	desired := selectionState{Session: "s2", Window: "1", Pane: "2"}
+	desired := selectionState{Session: "s2", Pane: "2"}
 	resolved := resolveDashboardSelection(groups, desired)
-	if resolved.Project != "B" || resolved.Session != "s2" || resolved.Window != "1" || resolved.Pane != "2" {
+	if resolved.Project != "B" || resolved.Session != "s2" || resolved.Pane != "2" {
 		t.Fatalf("resolveDashboardSelection() = %#v", resolved)
 	}
 }
@@ -288,11 +282,11 @@ func TestBuildDashboardData(t *testing.T) {
 	if session.Status != StatusRunning {
 		t.Fatalf("session status = %v", session.Status)
 	}
-	if session.WindowCount == 0 || session.ActiveWindow == "" {
-		t.Fatalf("session windows = %d active=%q", session.WindowCount, session.ActiveWindow)
+	if session.PaneCount == 0 || session.ActivePane == "" {
+		t.Fatalf("session panes = %d active=%q", session.PaneCount, session.ActivePane)
 	}
-	if len(session.Windows) == 0 || len(session.Windows[0].Panes) == 0 {
-		t.Fatalf("panes not attached: %#v", session.Windows)
+	if len(session.Panes) == 0 {
+		t.Fatalf("panes not attached: %#v", session.Panes)
 	}
 	if result.Resolved.Session != snap.Name {
 		t.Fatalf("Resolved = %#v", result.Resolved)

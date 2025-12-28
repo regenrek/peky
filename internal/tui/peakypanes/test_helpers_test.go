@@ -37,12 +37,9 @@ func startNativeSession(t *testing.T, model *Model, name string) native.SessionS
 	path := t.TempDir()
 	layoutCfg := &layout.LayoutConfig{
 		Name: "test",
-		Windows: []layout.WindowDef{{
-			Name: "main",
-			Panes: []layout.PaneDef{{
-				Title: "pane",
-				Cmd:   "cat",
-			}},
+		Panes: []layout.PaneDef{{
+			Title: "pane",
+			Cmd:   "cat",
 		}},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

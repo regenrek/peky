@@ -2,7 +2,6 @@ name: 3x4
 description: "Generic 3x4 grid (12 panes)"
 
 grid: 3x4
-window: grid
 titles:
   - pane-1
   - pane-2
