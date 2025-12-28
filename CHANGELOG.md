@@ -25,6 +25,7 @@ This format is based on Keep a Changelog.
 - Add pane now uses a lightweight direction prompt instead of a list picker.
 - Window rendering now supports scrollback viewports and copy-mode highlights for native panes.
 - Alternate screen panes no longer record scrollback history.
+- Default pane titles now compress path-like window names to readable repo-relative labels and de-duplicate duplicates.
 
 ### Fixed
 - Space key now passes correctly in native terminal focus.

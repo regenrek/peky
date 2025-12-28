@@ -3,42 +3,12 @@ package peakypanes
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 	"unicode"
 
 	"github.com/regenrek/peakypanes/internal/layout"
 )
-
-func expandPath(p string) string {
-	if p == "" {
-		return p
-	}
-	if strings.HasPrefix(p, "~") {
-		home, err := os.UserHomeDir()
-		if err == nil {
-			if p == "~" {
-				return home
-			}
-			if strings.HasPrefix(p, "~/") {
-				return filepath.Join(home, p[2:])
-			}
-		}
-	}
-	return p
-}
-
-func shortenPath(p string) string {
-	if p == "" {
-		return p
-	}
-	home, err := os.UserHomeDir()
-	if err == nil && strings.HasPrefix(p, home) {
-		return "~" + strings.TrimPrefix(p, home)
-	}
-	return p
-}
 
 func validateSessionName(name string) error {
 	if strings.TrimSpace(name) == "" {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/native"
+	"github.com/regenrek/peakypanes/internal/pathutil"
 	"gopkg.in/yaml.v3"
 )
 
@@ -156,7 +157,7 @@ func normalizeProjectPath(path string) string {
 	if path == "" {
 		return ""
 	}
-	path = expandPath(path)
+	path = pathutil.ExpandUser(path)
 	path = filepath.Clean(path)
 	return path
 }
@@ -172,7 +173,7 @@ func normalizeProjectRoots(roots []string) []string {
 		if root == "" {
 			continue
 		}
-		root = filepath.Clean(expandPath(root))
+		root = filepath.Clean(pathutil.ExpandUser(root))
 		if _, ok := seen[root]; ok {
 			continue
 		}
@@ -321,32 +322,30 @@ func buildDashboardData(input dashboardSnapshotInput) dashboardSnapshotResult {
 			}
 		}
 
-		activeWindow := ""
-		if len(s.Windows) > 0 {
-			activeWindow = s.Windows[0].Index
-		}
-		windows := windowsFromNative(s.Windows, activeWindow, settings)
-		windowCount := len(windows)
+		now := time.Now()
+		panes := panesFromNative(s.Panes, settings, now)
+		activePane := activePaneIndex(panes)
+		paneCount := len(panes)
 
 		item := findSession(group, s.Name)
 		if item == nil {
 			group.Sessions = append(group.Sessions, SessionItem{
-				Name:         s.Name,
-				Path:         path,
-				LayoutName:   s.LayoutName,
-				Status:       status,
-				WindowCount:  windowCount,
-				ActiveWindow: activeWindow,
-				Windows:      windows,
+				Name:       s.Name,
+				Path:       path,
+				LayoutName: s.LayoutName,
+				Status:     status,
+				PaneCount:  paneCount,
+				ActivePane: activePane,
+				Panes:      panes,
 			})
 			item = &group.Sessions[len(group.Sessions)-1]
 		} else {
 			item.Status = status
 			item.Path = path
 			item.LayoutName = s.LayoutName
-			item.WindowCount = windowCount
-			item.ActiveWindow = activeWindow
-			item.Windows = windows
+			item.PaneCount = paneCount
+			item.ActivePane = activePane
+			item.Panes = panes
 		}
 	}
 
@@ -373,16 +372,7 @@ func buildDashboardData(input dashboardSnapshotInput) dashboardSnapshotResult {
 
 	if input.Tab == TabProject && resolved.Session != "" {
 		if target := findSessionByName(groups, resolved.Session); target != nil {
-			windowIndex := resolved.Window
-			if windowIndex == "" {
-				windowIndex = target.ActiveWindow
-			}
-			if windowIndex != "" {
-				window := selectedWindow(target, windowIndex)
-				if window != nil {
-					resolved.Pane = resolvePaneSelection(resolved.Pane, window.Panes)
-				}
-			}
+			resolved.Pane = resolvePaneSelection(resolved.Pane, target.Panes)
 		}
 	}
 
@@ -440,16 +430,6 @@ func resolveSelection(groups []ProjectGroup, desired selectionState) selectionSt
 		session = &project.Sessions[0]
 	}
 	resolved.Session = session.Name
-	if desired.Window != "" {
-		if windowExists(session.Windows, desired.Window) {
-			resolved.Window = desired.Window
-		} else {
-			resolved.Window = session.ActiveWindow
-		}
-		if resolved.Window == "" && len(session.Windows) > 0 {
-			resolved.Window = session.Windows[0].Index
-		}
-	}
 	resolved.Pane = desired.Pane
 	return resolved
 }
@@ -479,7 +459,6 @@ func resolveDashboardSelectionFromColumns(columns []DashboardProjectColumn, desi
 				return selectionState{
 					Project: column.ProjectName,
 					Session: pane.SessionName,
-					Window:  pane.WindowIndex,
 					Pane:    pane.Pane.Index,
 				}
 			}
@@ -501,7 +480,6 @@ func resolveDashboardSelectionFromColumns(columns []DashboardProjectColumn, desi
 			return selectionState{
 				Project: column.ProjectName,
 				Session: pane.SessionName,
-				Window:  pane.WindowIndex,
 				Pane:    pane.Pane.Index,
 			}
 		}
@@ -514,7 +492,6 @@ func resolveDashboardSelectionFromColumns(columns []DashboardProjectColumn, desi
 		return selectionState{
 			Project: column.ProjectName,
 			Session: pane.SessionName,
-			Window:  pane.WindowIndex,
 			Pane:    pane.Pane.Index,
 		}
 	}
@@ -580,27 +557,6 @@ func findProjectForSession(groups []ProjectGroup, name string) (*ProjectGroup, *
 	return nil, nil
 }
 
-func windowsFromNative(windows []native.WindowSnapshot, activeWindow string, settings DashboardConfig) []WindowItem {
-	if len(windows) == 0 {
-		return nil
-	}
-	if strings.TrimSpace(activeWindow) == "" {
-		activeWindow = windows[0].Index
-	}
-	items := make([]WindowItem, len(windows))
-	now := time.Now()
-	for i, w := range windows {
-		panes := panesFromNative(w.Panes, settings, now)
-		items[i] = WindowItem{
-			Index:  w.Index,
-			Name:   w.Name,
-			Active: w.Index == activeWindow,
-			Panes:  panes,
-		}
-	}
-	return items
-}
-
 func panesFromNative(panes []native.PaneSnapshot, settings DashboardConfig, now time.Time) []PaneItem {
 	if len(panes) == 0 {
 		return nil
@@ -628,15 +584,6 @@ func panesFromNative(panes []native.PaneSnapshot, settings DashboardConfig, now 
 		items[i] = item
 	}
 	return items
-}
-
-func windowExists(windows []WindowItem, index string) bool {
-	for _, w := range windows {
-		if w.Index == index {
-			return true
-		}
-	}
-	return false
 }
 
 func paneExists(panes []PaneItem, index string) bool {
@@ -675,19 +622,18 @@ func sessionThumbnailFromData(session *SessionItem, settings DashboardConfig) Pa
 	if session == nil {
 		return PaneSummary{}
 	}
-	window := selectedWindow(session, session.ActiveWindow)
-	if window == nil || len(window.Panes) == 0 {
+	if len(session.Panes) == 0 {
 		return PaneSummary{}
 	}
 	var active *PaneItem
-	for i := range window.Panes {
-		if window.Panes[i].Active {
-			active = &window.Panes[i]
+	for i := range session.Panes {
+		if session.Panes[i].Active {
+			active = &session.Panes[i]
 			break
 		}
 	}
 	if active == nil {
-		active = &window.Panes[0]
+		active = &session.Panes[0]
 	}
 	return PaneSummary{Line: paneSummaryLine(*active, settings.ThumbnailLines), Status: active.Status}
 }

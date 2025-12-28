@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/pathutil"
 )
 
 // TestExpandPath tests the path expansion helper
@@ -22,9 +23,9 @@ func TestExpandPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := expandPath(tt.input)
+			got := pathutil.ExpandUser(tt.input)
 			if tt.want != "" && got != tt.want {
-				t.Errorf("expandPath(%q) = %q, want %q", tt.input, got, tt.want)
+				t.Errorf("ExpandUser(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
 	}
@@ -33,15 +34,15 @@ func TestExpandPath(t *testing.T) {
 // TestExpandPathTilde tests tilde expansion specifically
 func TestExpandPathTilde(t *testing.T) {
 	// Test tilde alone
-	result := expandPath("~")
+	result := pathutil.ExpandUser("~")
 	if result == "~" {
-		t.Error("expandPath(~) should expand to home directory")
+		t.Error("ExpandUser(~) should expand to home directory")
 	}
 
 	// Test tilde with path
-	result = expandPath("~/projects")
+	result = pathutil.ExpandUser("~/projects")
 	if result == "~/projects" {
-		t.Error("expandPath(~/projects) should expand to home/projects")
+		t.Error("ExpandUser(~/projects) should expand to home/projects")
 	}
 }
 
@@ -58,9 +59,9 @@ func TestShortenPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := shortenPath(tt.input)
+			got := pathutil.ShortenUser(tt.input)
 			if got != tt.want {
-				t.Errorf("shortenPath(%q) = %q, want %q", tt.input, got, tt.want)
+				t.Errorf("ShortenUser(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
 	}
@@ -145,8 +146,8 @@ func TestKeyBindings(t *testing.T) {
 	if !key.Matches(tea.KeyMsg{Type: tea.KeyShiftTab}, km.panePrev) {
 		t.Error("panePrev binding should match Shift+Tab key")
 	}
-	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlU}, km.toggleWindows) {
-		t.Error("toggleWindows binding should match ctrl+u")
+	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlU}, km.togglePanes) {
+		t.Error("togglePanes binding should match ctrl+u")
 	}
 	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlG}, km.help) {
 		t.Error("help binding should match ctrl+g")

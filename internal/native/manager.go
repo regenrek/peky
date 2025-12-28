@@ -55,15 +55,8 @@ type Session struct {
 	Name       string
 	Path       string
 	LayoutName string
-	Windows    []*Window
+	Panes      []*Pane
 	CreatedAt  time.Time
-}
-
-// Window groups panes for a layout window.
-type Window struct {
-	Index string
-	Name  string
-	Panes []*Pane
 }
 
 // Pane represents a running terminal pane.
@@ -112,11 +105,9 @@ func (m *Manager) Close() {
 	}
 	m.mu.Lock()
 	for _, session := range m.sessions {
-		for _, window := range session.Windows {
-			for _, pane := range window.Panes {
-				if pane.window != nil {
-					_ = pane.window.Close()
-				}
+		for _, pane := range session.Panes {
+			if pane.window != nil {
+				_ = pane.window.Close()
 			}
 		}
 	}
@@ -191,19 +182,15 @@ func (m *Manager) KillSession(name string) error {
 	}
 	delete(m.sessions, name)
 	var paneIDs []string
-	for _, window := range session.Windows {
-		for _, pane := range window.Panes {
-			paneIDs = append(paneIDs, pane.ID)
-			delete(m.panes, pane.ID)
-		}
+	for _, pane := range session.Panes {
+		paneIDs = append(paneIDs, pane.ID)
+		delete(m.panes, pane.ID)
 	}
 	m.mu.Unlock()
 
-	for _, window := range session.Windows {
-		for _, pane := range window.Panes {
-			if pane.window != nil {
-				_ = pane.window.Close()
-			}
+	for _, pane := range session.Panes {
+		if pane.window != nil {
+			_ = pane.window.Close()
 		}
 	}
 	for _, id := range paneIDs {
@@ -237,42 +224,15 @@ func (m *Manager) RenameSession(oldName, newName string) error {
 	return nil
 }
 
-// RenameWindow updates a window title in a session.
-func (m *Manager) RenameWindow(sessionName, windowIndex, newName string) error {
-	if m == nil {
-		return errors.New("native: manager is nil")
-	}
-	sessionName = strings.TrimSpace(sessionName)
-	windowIndex = strings.TrimSpace(windowIndex)
-	newName = strings.TrimSpace(newName)
-	if sessionName == "" || windowIndex == "" || newName == "" {
-		return errors.New("native: session/window name is required")
-	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	session, ok := m.sessions[sessionName]
-	if !ok {
-		return fmt.Errorf("native: session %q not found", sessionName)
-	}
-	for _, window := range session.Windows {
-		if window.Index == windowIndex {
-			window.Name = newName
-			return nil
-		}
-	}
-	return fmt.Errorf("native: window %q not found in %q", windowIndex, sessionName)
-}
-
 // RenamePane updates a pane title.
-func (m *Manager) RenamePane(sessionName, windowIndex, paneIndex, newTitle string) error {
+func (m *Manager) RenamePane(sessionName, paneIndex, newTitle string) error {
 	if m == nil {
 		return errors.New("native: manager is nil")
 	}
 	sessionName = strings.TrimSpace(sessionName)
-	windowIndex = strings.TrimSpace(windowIndex)
 	paneIndex = strings.TrimSpace(paneIndex)
 	newTitle = strings.TrimSpace(newTitle)
-	if sessionName == "" || windowIndex == "" || paneIndex == "" || newTitle == "" {
+	if sessionName == "" || paneIndex == "" || newTitle == "" {
 		return errors.New("native: pane name is required")
 	}
 	m.mu.Lock()
@@ -281,33 +241,27 @@ func (m *Manager) RenamePane(sessionName, windowIndex, paneIndex, newTitle strin
 	if !ok {
 		return fmt.Errorf("native: session %q not found", sessionName)
 	}
-	for _, window := range session.Windows {
-		if window.Index != windowIndex {
-			continue
-		}
-		for _, pane := range window.Panes {
-			if pane.Index == paneIndex {
-				pane.Title = newTitle
-				if pane.window != nil {
-					pane.window.SetTitle(newTitle)
-				}
-				return nil
+	for _, pane := range session.Panes {
+		if pane.Index == paneIndex {
+			pane.Title = newTitle
+			if pane.window != nil {
+				pane.window.SetTitle(newTitle)
 			}
+			return nil
 		}
 	}
 	return fmt.Errorf("native: pane %q not found in %q", paneIndex, sessionName)
 }
 
-// ClosePane removes a pane from a window and reflows remaining panes.
-func (m *Manager) ClosePane(ctx context.Context, sessionName, windowIndex, paneIndex string) error {
+// ClosePane removes a pane from a session and reflows remaining panes.
+func (m *Manager) ClosePane(ctx context.Context, sessionName, paneIndex string) error {
 	if m == nil {
 		return errors.New("native: manager is nil")
 	}
 	sessionName = strings.TrimSpace(sessionName)
-	windowIndex = strings.TrimSpace(windowIndex)
 	paneIndex = strings.TrimSpace(paneIndex)
-	if sessionName == "" || windowIndex == "" || paneIndex == "" {
-		return errors.New("native: session, window, and pane are required")
+	if sessionName == "" || paneIndex == "" {
+		return errors.New("native: session and pane are required")
 	}
 	if ctx != nil {
 		select {
@@ -326,14 +280,9 @@ func (m *Manager) ClosePane(ctx context.Context, sessionName, windowIndex, paneI
 		m.mu.Unlock()
 		return fmt.Errorf("native: session %q not found", sessionName)
 	}
-	window := findWindowByIndex(session, windowIndex)
-	if window == nil {
-		m.mu.Unlock()
-		return fmt.Errorf("native: window %q not found in %q", windowIndex, sessionName)
-	}
 	paneIdx := -1
 	var pane *Pane
-	for i, candidate := range window.Panes {
+	for i, candidate := range session.Panes {
 		if candidate.Index == paneIndex {
 			paneIdx = i
 			pane = candidate
@@ -345,12 +294,11 @@ func (m *Manager) ClosePane(ctx context.Context, sessionName, windowIndex, paneI
 		return fmt.Errorf("native: pane %q not found in %q", paneIndex, sessionName)
 	}
 
-	window.Panes = append(window.Panes[:paneIdx], window.Panes[paneIdx+1:]...)
+	session.Panes = append(session.Panes[:paneIdx], session.Panes[paneIdx+1:]...)
 	delete(m.panes, pane.ID)
 	paneWindow = pane.window
 
-	if len(window.Panes) == 0 {
-		removeWindowByIndex(session, windowIndex)
+	if len(session.Panes) == 0 {
 		m.mu.Unlock()
 		if paneWindow != nil {
 			_ = paneWindow.Close()
@@ -358,11 +306,11 @@ func (m *Manager) ClosePane(ctx context.Context, sessionName, windowIndex, paneI
 		m.notify(pane.ID)
 		return nil
 	}
-	if !anyPaneActive(window) {
-		window.Panes[0].Active = true
+	if !anyPaneActive(session.Panes) {
+		session.Panes[0].Active = true
 	}
-	retileWindow(window)
-	for _, remaining := range window.Panes {
+	retilePanes(session.Panes)
+	for _, remaining := range session.Panes {
 		notifyIDs = append(notifyIDs, remaining.ID)
 	}
 	m.mu.Unlock()
@@ -377,16 +325,15 @@ func (m *Manager) ClosePane(ctx context.Context, sessionName, windowIndex, paneI
 	return nil
 }
 
-// SplitPane splits a pane inside a window and returns the new pane index.
-func (m *Manager) SplitPane(ctx context.Context, sessionName, windowIndex, paneIndex string, vertical bool, percent int) (string, error) {
+// SplitPane splits a pane inside a session and returns the new pane index.
+func (m *Manager) SplitPane(ctx context.Context, sessionName, paneIndex string, vertical bool, percent int) (string, error) {
 	if m == nil {
 		return "", errors.New("native: manager is nil")
 	}
 	sessionName = strings.TrimSpace(sessionName)
-	windowIndex = strings.TrimSpace(windowIndex)
 	paneIndex = strings.TrimSpace(paneIndex)
-	if sessionName == "" || windowIndex == "" || paneIndex == "" {
-		return "", errors.New("native: session, window, and pane are required")
+	if sessionName == "" || paneIndex == "" {
+		return "", errors.New("native: session and pane are required")
 	}
 
 	m.mu.RLock()
@@ -395,17 +342,12 @@ func (m *Manager) SplitPane(ctx context.Context, sessionName, windowIndex, paneI
 		m.mu.RUnlock()
 		return "", fmt.Errorf("native: session %q not found", sessionName)
 	}
-	window := findWindowByIndex(session, windowIndex)
-	if window == nil {
-		m.mu.RUnlock()
-		return "", fmt.Errorf("native: window %q not found in %q", windowIndex, sessionName)
-	}
-	target := findPaneByIndex(window, paneIndex)
+	target := findPaneByIndex(session.Panes, paneIndex)
 	if target == nil {
 		m.mu.RUnlock()
 		return "", fmt.Errorf("native: pane %q not found in %q", paneIndex, sessionName)
 	}
-	newIndex := nextPaneIndex(window)
+	newIndex := nextPaneIndex(session.Panes)
 	startDir := strings.TrimSpace(session.Path)
 	m.mu.RUnlock()
 
@@ -426,13 +368,7 @@ func (m *Manager) SplitPane(ctx context.Context, sessionName, windowIndex, paneI
 		_ = pane.window.Close()
 		return "", fmt.Errorf("native: session %q not found", sessionName)
 	}
-	window = findWindowByIndex(session, windowIndex)
-	if window == nil {
-		m.mu.Unlock()
-		_ = pane.window.Close()
-		return "", fmt.Errorf("native: window %q not found in %q", windowIndex, sessionName)
-	}
-	target = findPaneByIndex(window, paneIndex)
+	target = findPaneByIndex(session.Panes, paneIndex)
 	if target == nil {
 		m.mu.Unlock()
 		_ = pane.window.Close()
@@ -441,14 +377,14 @@ func (m *Manager) SplitPane(ctx context.Context, sessionName, windowIndex, paneI
 	oldRect, newRect := splitRect(rectFromPane(target), vertical, percent)
 	target.Left, target.Top, target.Width, target.Height = oldRect.x, oldRect.y, oldRect.w, oldRect.h
 
-	for _, existing := range window.Panes {
+	for _, existing := range session.Panes {
 		existing.Active = false
 	}
 	pane.Index = newIndex
 	pane.Active = true
 	pane.Left, pane.Top, pane.Width, pane.Height = newRect.x, newRect.y, newRect.w, newRect.h
 	pane.LastActive = time.Now()
-	window.Panes = append(window.Panes, pane)
+	session.Panes = append(session.Panes, pane)
 	m.panes[pane.ID] = pane
 	m.mu.Unlock()
 
@@ -457,96 +393,16 @@ func (m *Manager) SplitPane(ctx context.Context, sessionName, windowIndex, paneI
 	return pane.Index, nil
 }
 
-// MovePaneToNewWindow moves a pane into a new window and returns the new window and pane indexes.
-func (m *Manager) MovePaneToNewWindow(ctx context.Context, sessionName, windowIndex, paneIndex string) (string, string, error) {
-	if m == nil {
-		return "", "", errors.New("native: manager is nil")
-	}
-	sessionName = strings.TrimSpace(sessionName)
-	windowIndex = strings.TrimSpace(windowIndex)
-	paneIndex = strings.TrimSpace(paneIndex)
-	if sessionName == "" || windowIndex == "" || paneIndex == "" {
-		return "", "", errors.New("native: session, window, and pane are required")
-	}
-	if ctx != nil {
-		select {
-		case <-ctx.Done():
-			return "", "", ctx.Err()
-		default:
-		}
-	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	session, ok := m.sessions[sessionName]
-	if !ok {
-		return "", "", fmt.Errorf("native: session %q not found", sessionName)
-	}
-	window := findWindowByIndex(session, windowIndex)
-	if window == nil {
-		return "", "", fmt.Errorf("native: window %q not found in %q", windowIndex, sessionName)
-	}
-	paneIdx := -1
-	var pane *Pane
-	for i, candidate := range window.Panes {
-		if candidate.Index == paneIndex {
-			paneIdx = i
-			pane = candidate
-			break
-		}
-	}
-	if pane == nil {
-		return "", "", fmt.Errorf("native: pane %q not found in %q", paneIndex, sessionName)
-	}
-
-	window.Panes = append(window.Panes[:paneIdx], window.Panes[paneIdx+1:]...)
-	var notifyIDs []string
-	if len(window.Panes) == 0 {
-		removeWindowByIndex(session, windowIndex)
-	} else {
-		if !anyPaneActive(window) {
-			window.Panes[0].Active = true
-		}
-		retileWindow(window)
-		for _, remaining := range window.Panes {
-			notifyIDs = append(notifyIDs, remaining.ID)
-		}
-	}
-
-	windowName := strings.TrimSpace(pane.Title)
-	if windowName == "" {
-		windowName = "window"
-	}
-	newWindowIndex := nextWindowIndex(session)
-	newWindow := &Window{
-		Index: newWindowIndex,
-		Name:  windowName,
-		Panes: []*Pane{pane},
-	}
-	pane.Index = "0"
-	pane.Active = true
-	pane.Left, pane.Top, pane.Width, pane.Height = 0, 0, layoutBaseSize, layoutBaseSize
-	pane.LastActive = time.Now()
-	session.Windows = append(session.Windows, newWindow)
-	m.notify(pane.ID)
-	for _, id := range notifyIDs {
-		m.notify(id)
-	}
-
-	return newWindowIndex, pane.Index, nil
-}
-
-// SwapPanes swaps two panes within the same window.
-func (m *Manager) SwapPanes(sessionName, windowIndex, paneA, paneB string) error {
+// SwapPanes swaps two panes within the same session.
+func (m *Manager) SwapPanes(sessionName, paneA, paneB string) error {
 	if m == nil {
 		return errors.New("native: manager is nil")
 	}
 	sessionName = strings.TrimSpace(sessionName)
-	windowIndex = strings.TrimSpace(windowIndex)
 	paneA = strings.TrimSpace(paneA)
 	paneB = strings.TrimSpace(paneB)
-	if sessionName == "" || windowIndex == "" || paneA == "" || paneB == "" {
-		return errors.New("native: session, window, and panes are required")
+	if sessionName == "" || paneA == "" || paneB == "" {
+		return errors.New("native: session and panes are required")
 	}
 	if paneA == paneB {
 		return nil
@@ -558,12 +414,8 @@ func (m *Manager) SwapPanes(sessionName, windowIndex, paneA, paneB string) error
 	if !ok {
 		return fmt.Errorf("native: session %q not found", sessionName)
 	}
-	window := findWindowByIndex(session, windowIndex)
-	if window == nil {
-		return fmt.Errorf("native: window %q not found in %q", windowIndex, sessionName)
-	}
-	first := findPaneByIndex(window, paneA)
-	second := findPaneByIndex(window, paneB)
+	first := findPaneByIndex(session.Panes, paneA)
+	second := findPaneByIndex(session.Panes, paneB)
 	if first == nil || second == nil {
 		return fmt.Errorf("native: panes %q and %q not found in %q", paneA, paneB, sessionName)
 	}
@@ -574,58 +426,10 @@ func (m *Manager) SwapPanes(sessionName, windowIndex, paneA, paneB string) error
 	second.Left, second.Top, second.Width, second.Height = firstRect.x, firstRect.y, firstRect.w, firstRect.h
 	first.Index, second.Index = second.Index, first.Index
 
-	sortPanesByIndex(window)
+	sortPanesByIndex(session.Panes)
 	m.notify(first.ID)
 	m.notify(second.ID)
 	return nil
-}
-
-// NewWindow creates a new window with a single shell pane.
-func (m *Manager) NewWindow(ctx context.Context, sessionName, windowName, path string) (*Window, error) {
-	if m == nil {
-		return nil, errors.New("native: manager is nil")
-	}
-	sessionName = strings.TrimSpace(sessionName)
-	if sessionName == "" {
-		return nil, errors.New("native: session name is required")
-	}
-	windowName = strings.TrimSpace(windowName)
-	if windowName == "" {
-		windowName = "window"
-	}
-	if strings.TrimSpace(path) != "" {
-		if err := validatePath(path); err != nil {
-			return nil, err
-		}
-		path = filepath.Clean(path)
-	}
-
-	pane, err := m.createPane(ctx, path, windowName, "", nil)
-	if err != nil {
-		return nil, err
-	}
-	pane.Index = "0"
-	pane.Active = true
-	pane.Left, pane.Top, pane.Width, pane.Height = 0, 0, layoutBaseSize, layoutBaseSize
-
-	m.mu.Lock()
-	session, ok := m.sessions[sessionName]
-	if !ok {
-		m.mu.Unlock()
-		_ = pane.window.Close()
-		return nil, fmt.Errorf("native: session %q not found", sessionName)
-	}
-	win := &Window{
-		Index: strconv.Itoa(len(session.Windows)),
-		Name:  windowName,
-		Panes: []*Pane{pane},
-	}
-	session.Windows = append(session.Windows, win)
-	m.panes[pane.ID] = pane
-	m.mu.Unlock()
-	m.forwardUpdates(pane)
-	m.notify(pane.ID)
-	return win, nil
 }
 
 // SendInput writes input to a pane and updates activity timestamp.
@@ -697,12 +501,12 @@ func (m *Manager) StartSession(ctx context.Context, spec SessionSpec) (*Session,
 		session.LayoutName = spec.Layout.Name
 	}
 
-	windows, panes, err := m.buildWindows(ctx, spec, session)
+	panes, err := m.buildPanes(ctx, spec)
 	if err != nil {
 		m.closePanes(panes)
 		return nil, err
 	}
-	session.Windows = windows
+	session.Panes = panes
 
 	m.mu.Lock()
 	if _, ok := m.sessions[session.Name]; ok {
@@ -743,39 +547,34 @@ func (m *Manager) Snapshot(previewLines int) []SessionSnapshot {
 			LayoutName: session.LayoutName,
 			CreatedAt:  session.CreatedAt,
 		}
-		for _, window := range session.Windows {
-			winSnap := WindowSnapshot{
-				Index: window.Index,
-				Name:  window.Name,
+		paneTitles := resolveSessionPaneTitles(session)
+		for _, pane := range session.Panes {
+			lines := renderPreviewLines(pane.window, previewLines)
+			title := strings.TrimSpace(paneTitles[pane])
+			if title == "" {
+				title = strings.TrimSpace(pane.Title)
 			}
-			for _, pane := range window.Panes {
-				lines := renderPreviewLines(pane.window, previewLines)
-				title := pane.Title
-				if pane.window != nil {
-					if winTitle := strings.TrimSpace(pane.window.Title()); winTitle != "" {
-						title = winTitle
-					}
-				}
-				paneSnap := PaneSnapshot{
-					ID:           pane.ID,
-					Index:        pane.Index,
-					Title:        title,
-					Command:      pane.Command,
-					StartCommand: pane.StartCommand,
-					PID:          pane.PID,
-					Active:       pane.Active,
-					Left:         pane.Left,
-					Top:          pane.Top,
-					Width:        pane.Width,
-					Height:       pane.Height,
-					Dead:         pane.window != nil && pane.window.Exited(),
-					DeadStatus:   pane.windowExitStatus(),
-					LastActive:   pane.LastActive,
-					Preview:      lines,
-				}
-				winSnap.Panes = append(winSnap.Panes, paneSnap)
+			if title == "" && pane.window != nil {
+				title = strings.TrimSpace(pane.window.Title())
 			}
-			snap.Windows = append(snap.Windows, winSnap)
+			paneSnap := PaneSnapshot{
+				ID:           pane.ID,
+				Index:        pane.Index,
+				Title:        title,
+				Command:      pane.Command,
+				StartCommand: pane.StartCommand,
+				PID:          pane.PID,
+				Active:       pane.Active,
+				Left:         pane.Left,
+				Top:          pane.Top,
+				Width:        pane.Width,
+				Height:       pane.Height,
+				Dead:         pane.window != nil && pane.window.Exited(),
+				DeadStatus:   pane.windowExitStatus(),
+				LastActive:   pane.LastActive,
+				Preview:      lines,
+			}
+			snap.Panes = append(snap.Panes, paneSnap)
 		}
 		out = append(out, snap)
 	}
@@ -787,15 +586,8 @@ type SessionSnapshot struct {
 	Name       string
 	Path       string
 	LayoutName string
-	Windows    []WindowSnapshot
+	Panes      []PaneSnapshot
 	CreatedAt  time.Time
-}
-
-// WindowSnapshot describes a window snapshot.
-type WindowSnapshot struct {
-	Index string
-	Name  string
-	Panes []PaneSnapshot
 }
 
 // PaneSnapshot describes a pane snapshot.
@@ -817,54 +609,27 @@ type PaneSnapshot struct {
 	Preview      []string
 }
 
-func (m *Manager) buildWindows(ctx context.Context, spec SessionSpec, session *Session) ([]*Window, []*Pane, error) {
+func (m *Manager) buildPanes(ctx context.Context, spec SessionSpec) ([]*Pane, error) {
 	if spec.Layout == nil {
-		return nil, nil, errors.New("native: layout is nil")
+		return nil, errors.New("native: layout is nil")
 	}
 	layoutCfg := spec.Layout
 	if strings.TrimSpace(layoutCfg.Grid) != "" {
-		windowName := strings.TrimSpace(layoutCfg.Window)
-		if windowName == "" {
-			windowName = strings.TrimSpace(layoutCfg.Name)
-		}
-		if windowName == "" {
-			windowName = "grid"
-		}
-		win, panes, err := m.buildGridWindow(ctx, spec.Path, windowName, layoutCfg, spec.Env)
-		if err != nil {
-			return nil, nil, err
-		}
-		return []*Window{win}, panes, nil
+		return m.buildGridPanes(ctx, spec.Path, layoutCfg, spec.Env)
 	}
-	if len(layoutCfg.Windows) == 0 {
-		return nil, nil, errors.New("native: layout has no windows defined")
+	if len(layoutCfg.Panes) == 0 {
+		return nil, errors.New("native: layout has no panes defined")
 	}
-	var windows []*Window
-	var panes []*Pane
-	for wi, winDef := range layoutCfg.Windows {
-		windowName := strings.TrimSpace(winDef.Name)
-		if windowName == "" {
-			windowName = fmt.Sprintf("window-%d", wi+1)
-		}
-		win, winPanes, err := m.buildSplitWindow(ctx, spec.Path, windowName, winDef, spec.Env)
-		if err != nil {
-			return nil, panes, err
-		}
-		win.Index = strconv.Itoa(wi)
-		windows = append(windows, win)
-		panes = append(panes, winPanes...)
-	}
-	return windows, panes, nil
+	return m.buildSplitPanes(ctx, spec.Path, layoutCfg.Panes, spec.Env)
 }
 
-func (m *Manager) buildGridWindow(ctx context.Context, path, name string, layoutCfg *layout.LayoutConfig, env []string) (*Window, []*Pane, error) {
+func (m *Manager) buildGridPanes(ctx context.Context, path string, layoutCfg *layout.LayoutConfig, env []string) ([]*Pane, error) {
 	grid, err := layout.Parse(layoutCfg.Grid)
 	if err != nil {
-		return nil, nil, fmt.Errorf("native: parse grid %q: %w", layoutCfg.Grid, err)
+		return nil, fmt.Errorf("native: parse grid %q: %w", layoutCfg.Grid, err)
 	}
 	commands := layout.ResolveGridCommands(layoutCfg, grid.Panes())
 	titles := layout.ResolveGridTitles(layoutCfg, grid.Panes())
-	win := &Window{Index: "0", Name: name}
 
 	cellW := layoutBaseSize / grid.Columns
 	cellH := layoutBaseSize / grid.Rows
@@ -896,7 +661,7 @@ func (m *Manager) buildGridWindow(ctx context.Context, path, name string, layout
 			pane, err := m.createPane(ctx, path, title, cmd, env)
 			if err != nil {
 				m.closePanes(panes)
-				return nil, nil, err
+				return nil, err
 			}
 			pane.Index = strconv.Itoa(idx)
 			pane.Left = left
@@ -907,33 +672,19 @@ func (m *Manager) buildGridWindow(ctx context.Context, path, name string, layout
 				pane.Active = true
 			}
 			panes = append(panes, pane)
-			win.Panes = append(win.Panes, pane)
 		}
 	}
-	return win, panes, nil
+	return panes, nil
 }
 
-func (m *Manager) buildSplitWindow(ctx context.Context, path, name string, def layout.WindowDef, env []string) (*Window, []*Pane, error) {
-	win := &Window{Name: name}
-	if len(def.Panes) == 0 {
-		pane, err := m.createPane(ctx, path, name, "", env)
-		if err != nil {
-			return nil, nil, err
-		}
-		pane.Index = "0"
-		pane.Active = true
-		pane.Left, pane.Top, pane.Width, pane.Height = 0, 0, layoutBaseSize, layoutBaseSize
-		win.Panes = []*Pane{pane}
-		return win, []*Pane{pane}, nil
-	}
-
+func (m *Manager) buildSplitPanes(ctx context.Context, path string, defs []layout.PaneDef, env []string) ([]*Pane, error) {
 	var panes []*Pane
 	active := (*Pane)(nil)
-	for i, paneDef := range def.Panes {
+	for i, paneDef := range defs {
 		pane, err := m.createPane(ctx, path, paneDef.Title, paneDef.Cmd, env)
 		if err != nil {
 			m.closePanes(panes)
-			return nil, nil, err
+			return nil, err
 		}
 		pane.Index = strconv.Itoa(i)
 		if i == 0 {
@@ -950,9 +701,8 @@ func (m *Manager) buildSplitWindow(ctx context.Context, path, name string, def l
 			pane.Left, pane.Top, pane.Width, pane.Height = 0, 0, layoutBaseSize, layoutBaseSize
 		}
 		panes = append(panes, pane)
-		win.Panes = append(win.Panes, pane)
 	}
-	return win, panes, nil
+	return panes, nil
 }
 
 func (m *Manager) createPane(ctx context.Context, path, title, command string, env []string) (*Pane, error) {
@@ -1114,25 +864,9 @@ func validatePath(path string) error {
 	return nil
 }
 
-func findWindowByIndex(session *Session, index string) *Window {
-	if session == nil {
-		return nil
-	}
+func findPaneByIndex(panes []*Pane, index string) *Pane {
 	index = strings.TrimSpace(index)
-	for _, window := range session.Windows {
-		if window.Index == index {
-			return window
-		}
-	}
-	return nil
-}
-
-func findPaneByIndex(window *Window, index string) *Pane {
-	if window == nil {
-		return nil
-	}
-	index = strings.TrimSpace(index)
-	for _, pane := range window.Panes {
+	for _, pane := range panes {
 		if pane.Index == index {
 			return pane
 		}
@@ -1140,9 +874,9 @@ func findPaneByIndex(window *Window, index string) *Pane {
 	return nil
 }
 
-func nextPaneIndex(window *Window) string {
+func nextPaneIndex(panes []*Pane) string {
 	max := -1
-	for _, pane := range window.Panes {
+	for _, pane := range panes {
 		if n, err := strconv.Atoi(strings.TrimSpace(pane.Index)); err == nil && n > max {
 			max = n
 		}
@@ -1153,36 +887,8 @@ func nextPaneIndex(window *Window) string {
 	return strconv.Itoa(max + 1)
 }
 
-func nextWindowIndex(session *Session) string {
-	max := -1
-	for _, window := range session.Windows {
-		if n, err := strconv.Atoi(strings.TrimSpace(window.Index)); err == nil && n > max {
-			max = n
-		}
-	}
-	if max < 0 {
-		return "0"
-	}
-	return strconv.Itoa(max + 1)
-}
-
-func removeWindowByIndex(session *Session, index string) {
-	if session == nil {
-		return
-	}
-	for i, window := range session.Windows {
-		if window.Index == index {
-			session.Windows = append(session.Windows[:i], session.Windows[i+1:]...)
-			return
-		}
-	}
-}
-
-func anyPaneActive(window *Window) bool {
-	if window == nil {
-		return false
-	}
-	for _, pane := range window.Panes {
+func anyPaneActive(panes []*Pane) bool {
+	for _, pane := range panes {
 		if pane.Active {
 			return true
 		}
@@ -1190,13 +896,10 @@ func anyPaneActive(window *Window) bool {
 	return false
 }
 
-func sortPanesByIndex(window *Window) {
-	if window == nil {
-		return
-	}
-	sort.SliceStable(window.Panes, func(i, j int) bool {
-		left := strings.TrimSpace(window.Panes[i].Index)
-		right := strings.TrimSpace(window.Panes[j].Index)
+func sortPanesByIndex(panes []*Pane) {
+	sort.SliceStable(panes, func(i, j int) bool {
+		left := strings.TrimSpace(panes[i].Index)
+		right := strings.TrimSpace(panes[j].Index)
 		li, lerr := strconv.Atoi(left)
 		ri, rerr := strconv.Atoi(right)
 		if lerr == nil && rerr == nil {
@@ -1212,16 +915,13 @@ func sortPanesByIndex(window *Window) {
 	})
 }
 
-func retileWindow(window *Window) {
-	if window == nil {
+func retilePanes(panes []*Pane) {
+	if len(panes) == 0 {
 		return
 	}
-	if len(window.Panes) == 0 {
-		return
-	}
-	sortPanesByIndex(window)
+	sortPanesByIndex(panes)
 
-	count := len(window.Panes)
+	count := len(panes)
 	cols := int(math.Ceil(math.Sqrt(float64(count))))
 	if cols <= 0 {
 		cols = 1
@@ -1236,7 +936,7 @@ func retileWindow(window *Window) {
 	remainderW := layoutBaseSize % cols
 	remainderH := layoutBaseSize % rows
 
-	for i, pane := range window.Panes {
+	for i, pane := range panes {
 		row := i / cols
 		col := i % cols
 		left := col * cellW

@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/native"
+	"github.com/regenrek/peakypanes/internal/pathutil"
 )
 
 // ViewState represents the current UI view.
@@ -24,7 +25,6 @@ const (
 	StateHelp
 	StateCommandPalette
 	StateRenameSession
-	StateRenameWindow
 	StateRenamePane
 	StateProjectRootSetup
 )
@@ -77,15 +77,15 @@ type ProjectGroup struct {
 
 // SessionItem represents a session in the dashboard.
 type SessionItem struct {
-	Name         string
-	Path         string
-	LayoutName   string
-	Status       Status
-	WindowCount  int
-	ActiveWindow string
-	Windows      []WindowItem
-	Thumbnail    PaneSummary
-	Config       *layout.ProjectConfig
+	Name       string
+	Path       string
+	LayoutName string
+	Status     Status
+	PaneCount  int
+	ActivePane string
+	Panes      []PaneItem
+	Thumbnail  PaneSummary
+	Config     *layout.ProjectConfig
 }
 
 // DashboardPane represents a pane with project metadata for the dashboard.
@@ -93,8 +93,6 @@ type DashboardPane struct {
 	ProjectName string
 	ProjectPath string
 	SessionName string
-	WindowIndex string
-	WindowName  string
 	Pane        PaneItem
 }
 
@@ -103,14 +101,6 @@ type DashboardProjectColumn struct {
 	ProjectName string
 	ProjectPath string
 	Panes       []DashboardPane
-}
-
-// WindowItem represents a session window.
-type WindowItem struct {
-	Index  string
-	Name   string
-	Active bool
-	Panes  []PaneItem
 }
 
 // PaneItem represents a pane with preview content.
@@ -165,7 +155,6 @@ type DashboardConfig struct {
 type selectionState struct {
 	Project string
 	Session string
-	Window  string
 	Pane    string
 }
 
@@ -232,7 +221,7 @@ type GitProject struct {
 }
 
 func (g GitProject) Title() string       { return "📁 " + g.Name }
-func (g GitProject) Description() string { return shortenPath(g.Path) }
+func (g GitProject) Description() string { return pathutil.ShortenUser(g.Path) }
 func (g GitProject) FilterValue() string { return g.Name }
 
 // LayoutChoice represents a selectable layout in the picker.
@@ -248,10 +237,9 @@ func (l LayoutChoice) FilterValue() string { return l.Label }
 
 // PaneSwapChoice represents a target pane for swapping.
 type PaneSwapChoice struct {
-	Label       string
-	Desc        string
-	WindowIndex string
-	PaneIndex   string
+	Label     string
+	Desc      string
+	PaneIndex string
 }
 
 func (p PaneSwapChoice) Title() string       { return p.Label }
