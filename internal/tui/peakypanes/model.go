@@ -19,6 +19,7 @@ import (
 
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/native"
+	"github.com/regenrek/peakypanes/internal/pathutil"
 	"github.com/regenrek/peakypanes/internal/terminal"
 	"github.com/regenrek/peakypanes/internal/tui/theme"
 )
@@ -44,7 +45,7 @@ type dashboardKeyMap struct {
 	attach          key.Binding
 	newSession      key.Binding
 	terminalFocus   key.Binding
-	toggleWindows   key.Binding
+	togglePanes     key.Binding
 	openProject     key.Binding
 	commandPalette  key.Binding
 	refresh         key.Binding
@@ -96,21 +97,17 @@ type Model struct {
 	confirmProject     string
 	confirmClose       string
 	confirmPaneSession string
-	confirmPaneWindow  string
 	confirmPaneIndex   string
 	confirmPaneID      string
 	confirmPaneTitle   string
 	confirmPaneRunning bool
 
-	renameInput       textinput.Model
-	renameSession     string
-	renameWindow      string
-	renameWindowIndex string
-	renamePane        string
-	renamePaneIndex   string
+	renameInput     textinput.Model
+	renameSession   string
+	renamePane      string
+	renamePaneIndex string
 
 	swapSourceSession string
-	swapSourceWindow  string
 	swapSourcePane    string
 	swapSourcePaneID  string
 
@@ -358,7 +355,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.selection.Project = projectName
 			}
 			m.selection.Session = msg.Name
-			m.selection.Window = ""
 			m.selection.Pane = ""
 			m.selectionVersion++
 			m.rememberSelection(m.selection)
@@ -407,7 +403,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateHelp(msg)
 		case StateCommandPalette:
 			return m.updateCommandPalette(msg)
-		case StateRenameSession, StateRenameWindow, StateRenamePane:
+		case StateRenameSession, StateRenamePane:
 			return m.updateRename(msg)
 		case StateProjectRootSetup:
 			return m.updateProjectRootSetup(msg)
@@ -510,14 +506,14 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selectDashboardPane(-1)
 			return m, nil
 		}
-		m.selectSessionOrWindow(-1)
+		m.selectSessionOrPane(-1)
 		return m, m.selectionRefreshCmd()
 	case key.Matches(msg, m.keys.sessionDown):
 		if m.tab == TabDashboard {
 			m.selectDashboardPane(1)
 			return m, nil
 		}
-		m.selectSessionOrWindow(1)
+		m.selectSessionOrPane(1)
 		return m, m.selectionRefreshCmd()
 	case key.Matches(msg, m.keys.sessionOnlyUp):
 		if m.tab == TabDashboard {
@@ -548,8 +544,8 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.newSession):
 		m.openLayoutPicker()
 		return m, nil
-	case key.Matches(msg, m.keys.toggleWindows):
-		m.toggleWindows()
+	case key.Matches(msg, m.keys.togglePanes):
+		m.togglePanes()
 	case key.Matches(msg, m.keys.openProject):
 		m.openProjectPicker()
 		return m, nil
@@ -616,7 +612,6 @@ func (m *Model) updateProjectPicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.rememberSelection(m.selection)
 			m.selection.Project = projectName
 			m.selection.Session = sessionName
-			m.selection.Window = ""
 			m.selection.Pane = ""
 			m.selectionVersion++
 			m.rememberSelection(m.selection)
@@ -722,74 +717,10 @@ func (m *Model) openRenameSession() {
 		return
 	}
 	m.renameSession = session.Name
-	m.renameWindow = ""
-	m.renameWindowIndex = ""
 	m.renamePane = ""
 	m.renamePaneIndex = ""
 	m.initRenameInput(session.Name, "new session name")
 	m.setState(StateRenameSession)
-}
-
-func (m *Model) openRenameWindow() {
-	session := m.selectedSession()
-	if session == nil {
-		m.setToast("No session selected", toastWarning)
-		return
-	}
-	if session.Status == StatusStopped {
-		m.setToast("Session not running", toastWarning)
-		return
-	}
-	window := selectedWindow(session, m.selection.Window)
-	if window == nil {
-		m.setToast("No window selected", toastWarning)
-		return
-	}
-	m.renameSession = session.Name
-	m.renameWindow = window.Name
-	m.renameWindowIndex = window.Index
-	m.renamePane = ""
-	m.renamePaneIndex = ""
-	m.initRenameInput(window.Name, "new window name")
-	m.setState(StateRenameWindow)
-}
-
-func (m *Model) openNewWindow() tea.Cmd {
-	session := m.selectedSession()
-	if session == nil {
-		m.setToast("No session selected", toastWarning)
-		return nil
-	}
-	if session.Status == StatusStopped {
-		m.setToast("Session not running", toastWarning)
-		return nil
-	}
-	startDir := strings.TrimSpace(session.Path)
-	if startDir == "" {
-		if project := m.selectedProject(); project != nil {
-			startDir = strings.TrimSpace(project.Path)
-		}
-	}
-	if startDir != "" {
-		if err := validateProjectPath(startDir); err != nil {
-			m.setToast("Start failed: "+err.Error(), toastError)
-			return nil
-		}
-	}
-
-	if m.native == nil {
-		m.setToast("New window failed: native manager unavailable", toastError)
-		return nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	if _, err := m.native.NewWindow(ctx, session.Name, "", startDir); err != nil {
-		m.setToast("New window failed: "+err.Error(), toastError)
-		return nil
-	}
-	m.selectionVersion++
-	m.setToast("Opened new window", toastSuccess)
-	return m.refreshCmd()
 }
 
 func (m *Model) openRenamePane() {
@@ -802,19 +733,12 @@ func (m *Model) openRenamePane() {
 		m.setToast("Session not running", toastWarning)
 		return
 	}
-	window := selectedWindow(session, m.selection.Window)
-	if window == nil {
-		m.setToast("No window selected", toastWarning)
-		return
-	}
 	pane := m.selectedPane()
 	if pane == nil {
 		m.setToast("No pane selected", toastWarning)
 		return
 	}
 	m.renameSession = session.Name
-	m.renameWindow = window.Name
-	m.renameWindowIndex = window.Index
 	m.renamePane = pane.Title
 	m.renamePaneIndex = pane.Index
 	m.initRenameInput(pane.Title, "new pane title")
@@ -852,11 +776,6 @@ func (m *Model) addPaneSplit(vertical bool) tea.Cmd {
 		m.setToast("Add pane failed: native manager unavailable", toastError)
 		return nil
 	}
-	window := selectedWindow(session, m.selection.Window)
-	if window == nil {
-		m.setToast("No window selected", toastWarning)
-		return nil
-	}
 	pane := m.selectedPane()
 	if pane == nil {
 		m.setToast("No pane selected", toastWarning)
@@ -864,58 +783,16 @@ func (m *Model) addPaneSplit(vertical bool) tea.Cmd {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	newIndex, err := m.native.SplitPane(ctx, session.Name, window.Index, pane.Index, vertical, 0)
+	newIndex, err := m.native.SplitPane(ctx, session.Name, pane.Index, vertical, 0)
 	if err != nil {
 		m.setToast("Add pane failed: "+err.Error(), toastError)
 		return nil
 	}
 	m.selection.Session = session.Name
-	m.selection.Window = window.Index
 	m.selection.Pane = newIndex
 	m.selectionVersion++
 	m.rememberSelection(m.selection)
 	m.setToast("Added pane", toastSuccess)
-	return m.refreshCmd()
-}
-
-func (m *Model) movePaneToNewWindow() tea.Cmd {
-	session := m.selectedSession()
-	if session == nil {
-		m.setToast("No session selected", toastWarning)
-		return nil
-	}
-	if session.Status == StatusStopped {
-		m.setToast("Session not running", toastWarning)
-		return nil
-	}
-	pane := m.selectedPane()
-	if pane == nil {
-		m.setToast("No pane selected", toastWarning)
-		return nil
-	}
-	window := selectedWindow(session, m.selection.Window)
-	if window == nil {
-		m.setToast("No window selected", toastWarning)
-		return nil
-	}
-
-	if m.native == nil {
-		m.setToast("Move pane failed: native manager unavailable", toastError)
-		return nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	newWindow, newPane, err := m.native.MovePaneToNewWindow(ctx, session.Name, window.Index, pane.Index)
-	if err != nil {
-		m.setToast("Move pane failed: "+err.Error(), toastError)
-		return nil
-	}
-	m.selection.Session = session.Name
-	m.selection.Window = newWindow
-	m.selection.Pane = newPane
-	m.selectionVersion++
-	m.rememberSelection(m.selection)
-	m.setToast("Moved pane to new window", toastSuccess)
 	return m.refreshCmd()
 }
 
@@ -930,20 +807,16 @@ func (m *Model) swapPaneWith(target PaneSwapChoice) tea.Cmd {
 		return nil
 	}
 	sourceSession := strings.TrimSpace(m.swapSourceSession)
-	sourceWindow := strings.TrimSpace(m.swapSourceWindow)
 	sourcePane := strings.TrimSpace(m.swapSourcePane)
 	if sourceSession == "" {
 		sourceSession = session.Name
-	}
-	if sourceWindow == "" {
-		sourceWindow = strings.TrimSpace(m.selection.Window)
 	}
 	if sourcePane == "" {
 		if pane := m.selectedPane(); pane != nil {
 			sourcePane = pane.Index
 		}
 	}
-	if sourceSession == "" || sourceWindow == "" || sourcePane == "" {
+	if sourceSession == "" || sourcePane == "" {
 		m.setToast("No pane selected", toastWarning)
 		return nil
 	}
@@ -952,12 +825,11 @@ func (m *Model) swapPaneWith(target PaneSwapChoice) tea.Cmd {
 		m.setToast("Swap pane failed: native manager unavailable", toastError)
 		return nil
 	}
-	if err := m.native.SwapPanes(session.Name, sourceWindow, sourcePane, target.PaneIndex); err != nil {
+	if err := m.native.SwapPanes(session.Name, sourcePane, target.PaneIndex); err != nil {
 		m.setToast("Swap pane failed: "+err.Error(), toastError)
 		return nil
 	}
 	m.selection.Session = session.Name
-	m.selection.Window = sourceWindow
 	m.selection.Pane = target.PaneIndex
 	m.selectionVersion++
 	m.rememberSelection(m.selection)
@@ -1013,25 +885,6 @@ func (m *Model) applyRename() tea.Cmd {
 		m.setState(StateDashboard)
 		m.setToast("Renamed session to "+newName, toastSuccess)
 		return m.refreshCmd()
-	case StateRenameWindow:
-		if newName == m.renameWindow {
-			m.setState(StateDashboard)
-			m.setToast("Window name unchanged", toastInfo)
-			return nil
-		}
-		if m.native == nil {
-			m.setToast("Rename failed: native manager unavailable", toastError)
-			return nil
-		}
-		if err := m.native.RenameWindow(m.renameSession, m.renameWindowIndex, newName); err != nil {
-			m.setToast("Rename failed: "+err.Error(), toastError)
-			return nil
-		}
-		m.selectionVersion++
-		m.rememberSelection(m.selection)
-		m.setState(StateDashboard)
-		m.setToast("Renamed window to "+newName, toastSuccess)
-		return m.refreshCmd()
 	case StateRenamePane:
 		if newName == m.renamePane {
 			m.setState(StateDashboard)
@@ -1039,18 +892,14 @@ func (m *Model) applyRename() tea.Cmd {
 			return nil
 		}
 		session := strings.TrimSpace(m.renameSession)
-		window := strings.TrimSpace(m.renameWindowIndex)
 		pane := strings.TrimSpace(m.renamePaneIndex)
 		if session == "" {
 			session = strings.TrimSpace(m.selection.Session)
 		}
-		if window == "" {
-			window = strings.TrimSpace(m.selection.Window)
-		}
 		if pane == "" {
 			pane = strings.TrimSpace(m.selection.Pane)
 		}
-		if session == "" || window == "" || pane == "" {
+		if session == "" || pane == "" {
 			m.setToast("No pane selected", toastWarning)
 			return nil
 		}
@@ -1058,7 +907,7 @@ func (m *Model) applyRename() tea.Cmd {
 			m.setToast("Rename failed: native manager unavailable", toastError)
 			return nil
 		}
-		if err := m.native.RenamePane(session, window, pane, newName); err != nil {
+		if err := m.native.RenamePane(session, pane, newName); err != nil {
 			m.setToast("Rename failed: "+err.Error(), toastError)
 			return nil
 		}
@@ -1302,13 +1151,13 @@ func hiddenProjectLabel(entry layout.HiddenProjectConfig) string {
 	name := strings.TrimSpace(entry.Name)
 	path := strings.TrimSpace(entry.Path)
 	if name != "" && path != "" {
-		return fmt.Sprintf("%s (%s)", name, shortenPath(path))
+		return fmt.Sprintf("%s (%s)", name, pathutil.ShortenUser(path))
 	}
 	if name != "" {
 		return name
 	}
 	if path != "" {
-		return shortenPath(path)
+		return pathutil.ShortenUser(path)
 	}
 	return "unknown project"
 }
@@ -1380,7 +1229,7 @@ func (m *Model) View() string {
 		return m.viewHelp()
 	case StateCommandPalette:
 		return m.viewCommandPalette()
-	case StateRenameSession, StateRenameWindow, StateRenamePane:
+	case StateRenameSession, StateRenamePane:
 		return m.viewRename()
 	case StateProjectRootSetup:
 		return m.viewProjectRootSetup()
@@ -1557,6 +1406,33 @@ func (m *Model) selectTab(delta int) {
 	m.selectionVersion++
 }
 
+func (m *Model) selectDashboardTab() bool {
+	if m.tab == TabDashboard {
+		return false
+	}
+	m.tab = TabDashboard
+	m.selectionVersion++
+	return true
+}
+
+func (m *Model) selectProjectTab(projectName string) bool {
+	if strings.TrimSpace(projectName) == "" {
+		return false
+	}
+	project := findProject(m.data.Projects, projectName)
+	if project == nil {
+		return false
+	}
+	resolved := resolveSelection(m.data.Projects, m.selectionForProject(project.Name))
+	changed := m.tab != TabProject || m.selection != resolved
+	m.tab = TabProject
+	m.applySelection(resolved)
+	if changed {
+		m.selectionVersion++
+	}
+	return changed
+}
+
 func (m *Model) selectSession(delta int) {
 	project := m.selectedProject()
 	if project == nil || len(project.Sessions) == 0 {
@@ -1569,13 +1445,12 @@ func (m *Model) selectSession(delta int) {
 	idx := sessionIndex(filtered, m.selection.Session)
 	idx = wrapIndex(idx+delta, len(filtered))
 	m.selection.Session = filtered[idx].Name
-	m.selection.Window = ""
 	m.selection.Pane = ""
 	m.selectionVersion++
 	m.rememberSelection(m.selection)
 }
 
-func (m *Model) selectSessionOrWindow(delta int) {
+func (m *Model) selectSessionOrPane(delta int) {
 	project := m.selectedProject()
 	if project == nil || len(project.Sessions) == 0 {
 		return
@@ -1586,7 +1461,7 @@ func (m *Model) selectSessionOrWindow(delta int) {
 	}
 	type entry struct {
 		session string
-		window  string
+		pane    string
 	}
 	items := make([]entry, 0, len(filtered))
 	for _, session := range filtered {
@@ -1594,8 +1469,8 @@ func (m *Model) selectSessionOrWindow(delta int) {
 		if !m.sessionExpanded(session.Name) {
 			continue
 		}
-		for _, window := range session.Windows {
-			items = append(items, entry{session: session.Name, window: window.Index})
+		for _, pane := range session.Panes {
+			items = append(items, entry{session: session.Name, pane: pane.Index})
 		}
 	}
 	if len(items) == 0 {
@@ -1603,9 +1478,9 @@ func (m *Model) selectSessionOrWindow(delta int) {
 	}
 
 	current := -1
-	if m.selection.Window != "" {
+	if m.selection.Pane != "" {
 		for i, item := range items {
-			if item.session == m.selection.Session && item.window == m.selection.Window {
+			if item.session == m.selection.Session && item.pane == m.selection.Pane {
 				current = i
 				break
 			}
@@ -1613,7 +1488,7 @@ func (m *Model) selectSessionOrWindow(delta int) {
 	}
 	if current == -1 {
 		for i, item := range items {
-			if item.session == m.selection.Session && item.window == "" {
+			if item.session == m.selection.Session && item.pane == "" {
 				current = i
 				break
 			}
@@ -1625,8 +1500,7 @@ func (m *Model) selectSessionOrWindow(delta int) {
 
 	next := items[wrapIndex(current+delta, len(items))]
 	m.selection.Session = next.session
-	m.selection.Window = next.window
-	m.selection.Pane = ""
+	m.selection.Pane = next.pane
 	m.selectionVersion++
 	m.rememberSelection(m.selection)
 }
@@ -1656,7 +1530,6 @@ func (m *Model) selectDashboardPane(delta int) {
 	pane := column.Panes[idx]
 	m.selection.Project = column.ProjectName
 	m.selection.Session = pane.SessionName
-	m.selection.Window = pane.WindowIndex
 	m.selection.Pane = pane.Pane.Index
 	m.selectionVersion++
 	m.rememberSelection(m.selection)
@@ -1686,59 +1559,27 @@ func (m *Model) selectDashboardProject(delta int) {
 	m.selectionVersion++
 }
 
-func (m *Model) selectWindow(delta int) {
-	session := m.selectedSession()
-	if session == nil || len(session.Windows) == 0 {
-		return
-	}
-	idx := windowIndex(session.Windows, m.selection.Window)
-	idx = wrapIndex(idx+delta, len(session.Windows))
-	m.selection.Window = session.Windows[idx].Index
-	m.selection.Pane = ""
-	m.selectionVersion++
-	m.rememberSelection(m.selection)
-}
-
 func (m *Model) selectPane(delta int) {
 	session := m.selectedSession()
 	if session == nil {
 		return
 	}
-	type paneRef struct {
-		windowIndex string
-		paneIndex   string
-	}
-	var panes []paneRef
-	for _, window := range session.Windows {
-		if len(window.Panes) == 0 {
-			continue
-		}
-		for _, pane := range window.Panes {
-			panes = append(panes, paneRef{windowIndex: window.Index, paneIndex: pane.Index})
-		}
-	}
-	if len(panes) == 0 {
+	if len(session.Panes) == 0 {
 		return
 	}
 
-	currentWindow := strings.TrimSpace(m.selection.Window)
-	if currentWindow == "" {
-		currentWindow = session.ActiveWindow
-	}
 	currentPane := strings.TrimSpace(m.selection.Pane)
 	if currentPane == "" {
-		if window := selectedWindow(session, currentWindow); window != nil && len(window.Panes) > 0 {
-			if active := activePaneIndex(window.Panes); active != "" {
-				currentPane = active
-			} else {
-				currentPane = window.Panes[0].Index
-			}
+		if active := activePaneIndex(session.Panes); active != "" {
+			currentPane = active
+		} else {
+			currentPane = session.Panes[0].Index
 		}
 	}
 
 	idx := -1
-	for i, ref := range panes {
-		if ref.windowIndex == currentWindow && ref.paneIndex == currentPane {
+	for i, pane := range session.Panes {
+		if pane.Index == currentPane {
 			idx = i
 			break
 		}
@@ -1746,14 +1587,13 @@ func (m *Model) selectPane(delta int) {
 	if idx == -1 {
 		idx = 0
 	}
-	idx = wrapIndex(idx+delta, len(panes))
-	next := panes[idx]
-	m.selection.Window = next.windowIndex
-	m.selection.Pane = next.paneIndex
+	idx = wrapIndex(idx+delta, len(session.Panes))
+	next := session.Panes[idx]
+	m.selection.Pane = next.Index
 	m.rememberSelection(m.selection)
 }
 
-func (m *Model) toggleWindows() {
+func (m *Model) togglePanes() {
 	session := m.selectedSession()
 	if session == nil {
 		return
@@ -1763,17 +1603,13 @@ func (m *Model) toggleWindows() {
 }
 
 func (m *Model) cyclePane(delta int) tea.Cmd {
-	prevWindow := m.selection.Window
 	prevPane := m.selection.Pane
 	m.selectPane(delta)
-	changed := m.selection.Window != prevWindow || m.selection.Pane != prevPane
+	changed := m.selection.Pane != prevPane
 	if !changed {
 		return nil
 	}
 	m.selectionVersion++
-	if m.selection.Window != prevWindow {
-		return m.selectionRefreshCmd()
-	}
 	return nil
 }
 
@@ -1971,11 +1807,6 @@ func (m *Model) openClosePaneConfirm() tea.Cmd {
 		m.setToast("Session not running", toastWarning)
 		return nil
 	}
-	window := selectedWindow(session, m.selection.Window)
-	if window == nil {
-		m.setToast("No window selected", toastWarning)
-		return nil
-	}
 	pane := m.selectedPane()
 	if pane == nil {
 		m.setToast("No pane selected", toastWarning)
@@ -1985,7 +1816,7 @@ func (m *Model) openClosePaneConfirm() tea.Cmd {
 	if !running {
 		m.setState(StateDashboard)
 		m.setToast("Closing pane...", toastInfo)
-		return m.closePane(session.Name, window.Index, pane.Index, pane.ID)
+		return m.closePane(session.Name, pane.Index, pane.ID)
 	}
 	title := strings.TrimSpace(pane.Title)
 	if title == "" {
@@ -1995,7 +1826,6 @@ func (m *Model) openClosePaneConfirm() tea.Cmd {
 		title = fmt.Sprintf("pane %s", pane.Index)
 	}
 	m.confirmPaneSession = session.Name
-	m.confirmPaneWindow = window.Index
 	m.confirmPaneIndex = pane.Index
 	m.confirmPaneID = pane.ID
 	m.confirmPaneTitle = title
@@ -2032,7 +1862,6 @@ func (m *Model) updateConfirmClosePane(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *Model) resetConfirmPane() {
 	m.confirmPaneSession = ""
-	m.confirmPaneWindow = ""
 	m.confirmPaneIndex = ""
 	m.confirmPaneID = ""
 	m.confirmPaneTitle = ""
@@ -2066,23 +1895,21 @@ func (m *Model) applyCloseProject() tea.Cmd {
 
 func (m *Model) applyClosePane() tea.Cmd {
 	session := strings.TrimSpace(m.confirmPaneSession)
-	window := strings.TrimSpace(m.confirmPaneWindow)
 	pane := strings.TrimSpace(m.confirmPaneIndex)
 	paneID := strings.TrimSpace(m.confirmPaneID)
 	m.resetConfirmPane()
 	m.setState(StateDashboard)
-	if session == "" || window == "" || pane == "" {
+	if session == "" || pane == "" {
 		m.setToast("No pane selected", toastWarning)
 		return nil
 	}
-	return m.closePane(session, window, pane, paneID)
+	return m.closePane(session, pane, paneID)
 }
 
-func (m *Model) closePane(sessionName, windowIndex, paneIndex, paneID string) tea.Cmd {
+func (m *Model) closePane(sessionName, paneIndex, paneID string) tea.Cmd {
 	sessionName = strings.TrimSpace(sessionName)
-	windowIndex = strings.TrimSpace(windowIndex)
 	paneIndex = strings.TrimSpace(paneIndex)
-	if sessionName == "" || windowIndex == "" || paneIndex == "" {
+	if sessionName == "" || paneIndex == "" {
 		m.setToast("No pane selected", toastWarning)
 		return nil
 	}
@@ -2100,14 +1927,11 @@ func (m *Model) closePane(sessionName, windowIndex, paneIndex, paneID string) te
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	if err := m.native.ClosePane(ctx, sessionName, windowIndex, paneIndex); err != nil {
+	if err := m.native.ClosePane(ctx, sessionName, paneIndex); err != nil {
 		m.setToast("Close pane failed: "+err.Error(), toastError)
 		return nil
 	}
 	m.selection.Pane = ""
-	if m.selection.Window == windowIndex {
-		m.selection.Window = ""
-	}
 	m.selectionVersion++
 	m.rememberSelection(m.selection)
 	m.setToast("Closed pane", toastSuccess)
@@ -2385,22 +2209,17 @@ func (m *Model) openPaneSwapPicker() {
 		m.setToast("Session not running", toastWarning)
 		return
 	}
-	window := selectedWindow(session, m.selection.Window)
-	if window == nil || len(window.Panes) == 0 {
-		m.setToast("No window selected", toastWarning)
-		return
-	}
 	source := m.selectedPane()
 	if source == nil {
 		m.setToast("No pane selected", toastWarning)
 		return
 	}
-	if len(window.Panes) < 2 {
+	if len(session.Panes) < 2 {
 		m.setToast("Not enough panes to swap", toastInfo)
 		return
 	}
 	var items []list.Item
-	for _, pane := range window.Panes {
+	for _, pane := range session.Panes {
 		if pane.Index == source.Index {
 			continue
 		}
@@ -2417,10 +2236,9 @@ func (m *Model) openPaneSwapPicker() {
 			desc = "swap target"
 		}
 		items = append(items, PaneSwapChoice{
-			Label:       label,
-			Desc:        desc,
-			WindowIndex: window.Index,
-			PaneIndex:   pane.Index,
+			Label:     label,
+			Desc:      desc,
+			PaneIndex: pane.Index,
 		})
 	}
 	if len(items) == 0 {
@@ -2428,7 +2246,6 @@ func (m *Model) openPaneSwapPicker() {
 		return
 	}
 	m.swapSourceSession = session.Name
-	m.swapSourceWindow = window.Index
 	m.swapSourcePane = source.Index
 	m.swapSourcePaneID = source.ID
 	m.paneSwapPicker.SetItems(items)
@@ -2601,9 +2418,6 @@ func (m *Model) commandPaletteItems() []list.Item {
 			m.openPaneSplitPicker()
 			return nil
 		}},
-		{Label: "Pane: Move to new window", Desc: "Move the selected pane into a new window", Run: func(m *Model) tea.Cmd {
-			return m.movePaneToNewWindow()
-		}},
 		{Label: "Pane: Swap pane", Desc: "Swap the selected pane with another", Run: func(m *Model) tea.Cmd {
 			m.openPaneSwapPicker()
 			return nil
@@ -2618,19 +2432,12 @@ func (m *Model) commandPaletteItems() []list.Item {
 			m.openRenamePane()
 			return nil
 		}},
+		{Label: "Pane: Toggle pane list", Desc: "Expand/collapse pane list", Run: func(m *Model) tea.Cmd {
+			m.togglePanes()
+			return nil
+		}},
 		{Label: "Session: Rename session", Desc: "Rename the selected session", Run: func(m *Model) tea.Cmd {
 			m.openRenameSession()
-			return nil
-		}},
-		{Label: "Window: Toggle window list", Desc: "Expand/collapse window list", Run: func(m *Model) tea.Cmd {
-			m.toggleWindows()
-			return nil
-		}},
-		{Label: "Window: New window", Desc: "Create a new window in the selected session", Run: func(m *Model) tea.Cmd {
-			return m.openNewWindow()
-		}},
-		{Label: "Window: Rename window", Desc: "Rename the selected window", Run: func(m *Model) tea.Cmd {
-			m.openRenameWindow()
 			return nil
 		}},
 		{Label: "Other: Refresh", Desc: "Refresh dashboard data", Run: func(m *Model) tea.Cmd {
@@ -2870,15 +2677,6 @@ func sessionIndex(sessions []SessionItem, name string) int {
 	return 0
 }
 
-func windowIndex(windows []WindowItem, idx string) int {
-	for i := range windows {
-		if windows[i].Index == idx {
-			return i
-		}
-	}
-	return 0
-}
-
 func paneIndex(panes []PaneItem, idx string) int {
 	for i := range panes {
 		if panes[i].Index == idx {
@@ -2950,23 +2748,22 @@ func (m *Model) selectedPane() *PaneItem {
 	if session == nil {
 		return nil
 	}
-	window := selectedWindow(session, m.selection.Window)
-	if window == nil || len(window.Panes) == 0 {
+	if len(session.Panes) == 0 {
 		return nil
 	}
 	if m.selection.Pane != "" {
-		for i := range window.Panes {
-			if window.Panes[i].Index == m.selection.Pane {
-				return &window.Panes[i]
+		for i := range session.Panes {
+			if session.Panes[i].Index == m.selection.Pane {
+				return &session.Panes[i]
 			}
 		}
 	}
-	for i := range window.Panes {
-		if window.Panes[i].Active {
-			return &window.Panes[i]
+	for i := range session.Panes {
+		if session.Panes[i].Active {
+			return &session.Panes[i]
 		}
 	}
-	return &window.Panes[0]
+	return &session.Panes[0]
 }
 
 func (m *Model) filteredSessions(sessions []SessionItem) []SessionItem {
@@ -3000,10 +2797,9 @@ func (m *Model) filteredDashboardColumns(columns []DashboardProjectColumn) []Das
 			if strings.Contains(strings.ToLower(pane.ProjectName), filter) ||
 				strings.Contains(strings.ToLower(pane.ProjectPath), filter) ||
 				strings.Contains(strings.ToLower(pane.SessionName), filter) ||
-				strings.Contains(strings.ToLower(pane.WindowName), filter) ||
-				strings.Contains(strings.ToLower(pane.WindowIndex), filter) ||
 				strings.Contains(strings.ToLower(pane.Pane.Title), filter) ||
-				strings.Contains(strings.ToLower(pane.Pane.Command), filter) {
+				strings.Contains(strings.ToLower(pane.Pane.Command), filter) ||
+				strings.Contains(strings.ToLower(pane.Pane.Index), filter) {
 				next.Panes = append(next.Panes, pane)
 			}
 		}
@@ -3022,18 +2818,14 @@ func layoutSummary(cfg *layout.LayoutConfig) string {
 		}
 		return fmt.Sprintf("grid %s", cfg.Grid)
 	}
-	windows := len(cfg.Windows)
-	panes := 0
-	for _, w := range cfg.Windows {
-		panes += len(w.Panes)
-	}
-	if windows == 0 && panes == 0 {
+	panes := len(cfg.Panes)
+	if panes == 0 {
 		return ""
 	}
-	if windows == 1 {
-		return fmt.Sprintf("%d panes • 1 window", panes)
+	if panes == 1 {
+		return "1 pane • split layout"
 	}
-	return fmt.Sprintf("%d panes • %d windows", panes, windows)
+	return fmt.Sprintf("%d panes • split layout", panes)
 }
 
 // ===== Toasts =====

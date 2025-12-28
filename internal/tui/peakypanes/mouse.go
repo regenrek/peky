@@ -24,6 +24,29 @@ type paneHit struct {
 }
 
 func (m *Model) updateDashboardMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+		if hit, ok := m.hitTestHeader(msg.X, msg.Y); ok {
+			if m.terminalFocus {
+				m.setTerminalFocus(false)
+			}
+			switch hit.Kind {
+			case headerPartDashboard:
+				if m.selectDashboardTab() {
+					return m, m.selectionRefreshCmd()
+				}
+				return m, nil
+			case headerPartProject:
+				if m.selectProjectTab(hit.ProjectName) {
+					return m, m.selectionRefreshCmd()
+				}
+				return m, nil
+			case headerPartNew:
+				m.openProjectPicker()
+				return m, nil
+			}
+		}
+	}
+
 	hit, ok := m.hitTestPane(msg.X, msg.Y)
 
 	if m.terminalFocus {
@@ -190,6 +213,60 @@ func (m *Model) hitTestPane(x, y int) (paneHit, bool) {
 	return paneHit{}, false
 }
 
+func (m *Model) hitTestHeader(x, y int) (headerHit, bool) {
+	for _, hit := range m.headerHitRects() {
+		if hit.Rect.contains(x, y) {
+			return hit.Hit, true
+		}
+	}
+	return headerHit{}, false
+}
+
+func (m *Model) headerHitRects() []headerHitRect {
+	header, ok := m.headerRect()
+	if !ok {
+		return nil
+	}
+	parts := m.headerParts()
+	if len(parts) == 0 {
+		return nil
+	}
+
+	hits := make([]headerHitRect, 0, len(parts))
+	cursor := header.X
+	maxX := header.X + header.W
+	for i, part := range parts {
+		if i > 0 {
+			cursor++
+		}
+		start := cursor
+		end := cursor + part.Width
+		if start >= maxX {
+			break
+		}
+		visibleEnd := end
+		if visibleEnd > maxX {
+			visibleEnd = maxX
+		}
+		if part.Kind.clickable() && visibleEnd > start {
+			hits = append(hits, headerHitRect{
+				Hit: headerHit{
+					Kind:        part.Kind,
+					ProjectName: part.ProjectName,
+				},
+				Rect: rect{
+					X: start,
+					Y: header.Y,
+					W: visibleEnd - start,
+					H: header.H,
+				},
+			})
+		}
+		cursor = end
+	}
+	return hits
+}
+
 func (m *Model) paneHits() []paneHit {
 	if m.state != StateDashboard {
 		return nil
@@ -317,7 +394,6 @@ func (m *Model) dashboardPaneHits() []paneHit {
 				Selection: selectionState{
 					Project: column.ProjectName,
 					Session: pane.SessionName,
-					Window:  pane.WindowIndex,
 					Pane:    pane.Pane.Index,
 				},
 				Outer:   outer,
@@ -338,8 +414,7 @@ func (m *Model) projectPaneHits() []paneHit {
 	if project == nil || session == nil {
 		return nil
 	}
-	window := selectedWindow(session, m.selection.Window)
-	if window == nil || len(window.Panes) == 0 {
+	if len(session.Panes) == 0 {
 		return nil
 	}
 
@@ -367,19 +442,19 @@ func (m *Model) projectPaneHits() []paneHit {
 
 	mode := m.settings.PreviewMode
 	if mode == "layout" {
-		return projectPaneLayoutHits(project, session, window, preview)
+		return projectPaneLayoutHits(project, session, session.Panes, preview)
 	}
-	return projectPaneTileHits(project, session, window, preview)
+	return projectPaneTileHits(project, session, session.Panes, preview)
 }
 
-func projectPaneLayoutHits(project *ProjectGroup, session *SessionItem, window *WindowItem, preview rect) []paneHit {
-	maxW, maxH := paneBounds(window.Panes)
+func projectPaneLayoutHits(project *ProjectGroup, session *SessionItem, panes []PaneItem, preview rect) []paneHit {
+	maxW, maxH := paneBounds(panes)
 	if maxW == 0 || maxH == 0 {
 		return nil
 	}
 
-	hits := make([]paneHit, 0, len(window.Panes))
-	for _, pane := range window.Panes {
+	hits := make([]paneHit, 0, len(panes))
+	for _, pane := range panes {
 		x1, y1, w, h := scalePane(pane, maxW, maxH, preview.W, preview.H)
 		if w <= 0 || h <= 0 {
 			continue
@@ -395,7 +470,6 @@ func projectPaneLayoutHits(project *ProjectGroup, session *SessionItem, window *
 			Selection: selectionState{
 				Project: project.Name,
 				Session: session.Name,
-				Window:  window.Index,
 				Pane:    pane.Index,
 			},
 			Outer:   outer,
@@ -405,12 +479,7 @@ func projectPaneLayoutHits(project *ProjectGroup, session *SessionItem, window *
 	return hits
 }
 
-func projectPaneTileHits(project *ProjectGroup, session *SessionItem, window *WindowItem, preview rect) []paneHit {
-	panes := window.Panes
-	if len(panes) == 0 {
-		return nil
-	}
-
+func projectPaneTileHits(project *ProjectGroup, session *SessionItem, panes []PaneItem, preview rect) []paneHit {
 	cols := 3
 	if preview.W < 70 {
 		cols = 2
@@ -473,7 +542,6 @@ func projectPaneTileHits(project *ProjectGroup, session *SessionItem, window *Wi
 				Selection: selectionState{
 					Project: project.Name,
 					Session: session.Name,
-					Window:  window.Index,
 					Pane:    pane.Index,
 				},
 				Outer:   outer,

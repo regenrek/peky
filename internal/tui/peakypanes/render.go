@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/cellbuf"
+	"github.com/regenrek/peakypanes/internal/pathutil"
 	"github.com/regenrek/peakypanes/internal/tui/icons"
 	"github.com/regenrek/peakypanes/internal/tui/theme"
 )
@@ -69,42 +70,7 @@ func (m Model) viewDashboardContent() string {
 }
 
 func (m Model) viewHeader(width int) string {
-	logo := "🎩 Peaky Panes"
-	parts := []string{logo}
-
-	dashboardLabel := "Dashboard"
-	if m.tab == TabDashboard {
-		parts = append(parts, theme.TabActive.Render(dashboardLabel))
-	} else {
-		parts = append(parts, theme.TabInactive.Render(dashboardLabel))
-	}
-
-	if len(m.data.Projects) == 0 {
-		parts = append(parts, theme.TabInactive.Render("none"))
-	} else {
-		activeProject := m.selection.Project
-		if m.tab == TabProject {
-			found := false
-			for _, p := range m.data.Projects {
-				if p.Name == activeProject {
-					found = true
-					break
-				}
-			}
-			if !found && len(m.data.Projects) > 0 {
-				activeProject = m.data.Projects[0].Name
-			}
-		}
-		for _, p := range m.data.Projects {
-			if m.tab == TabProject && p.Name == activeProject {
-				parts = append(parts, theme.TabActive.Render(p.Name))
-			} else {
-				parts = append(parts, theme.TabInactive.Render(p.Name))
-			}
-		}
-	}
-	parts = append(parts, theme.TabAdd.Render("+ New"))
-	line := strings.Join(parts, " ")
+	line := headerLine(m.headerParts())
 	return fitLine(line, width)
 }
 
@@ -189,11 +155,11 @@ func (m Model) viewSidebar(width, height int) string {
 			nameStyle = theme.SidebarSessionStopped
 		}
 		name := nameStyle.Render(s.Name)
-		count := theme.SidebarMeta.Render(fmt.Sprintf("(%d)", s.WindowCount))
+		count := theme.SidebarMeta.Render(fmt.Sprintf("(%d)", s.PaneCount))
 		line := fmt.Sprintf("%s %s %s", marker, name, count)
 		builder.WriteString(fitLine(line, width))
 		builder.WriteString("\n")
-		if s.WindowCount <= 0 {
+		if s.PaneCount <= 0 {
 			continue
 		}
 		expanded := m.sessionExpanded(s.Name)
@@ -203,39 +169,26 @@ func (m Model) viewSidebar(width, height int) string {
 			}
 			continue
 		}
-		for _, w := range s.Windows {
-			isSelectedWindow := isSelectedSession && w.Index == m.selection.Window
-			windowLabelStyle := theme.SidebarWindow
-			if isSelectedWindow {
-				windowLabelStyle = theme.SidebarWindowSelected
+		selectedPane := ""
+		if isSelectedSession {
+			selectedPane = m.selection.Pane
+			if selectedPane == "" {
+				selectedPane = activePaneIndex(s.Panes)
 			}
-			wline := fmt.Sprintf("%s %s", theme.SidebarPrefix.Render(iconSet.WindowLabel), windowLabelStyle.Render(windowLabel(w)))
-			builder.WriteString(fitLine(wline, width))
+		}
+		for _, p := range s.Panes {
+			isSelectedPane := isSelectedSession && selectedPane != "" && p.Index == selectedPane
+			paneMarker := " "
+			if isSelectedPane {
+				paneMarker = theme.SidebarPaneMarker.Render(iconSet.PaneDot.BySize(iconSize))
+			}
+			paneLabelStyle := theme.SidebarPane
+			if isSelectedPane {
+				paneLabelStyle = theme.SidebarPaneSelected
+			}
+			pline := fmt.Sprintf("%s %s", paneMarker, paneLabelStyle.Render(paneLabel(p)))
+			builder.WriteString(fitLine(pline, width))
 			builder.WriteString("\n")
-			if len(w.Panes) == 0 {
-				continue
-			}
-			selectedPane := ""
-			if isSelectedWindow {
-				selectedPane = m.selection.Pane
-				if selectedPane == "" {
-					selectedPane = activePaneIndex(w.Panes)
-				}
-			}
-			for _, p := range w.Panes {
-				isSelectedPane := isSelectedWindow && selectedPane != "" && p.Index == selectedPane
-				paneMarker := " "
-				if isSelectedPane {
-					paneMarker = theme.SidebarPaneMarker.Render(iconSet.PaneDot.BySize(iconSize))
-				}
-				paneLabelStyle := theme.SidebarPane
-				if isSelectedPane {
-					paneLabelStyle = theme.SidebarPaneSelected
-				}
-				pline := fmt.Sprintf("%s %s", paneMarker, paneLabelStyle.Render(paneLabel(p)))
-				builder.WriteString(fitLine(pline, width))
-				builder.WriteString("\n")
-			}
 		}
 		if i < len(sessions)-1 {
 			builder.WriteString("\n")
@@ -271,12 +224,7 @@ func (m Model) viewPreview(width, height int) string {
 	if session == nil {
 		return padLines(m.emptyStateMessage(), width, height)
 	}
-	var panes []PaneItem
-	if session != nil {
-		if window := selectedWindow(session, m.selection.Window); window != nil {
-			panes = window.Panes
-		}
-	}
+	panes := session.Panes
 
 	lines := []string{}
 	gridHeight := height
@@ -288,30 +236,6 @@ func (m Model) viewPreview(width, height int) string {
 	lines = append(lines, grid)
 
 	return padLines(strings.Join(lines, "\n"), width, height)
-}
-
-func (m Model) viewWindowBar(width int) string {
-	session := m.selectedSession()
-	if session == nil || len(session.Windows) == 0 {
-		return ""
-	}
-	if len(session.Windows) <= 1 {
-		return ""
-	}
-	parts := make([]string, 0, len(session.Windows))
-	for _, w := range session.Windows {
-		label := w.Name
-		if strings.TrimSpace(label) == "" {
-			label = w.Index
-		}
-		if w.Index == m.selection.Window {
-			parts = append(parts, theme.TabActive.Render(label))
-		} else {
-			parts = append(parts, theme.TabInactive.Render(label))
-		}
-	}
-	line := strings.Join(parts, " ")
-	return fitLine(line, width)
 }
 
 func (m Model) viewThumbnails(width int) string {
@@ -356,7 +280,7 @@ func (m Model) viewFooter(width int) string {
 	projectKeys := joinKeyLabels(m.keys.projectLeft, m.keys.projectRight)
 	sessionKeys := joinKeyLabels(m.keys.sessionUp, m.keys.sessionDown)
 	paneKeys := joinKeyLabels(m.keys.paneNext, m.keys.panePrev)
-	sessionLabel := "session/window"
+	sessionLabel := "session/pane"
 	paneLabel := "pane"
 	if m.tab == TabDashboard {
 		sessionLabel = "pane"
@@ -531,11 +455,6 @@ func (m Model) viewConfirmClosePane() string {
 		dialogContent.WriteString(theme.DialogValue.Render(m.confirmPaneTitle))
 		dialogContent.WriteString("\n")
 	}
-	if m.confirmPaneWindow != "" {
-		dialogContent.WriteString(theme.DialogLabel.Render("Window: "))
-		dialogContent.WriteString(theme.DialogValue.Render(m.confirmPaneWindow))
-		dialogContent.WriteString("\n")
-	}
 	if m.confirmPaneSession != "" {
 		dialogContent.WriteString(theme.DialogLabel.Render("Session: "))
 		dialogContent.WriteString(theme.DialogValue.Render(m.confirmPaneSession))
@@ -562,8 +481,6 @@ func (m Model) viewRename() string {
 
 	title := "Rename Session"
 	switch m.state {
-	case StateRenameWindow:
-		title = "Rename Window"
 	case StateRenamePane:
 		title = "Rename Pane"
 	}
@@ -576,15 +493,6 @@ func (m Model) viewRename() string {
 			dialogContent.WriteString(theme.DialogValue.Render(m.renameSession))
 			dialogContent.WriteString("\n")
 		}
-		windowLabel := strings.TrimSpace(m.renameWindow)
-		if windowLabel == "" {
-			windowLabel = strings.TrimSpace(m.renameWindowIndex)
-		}
-		if windowLabel != "" {
-			dialogContent.WriteString(theme.DialogLabel.Render("Window: "))
-			dialogContent.WriteString(theme.DialogValue.Render(windowLabel))
-			dialogContent.WriteString("\n")
-		}
 		paneLabel := strings.TrimSpace(m.renamePane)
 		if paneLabel == "" && strings.TrimSpace(m.renamePaneIndex) != "" {
 			paneLabel = fmt.Sprintf("pane %s", strings.TrimSpace(m.renamePaneIndex))
@@ -592,18 +500,6 @@ func (m Model) viewRename() string {
 		if paneLabel != "" {
 			dialogContent.WriteString(theme.DialogLabel.Render("Pane: "))
 			dialogContent.WriteString(theme.DialogValue.Render(paneLabel))
-			dialogContent.WriteString("\n")
-		}
-		dialogContent.WriteString("\n")
-	} else if m.state == StateRenameWindow {
-		if strings.TrimSpace(m.renameSession) != "" {
-			dialogContent.WriteString(theme.DialogLabel.Render("Session: "))
-			dialogContent.WriteString(theme.DialogValue.Render(m.renameSession))
-			dialogContent.WriteString("\n")
-		}
-		if strings.TrimSpace(m.renameWindow) != "" {
-			dialogContent.WriteString(theme.DialogLabel.Render("Window: "))
-			dialogContent.WriteString(theme.DialogValue.Render(m.renameWindow))
 			dialogContent.WriteString("\n")
 		}
 		dialogContent.WriteString("\n")
@@ -735,7 +631,7 @@ func (m Model) viewHelp() string {
 	var left strings.Builder
 	left.WriteString("Navigation\n")
 	left.WriteString(fmt.Sprintf("  %s Switch projects\n", joinKeyLabels(m.keys.projectLeft, m.keys.projectRight)))
-	left.WriteString(fmt.Sprintf("  %s Switch sessions/windows (project view)\n", joinKeyLabels(m.keys.sessionUp, m.keys.sessionDown)))
+	left.WriteString(fmt.Sprintf("  %s Switch sessions/panes (project view)\n", joinKeyLabels(m.keys.sessionUp, m.keys.sessionDown)))
 	left.WriteString(fmt.Sprintf("  %s Switch sessions only (project view)\n", joinKeyLabels(m.keys.sessionOnlyUp, m.keys.sessionOnlyDown)))
 	left.WriteString(fmt.Sprintf("  %s Switch panes (project view)\n", joinKeyLabels(m.keys.paneNext, m.keys.panePrev)))
 	left.WriteString(fmt.Sprintf("  %s Switch panes (dashboard)\n", joinKeyLabels(m.keys.sessionUp, m.keys.sessionDown)))
@@ -757,8 +653,8 @@ func (m Model) viewHelp() string {
 	left.WriteString("  type  Send input to focused pane\n")
 
 	var right strings.Builder
-	right.WriteString("Window\n")
-	right.WriteString(fmt.Sprintf("  %s Toggle window list\n", keyLabel(m.keys.toggleWindows)))
+	right.WriteString("Pane List\n")
+	right.WriteString(fmt.Sprintf("  %s Toggle pane list\n", keyLabel(m.keys.togglePanes)))
 	right.WriteString("\nOther\n")
 	right.WriteString(fmt.Sprintf("  %s Refresh\n", keyLabel(m.keys.refresh)))
 	right.WriteString(fmt.Sprintf("  %s Edit config\n", keyLabel(m.keys.editConfig)))
@@ -1238,8 +1134,7 @@ func renderDashboardPaneTile(pane DashboardPane, width, height, previewLines int
 	if selected {
 		marker = theme.SidebarCaret.Render(iconSet.Caret.BySize(iconSize))
 	}
-	window := windowLabel(WindowItem{Index: pane.WindowIndex, Name: pane.WindowName})
-	label := fmt.Sprintf("%s / %s / %s", pane.SessionName, window, paneLabel(pane.Pane))
+	label := fmt.Sprintf("%s / %s", pane.SessionName, paneLabel(pane.Pane))
 	header := fmt.Sprintf("%s %s %s", marker, renderBadge(pane.Pane.Status), label)
 	if selected {
 		header = theme.SidebarSessionSelected.Render(header)
@@ -1255,9 +1150,9 @@ func renderDashboardPaneTile(pane DashboardPane, width, height, previewLines int
 	}
 	detail = "cmd: " + detail
 	if selected {
-		detail = theme.SidebarWindowSelected.Render(detail)
+		detail = theme.SidebarPaneSelected.Render(detail)
 	} else {
-		detail = theme.SidebarWindow.Render(detail)
+		detail = theme.SidebarPane.Render(detail)
 	}
 	detailLine := truncateTileLine(detail, contentWidth)
 
@@ -1314,8 +1209,7 @@ func (m Model) renderDashboardPaneTileLive(pane DashboardPane, width, height, pr
 	if selected {
 		marker = theme.SidebarCaret.Render(iconSet.Caret.BySize(iconSize))
 	}
-	window := windowLabel(WindowItem{Index: pane.WindowIndex, Name: pane.WindowName})
-	label := fmt.Sprintf("%s / %s / %s", pane.SessionName, window, paneLabel(pane.Pane))
+	label := fmt.Sprintf("%s / %s", pane.SessionName, paneLabel(pane.Pane))
 	header := fmt.Sprintf("%s %s %s", marker, renderBadge(pane.Pane.Status), label)
 	if selected {
 		header = theme.SidebarSessionSelected.Render(header)
@@ -1331,9 +1225,9 @@ func (m Model) renderDashboardPaneTileLive(pane DashboardPane, width, height, pr
 	}
 	detail = "cmd: " + detail
 	if selected {
-		detail = theme.SidebarWindowSelected.Render(detail)
+		detail = theme.SidebarPaneSelected.Render(detail)
 	} else {
-		detail = theme.SidebarWindow.Render(detail)
+		detail = theme.SidebarPane.Render(detail)
 	}
 	detailLine := truncateTileLine(detail, contentWidth)
 
@@ -1564,18 +1458,6 @@ func scalePane(p PaneItem, totalW, totalH, width, height int) (int, int, int, in
 	return x1, y1, w, h
 }
 
-func windowLabel(window WindowItem) string {
-	name := strings.TrimSpace(window.Name)
-	index := strings.TrimSpace(window.Index)
-	if name == "" {
-		return index
-	}
-	if index == "" {
-		return name
-	}
-	return fmt.Sprintf("%s %s", index, name)
-}
-
 func paneLabel(pane PaneItem) string {
 	label := strings.TrimSpace(pane.Title)
 	if label == "" {
@@ -1590,18 +1472,11 @@ func paneLabel(pane PaneItem) string {
 	return fmt.Sprintf("%s %s", pane.Index, label)
 }
 
-func windowNameOrDash(name string) string {
-	if strings.TrimSpace(name) == "" {
-		return "-"
-	}
-	return name
-}
-
 func pathOrDash(path string) string {
 	if strings.TrimSpace(path) == "" {
 		return "-"
 	}
-	return shortenPath(path)
+	return pathutil.ShortenUser(path)
 }
 
 func layoutOrDash(layout string) string {
@@ -1716,25 +1591,6 @@ func sessionBadgeStatus(session SessionItem) PaneStatus {
 		return PaneStatusIdle
 	}
 	return session.Thumbnail.Status
-}
-
-func selectedWindow(session *SessionItem, windowIndex string) *WindowItem {
-	if session == nil {
-		return nil
-	}
-	resolved := strings.TrimSpace(windowIndex)
-	if resolved == "" {
-		resolved = strings.TrimSpace(session.ActiveWindow)
-	}
-	for i := range session.Windows {
-		if session.Windows[i].Index == resolved {
-			return &session.Windows[i]
-		}
-	}
-	if len(session.Windows) > 0 {
-		return &session.Windows[0]
-	}
-	return nil
 }
 
 func truncateLine(text string, width int) string {

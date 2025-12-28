@@ -48,3 +48,24 @@ func (m *Model) dashboardBodyRect() (rect, bool) {
 	bodyY := padTop + headerHeight + headerGap
 	return rect{X: bodyX, Y: bodyY, W: contentWidth, H: bodyHeight}, true
 }
+
+func (m *Model) headerRect() (rect, bool) {
+	if m.width == 0 || m.height == 0 {
+		return rect{}, false
+	}
+	h, v := appStyle.GetFrameSize()
+	contentWidth := m.width - h
+	contentHeight := m.height - v
+	if contentWidth <= 10 || contentHeight <= 6 {
+		return rect{}, false
+	}
+
+	header := m.viewHeader(contentWidth)
+	headerHeight := lipgloss.Height(header)
+	if headerHeight <= 0 {
+		return rect{}, false
+	}
+
+	padTop, _, _, padLeft := appStyle.GetPadding()
+	return rect{X: padLeft, Y: padTop, W: contentWidth, H: headerHeight}, true
+}
