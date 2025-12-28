@@ -6,12 +6,12 @@
 █       █████   █   █   █  ██     █      █        █   █   █  ██    █████   █████
 ```
 
-**Terminal dashboard with YAML-based layouts, native live previews, and native sessions.**
+**Terminal dashboard with YAML-based layouts, native live previews, and persistent native sessions.**
 
 ![Peaky Panes Preview](assets/peakypanes-preview.jpg)
 
 
-Define your layouts in YAML, share them with your team via git, and get consistent development environments everywhere. Run sessions with the built-in **native session manager**.
+Define your layouts in YAML, share them with your team via git, and get consistent development environments everywhere. Sessions are owned by a **native daemon** so they keep running after the UI exits.
 
 ## Features
 
@@ -22,7 +22,7 @@ Define your layouts in YAML, share them with your team via git, and get consiste
 - 🔄 **Variable expansion** - Use `${EDITOR}`, `${PROJECT_PATH}`, etc.
 - 🎯 **Zero config** - Just run `peakypanes` in any directory
 - 🧠 **Native live previews** - Full TUI support (vim/htop) with live panes
-- 🧭 **Native session manager** - Multi-pane sessions with configurable layouts
+- 🧭 **Persistent native daemon** - Sessions keep running after the UI exits
 - 📜 **Scrollback + copy mode** - Navigate output and yank from native panes
 - ⌘ **Command palette** - Quick actions, including renaming sessions/panes
 
@@ -68,6 +68,11 @@ cd your-project
 peakypanes init --local
 # Edit .peakypanes.yml
 git add .peakypanes.yml  # Share with team
+```
+
+**Run the daemon in the foreground (optional):**
+```bash
+peakypanes daemon
 ```
 
 ## Configuration

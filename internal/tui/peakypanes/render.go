@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/cellbuf"
 	"github.com/regenrek/peakypanes/internal/pathutil"
+	"github.com/regenrek/peakypanes/internal/sessiond"
 	"github.com/regenrek/peakypanes/internal/tui/icons"
 	"github.com/regenrek/peakypanes/internal/tui/theme"
 )
@@ -1233,17 +1234,13 @@ func (m Model) renderDashboardPaneTileLive(pane DashboardPane, width, height, pr
 
 	lines := []string{header, detailLine}
 	if availablePreview > 0 {
-		var live string
-		if m.native != nil {
-			if win := m.native.Window(pane.Pane.ID); win != nil {
-				_ = win.Resize(contentWidth, availablePreview)
-				if selected && m.terminalFocus {
-					live = win.ViewLipgloss(true)
-				} else {
-					live = win.ViewANSI()
-				}
-			}
+		mode := sessiond.PaneViewANSI
+		showCursor := false
+		if selected && m.terminalFocus {
+			mode = sessiond.PaneViewLipgloss
+			showCursor = true
 		}
+		live := m.paneView(pane.Pane.ID, contentWidth, availablePreview, mode, showCursor)
 
 		if live != "" {
 			live = padLines(live, contentWidth, availablePreview)
@@ -1387,17 +1384,13 @@ func (m Model) renderPaneTileLive(pane PaneItem, width, height int, compact bool
 		maxPreview = 0
 	}
 	if maxPreview > 0 {
-		var live string
-		if m.native != nil {
-			if win := m.native.Window(pane.ID); win != nil {
-				_ = win.Resize(contentWidth, maxPreview)
-				if target && m.terminalFocus {
-					live = win.ViewLipgloss(true)
-				} else {
-					live = win.ViewANSI()
-				}
-			}
+		mode := sessiond.PaneViewANSI
+		showCursor := false
+		if target && m.terminalFocus {
+			mode = sessiond.PaneViewLipgloss
+			showCursor = true
 		}
+		live := m.paneView(pane.ID, contentWidth, maxPreview, mode, showCursor)
 
 		if live != "" {
 			live = padLines(live, contentWidth, maxPreview)

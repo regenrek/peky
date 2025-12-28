@@ -12,6 +12,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/sessiond"
 	"github.com/regenrek/peakypanes/internal/tui/peakypanes"
 )
 
@@ -32,6 +33,7 @@ Commands:
   dashboard        Open dashboard UI
   open             Start a session and open dashboard
   start            Start a session and open dashboard (alias)
+  daemon           Run the session daemon
   init             Initialize configuration
   layouts          List and manage layouts
   clone            Clone from GitHub and open
@@ -43,6 +45,7 @@ Examples:
   peakypanes start                    # Start session from current dir
   peakypanes start --layout dev-3     # Start with specific layout
   peakypanes open --path ~/repo       # Start from a path
+  peakypanes daemon                   # Run daemon in foreground
   peakypanes init                     # Create global config
   peakypanes init --local             # Create .peakypanes.yml in current dir
   peakypanes layouts                  # List available layouts
@@ -79,6 +82,18 @@ Examples:
   peakypanes init                     # Create ~/.config/peakypanes/
   peakypanes init --local             # Create .peakypanes.yml here
   peakypanes init --local --layout tauri-debug
+`
+
+const daemonHelpText = `Run the Peaky Panes session daemon.
+
+Usage:
+  peakypanes daemon [options]
+
+Options:
+  -h, --help           Show this help
+
+Examples:
+  peakypanes daemon
 `
 
 const layoutsHelpText = `List and manage layouts.
@@ -134,6 +149,8 @@ func main() {
 		runDashboardCommand(os.Args[2:])
 	case "open", "o", "start":
 		runStart(os.Args[2:])
+	case "daemon":
+		runDaemon(os.Args[2:])
 	case "init":
 		runInit(os.Args[2:])
 	case "layouts":
@@ -155,7 +172,15 @@ func main() {
 }
 
 func runMenu(autoStart *peakypanes.AutoStartSpec) {
-	model, err := peakypanes.NewModel()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	client, err := sessiond.ConnectDefault(ctx, version)
+	if err != nil {
+		fatal("failed to connect to daemon: %v", err)
+	}
+	defer func() { _ = client.Close() }()
+
+	model, err := peakypanes.NewModel(client)
 	if err != nil {
 		fatal("failed to initialize: %v", err)
 	}
@@ -228,6 +253,31 @@ func runDashboardCommand(args []string) {
 		return
 	}
 	runMenuFn(nil)
+}
+
+func runDaemon(args []string) {
+	showHelp := false
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "-h", "--help":
+			showHelp = true
+		}
+	}
+	if showHelp {
+		fmt.Print(daemonHelpText)
+		return
+	}
+
+	daemon, err := sessiond.NewDaemon(sessiond.DaemonConfig{
+		Version:       version,
+		HandleSignals: true,
+	})
+	if err != nil {
+		fatal("failed to create daemon: %v", err)
+	}
+	if err := daemon.Run(); err != nil {
+		fatal("daemon failed: %v", err)
+	}
 }
 
 func runStart(args []string) {

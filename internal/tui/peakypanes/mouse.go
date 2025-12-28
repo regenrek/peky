@@ -1,11 +1,13 @@
 package peakypanes
 
 import (
+	"context"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	uv "github.com/charmbracelet/ultraviolet"
+
+	"github.com/regenrek/peakypanes/internal/sessiond"
 )
 
 const doubleClickThreshold = 350 * time.Millisecond
@@ -51,17 +53,16 @@ func (m *Model) updateDashboardMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 	if m.terminalFocus {
 		if ok && m.hitIsSelected(hit) && hit.Content.contains(msg.X, msg.Y) {
-			m.forwardMouseEvent(hit, msg)
-			return m, nil
+			return m, m.forwardMouseEvent(hit, msg)
 		}
 		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && ok && !m.hitIsSelected(hit) {
 			m.setTerminalFocus(false)
 			changed := m.applySelectionFromHit(hit.Selection)
 			m.recordClick(hit, msg)
 			if changed {
-				return m, m.selectionCmd()
+				return m, tea.Batch(m.selectionCmd(), m.refreshPaneViewsCmd())
 			}
-			return m, nil
+			return m, m.refreshPaneViewsCmd()
 		}
 		return m, nil
 	}
@@ -84,15 +85,16 @@ func (m *Model) updateDashboardMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.setTerminalFocus(true)
+		cmds := []tea.Cmd{m.refreshPaneViewsCmd()}
 		if changed {
-			return m, m.selectionCmd()
+			cmds = append(cmds, m.selectionCmd())
 		}
-		return m, nil
+		return m, tea.Batch(cmds...)
 	}
 
 	m.recordClick(hit, msg)
 	if m.applySelectionFromHit(hit.Selection) {
-		return m, m.selectionCmd()
+		return m, tea.Batch(m.selectionCmd(), m.refreshPaneViewsCmd())
 	}
 	return m, nil
 }
@@ -107,11 +109,11 @@ func (m *Model) allowMouseMotion() bool {
 	if !m.supportsTerminalFocus() {
 		return false
 	}
-	win := m.nativeFocusedWindow()
-	if win == nil {
+	pane := m.selectedPane()
+	if pane == nil || strings.TrimSpace(pane.ID) == "" {
 		return false
 	}
-	return win.AllowsMouseMotion()
+	return m.paneMouseMotion[pane.ID]
 }
 
 func (m *Model) applySelectionFromHit(sel selectionState) bool {
@@ -169,38 +171,40 @@ func (m *Model) hitIsSelected(hit paneHit) bool {
 	return m.selection == hit.Selection
 }
 
-func (m *Model) forwardMouseEvent(hit paneHit, msg tea.MouseMsg) {
-	if m.native == nil {
-		return
+func (m *Model) forwardMouseEvent(hit paneHit, msg tea.MouseMsg) tea.Cmd {
+	if m == nil || m.client == nil {
+		return nil
 	}
 	if !m.supportsTerminalFocus() {
-		return
+		return nil
 	}
 	if strings.TrimSpace(hit.PaneID) == "" {
-		return
+		return nil
 	}
 	if !hit.Content.contains(msg.X, msg.Y) {
-		return
+		return nil
 	}
 	relX := msg.X - hit.Content.X
 	relY := msg.Y - hit.Content.Y
 	if relX < 0 || relY < 0 {
-		return
+		return nil
 	}
 
-	event, ok := mouseEventFromTea(msg, relX, relY)
+	payload, ok := mousePayloadFromTea(msg, relX, relY)
 	if !ok {
-		return
+		return nil
 	}
-	win := m.native.Window(hit.PaneID)
-	if win == nil {
-		return
+	if payload.Action == sessiond.MouseActionMotion && !m.paneMouseMotion[hit.PaneID] {
+		return nil
 	}
-	if _, isMotion := event.(uv.MouseMotionEvent); isMotion && !win.AllowsMouseMotion() {
-		return
-	}
-	if err := m.native.SendMouse(hit.PaneID, event); err != nil {
-		m.setToast("Mouse input failed: "+err.Error(), toastError)
+	paneID := hit.PaneID
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), terminalActionTimeout)
+		defer cancel()
+		if err := m.client.SendMouse(ctx, paneID, payload); err != nil {
+			return ErrorMsg{Err: err, Context: "send mouse"}
+		}
+		return nil
 	}
 }
 
@@ -614,35 +618,32 @@ func boolToInt(v bool) int {
 	return 0
 }
 
-func mouseEventFromTea(msg tea.MouseMsg, x, y int) (uv.MouseEvent, bool) {
+func mousePayloadFromTea(msg tea.MouseMsg, x, y int) (sessiond.MouseEventPayload, bool) {
 	if x < 0 || y < 0 {
-		return nil, false
+		return sessiond.MouseEventPayload{}, false
 	}
-	mod := uv.KeyMod(0)
-	if msg.Shift {
-		mod |= uv.ModShift
-	}
-	if msg.Alt {
-		mod |= uv.ModAlt
-	}
-	if msg.Ctrl {
-		mod |= uv.ModCtrl
-	}
-	mouse := uv.Mouse{X: x, Y: y, Button: uv.MouseButton(msg.Button), Mod: mod}
-
-	if isWheelButton(msg.Button) {
-		return uv.MouseWheelEvent(mouse), true
-	}
+	action := sessiond.MouseActionUnknown
 	switch msg.Action {
 	case tea.MouseActionPress:
-		return uv.MouseClickEvent(mouse), true
+		action = sessiond.MouseActionPress
 	case tea.MouseActionRelease:
-		return uv.MouseReleaseEvent(mouse), true
+		action = sessiond.MouseActionRelease
 	case tea.MouseActionMotion:
-		return uv.MouseMotionEvent(mouse), true
+		action = sessiond.MouseActionMotion
 	default:
-		return nil, false
+		return sessiond.MouseEventPayload{}, false
 	}
+	payload := sessiond.MouseEventPayload{
+		X:      x,
+		Y:      y,
+		Button: int(msg.Button),
+		Action: action,
+		Shift:  msg.Shift,
+		Alt:    msg.Alt,
+		Ctrl:   msg.Ctrl,
+		Wheel:  isWheelButton(msg.Button),
+	}
+	return payload, true
 }
 
 func isWheelButton(button tea.MouseButton) bool {

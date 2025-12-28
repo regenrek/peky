@@ -8,6 +8,7 @@ import (
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/native"
 	"github.com/regenrek/peakypanes/internal/pathutil"
+	"github.com/regenrek/peakypanes/internal/sessiond"
 )
 
 // ViewState represents the current UI view.
@@ -165,7 +166,7 @@ type dashboardSnapshotInput struct {
 	Version   uint64
 	Config    *layout.Config
 	Settings  DashboardConfig
-	Native    *native.Manager
+	Sessions  []native.SessionSnapshot
 }
 
 // dashboardSnapshotResult is returned by a refresh.
@@ -193,13 +194,19 @@ type selectionRefreshMsg struct {
 	Version uint64
 }
 
-// nativePaneUpdatedMsg is emitted when a native pane updates.
-type nativePaneUpdatedMsg struct {
-	PaneID string
+// daemonEventMsg wraps an async daemon event.
+type daemonEventMsg struct {
+	Event sessiond.Event
 }
 
-// nativeSessionStartedMsg signals a native session creation result.
-type nativeSessionStartedMsg struct {
+// paneViewsMsg carries pane view updates from the daemon.
+type paneViewsMsg struct {
+	Views []sessiond.PaneViewResponse
+	Err   error
+}
+
+// sessionStartedMsg signals a session creation result.
+type sessionStartedMsg struct {
 	Name  string
 	Path  string
 	Err   error

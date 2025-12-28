@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/native"
 )
 
 func TestDefaultDashboardConfigDefaults(t *testing.T) {
@@ -233,7 +234,7 @@ func TestResolveDashboardSelection(t *testing.T) {
 				{
 					Name:   "s1",
 					Status: StatusRunning,
-					Panes: []PaneItem{{Index: "0", Active: true}},
+					Panes:  []PaneItem{{Index: "0", Active: true}},
 				},
 			},
 		},
@@ -243,7 +244,7 @@ func TestResolveDashboardSelection(t *testing.T) {
 				{
 					Name:   "s2",
 					Status: StatusRunning,
-					Panes: []PaneItem{{Index: "2", Active: true}},
+					Panes:  []PaneItem{{Index: "2", Active: true}},
 				},
 			},
 		},
@@ -270,7 +271,7 @@ func TestBuildDashboardData(t *testing.T) {
 		Config:    cfg,
 		Settings:  settings,
 		Version:   1,
-		Native:    m.native,
+		Sessions:  []native.SessionSnapshot{snap},
 	})
 	if result.Err != nil {
 		t.Fatalf("buildDashboardData() error: %v", result.Err)
@@ -313,7 +314,7 @@ func TestBuildDashboardDataHonorsHiddenProjects(t *testing.T) {
 		Config:    cfg,
 		Settings:  settings,
 		Version:   1,
-		Native:    m.native,
+		Sessions:  []native.SessionSnapshot{snap},
 	})
 	if result.Err != nil {
 		t.Fatalf("buildDashboardData() error: %v", result.Err)

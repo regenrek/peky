@@ -67,7 +67,7 @@ func TestRenameSession(t *testing.T) {
 	if m.selection.Session != "new" {
 		t.Fatalf("selection.Session = %q", m.selection.Session)
 	}
-	if m.native.Session("new") == nil {
+	if !sessionExists(t, m.client, "new") {
 		t.Fatalf("expected renamed session")
 	}
 }
@@ -88,12 +88,12 @@ func TestRenamePane(t *testing.T) {
 	m.renameInput.SetValue("pane")
 	m.applyRename()
 
-	session := m.native.Session("sess")
-	if session == nil || len(session.Panes) == 0 {
-		t.Fatalf("pane rename failed: %#v", session)
+	sessionSnap := waitForSessionSnapshot(t, m.client, "sess")
+	if len(sessionSnap.Panes) == 0 {
+		t.Fatalf("pane rename failed: %#v", sessionSnap)
 	}
-	if session.Panes[0].Title != "pane" {
-		t.Fatalf("pane title = %q", session.Panes[0].Title)
+	if sessionSnap.Panes[0].Title != "pane" {
+		t.Fatalf("pane title = %q", sessionSnap.Panes[0].Title)
 	}
 }
 
@@ -108,7 +108,7 @@ func TestUpdateConfirmKill(t *testing.T) {
 	if m.state != StateDashboard {
 		t.Fatalf("state = %v", m.state)
 	}
-	if m.native.Session("sess") != nil {
+	if sessionExists(t, m.client, "sess") {
 		t.Fatalf("session should be killed")
 	}
 }
@@ -173,7 +173,7 @@ func TestUpdateConfirmCloseProjectKillsSessions(t *testing.T) {
 	if m.state != StateDashboard {
 		t.Fatalf("state = %v", m.state)
 	}
-	if m.native.Session(snap.Name) != nil {
+	if sessionExists(t, m.client, snap.Name) {
 		t.Fatalf("session should be killed")
 	}
 }
@@ -205,9 +205,9 @@ func TestAddPaneSplit(t *testing.T) {
 
 	_ = m.addPaneSplit(false)
 
-	session := m.native.Session(snap.Name)
-	if session == nil || len(session.Panes) < 2 {
-		t.Fatalf("expected new pane, got %#v", session)
+	sessionSnap := waitForSessionSnapshot(t, m.client, snap.Name)
+	if len(sessionSnap.Panes) < 2 {
+		t.Fatalf("expected new pane, got %#v", sessionSnap)
 	}
 }
 

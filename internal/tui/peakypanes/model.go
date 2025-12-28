@@ -20,7 +20,7 @@ import (
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/native"
 	"github.com/regenrek/peakypanes/internal/pathutil"
-	"github.com/regenrek/peakypanes/internal/terminal"
+	"github.com/regenrek/peakypanes/internal/sessiond"
 	"github.com/regenrek/peakypanes/internal/tui/theme"
 )
 
@@ -61,7 +61,7 @@ type dashboardKeyMap struct {
 
 // Model implements tea.Model for peakypanes TUI.
 type Model struct {
-	native *native.Manager
+	client *sessiond.Client
 	state  ViewState
 	tab    DashboardTab
 	width  int
@@ -122,22 +122,30 @@ type Model struct {
 	terminalFocus bool
 
 	autoStart *AutoStartSpec
+
+	paneViews       map[paneViewKey]string
+	paneMouseMotion map[string]bool
 }
 
 // NewModel creates a new peakypanes TUI model.
-func NewModel() (*Model, error) {
+func NewModel(client *sessiond.Client) (*Model, error) {
 	configPath, err := layout.DefaultConfigPath()
 	if err != nil {
 		return nil, err
 	}
+	if client == nil {
+		return nil, errors.New("session client is required")
+	}
 
 	m := &Model{
-		native:             native.NewManager(),
+		client:             client,
 		state:              StateDashboard,
 		tab:                TabDashboard,
 		configPath:         configPath,
 		expandedSessions:   make(map[string]bool),
 		selectionByProject: make(map[string]selectionState),
+		paneViews:          make(map[paneViewKey]string),
+		paneMouseMotion:    make(map[string]bool),
 	}
 
 	m.filterInput = textinput.New()
@@ -202,8 +210,8 @@ func (m *Model) SetAutoStart(spec AutoStartSpec) {
 func (m *Model) Init() tea.Cmd {
 	m.beginRefresh()
 	cmds := []tea.Cmd{m.refreshCmd(), tickCmd(m.settings.RefreshInterval)}
-	if m.native != nil {
-		cmds = append(cmds, waitNativePaneUpdate(m.native))
+	if m.client != nil {
+		cmds = append(cmds, waitDaemonEvent(m.client))
 	}
 	if m.autoStart != nil {
 		cmds = append(cmds, m.startSessionNative(m.autoStart.Session, m.autoStart.Path, m.autoStart.Layout, m.autoStart.Focus))
@@ -217,16 +225,16 @@ func tickCmd(interval time.Duration) tea.Cmd {
 	})
 }
 
-func waitNativePaneUpdate(manager *native.Manager) tea.Cmd {
-	if manager == nil {
+func waitDaemonEvent(client *sessiond.Client) tea.Cmd {
+	if client == nil {
 		return nil
 	}
 	return func() tea.Msg {
-		event, ok := <-manager.Events()
+		event, ok := <-client.Events()
 		if !ok {
 			return nil
 		}
-		return nativePaneUpdatedMsg{PaneID: event.PaneID}
+		return daemonEventMsg{Event: event}
 	}
 }
 
@@ -256,6 +264,7 @@ func (m Model) refreshCmd() tea.Cmd {
 	version := m.selectionVersion
 	currentSettings := m.settings
 	currentKeys := m.keys
+	client := m.client
 	return func() tea.Msg {
 		cfg, err := loadConfig(configPath)
 		warning := ""
@@ -279,13 +288,37 @@ func (m Model) refreshCmd() tea.Cmd {
 			warning += "keymap: " + err.Error()
 			keys = currentKeys
 		}
+		var sessions []native.SessionSnapshot
+		if client != nil {
+			previewLines := settings.PreviewLines
+			if dashboard := dashboardPreviewLines(settings); dashboard > previewLines {
+				previewLines = dashboard
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			sessions, _, err = client.Snapshot(ctx, previewLines)
+			if err != nil {
+				result := buildDashboardData(dashboardSnapshotInput{
+					Selection: selection,
+					Tab:       currentTab,
+					Version:   version,
+					Config:    cfg,
+					Settings:  settings,
+					Sessions:  nil,
+				})
+				result.Keymap = keys
+				result.Warning = warning
+				result.Err = err
+				return dashboardSnapshotMsg{Result: result}
+			}
+		}
 		result := buildDashboardData(dashboardSnapshotInput{
 			Selection: selection,
 			Tab:       currentTab,
 			Version:   version,
 			Config:    cfg,
 			Settings:  settings,
-			Native:    m.native,
+			Sessions:  sessions,
 		})
 		result.Keymap = keys
 		result.Warning = warning
@@ -340,10 +373,34 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.refreshSelectionForProjectConfig() {
 			m.setToast("Project config changed: selection refreshed", toastInfo)
 		}
+		return m, m.refreshPaneViewsCmd()
+	case daemonEventMsg:
+		cmds := []tea.Cmd{waitDaemonEvent(m.client)}
+		switch msg.Event.Type {
+		case sessiond.EventPaneUpdated:
+			if cmd := m.refreshPaneViewFor(msg.Event.PaneID); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		case sessiond.EventSessionChanged:
+			if m.refreshInFlight == 0 {
+				m.beginRefresh()
+				cmds = append(cmds, m.refreshCmd())
+			}
+		}
+		return m, tea.Batch(cmds...)
+	case paneViewsMsg:
+		if msg.Err != nil {
+			m.setToast("Pane view failed: "+msg.Err.Error(), toastWarning)
+		}
+		for _, view := range msg.Views {
+			key := paneViewKeyFrom(view)
+			m.paneViews[key] = view.View
+			if view.PaneID != "" {
+				m.paneMouseMotion[view.PaneID] = view.AllowMotion
+			}
+		}
 		return m, nil
-	case nativePaneUpdatedMsg:
-		return m, waitNativePaneUpdate(m.native)
-	case nativeSessionStartedMsg:
+	case sessionStartedMsg:
 		if msg.Err != nil {
 			m.setToast("Start failed: "+msg.Err.Error(), toastError)
 			return m, nil
@@ -464,27 +521,20 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.supportsTerminalFocus() && m.terminalFocus {
 		if msg.String() == "esc" {
 			m.setTerminalFocus(false)
-			return m, nil
+			return m, m.refreshPaneViewsCmd()
 		}
 		if key.Matches(msg, m.keys.terminalFocus) {
 			m.setTerminalFocus(false)
+			return m, m.refreshPaneViewsCmd()
+		}
+		if cmd := m.handleTerminalKeyCmd(msg); cmd != nil {
+			return m, cmd
+		}
+		payload := encodeKeyMsg(msg)
+		if len(payload) == 0 {
 			return m, nil
 		}
-		// Intercept native scrollback/copy keys before PTY input.
-		win := m.nativeFocusedWindow()
-		if win != nil {
-			res := handleNativeTerminalKey(msg, m.keys, win)
-			if res.Handled {
-				if res.Toast != "" {
-					m.setToast(res.Toast, res.Level)
-				}
-				return m, res.Cmd
-			}
-		}
-		if err := m.sendNativeKey(msg); err != nil {
-			m.setToast("Input failed: "+err.Error(), toastError)
-		}
-		return m, nil
+		return m, m.sendPaneInputCmd(payload, "send to pane")
 	}
 
 	switch {
@@ -494,7 +544,7 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.setTerminalFocus(!m.terminalFocus)
-		return m, nil
+		return m, m.refreshPaneViewsCmd()
 	case key.Matches(msg, m.keys.projectLeft):
 		m.selectTab(-1)
 		return m, m.selectionRefreshCmd()
@@ -772,8 +822,8 @@ func (m *Model) addPaneSplit(vertical bool) tea.Cmd {
 		}
 	}
 
-	if m.native == nil {
-		m.setToast("Add pane failed: native manager unavailable", toastError)
+	if m.client == nil {
+		m.setToast("Add pane failed: session client unavailable", toastError)
 		return nil
 	}
 	pane := m.selectedPane()
@@ -783,7 +833,7 @@ func (m *Model) addPaneSplit(vertical bool) tea.Cmd {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	newIndex, err := m.native.SplitPane(ctx, session.Name, pane.Index, vertical, 0)
+	newIndex, err := m.client.SplitPane(ctx, session.Name, pane.Index, vertical, 0)
 	if err != nil {
 		m.setToast("Add pane failed: "+err.Error(), toastError)
 		return nil
@@ -821,11 +871,13 @@ func (m *Model) swapPaneWith(target PaneSwapChoice) tea.Cmd {
 		return nil
 	}
 
-	if m.native == nil {
-		m.setToast("Swap pane failed: native manager unavailable", toastError)
+	if m.client == nil {
+		m.setToast("Swap pane failed: session client unavailable", toastError)
 		return nil
 	}
-	if err := m.native.SwapPanes(session.Name, sourcePane, target.PaneIndex); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := m.client.SwapPanes(ctx, session.Name, sourcePane, target.PaneIndex); err != nil {
 		m.setToast("Swap pane failed: "+err.Error(), toastError)
 		return nil
 	}
@@ -865,11 +917,13 @@ func (m *Model) applyRename() tea.Cmd {
 			m.setToast("Session name unchanged", toastInfo)
 			return nil
 		}
-		if m.native == nil {
-			m.setToast("Rename failed: native manager unavailable", toastError)
+		if m.client == nil {
+			m.setToast("Rename failed: session client unavailable", toastError)
 			return nil
 		}
-		if err := m.native.RenameSession(m.renameSession, newName); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if _, err := m.client.RenameSession(ctx, m.renameSession, newName); err != nil {
 			m.setToast("Rename failed: "+err.Error(), toastError)
 			return nil
 		}
@@ -903,11 +957,13 @@ func (m *Model) applyRename() tea.Cmd {
 			m.setToast("No pane selected", toastWarning)
 			return nil
 		}
-		if m.native == nil {
-			m.setToast("Rename failed: native manager unavailable", toastError)
+		if m.client == nil {
+			m.setToast("Rename failed: session client unavailable", toastError)
 			return nil
 		}
-		if err := m.native.RenamePane(session, pane, newName); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := m.client.RenamePane(ctx, session, pane, newName); err != nil {
 			m.setToast("Rename failed: "+err.Error(), toastError)
 			return nil
 		}
@@ -1166,12 +1222,14 @@ func (m *Model) updateConfirmKill(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "y", "enter":
 		if m.confirmSession != "" {
-			if m.native == nil {
-				m.setToast("Kill failed: native manager unavailable", toastError)
+			if m.client == nil {
+				m.setToast("Kill failed: session client unavailable", toastError)
 				m.setState(StateDashboard)
 				return m, nil
 			}
-			if err := m.native.KillSession(m.confirmSession); err != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			if err := m.client.KillSession(ctx, m.confirmSession); err != nil {
 				m.setToast("Kill failed: "+err.Error(), toastError)
 				m.setState(StateDashboard)
 				return m, nil
@@ -1266,7 +1324,7 @@ func (m *Model) setTerminalFocus(enabled bool) {
 }
 
 func (m *Model) supportsTerminalFocus() bool {
-	if m.native == nil {
+	if m.client == nil {
 		return false
 	}
 	pane := m.selectedPane()
@@ -1627,7 +1685,7 @@ func (m *Model) attachOrStart() tea.Cmd {
 		return m.startProjectNative(*session, focus)
 	}
 	m.setTerminalFocus(true)
-	return nil
+	return m.refreshPaneViewsCmd()
 }
 
 func (m *Model) startNewSessionWithLayout(layoutName string) tea.Cmd {
@@ -1662,21 +1720,27 @@ func (m *Model) startNewSessionWithLayout(layoutName string) tea.Cmd {
 	}
 	base = layout.SanitizeSessionName(base)
 
-	if m.native == nil {
-		m.setToast("Start failed: native manager unavailable", toastError)
+	if m.client == nil {
+		m.setToast("Start failed: session client unavailable", toastError)
 		return nil
 	}
-	existing := m.native.SessionNames()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	existing, err := m.client.SessionNames(ctx)
+	if err != nil {
+		m.setToast("Start failed: "+err.Error(), toastError)
+		return nil
+	}
 	newName := nextSessionName(base, existing)
 	focus := m.settings.AttachBehavior != AttachBehaviorDetached
 	return m.startSessionNative(newName, path, layoutName, focus)
 }
 
 func (m *Model) shutdownCmd() tea.Cmd {
-	nativeMgr := m.native
+	client := m.client
 	return func() tea.Msg {
-		if nativeMgr != nil {
-			nativeMgr.Close()
+		if client != nil {
+			_ = client.Close()
 		}
 		return nil
 	}
@@ -1702,57 +1766,17 @@ func (m *Model) startProjectNative(session SessionItem, focus bool) tea.Cmd {
 
 func (m *Model) startSessionNative(sessionName, path, layoutName string, focus bool) tea.Cmd {
 	return func() tea.Msg {
-		if m.native == nil {
-			return nativeSessionStartedMsg{Path: path, Err: errors.New("native manager unavailable"), Focus: focus}
+		if m.client == nil {
+			return sessionStartedMsg{Path: path, Err: errors.New("session client unavailable"), Focus: focus}
 		}
-		loader, err := layout.NewLoader()
-		if err != nil {
-			return nativeSessionStartedMsg{Path: path, Err: err, Focus: focus}
-		}
-		loader.SetProjectDir(path)
-		if err := loader.LoadAll(); err != nil {
-			return nativeSessionStartedMsg{Path: path, Err: err, Focus: focus}
-		}
-
-		sessionName = layout.ResolveSessionName(path, sessionName, loader.GetProjectConfig())
-		if strings.TrimSpace(sessionName) == "" {
-			return nativeSessionStartedMsg{Path: path, Err: errors.New("session name is required"), Focus: focus}
-		}
-
-		var selectedLayout *layout.LayoutConfig
-		if layoutName != "" {
-			selectedLayout, _, err = loader.GetLayout(layoutName)
-			if err != nil {
-				return nativeSessionStartedMsg{Path: path, Err: err, Focus: focus}
-			}
-		} else if loader.HasProjectConfig() {
-			selectedLayout = loader.GetProjectLayout()
-			if selectedLayout == nil {
-				selectedLayout, _, _ = loader.GetLayout("dev-3")
-			}
-		} else {
-			selectedLayout, _, _ = loader.GetLayout("dev-3")
-		}
-		if selectedLayout == nil {
-			return nativeSessionStartedMsg{Path: path, Err: errors.New("no layout found"), Focus: focus}
-		}
-
-		projectName := filepath.Base(path)
-		var projectVars map[string]string
-		if loader.GetProjectConfig() != nil {
-			projectVars = loader.GetProjectConfig().Vars
-		}
-		expanded := layout.ExpandLayoutVars(selectedLayout, projectVars, path, projectName)
-
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_, err = m.native.StartSession(ctx, native.SessionSpec{
+		resp, err := m.client.StartSession(ctx, sessiond.StartSessionRequest{
 			Name:       sessionName,
 			Path:       path,
-			Layout:     expanded,
-			LayoutName: selectedLayout.Name,
+			LayoutName: layoutName,
 		})
-		return nativeSessionStartedMsg{Name: sessionName, Path: path, Err: err, Focus: focus}
+		return sessionStartedMsg{Name: resp.Name, Path: resp.Path, Err: err, Focus: focus}
 	}
 }
 
@@ -1761,8 +1785,8 @@ func (m *Model) startSessionAtPathDetached(path string) tea.Cmd {
 		m.setToast("Start failed: "+err.Error(), toastError)
 		return nil
 	}
-	if m.native == nil {
-		m.setToast("Start failed: native manager unavailable", toastError)
+	if m.client == nil {
+		m.setToast("Start failed: session client unavailable", toastError)
 		return nil
 	}
 	return m.startSessionNative("", path, "", false)
@@ -1921,13 +1945,13 @@ func (m *Model) closePane(sessionName, paneIndex, paneID string) tea.Cmd {
 		}
 	}
 
-	if m.native == nil {
-		m.setToast("Close pane failed: native manager unavailable", toastError)
+	if m.client == nil {
+		m.setToast("Close pane failed: session client unavailable", toastError)
 		return nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	if err := m.native.ClosePane(ctx, sessionName, paneIndex); err != nil {
+	if err := m.client.ClosePane(ctx, sessionName, paneIndex); err != nil {
 		m.setToast("Close pane failed: "+err.Error(), toastError)
 		return nil
 	}
@@ -1962,13 +1986,15 @@ func (m *Model) killProjectSessions() tea.Cmd {
 	}
 	var failed []string
 	for _, s := range running {
-		if m.native == nil {
+		if m.client == nil {
 			failed = append(failed, s.Name)
 			continue
 		}
-		if err := m.native.KillSession(s.Name); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		if err := m.client.KillSession(ctx, s.Name); err != nil {
 			failed = append(failed, s.Name)
 		}
+		cancel()
 	}
 	if len(failed) > 0 {
 		m.setToast("Kill failed: "+strings.Join(failed, ", "), toastError)
@@ -2492,7 +2518,7 @@ func (m *Model) openQuickReply() tea.Cmd {
 	m.setTerminalFocus(false)
 	m.quickReplyInput.SetValue("")
 	m.quickReplyInput.Focus()
-	return nil
+	return m.refreshPaneViewsCmd()
 }
 
 func (m *Model) updateQuickReply(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -2518,33 +2544,6 @@ func (m *Model) updateQuickReply(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// nativeFocusedWindow returns the terminal.Window for the selected native pane.
-func (m *Model) nativeFocusedWindow() *terminal.Window {
-	if m.native == nil {
-		return nil
-	}
-	p := m.selectedPane()
-	if p == nil || strings.TrimSpace(p.ID) == "" {
-		return nil
-	}
-	return m.native.PaneWindow(p.ID)
-}
-
-func (m *Model) sendNativeKey(msg tea.KeyMsg) error {
-	if m.native == nil {
-		return errors.New("native manager unavailable")
-	}
-	pane := m.selectedPane()
-	if pane == nil || strings.TrimSpace(pane.ID) == "" {
-		return errors.New("no pane selected")
-	}
-	payload := encodeKeyMsg(msg)
-	if len(payload) == 0 {
-		return nil
-	}
-	return m.native.SendInput(pane.ID, payload)
-}
-
 func (m *Model) sendQuickReply() tea.Cmd {
 	text := strings.TrimSpace(m.quickReplyInput.Value())
 	if text == "" {
@@ -2560,13 +2559,15 @@ func (m *Model) sendQuickReply() tea.Cmd {
 		label = fmt.Sprintf("pane %s", pane.Index)
 	}
 	return func() tea.Msg {
-		if m.native == nil {
-			return ErrorMsg{Err: errors.New("native manager unavailable"), Context: "send to pane"}
+		if m.client == nil {
+			return ErrorMsg{Err: errors.New("session client unavailable"), Context: "send to pane"}
 		}
-		if err := m.native.SendInput(pane.ID, []byte(text)); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), terminalActionTimeout)
+		defer cancel()
+		if err := m.client.SendInput(ctx, pane.ID, []byte(text)); err != nil {
 			return ErrorMsg{Err: err, Context: "send to pane"}
 		}
-		if err := m.native.SendInput(pane.ID, []byte{'\r'}); err != nil {
+		if err := m.client.SendInput(ctx, pane.ID, []byte{'\r'}); err != nil {
 			return ErrorMsg{Err: err, Context: "send to pane"}
 		}
 		if label != "" {

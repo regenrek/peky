@@ -47,6 +47,7 @@ type Manager struct {
 	events       chan PaneEvent
 	eventsClosed bool
 	nextID       atomic.Uint64
+	version      atomic.Uint64
 	closed       atomic.Bool
 }
 
@@ -93,6 +94,14 @@ func (m *Manager) Events() <-chan PaneEvent {
 		return nil
 	}
 	return m.events
+}
+
+// Version returns a monotonically increasing version for snapshot changes.
+func (m *Manager) Version() uint64 {
+	if m == nil {
+		return 0
+	}
+	return m.version.Load()
 }
 
 // Close stops all sessions and releases resources.
@@ -196,6 +205,7 @@ func (m *Manager) KillSession(name string) error {
 	for _, id := range paneIDs {
 		m.notify(id)
 	}
+	m.version.Add(1)
 	return nil
 }
 
@@ -221,6 +231,7 @@ func (m *Manager) RenameSession(oldName, newName string) error {
 	delete(m.sessions, oldName)
 	session.Name = newName
 	m.sessions[newName] = session
+	m.version.Add(1)
 	return nil
 }
 
@@ -247,6 +258,7 @@ func (m *Manager) RenamePane(sessionName, paneIndex, newTitle string) error {
 			if pane.window != nil {
 				pane.window.SetTitle(newTitle)
 			}
+			m.version.Add(1)
 			return nil
 		}
 	}
@@ -322,6 +334,7 @@ func (m *Manager) ClosePane(ctx context.Context, sessionName, paneIndex string) 
 	for _, id := range notifyIDs {
 		m.notify(id)
 	}
+	m.version.Add(1)
 	return nil
 }
 
@@ -390,6 +403,7 @@ func (m *Manager) SplitPane(ctx context.Context, sessionName, paneIndex string, 
 
 	m.forwardUpdates(pane)
 	m.notify(pane.ID)
+	m.version.Add(1)
 	return pane.Index, nil
 }
 
@@ -429,6 +443,7 @@ func (m *Manager) SwapPanes(sessionName, paneA, paneB string) error {
 	sortPanesByIndex(session.Panes)
 	m.notify(first.ID)
 	m.notify(second.ID)
+	m.version.Add(1)
 	return nil
 }
 
@@ -528,6 +543,7 @@ func (m *Manager) StartSession(ctx context.Context, spec SessionSpec) (*Session,
 	for _, pane := range panes {
 		m.notify(pane.ID)
 	}
+	m.version.Add(1)
 
 	return session, nil
 }
@@ -790,6 +806,7 @@ func (m *Manager) notify(id string) {
 	if m == nil || m.closed.Load() {
 		return
 	}
+	m.version.Add(1)
 	m.eventsMu.Lock()
 	defer m.eventsMu.Unlock()
 	if m.eventsClosed {

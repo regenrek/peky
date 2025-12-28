@@ -250,14 +250,7 @@ func buildDashboardData(input dashboardSnapshotInput) dashboardSnapshotResult {
 	settings := input.Settings
 	selected := input.Selection
 
-	var nativeSessions []native.SessionSnapshot
-	if input.Native != nil {
-		previewLines := settings.PreviewLines
-		if dashboard := dashboardPreviewLines(settings); dashboard > previewLines {
-			previewLines = dashboard
-		}
-		nativeSessions = input.Native.Snapshot(previewLines)
-	}
+	nativeSessions := input.Sessions
 
 	groups := make([]ProjectGroup, 0)
 	groupByKey := make(map[string]*ProjectGroup)
