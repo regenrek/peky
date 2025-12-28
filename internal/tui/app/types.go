@@ -159,24 +159,26 @@ type selectionState struct {
 
 // dashboardSnapshotInput carries the state needed for refresh.
 type dashboardSnapshotInput struct {
-	Selection selectionState
-	Tab       DashboardTab
-	Version   uint64
-	Config    *layout.Config
-	Settings  DashboardConfig
-	Sessions  []native.SessionSnapshot
+	Selection  selectionState
+	Tab        DashboardTab
+	Version    uint64
+	RefreshSeq uint64
+	Config     *layout.Config
+	Settings   DashboardConfig
+	Sessions   []native.SessionSnapshot
 }
 
 // dashboardSnapshotResult is returned by a refresh.
 type dashboardSnapshotResult struct {
-	Data      DashboardData
-	Resolved  selectionState
-	Err       error
-	Warning   string
-	RawConfig *layout.Config
-	Settings  DashboardConfig
-	Keymap    *dashboardKeyMap
-	Version   uint64
+	Data       DashboardData
+	Resolved   selectionState
+	Err        error
+	Warning    string
+	RawConfig  *layout.Config
+	Settings   DashboardConfig
+	Keymap     *dashboardKeyMap
+	Version    uint64
+	RefreshSeq uint64
 }
 
 // dashboardSnapshotMsg is sent back to the model.

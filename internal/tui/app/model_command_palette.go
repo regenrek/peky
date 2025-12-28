@@ -114,8 +114,7 @@ func (m *Model) commandPaletteItems() []list.Item {
 		}},
 		{Label: "Other: Refresh", Desc: "Refresh dashboard data", Run: func() tea.Cmd {
 			m.setToast("Refreshing...", toastInfo)
-			m.refreshing = true
-			return m.refreshCmd()
+			return m.startRefreshCmd()
 		}},
 		{Label: "Other: Edit config", Desc: "Open config in $EDITOR", Run: func() tea.Cmd {
 			return m.editConfig()

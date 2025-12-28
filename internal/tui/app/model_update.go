@@ -154,8 +154,7 @@ func (m *Model) applyWindowSize(msg tea.WindowSizeMsg) {
 
 func (m *Model) handleRefreshTick(msg refreshTickMsg) tea.Cmd {
 	if m.refreshInFlight == 0 {
-		m.beginRefresh()
-		return tea.Batch(m.refreshCmd(), tickCmd(m.settings.RefreshInterval))
+		return tea.Batch(m.startRefreshCmd(), tickCmd(m.settings.RefreshInterval))
 	}
 	return tickCmd(m.settings.RefreshInterval)
 }
@@ -164,16 +163,22 @@ func (m *Model) handleSelectionRefresh(msg selectionRefreshMsg) tea.Cmd {
 	if msg.Version != m.selectionVersion {
 		return nil
 	}
-	m.beginRefresh()
-	return m.refreshCmd()
+	return m.startRefreshCmd()
 }
 
 func (m *Model) handleDashboardSnapshot(msg dashboardSnapshotMsg) tea.Cmd {
 	m.endRefresh()
+	if msg.Result.RefreshSeq > 0 && msg.Result.RefreshSeq < m.refreshSeq {
+		return nil
+	}
+	if msg.Result.RefreshSeq < m.lastAppliedSeq {
+		return nil
+	}
 	if msg.Result.Err != nil {
 		m.setToast("Refresh failed: "+msg.Result.Err.Error(), toastError)
 		return nil
 	}
+	m.lastAppliedSeq = msg.Result.RefreshSeq
 	if msg.Result.Warning != "" {
 		m.setToast("Dashboard config: "+msg.Result.Warning, toastWarning)
 	}
@@ -204,8 +209,7 @@ func (m *Model) handleDaemonEvent(msg daemonEventMsg) tea.Cmd {
 		}
 	case sessiond.EventSessionChanged:
 		if m.refreshInFlight == 0 {
-			m.beginRefresh()
-			cmds = append(cmds, m.refreshCmd())
+			cmds = append(cmds, m.startRefreshCmd())
 		}
 	}
 	return tea.Batch(cmds...)
@@ -243,6 +247,5 @@ func (m *Model) handleSessionStarted(msg sessionStartedMsg) tea.Cmd {
 		m.setToast("Session started", toastSuccess)
 	}
 	m.setTerminalFocus(msg.Focus)
-	m.beginRefresh()
-	return m.refreshCmd()
+	return m.startRefreshCmd()
 }

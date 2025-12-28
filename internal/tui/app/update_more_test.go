@@ -61,6 +61,38 @@ func TestUpdateHandlers(t *testing.T) {
 	}
 }
 
+func TestHandleDashboardSnapshotRefreshSeq(t *testing.T) {
+	m := newTestModelLite()
+	m.data = DashboardData{Projects: []ProjectGroup{{Name: "Keep"}}}
+	m.refreshSeq = 5
+	m.lastAppliedSeq = 4
+
+	stale := dashboardSnapshotMsg{Result: dashboardSnapshotResult{
+		Data:       DashboardData{Projects: []ProjectGroup{{Name: "Stale"}}},
+		Settings:   m.settings,
+		Version:    m.selectionVersion,
+		RefreshSeq: 4,
+	}}
+	m.handleDashboardSnapshot(stale)
+	if m.data.Projects[0].Name != "Keep" {
+		t.Fatalf("stale refresh applied: %#v", m.data.Projects)
+	}
+
+	fresh := dashboardSnapshotMsg{Result: dashboardSnapshotResult{
+		Data:       DashboardData{Projects: []ProjectGroup{{Name: "Fresh"}}},
+		Settings:   m.settings,
+		Version:    m.selectionVersion,
+		RefreshSeq: 5,
+	}}
+	m.handleDashboardSnapshot(fresh)
+	if m.data.Projects[0].Name != "Fresh" {
+		t.Fatalf("fresh refresh not applied: %#v", m.data.Projects)
+	}
+	if m.lastAppliedSeq != 5 {
+		t.Fatalf("lastAppliedSeq=%d want 5", m.lastAppliedSeq)
+	}
+}
+
 func TestUpdateRouting(t *testing.T) {
 	m := newTestModelLite()
 

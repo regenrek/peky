@@ -1,6 +1,8 @@
 package app
 
 import (
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/regenrek/peakypanes/internal/layout"
@@ -8,13 +10,19 @@ import (
 )
 
 func buildDashboardData(input dashboardSnapshotInput) dashboardSnapshotResult {
-	result := dashboardSnapshotResult{Settings: input.Settings, RawConfig: input.Config, Version: input.Version}
+	result := dashboardSnapshotResult{
+		Settings:   input.Settings,
+		RawConfig:  input.Config,
+		Version:    input.Version,
+		RefreshSeq: input.RefreshSeq,
+	}
 
 	index := newDashboardGroupIndex(len(input.Config.Projects) + len(input.Sessions))
 	index.addConfigProjects(input.Config, input.Settings)
 	index.mergeNativeSessions(input.Sessions, input.Settings)
 
 	groups := index.groups
+	sortProjectGroups(groups, input.Config)
 	resolved := resolveSelectionForTab(input.Tab, groups, input.Selection)
 	applySessionThumbnails(groups, input.Settings)
 	resolved = resolveProjectPaneSelection(input.Tab, groups, resolved)
@@ -170,6 +178,77 @@ func resolveProjectPaneSelection(tab DashboardTab, groups []ProjectGroup, resolv
 		resolved.Pane = resolvePaneSelection(resolved.Pane, target.Panes)
 	}
 	return resolved
+}
+
+func sortProjectGroups(groups []ProjectGroup, cfg *layout.Config) {
+	if len(groups) < 2 {
+		return
+	}
+	order := configProjectOrder(cfg)
+	sort.SliceStable(groups, func(i, j int) bool {
+		left := buildProjectGroupSortMeta(groups[i], order)
+		right := buildProjectGroupSortMeta(groups[j], order)
+		if left.hasOrder || right.hasOrder {
+			if left.hasOrder && right.hasOrder && left.order != right.order {
+				return left.order < right.order
+			}
+			if left.hasOrder != right.hasOrder {
+				return left.hasOrder
+			}
+		}
+		if left.name != right.name {
+			return left.name < right.name
+		}
+		if left.path != right.path {
+			return left.path < right.path
+		}
+		return left.key < right.key
+	})
+}
+
+type projectGroupSortMeta struct {
+	key      string
+	name     string
+	path     string
+	order    int
+	hasOrder bool
+}
+
+func buildProjectGroupSortMeta(group ProjectGroup, order map[string]int) projectGroupSortMeta {
+	key := projectKey(group.Path, group.Name)
+	meta := projectGroupSortMeta{
+		key:  key,
+		name: strings.ToLower(strings.TrimSpace(group.Name)),
+		path: strings.ToLower(strings.TrimSpace(group.Path)),
+	}
+	if order != nil {
+		if idx, ok := order[key]; ok {
+			meta.order = idx
+			meta.hasOrder = true
+		}
+	}
+	return meta
+}
+
+func configProjectOrder(cfg *layout.Config) map[string]int {
+	if cfg == nil || len(cfg.Projects) == 0 {
+		return nil
+	}
+	order := make(map[string]int, len(cfg.Projects))
+	for i := range cfg.Projects {
+		name, _, path := normalizeProjectConfig(&cfg.Projects[i])
+		key := projectKey(path, name)
+		if key == "" {
+			continue
+		}
+		if _, exists := order[key]; !exists {
+			order[key] = i
+		}
+	}
+	if len(order) == 0 {
+		return nil
+	}
+	return order
 }
 
 func panesFromNative(panes []native.PaneSnapshot, settings DashboardConfig, now time.Time) []PaneItem {

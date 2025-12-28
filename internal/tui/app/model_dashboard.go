@@ -170,8 +170,7 @@ func (m *Model) handleDashboardActions(msg tea.KeyMsg) (tea.Cmd, bool) {
 		return m.openCommandPalette(), true
 	case key.Matches(msg, m.keys.refresh):
 		m.setToast("Refreshing...", toastInfo)
-		m.beginRefresh()
-		return m.refreshCmd(), true
+		return m.startRefreshCmd(), true
 	case key.Matches(msg, m.keys.editConfig):
 		return m.editConfig(), true
 	case key.Matches(msg, m.keys.kill):

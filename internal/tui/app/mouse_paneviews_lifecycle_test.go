@@ -110,7 +110,7 @@ func TestRefreshCmdAndDaemonEvent(t *testing.T) {
 	m.configPath = cfgPath
 	m.client = nil
 
-	cmd := m.refreshCmd()
+	cmd := m.refreshCmd(1)
 	msg := cmd()
 	if _, ok := msg.(dashboardSnapshotMsg); !ok {
 		t.Fatalf("expected dashboardSnapshotMsg")

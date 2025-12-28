@@ -109,6 +109,8 @@ type Model struct {
 
 	selectionVersion uint64
 	refreshInFlight  int
+	refreshSeq       uint64
+	lastAppliedSeq   uint64
 
 	terminalFocus bool
 

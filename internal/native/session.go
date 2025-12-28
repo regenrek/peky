@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -45,10 +46,22 @@ func (m *Manager) SessionNames() []string {
 		return nil
 	}
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-	names := make([]string, 0, len(m.sessions))
-	for name := range m.sessions {
-		names = append(names, name)
+	sessions := make([]*Session, 0, len(m.sessions))
+	for _, session := range m.sessions {
+		sessions = append(sessions, session)
+	}
+	m.mu.RUnlock()
+
+	sort.Slice(sessions, func(i, j int) bool {
+		if sessions[i].CreatedAt.Equal(sessions[j].CreatedAt) {
+			return sessions[i].Name < sessions[j].Name
+		}
+		return sessions[i].CreatedAt.Before(sessions[j].CreatedAt)
+	})
+
+	names := make([]string, 0, len(sessions))
+	for _, session := range sessions {
+		names = append(names, session.Name)
 	}
 	return names
 }
@@ -184,16 +197,29 @@ func (m *Manager) Snapshot(previewLines int) []SessionSnapshot {
 	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	out := make([]SessionSnapshot, 0, len(m.sessions))
+	sessions := make([]*Session, 0, len(m.sessions))
 	for _, session := range m.sessions {
+		sessions = append(sessions, session)
+	}
+	sort.Slice(sessions, func(i, j int) bool {
+		if sessions[i].CreatedAt.Equal(sessions[j].CreatedAt) {
+			return sessions[i].Name < sessions[j].Name
+		}
+		return sessions[i].CreatedAt.Before(sessions[j].CreatedAt)
+	})
+
+	out := make([]SessionSnapshot, 0, len(m.sessions))
+	for _, session := range sessions {
 		snap := SessionSnapshot{
 			Name:       session.Name,
 			Path:       session.Path,
 			LayoutName: session.LayoutName,
 			CreatedAt:  session.CreatedAt,
 		}
+		panes := append([]*Pane(nil), session.Panes...)
+		sortPanesByIndex(panes)
 		paneTitles := resolveSessionPaneTitles(session)
-		for _, pane := range session.Panes {
+		for _, pane := range panes {
 			lines := renderPreviewLines(pane.window, previewLines)
 			title := strings.TrimSpace(paneTitles[pane])
 			if title == "" {

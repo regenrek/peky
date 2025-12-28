@@ -262,7 +262,7 @@ func (m *Model) applyCloseProject() tea.Cmd {
 		return nil
 	}
 	m.setToast("Closed project "+name, toastSuccess)
-	return m.refreshCmd()
+	return m.startRefreshCmd()
 }
 
 func (m *Model) applyClosePane() tea.Cmd {
@@ -307,7 +307,7 @@ func (m *Model) closePane(sessionName, paneIndex, paneID string) tea.Cmd {
 	m.selectionVersion++
 	m.rememberSelection(m.selection)
 	m.setToast("Closed pane", toastSuccess)
-	return m.refreshCmd()
+	return m.startRefreshCmd()
 }
 
 func (m *Model) killProjectSessions() tea.Cmd {
@@ -346,10 +346,10 @@ func (m *Model) killProjectSessions() tea.Cmd {
 	}
 	if len(failed) > 0 {
 		m.setToast("Kill failed: "+strings.Join(failed, ", "), toastError)
-		return m.refreshCmd()
+		return m.startRefreshCmd()
 	}
 	m.setToast("Killed sessions for "+name, toastSuccess)
-	return m.refreshCmd()
+	return m.startRefreshCmd()
 }
 
 func (m *Model) updateConfirmKill(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -372,7 +372,7 @@ func (m *Model) updateConfirmKill(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.confirmSession = ""
 			m.confirmProject = ""
 			m.setState(StateDashboard)
-			return m, m.refreshCmd()
+			return m, m.startRefreshCmd()
 		}
 		m.setState(StateDashboard)
 		return m, nil
@@ -433,7 +433,7 @@ func (m *Model) addPaneSplit(vertical bool) tea.Cmd {
 	m.selectionVersion++
 	m.rememberSelection(m.selection)
 	m.setToast("Added pane", toastSuccess)
-	return m.refreshCmd()
+	return m.startRefreshCmd()
 }
 
 func (m *Model) swapPaneWith(target PaneSwapChoice) tea.Cmd {
@@ -476,5 +476,5 @@ func (m *Model) swapPaneWith(target PaneSwapChoice) tea.Cmd {
 	m.selectionVersion++
 	m.rememberSelection(m.selection)
 	m.setToast("Swapped panes", toastSuccess)
-	return m.refreshCmd()
+	return m.startRefreshCmd()
 }

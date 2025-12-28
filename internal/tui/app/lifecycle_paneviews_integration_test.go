@@ -11,7 +11,7 @@ func TestRefreshCmdWithClient(t *testing.T) {
 	snap := startNativeSession(t, m, "app")
 	m.selection = selectionState{Session: snap.Name}
 
-	cmd := m.refreshCmd()
+	cmd := m.refreshCmd(1)
 	msg := cmd()
 	snapshot, ok := msg.(dashboardSnapshotMsg)
 	if !ok {

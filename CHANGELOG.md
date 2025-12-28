@@ -32,6 +32,8 @@ This format is based on Keep a Changelog.
 - Command palette and project picker filters now reset on open/selection.
 - Scrollback view stays anchored when new output arrives while scrolled up.
 - Native manager no longer panics on shutdown when pane updates arrive after close.
+- Project tabs and pane lists no longer reorder during rapid navigation thanks to deterministic ordering.
+- Stale refresh results are ignored so fast navigation cannot apply out-of-order snapshots.
 
 ## 0.0.4 - 2025-12-25
 

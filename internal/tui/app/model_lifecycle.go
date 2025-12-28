@@ -17,8 +17,7 @@ func (m *Model) SetAutoStart(spec AutoStartSpec) {
 }
 
 func (m *Model) Init() tea.Cmd {
-	m.beginRefresh()
-	cmds := []tea.Cmd{m.refreshCmd(), tickCmd(m.settings.RefreshInterval)}
+	cmds := []tea.Cmd{m.startRefreshCmd(), tickCmd(m.settings.RefreshInterval)}
 	if m.client != nil {
 		cmds = append(cmds, waitDaemonEvent(m.client))
 	}
@@ -54,9 +53,11 @@ func (m *Model) selectionRefreshCmd() tea.Cmd {
 	})
 }
 
-func (m *Model) beginRefresh() {
+func (m *Model) beginRefresh() uint64 {
 	m.refreshInFlight++
 	m.refreshing = true
+	m.refreshSeq++
+	return m.refreshSeq
 }
 
 func (m *Model) endRefresh() {
@@ -66,7 +67,7 @@ func (m *Model) endRefresh() {
 	m.refreshing = m.refreshInFlight > 0
 }
 
-func (m Model) refreshCmd() tea.Cmd {
+func (m Model) refreshCmd(seq uint64) tea.Cmd {
 	selection := m.selection
 	currentTab := m.tab
 	configPath := m.configPath
@@ -108,12 +109,13 @@ func (m Model) refreshCmd() tea.Cmd {
 			sessions, _, err = client.Snapshot(ctx, previewLines)
 			if err != nil {
 				result := buildDashboardData(dashboardSnapshotInput{
-					Selection: selection,
-					Tab:       currentTab,
-					Version:   version,
-					Config:    cfg,
-					Settings:  settings,
-					Sessions:  nil,
+					Selection:  selection,
+					Tab:        currentTab,
+					Version:    version,
+					RefreshSeq: seq,
+					Config:     cfg,
+					Settings:   settings,
+					Sessions:   nil,
 				})
 				result.Keymap = keys
 				result.Warning = warning
@@ -122,15 +124,24 @@ func (m Model) refreshCmd() tea.Cmd {
 			}
 		}
 		result := buildDashboardData(dashboardSnapshotInput{
-			Selection: selection,
-			Tab:       currentTab,
-			Version:   version,
-			Config:    cfg,
-			Settings:  settings,
-			Sessions:  sessions,
+			Selection:  selection,
+			Tab:        currentTab,
+			Version:    version,
+			RefreshSeq: seq,
+			Config:     cfg,
+			Settings:   settings,
+			Sessions:   sessions,
 		})
 		result.Keymap = keys
 		result.Warning = warning
 		return dashboardSnapshotMsg{Result: result}
 	}
+}
+
+func (m *Model) startRefreshCmd() tea.Cmd {
+	if m == nil {
+		return nil
+	}
+	seq := m.beginRefresh()
+	return m.refreshCmd(seq)
 }
