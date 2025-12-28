@@ -1,0 +1,112 @@
+package sessiond
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/regenrek/peakypanes/internal/native"
+)
+
+type stubPaneView struct {
+	lipglossCalled bool
+	ansiCalled     bool
+	showCursor     bool
+}
+
+func (s *stubPaneView) ViewLipgloss(showCursor bool) string {
+	s.lipglossCalled = true
+	s.showCursor = showCursor
+	return "lipgloss"
+}
+
+func (s *stubPaneView) ViewANSI() string {
+	s.ansiCalled = true
+	return "ansi"
+}
+
+func TestRequirePaneID(t *testing.T) {
+	if _, err := requirePaneID(" "); err == nil {
+		t.Fatalf("expected error for empty pane id")
+	}
+	got, err := requirePaneID(" pane-1 ")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "pane-1" {
+		t.Fatalf("expected trimmed pane id, got %q", got)
+	}
+}
+
+func TestNormalizeDimensions(t *testing.T) {
+	cols, rows := normalizeDimensions(0, 0)
+	if cols != 1 || rows != 1 {
+		t.Fatalf("expected 1x1, got %dx%d", cols, rows)
+	}
+	cols, rows = normalizeDimensions(5, -2)
+	if cols != 5 || rows != 1 {
+		t.Fatalf("expected 5x1, got %dx%d", cols, rows)
+	}
+}
+
+func TestPaneViewString(t *testing.T) {
+	win := &stubPaneView{}
+	out := paneViewString(win, PaneViewRequest{Mode: PaneViewLipgloss, ShowCursor: true})
+	if out != "lipgloss" || !win.lipglossCalled || !win.showCursor {
+		t.Fatalf("expected lipgloss render")
+	}
+
+	win = &stubPaneView{}
+	out = paneViewString(win, PaneViewRequest{Mode: PaneViewANSI})
+	if out != "ansi" || !win.ansiCalled {
+		t.Fatalf("expected ansi render")
+	}
+}
+
+func TestHandleRequestError(t *testing.T) {
+	d := &Daemon{}
+	resp := d.handleRequest(Envelope{Kind: EnvelopeRequest, Op: Op("unknown"), ID: 7})
+	if resp.Kind != EnvelopeResponse {
+		t.Fatalf("expected response envelope kind")
+	}
+	if resp.Error == "" {
+		t.Fatalf("expected error for unknown op")
+	}
+	if resp.ID != 7 {
+		t.Fatalf("expected response id 7, got %d", resp.ID)
+	}
+}
+
+func TestWindowFromRequestErrors(t *testing.T) {
+	d := &Daemon{}
+	if _, _, err := d.windowFromRequest(""); err == nil {
+		t.Fatalf("expected error for empty pane id")
+	}
+	if _, _, err := d.windowFromRequest("pane"); err == nil {
+		t.Fatalf("expected error for nil manager")
+	}
+	d.manager = wrapManager(native.NewManager())
+	t.Cleanup(func() { d.manager.Close() })
+	if _, _, err := d.windowFromRequest("missing"); err == nil {
+		t.Fatalf("expected error for missing pane")
+	}
+}
+
+func TestStartSessionProjectLayoutNoPanes(t *testing.T) {
+	dir := t.TempDir()
+	config := []byte("layout:\n  name: empty\n  panes: []\n")
+	if err := os.WriteFile(filepath.Join(dir, ".peakypanes.yml"), config, 0o600); err != nil {
+		t.Fatalf("write project config: %v", err)
+	}
+
+	d := &Daemon{manager: wrapManager(native.NewManager())}
+	t.Cleanup(func() { d.manager.Close() })
+	_, err := d.startSession(StartSessionRequest{Name: "demo", Path: dir})
+	if err == nil {
+		t.Fatalf("expected error for empty layout")
+	}
+	if !strings.Contains(err.Error(), "layout has no panes defined") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

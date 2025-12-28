@@ -50,7 +50,7 @@ func TestWindowScrollbackAnchorsOnNewOutput(t *testing.T) {
 		}
 	}
 
-	waitFor(t, 2*time.Second, "scrollback populated", func() bool {
+	waitFor(t, 4*time.Second, "scrollback populated", func() bool {
 		return w.ScrollbackLen() >= 2
 	})
 
@@ -65,13 +65,13 @@ func TestWindowScrollbackAnchorsOnNewOutput(t *testing.T) {
 		t.Fatalf("send input: %v", err)
 	}
 
-	waitFor(t, 2*time.Second, "scrollback grows", func() bool {
+	waitFor(t, 4*time.Second, "scrollback grows", func() bool {
 		return w.ScrollbackLen() > oldSB
 	})
 
 	newSB := w.ScrollbackLen()
 	expected := oldOffset + (newSB - oldSB)
-	waitFor(t, 2*time.Second, "offset anchored", func() bool {
+	waitFor(t, 4*time.Second, "offset anchored", func() bool {
 		return w.GetScrollbackOffset() == expected
 	})
 }

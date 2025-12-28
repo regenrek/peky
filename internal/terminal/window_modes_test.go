@@ -11,24 +11,29 @@ import (
 )
 
 type fakeEmu struct {
-	cols, rows int
-	sb         [][]uv.Cell
-	screen     [][]uv.Cell
-	alt        bool
-	cursor     uv.Position
+	cols, rows  int
+	sb          [][]uv.Cell
+	screen      [][]uv.Cell
+	alt         bool
+	cursor      uv.Position
+	renderValue string
+	renderCalls int
+	sentMouse   uv.MouseEvent
 }
 
 func (f *fakeEmu) Read(p []byte) (int, error)  { return 0, io.EOF }
 func (f *fakeEmu) Write(p []byte) (int, error) { return len(p), nil }
 func (f *fakeEmu) Close() error                { return nil }
 func (f *fakeEmu) Resize(cols, rows int)       { f.cols, f.rows = cols, rows }
-func (f *fakeEmu) Render() string              { return "" }
+func (f *fakeEmu) Render() string              { f.renderCalls++; return f.renderValue }
 func (f *fakeEmu) CursorPosition() uv.Position { return f.cursor }
-func (f *fakeEmu) SendMouse(uv.MouseEvent)     {}
-func (f *fakeEmu) SetCallbacks(vt.Callbacks)   {}
-func (f *fakeEmu) Height() int                 { return f.rows }
-func (f *fakeEmu) Width() int                  { return f.cols }
-func (f *fakeEmu) IsAltScreen() bool           { return f.alt }
+func (f *fakeEmu) SendMouse(event uv.MouseEvent) {
+	f.sentMouse = event
+}
+func (f *fakeEmu) SetCallbacks(vt.Callbacks) {}
+func (f *fakeEmu) Height() int               { return f.rows }
+func (f *fakeEmu) Width() int                { return f.cols }
+func (f *fakeEmu) IsAltScreen() bool         { return f.alt }
 
 func (f *fakeEmu) ScrollbackLen() int { return len(f.sb) }
 func (f *fakeEmu) ScrollbackLine(i int) []uv.Cell {

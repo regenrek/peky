@@ -50,55 +50,78 @@ func (e *Emulator) handleTitle(cmd int, data []byte) {
 }
 
 func (e *Emulator) handleDefaultColor(cmd int, data []byte) {
-	if cmd != 10 && cmd != 11 && cmd != 12 &&
-		cmd != 110 && cmd != 111 && cmd != 112 {
-		// Invalid, ignore
+	kind, ok := defaultColorKindForCmd(cmd)
+	if !ok {
 		return
 	}
-
 	parts := bytes.Split(data, []byte{';'})
 	if len(parts) == 0 {
-		// Invalid, ignore
 		return
 	}
-
-	cb := func(c color.Color) {
-		switch cmd {
-		case 10, 110: // Foreground color
-			e.SetForegroundColor(c)
-		case 11, 111: // Background color
-			e.SetBackgroundColor(c)
-		case 12, 112: // Cursor color
-			e.SetCursorColor(c)
-		}
-	}
-
 	switch len(parts) {
-	case 1: // Reset color
-		cb(nil)
-	case 2: // Set/Query color
+	case 1:
+		e.applyDefaultColor(kind, nil)
+	case 2:
 		arg := string(parts[1])
 		if arg == "?" {
-			var xrgb ansi.XRGBColor
-			switch cmd {
-			case 10: // Query foreground color
-				xrgb.Color = e.ForegroundColor()
-				if xrgb.Color != nil {
-					io.WriteString(e.pw, ansi.SetForegroundColor(xrgb.String())) //nolint:errcheck,gosec
-				}
-			case 11: // Query background color
-				xrgb.Color = e.BackgroundColor()
-				if xrgb.Color != nil {
-					io.WriteString(e.pw, ansi.SetBackgroundColor(xrgb.String())) //nolint:errcheck,gosec
-				}
-			case 12: // Query cursor color
-				xrgb.Color = e.CursorColor()
-				if xrgb.Color != nil {
-					io.WriteString(e.pw, ansi.SetCursorColor(xrgb.String())) //nolint:errcheck,gosec
-				}
-			}
-		} else if c := ansi.XParseColor(arg); c != nil {
-			cb(c)
+			e.queryDefaultColor(kind)
+			return
+		}
+		if c := ansi.XParseColor(arg); c != nil {
+			e.applyDefaultColor(kind, c)
+		}
+	}
+}
+
+type defaultColorKind int
+
+const (
+	defaultColorForeground defaultColorKind = iota
+	defaultColorBackground
+	defaultColorCursor
+)
+
+func defaultColorKindForCmd(cmd int) (defaultColorKind, bool) {
+	switch cmd {
+	case 10, 110:
+		return defaultColorForeground, true
+	case 11, 111:
+		return defaultColorBackground, true
+	case 12, 112:
+		return defaultColorCursor, true
+	default:
+		return 0, false
+	}
+}
+
+func (e *Emulator) applyDefaultColor(kind defaultColorKind, c color.Color) {
+	switch kind {
+	case defaultColorForeground:
+		e.SetForegroundColor(c)
+	case defaultColorBackground:
+		e.SetBackgroundColor(c)
+	case defaultColorCursor:
+		e.SetCursorColor(c)
+	}
+}
+
+func (e *Emulator) queryDefaultColor(kind defaultColorKind) {
+	var xrgb ansi.XRGBColor
+	switch kind {
+	case defaultColorForeground:
+		xrgb.Color = e.ForegroundColor()
+		if xrgb.Color != nil {
+			io.WriteString(e.pw, ansi.SetForegroundColor(xrgb.String())) //nolint:errcheck,gosec
+		}
+	case defaultColorBackground:
+		xrgb.Color = e.BackgroundColor()
+		if xrgb.Color != nil {
+			io.WriteString(e.pw, ansi.SetBackgroundColor(xrgb.String())) //nolint:errcheck,gosec
+		}
+	case defaultColorCursor:
+		xrgb.Color = e.CursorColor()
+		if xrgb.Color != nil {
+			io.WriteString(e.pw, ansi.SetCursorColor(xrgb.String())) //nolint:errcheck,gosec
 		}
 	}
 }

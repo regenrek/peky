@@ -23,282 +23,227 @@ type KeyPressEvent = uv.KeyPressEvent
 
 // SendKey returns the default key map.
 func (e *Emulator) SendKey(k uv.KeyEvent) {
-	var seq string
+	key, ok := k.(KeyPressEvent)
+	if !ok {
+		return
+	}
+	ack := e.isModeSet(ansi.ModeCursorKeys)    // Application cursor keys mode
+	akk := e.isModeSet(ansi.ModeNumericKeypad) // Application keypad keys mode
 
-	ack := e.isModeSet(ansi.CursorKeysMode)    // Application cursor keys mode
-	akk := e.isModeSet(ansi.NumericKeypadMode) // Application keypad keys mode
+	seq := sequenceForKeyPress(key, ack, akk)
+	if seq == "" {
+		return
+	}
+	io.WriteString(e.pw, seq) //nolint:errcheck,gosec
+}
+
+func sequenceForKeyPress(key KeyPressEvent, ack, akk bool) string {
+	seqPrefix := ""
+	if key.Mod&ModAlt != 0 {
+		seqPrefix = "\x1b"
+		key.Mod &^= ModAlt // Remove the Alt modifier for easier matching
+	}
 
 	//nolint:godox
-	// TODO: Support Kitty, CSI u, and XTerm modifyOtherKeys.
-	switch key := k.(type) {
-	case KeyPressEvent:
-		if key.Mod&ModAlt != 0 {
-			// Handle alt-modified keys
-			seq = "\x1b" + seq
-			key.Mod &^= ModAlt // Remove the Alt modifier for easier matching
-		}
+	// FIXME: We remove any Base and Shifted codes to properly handle
+	// comparison. This is a workaround for the fact that we don't support
+	// extended keys yet.
+	key.BaseCode = 0
+	key.ShiftedCode = 0
 
-		//nolint:godox
-		// FIXME: We remove any Base and Shifted codes to properly handle
-		// comparison. This is a workaround for the fact that we don't support
-		// extended keys yet.
-		key.BaseCode = 0
-		key.ShiftedCode = 0
-
-		switch key {
-		// Control keys
-		case KeyPressEvent{Code: KeySpace, Mod: ModCtrl}:
-			seq += "\x00"
-		case KeyPressEvent{Code: 'a', Mod: ModCtrl}:
-			seq += "\x01"
-		case KeyPressEvent{Code: 'b', Mod: ModCtrl}:
-			seq += "\x02"
-		case KeyPressEvent{Code: 'c', Mod: ModCtrl}:
-			seq += "\x03"
-		case KeyPressEvent{Code: 'd', Mod: ModCtrl}:
-			seq += "\x04"
-		case KeyPressEvent{Code: 'e', Mod: ModCtrl}:
-			seq += "\x05"
-		case KeyPressEvent{Code: 'f', Mod: ModCtrl}:
-			seq += "\x06"
-		case KeyPressEvent{Code: 'g', Mod: ModCtrl}:
-			seq += "\x07"
-		case KeyPressEvent{Code: 'h', Mod: ModCtrl}:
-			seq += "\x08"
-		case KeyPressEvent{Code: 'i', Mod: ModCtrl}:
-			seq += "\x09"
-		case KeyPressEvent{Code: 'j', Mod: ModCtrl}:
-			seq += "\x0a"
-		case KeyPressEvent{Code: 'k', Mod: ModCtrl}:
-			seq += "\x0b"
-		case KeyPressEvent{Code: 'l', Mod: ModCtrl}:
-			seq += "\x0c"
-		case KeyPressEvent{Code: 'm', Mod: ModCtrl}:
-			seq += "\x0d"
-		case KeyPressEvent{Code: 'n', Mod: ModCtrl}:
-			seq += "\x0e"
-		case KeyPressEvent{Code: 'o', Mod: ModCtrl}:
-			seq += "\x0f"
-		case KeyPressEvent{Code: 'p', Mod: ModCtrl}:
-			seq += "\x10"
-		case KeyPressEvent{Code: 'q', Mod: ModCtrl}:
-			seq += "\x11"
-		case KeyPressEvent{Code: 'r', Mod: ModCtrl}:
-			seq += "\x12"
-		case KeyPressEvent{Code: 's', Mod: ModCtrl}:
-			seq += "\x13"
-		case KeyPressEvent{Code: 't', Mod: ModCtrl}:
-			seq += "\x14"
-		case KeyPressEvent{Code: 'u', Mod: ModCtrl}:
-			seq += "\x15"
-		case KeyPressEvent{Code: 'v', Mod: ModCtrl}:
-			seq += "\x16"
-		case KeyPressEvent{Code: 'w', Mod: ModCtrl}:
-			seq += "\x17"
-		case KeyPressEvent{Code: 'x', Mod: ModCtrl}:
-			seq += "\x18"
-		case KeyPressEvent{Code: 'y', Mod: ModCtrl}:
-			seq += "\x19"
-		case KeyPressEvent{Code: 'z', Mod: ModCtrl}:
-			seq += "\x1a"
-		case KeyPressEvent{Code: '[', Mod: ModCtrl}:
-			seq += "\x1b"
-		case KeyPressEvent{Code: '\\', Mod: ModCtrl}:
-			seq += "\x1c"
-		case KeyPressEvent{Code: ']', Mod: ModCtrl}:
-			seq += "\x1d"
-		case KeyPressEvent{Code: '^', Mod: ModCtrl}:
-			seq += "\x1e"
-		case KeyPressEvent{Code: '_', Mod: ModCtrl}:
-			seq += "\x1f"
-
-		case KeyPressEvent{Code: KeyEnter}:
-			seq += "\r"
-		case KeyPressEvent{Code: KeyTab}:
-			seq += "\t"
-		case KeyPressEvent{Code: KeyBackspace}:
-			seq += "\x7f"
-		case KeyPressEvent{Code: KeyEscape}:
-			seq += "\x1b"
-
-		case KeyPressEvent{Code: KeyUp}:
-			if ack {
-				seq += "\x1bOA"
-			} else {
-				seq += "\x1b[A"
-			}
-		case KeyPressEvent{Code: KeyDown}:
-			if ack {
-				seq += "\x1bOB"
-			} else {
-				seq += "\x1b[B"
-			}
-		case KeyPressEvent{Code: KeyRight}:
-			if ack {
-				seq += "\x1bOC"
-			} else {
-				seq += "\x1b[C"
-			}
-		case KeyPressEvent{Code: KeyLeft}:
-			if ack {
-				seq += "\x1bOD"
-			} else {
-				seq += "\x1b[D"
-			}
-
-		case KeyPressEvent{Code: KeyInsert}:
-			seq += "\x1b[2~"
-		case KeyPressEvent{Code: KeyDelete}:
-			seq += "\x1b[3~"
-		case KeyPressEvent{Code: KeyHome}:
-			seq += "\x1b[H"
-		case KeyPressEvent{Code: KeyEnd}:
-			seq += "\x1b[F"
-		case KeyPressEvent{Code: KeyPgUp}:
-			seq += "\x1b[5~"
-		case KeyPressEvent{Code: KeyPgDown}:
-			seq += "\x1b[6~"
-
-		case KeyPressEvent{Code: KeyF1}:
-			seq += "\x1bOP"
-		case KeyPressEvent{Code: KeyF2}:
-			seq += "\x1bOQ"
-		case KeyPressEvent{Code: KeyF3}:
-			seq += "\x1bOR"
-		case KeyPressEvent{Code: KeyF4}:
-			seq += "\x1bOS"
-		case KeyPressEvent{Code: KeyF5}:
-			seq += "\x1b[15~"
-		case KeyPressEvent{Code: KeyF6}:
-			seq += "\x1b[17~"
-		case KeyPressEvent{Code: KeyF7}:
-			seq += "\x1b[18~"
-		case KeyPressEvent{Code: KeyF8}:
-			seq += "\x1b[19~"
-		case KeyPressEvent{Code: KeyF9}:
-			seq += "\x1b[20~"
-		case KeyPressEvent{Code: KeyF10}:
-			seq += "\x1b[21~"
-		case KeyPressEvent{Code: KeyF11}:
-			seq += "\x1b[23~"
-		case KeyPressEvent{Code: KeyF12}:
-			seq += "\x1b[24~"
-
-		case KeyPressEvent{Code: KeyKp0}:
-			if akk {
-				seq += "\x1bOp"
-			} else {
-				seq += "0"
-			}
-		case KeyPressEvent{Code: KeyKp1}:
-			if akk {
-				seq += "\x1bOq"
-			} else {
-				seq += "1"
-			}
-		case KeyPressEvent{Code: KeyKp2}:
-			if akk {
-				seq += "\x1bOr"
-			} else {
-				seq += "2"
-			}
-		case KeyPressEvent{Code: KeyKp3}:
-			if akk {
-				seq += "\x1bOs"
-			} else {
-				seq += "3"
-			}
-		case KeyPressEvent{Code: KeyKp4}:
-			if akk {
-				seq += "\x1bOt"
-			} else {
-				seq += "4"
-			}
-		case KeyPressEvent{Code: KeyKp5}:
-			if akk {
-				seq += "\x1bOu"
-			} else {
-				seq += "5"
-			}
-		case KeyPressEvent{Code: KeyKp6}:
-			if akk {
-				seq += "\x1bOv"
-			} else {
-				seq += "6"
-			}
-		case KeyPressEvent{Code: KeyKp7}:
-			if akk {
-				seq += "\x1bOw"
-			} else {
-				seq += "7"
-			}
-		case KeyPressEvent{Code: KeyKp8}:
-			if akk {
-				seq += "\x1bOx"
-			} else {
-				seq = "8"
-			}
-		case KeyPressEvent{Code: KeyKp9}:
-			if akk {
-				seq += "\x1bOy"
-			} else {
-				seq += "9"
-			}
-		case KeyPressEvent{Code: KeyKpEnter}:
-			if akk {
-				seq += "\x1bOM"
-			} else {
-				seq += "\r"
-			}
-		case KeyPressEvent{Code: KeyKpEqual}:
-			if akk {
-				seq += "\x1bOX"
-			} else {
-				seq += "="
-			}
-		case KeyPressEvent{Code: KeyKpMultiply}:
-			if akk {
-				seq += "\x1bOj"
-			} else {
-				seq += "*"
-			}
-		case KeyPressEvent{Code: KeyKpPlus}:
-			if akk {
-				seq += "\x1bOk"
-			} else {
-				seq += "+"
-			}
-		case KeyPressEvent{Code: KeyKpComma}:
-			if akk {
-				seq += "\x1bOl"
-			} else {
-				seq += ","
-			}
-		case KeyPressEvent{Code: KeyKpMinus}:
-			if akk {
-				seq += "\x1bOm"
-			} else {
-				seq += "-"
-			}
-		case KeyPressEvent{Code: KeyKpDecimal}:
-			if akk {
-				seq += "\x1bOn"
-			} else {
-				seq += "."
-			}
-
-		case KeyPressEvent{Code: KeyTab, Mod: ModShift}:
-			seq += "\x1b[Z"
-
-		default:
-			// Handle the rest of the keys.
-			if key.Mod == 0 {
-				seq += string(key.Code)
-			}
-		}
-
-		io.WriteString(e.pw, seq) //nolint:errcheck,gosec
+	seq := rawSequenceForKeyPress(key, ack, akk)
+	if seq == "" {
+		return seqPrefix
 	}
+	return seqPrefix + seq
+}
+
+func rawSequenceForKeyPress(key KeyPressEvent, ack, akk bool) string {
+	if key.Mod == ModCtrl {
+		if seq, ok := ctrlKeySequence(key.Code); ok {
+			return seq
+		}
+	}
+	if key.Mod == ModShift && key.Code == KeyTab {
+		return "\x1b[Z"
+	}
+	if key.Mod != 0 {
+		return ""
+	}
+	if seq, ok := basicKeySequence(key.Code); ok {
+		return seq
+	}
+	if seq, ok := arrowKeySequence(key.Code, ack); ok {
+		return seq
+	}
+	if seq, ok := navKeySequence(key.Code); ok {
+		return seq
+	}
+	if seq, ok := functionKeySequence(key.Code); ok {
+		return seq
+	}
+	if seq, ok := keypadSequence(key.Code, akk); ok {
+		return seq
+	}
+	return string(key.Code)
+}
+
+func ctrlKeySequence(code rune) (string, bool) {
+	seq, ok := ctrlKeyMap[code]
+	return seq, ok
+}
+
+func basicKeySequence(code rune) (string, bool) {
+	seq, ok := basicKeyMap[code]
+	return seq, ok
+}
+
+func arrowKeySequence(code rune, app bool) (string, bool) {
+	if app {
+		seq, ok := arrowKeyAppMap[code]
+		return seq, ok
+	}
+	seq, ok := arrowKeyMap[code]
+	return seq, ok
+}
+
+func navKeySequence(code rune) (string, bool) {
+	seq, ok := navKeyMap[code]
+	return seq, ok
+}
+
+func functionKeySequence(code rune) (string, bool) {
+	seq, ok := functionKeyMap[code]
+	return seq, ok
+}
+
+func keypadSequence(code rune, app bool) (string, bool) {
+	if app {
+		seq, ok := keypadAppMap[code]
+		return seq, ok
+	}
+	seq, ok := keypadKeyMap[code]
+	return seq, ok
+}
+
+var ctrlKeyMap = map[rune]string{
+	KeySpace: "\x00",
+	'a':      "\x01",
+	'b':      "\x02",
+	'c':      "\x03",
+	'd':      "\x04",
+	'e':      "\x05",
+	'f':      "\x06",
+	'g':      "\x07",
+	'h':      "\x08",
+	'i':      "\x09",
+	'j':      "\x0a",
+	'k':      "\x0b",
+	'l':      "\x0c",
+	'm':      "\x0d",
+	'n':      "\x0e",
+	'o':      "\x0f",
+	'p':      "\x10",
+	'q':      "\x11",
+	'r':      "\x12",
+	's':      "\x13",
+	't':      "\x14",
+	'u':      "\x15",
+	'v':      "\x16",
+	'w':      "\x17",
+	'x':      "\x18",
+	'y':      "\x19",
+	'z':      "\x1a",
+	'[':      "\x1b",
+	'\\':     "\x1c",
+	']':      "\x1d",
+	'^':      "\x1e",
+	'_':      "\x1f",
+}
+
+var basicKeyMap = map[rune]string{
+	KeyEnter:     "\r",
+	KeyTab:       "\t",
+	KeyBackspace: "\x7f",
+	KeyEscape:    "\x1b",
+}
+
+var arrowKeyMap = map[rune]string{
+	KeyUp:    "\x1b[A",
+	KeyDown:  "\x1b[B",
+	KeyRight: "\x1b[C",
+	KeyLeft:  "\x1b[D",
+}
+
+var arrowKeyAppMap = map[rune]string{
+	KeyUp:    "\x1bOA",
+	KeyDown:  "\x1bOB",
+	KeyRight: "\x1bOC",
+	KeyLeft:  "\x1bOD",
+}
+
+var navKeyMap = map[rune]string{
+	KeyInsert: "\x1b[2~",
+	KeyDelete: "\x1b[3~",
+	KeyHome:   "\x1b[H",
+	KeyEnd:    "\x1b[F",
+	KeyPgUp:   "\x1b[5~",
+	KeyPgDown: "\x1b[6~",
+}
+
+var functionKeyMap = map[rune]string{
+	KeyF1:  "\x1bOP",
+	KeyF2:  "\x1bOQ",
+	KeyF3:  "\x1bOR",
+	KeyF4:  "\x1bOS",
+	KeyF5:  "\x1b[15~",
+	KeyF6:  "\x1b[17~",
+	KeyF7:  "\x1b[18~",
+	KeyF8:  "\x1b[19~",
+	KeyF9:  "\x1b[20~",
+	KeyF10: "\x1b[21~",
+	KeyF11: "\x1b[23~",
+	KeyF12: "\x1b[24~",
+}
+
+var keypadKeyMap = map[rune]string{
+	KeyKp0:        "0",
+	KeyKp1:        "1",
+	KeyKp2:        "2",
+	KeyKp3:        "3",
+	KeyKp4:        "4",
+	KeyKp5:        "5",
+	KeyKp6:        "6",
+	KeyKp7:        "7",
+	KeyKp8:        "8",
+	KeyKp9:        "9",
+	KeyKpEnter:    "\r",
+	KeyKpEqual:    "=",
+	KeyKpMultiply: "*",
+	KeyKpPlus:     "+",
+	KeyKpComma:    ",",
+	KeyKpMinus:    "-",
+	KeyKpDecimal:  ".",
+}
+
+var keypadAppMap = map[rune]string{
+	KeyKp0:        "\x1bOp",
+	KeyKp1:        "\x1bOq",
+	KeyKp2:        "\x1bOr",
+	KeyKp3:        "\x1bOs",
+	KeyKp4:        "\x1bOt",
+	KeyKp5:        "\x1bOu",
+	KeyKp6:        "\x1bOv",
+	KeyKp7:        "\x1bOw",
+	KeyKp8:        "\x1bOx",
+	KeyKp9:        "\x1bOy",
+	KeyKpEnter:    "\x1bOM",
+	KeyKpEqual:    "\x1bOX",
+	KeyKpMultiply: "\x1bOj",
+	KeyKpPlus:     "\x1bOk",
+	KeyKpComma:    "\x1bOl",
+	KeyKpMinus:    "\x1bOm",
+	KeyKpDecimal:  "\x1bOn",
 }
 
 // Key codes.

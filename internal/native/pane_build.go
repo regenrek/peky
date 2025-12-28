@@ -1,0 +1,215 @@
+package native
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/charmbracelet/x/ansi"
+	"github.com/kballard/go-shellquote"
+
+	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/terminal"
+)
+
+var newWindow = terminal.NewWindow
+
+func (m *Manager) buildPanes(ctx context.Context, spec SessionSpec) ([]*Pane, error) {
+	if spec.Layout == nil {
+		return nil, errors.New("native: layout is nil")
+	}
+	layoutCfg := spec.Layout
+	if strings.TrimSpace(layoutCfg.Grid) != "" {
+		return m.buildGridPanes(ctx, spec.Path, layoutCfg, spec.Env)
+	}
+	if len(layoutCfg.Panes) == 0 {
+		return nil, errors.New("native: layout has no panes defined")
+	}
+	return m.buildSplitPanes(ctx, spec.Path, layoutCfg.Panes, spec.Env)
+}
+
+func (m *Manager) buildGridPanes(ctx context.Context, path string, layoutCfg *layout.LayoutConfig, env []string) ([]*Pane, error) {
+	grid, err := layout.Parse(layoutCfg.Grid)
+	if err != nil {
+		return nil, fmt.Errorf("native: parse grid %q: %w", layoutCfg.Grid, err)
+	}
+	commands := layout.ResolveGridCommands(layoutCfg, grid.Panes())
+	titles := layout.ResolveGridTitles(layoutCfg, grid.Panes())
+
+	cellW := layoutBaseSize / grid.Columns
+	cellH := layoutBaseSize / grid.Rows
+	remainderW := layoutBaseSize % grid.Columns
+	remainderH := layoutBaseSize % grid.Rows
+
+	panes := make([]*Pane, 0, grid.Panes())
+	for r := 0; r < grid.Rows; r++ {
+		for c := 0; c < grid.Columns; c++ {
+			idx := r*grid.Columns + c
+			title := ""
+			if idx < len(titles) {
+				title = titles[idx]
+			}
+			cmd := ""
+			if idx < len(commands) {
+				cmd = commands[idx]
+			}
+			left := c * cellW
+			top := r * cellH
+			width := cellW
+			height := cellH
+			if c == grid.Columns-1 {
+				width += remainderW
+			}
+			if r == grid.Rows-1 {
+				height += remainderH
+			}
+			pane, err := m.createPane(ctx, path, title, cmd, env)
+			if err != nil {
+				m.closePanes(panes)
+				return nil, err
+			}
+			pane.Index = strconv.Itoa(idx)
+			pane.Left = left
+			pane.Top = top
+			pane.Width = width
+			pane.Height = height
+			if idx == 0 {
+				pane.Active = true
+			}
+			panes = append(panes, pane)
+		}
+	}
+	return panes, nil
+}
+
+func (m *Manager) buildSplitPanes(ctx context.Context, path string, defs []layout.PaneDef, env []string) ([]*Pane, error) {
+	var panes []*Pane
+	active := (*Pane)(nil)
+	for i, paneDef := range defs {
+		pane, err := m.createPane(ctx, path, paneDef.Title, paneDef.Cmd, env)
+		if err != nil {
+			m.closePanes(panes)
+			return nil, err
+		}
+		pane.Index = strconv.Itoa(i)
+		if i == 0 {
+			pane.Active = true
+			pane.Left, pane.Top, pane.Width, pane.Height = 0, 0, layoutBaseSize, layoutBaseSize
+			active = pane
+		} else if active != nil {
+			vertical := strings.EqualFold(paneDef.Split, "vertical") || strings.EqualFold(paneDef.Split, "v")
+			percent := parsePercent(paneDef.Size)
+			oldRect, newRect := splitRect(rectFromPane(active), vertical, percent)
+			active.Left, active.Top, active.Width, active.Height = oldRect.x, oldRect.y, oldRect.w, oldRect.h
+			pane.Left, pane.Top, pane.Width, pane.Height = newRect.x, newRect.y, newRect.w, newRect.h
+		} else {
+			pane.Left, pane.Top, pane.Width, pane.Height = 0, 0, layoutBaseSize, layoutBaseSize
+		}
+		panes = append(panes, pane)
+	}
+	return panes, nil
+}
+
+func (m *Manager) createPane(ctx context.Context, path, title, command string, env []string) (*Pane, error) {
+	if ctx != nil {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+	}
+	id := m.nextPaneID()
+	opts := terminal.Options{
+		ID:    id,
+		Title: strings.TrimSpace(title),
+		Dir:   strings.TrimSpace(path),
+		Env:   env,
+	}
+	startCommand := strings.TrimSpace(command)
+	if startCommand == "" {
+		opts.Command = ""
+	} else {
+		cmd, args, err := splitCommand(startCommand)
+		if err != nil {
+			return nil, fmt.Errorf("native: parse command %q: %w", startCommand, err)
+		}
+		opts.Command = cmd
+		opts.Args = args
+	}
+	win, err := newWindow(opts)
+	if err != nil {
+		return nil, err
+	}
+	if ctx != nil {
+		select {
+		case <-ctx.Done():
+			_ = win.Close()
+			return nil, ctx.Err()
+		default:
+		}
+	}
+	pane := &Pane{
+		ID:           id,
+		Title:        strings.TrimSpace(title),
+		Command:      startCommand,
+		StartCommand: startCommand,
+		window:       win,
+		LastActive:   time.Now(),
+	}
+	if win != nil && win.Exited() {
+		pane.Dead = true
+		pane.DeadStatus = win.ExitStatus()
+	}
+	if win != nil {
+		pane.PID = win.PID()
+	}
+	return pane, nil
+}
+
+func renderPreviewLines(win *terminal.Window, max int) []string {
+	if win == nil || max <= 0 {
+		return nil
+	}
+	view := win.ViewANSI()
+	if view == "" {
+		return nil
+	}
+	plain := ansi.Strip(view)
+	lines := strings.Split(plain, "\n")
+	if len(lines) <= max {
+		return lines
+	}
+	return lines[len(lines)-max:]
+}
+
+func splitCommand(command string) (string, []string, error) {
+	parts, err := shellquote.Split(command)
+	if err != nil {
+		return "", nil, err
+	}
+	if len(parts) == 0 {
+		return "", nil, errors.New("empty command")
+	}
+	return parts[0], parts[1:], nil
+}
+
+func validatePath(path string) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil
+	}
+	clean := filepath.Clean(path)
+	info, err := os.Stat(clean)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("%s is not a directory", clean)
+	}
+	return nil
+}

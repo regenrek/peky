@@ -88,6 +88,8 @@ The helper requires:
 - npm auth (`npm whoami` must succeed)
 - `goreleaser` installed locally
 - `GITHUB_TOKEN` set (you can export `GITHUB_TOKEN=$(gh auth token)`).
+- Homebrew installed and `brew tap regenrek/tap` already run.
+- Git credentials with push access to `regenrek/homebrew-tap`.
 
 ## Post-Release Verification
 
@@ -99,5 +101,6 @@ npx -y peakypanes
 ## Notes
 
 - `goreleaser release --clean` builds binaries into `dist/` and creates the GitHub release.
+- The release helper updates the Homebrew tap formula (`regenrek/homebrew-tap`).
 - `npm run build:npm-packages` copies those binaries into `packages/` and writes the npm metadata.
 - The meta package (`packages/peakypanes`) must be published last so it can resolve optional dependencies.

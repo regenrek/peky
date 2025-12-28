@@ -1791,7 +1791,9 @@ func TestTerminal(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			term := newTestTerminal(t, tt.w, tt.h)
 			for _, in := range tt.input {
-				term.Write([]byte(in))
+				if _, err := term.Write([]byte(in)); err != nil {
+					t.Fatalf("write input: %v", err)
+				}
 			}
 			got := termText(term)
 			if len(got) != len(tt.want) {

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/regenrek/peakypanes/internal/pathutil"
+	"github.com/regenrek/peakypanes/internal/userpath"
 )
 
 type paneTitleKind int
@@ -179,7 +179,7 @@ func shortenPathTitle(pathTitle, sessionPath string) string {
 	}
 	sessionPath = strings.TrimSpace(sessionPath)
 
-	expanded := pathutil.ExpandUser(pathTitle)
+	expanded := userpath.ExpandUser(pathTitle)
 	expanded = strings.TrimSpace(expanded)
 	if expanded != "" {
 		expanded = filepath.Clean(expanded)
@@ -213,7 +213,7 @@ func shortenPathTitle(pathTitle, sessionPath string) string {
 
 	display := pathTitle
 	if expanded != "" {
-		display = pathutil.ShortenUser(expanded)
+		display = userpath.ShortenUser(expanded)
 	}
 	return compressPathForDisplay(display, 2)
 }

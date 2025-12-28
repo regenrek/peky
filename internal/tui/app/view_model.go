@@ -1,0 +1,254 @@
+package app
+
+import (
+	"strings"
+
+	"github.com/regenrek/peakypanes/internal/sessiond"
+	"github.com/regenrek/peakypanes/internal/tui/views"
+	"github.com/regenrek/peakypanes/internal/userpath"
+)
+
+func (m *Model) viewModel() views.Model {
+	columns := collectDashboardColumns(m.data.Projects)
+	filteredColumns := m.filteredDashboardColumns(columns)
+	selectedProject := dashboardSelectedProject(filteredColumns, m.selection)
+
+	var sidebarSessions []SessionItem
+	var sidebarProject *ProjectGroup
+	if project := m.selectedProject(); project != nil {
+		sidebarProject = project
+		sidebarSessions = m.filteredSessions(project.Sessions)
+	}
+
+	var previewSession *SessionItem
+	if session := m.selectedSession(); session != nil {
+		previewSession = session
+	}
+
+	vm := views.Model{
+		Width:                    m.width,
+		Height:                   m.height,
+		ActiveView:               int(m.state),
+		Tab:                      int(m.tab),
+		HeaderLine:               headerLine(m.headerParts()),
+		EmptyStateMessage:        m.emptyStateMessage(),
+		Projects:                 toViewProjects(m.data.Projects),
+		DashboardColumns:         toViewColumns(filteredColumns),
+		DashboardSelectedProject: selectedProject,
+		SidebarProject:           toViewProjectPtr(sidebarProject),
+		SidebarSessions:          toViewSessions(sidebarSessions),
+		PreviewSession:           toViewSessionPtr(previewSession),
+		SelectionProject:         m.selection.Project,
+		SelectionSession:         m.selection.Session,
+		SelectionPane:            m.selection.Pane,
+		ExpandedSessions:         m.expandedSessions,
+		FilterActive:             m.filterActive,
+		FilterInput:              m.filterInput,
+		QuickReplyInput:          m.quickReplyInput,
+		TerminalFocus:            m.terminalFocus,
+		SupportsTerminalFocus:    m.supportsTerminalFocus(),
+		ProjectPicker:            m.projectPicker,
+		LayoutPicker:             m.layoutPicker,
+		PaneSwapPicker:           m.paneSwapPicker,
+		CommandPalette:           m.commandPalette,
+		ConfirmKill: views.ConfirmKill{
+			Session: m.confirmSession,
+			Project: m.confirmProject,
+		},
+		ConfirmCloseProject: views.ConfirmCloseProject{
+			Project:         m.confirmClose,
+			RunningSessions: runningSessionsForProject(m.data.Projects, m.confirmClose),
+		},
+		ConfirmClosePane: views.ConfirmClosePane{
+			Title:   m.confirmPaneTitle,
+			Session: m.confirmPaneSession,
+			Running: m.confirmPaneRunning,
+		},
+		Rename: views.Rename{
+			IsPane:    m.state == StateRenamePane,
+			Session:   m.renameSession,
+			Pane:      m.renamePane,
+			PaneIndex: m.renamePaneIndex,
+			Input:     m.renameInput,
+		},
+		ProjectRootInput:      m.projectRootInput,
+		Keys:                  buildKeyHints(m.keys),
+		Toast:                 m.toastText(),
+		ShowThumbnails:        m.settings.ShowThumbnails,
+		PreviewCompact:        m.settings.PreviewCompact,
+		PreviewMode:           m.settings.PreviewMode,
+		DashboardPreviewLines: dashboardPreviewLines(m.settings),
+		PaneView:              m.paneViewProvider(),
+	}
+
+	return vm
+}
+
+func (m *Model) paneViewProvider() func(id string, width, height int, showCursor bool) string {
+	if m == nil || m.client == nil {
+		return nil
+	}
+	return func(id string, width, height int, showCursor bool) string {
+		if strings.TrimSpace(id) == "" || width <= 0 || height <= 0 {
+			return ""
+		}
+		mode := sessiond.PaneViewANSI
+		if showCursor {
+			mode = sessiond.PaneViewLipgloss
+		}
+		return m.paneView(id, width, height, mode, showCursor)
+	}
+}
+
+func runningSessionsForProject(projects []ProjectGroup, name string) int {
+	if strings.TrimSpace(name) == "" {
+		return 0
+	}
+	project := findProject(projects, name)
+	if project == nil {
+		return 0
+	}
+	running := 0
+	for _, s := range project.Sessions {
+		if s.Status != StatusStopped {
+			running++
+		}
+	}
+	return running
+}
+
+func buildKeyHints(keys *dashboardKeyMap) views.KeyHints {
+	if keys == nil {
+		return views.KeyHints{}
+	}
+	return views.KeyHints{
+		ProjectKeys:     joinKeyLabels(keys.projectLeft, keys.projectRight),
+		SessionKeys:     joinKeyLabels(keys.sessionUp, keys.sessionDown),
+		SessionOnlyKeys: joinKeyLabels(keys.sessionOnlyUp, keys.sessionOnlyDown),
+		PaneKeys:        joinKeyLabels(keys.paneNext, keys.panePrev),
+		OpenProject:     keyLabel(keys.openProject),
+		CloseProject:    keyLabel(keys.closeProject),
+		NewSession:      keyLabel(keys.newSession),
+		KillSession:     keyLabel(keys.kill),
+		TogglePanes:     keyLabel(keys.togglePanes),
+		TerminalFocus:   keyLabel(keys.terminalFocus),
+		Scrollback:      keyLabel(keys.scrollback),
+		CopyMode:        keyLabel(keys.copyMode),
+		Refresh:         keyLabel(keys.refresh),
+		EditConfig:      keyLabel(keys.editConfig),
+		CommandPalette:  keyLabel(keys.commandPalette),
+		Filter:          keyLabel(keys.filter),
+		Help:            keyLabel(keys.help),
+		Quit:            keyLabel(keys.quit),
+	}
+}
+
+func toViewProjects(projects []ProjectGroup) []views.Project {
+	out := make([]views.Project, 0, len(projects))
+	for _, project := range projects {
+		out = append(out, toViewProject(project))
+	}
+	return out
+}
+
+func toViewProjectPtr(project *ProjectGroup) *views.Project {
+	if project == nil {
+		return nil
+	}
+	value := toViewProject(*project)
+	return &value
+}
+
+func toViewProject(project ProjectGroup) views.Project {
+	return views.Project{
+		Name:     project.Name,
+		Path:     displayPath(project.Path),
+		Sessions: toViewSessions(project.Sessions),
+	}
+}
+
+func toViewSessions(sessions []SessionItem) []views.Session {
+	out := make([]views.Session, 0, len(sessions))
+	for _, session := range sessions {
+		out = append(out, toViewSession(session))
+	}
+	return out
+}
+
+func toViewSessionPtr(session *SessionItem) *views.Session {
+	if session == nil {
+		return nil
+	}
+	value := toViewSession(*session)
+	return &value
+}
+
+func toViewSession(session SessionItem) views.Session {
+	activePane := session.ActivePane
+	if activePane == "" {
+		activePane = activePaneIndex(session.Panes)
+	}
+	return views.Session{
+		Name:            session.Name,
+		Status:          int(session.Status),
+		PaneCount:       session.PaneCount,
+		ActivePane:      activePane,
+		Panes:           toViewPanes(session.Panes),
+		ThumbnailLine:   session.Thumbnail.Line,
+		ThumbnailStatus: int(session.Thumbnail.Status),
+	}
+}
+
+func toViewPanes(panes []PaneItem) []views.Pane {
+	out := make([]views.Pane, 0, len(panes))
+	for _, pane := range panes {
+		out = append(out, toViewPane(pane))
+	}
+	return out
+}
+
+func toViewPane(pane PaneItem) views.Pane {
+	return views.Pane{
+		ID:          pane.ID,
+		Index:       pane.Index,
+		Title:       pane.Title,
+		Command:     pane.Command,
+		Active:      pane.Active,
+		Left:        pane.Left,
+		Top:         pane.Top,
+		Width:       pane.Width,
+		Height:      pane.Height,
+		Preview:     pane.Preview,
+		Status:      int(pane.Status),
+		SummaryLine: paneSummaryLine(pane, 0),
+	}
+}
+
+func toViewColumns(columns []DashboardProjectColumn) []views.DashboardColumn {
+	out := make([]views.DashboardColumn, 0, len(columns))
+	for _, column := range columns {
+		viewColumn := views.DashboardColumn{
+			ProjectName: column.ProjectName,
+			ProjectPath: displayPath(column.ProjectPath),
+			Panes:       make([]views.DashboardPane, 0, len(column.Panes)),
+		}
+		for _, pane := range column.Panes {
+			viewColumn.Panes = append(viewColumn.Panes, views.DashboardPane{
+				ProjectName: pane.ProjectName,
+				ProjectPath: displayPath(pane.ProjectPath),
+				SessionName: pane.SessionName,
+				Pane:        toViewPane(pane.Pane),
+			})
+		}
+		out = append(out, viewColumn)
+	}
+	return out
+}
+
+func displayPath(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	return userpath.ShortenUser(path)
+}

@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/regenrek/peakypanes/internal/layout"
-	"github.com/regenrek/peakypanes/internal/tui/peakypanes"
+	"github.com/regenrek/peakypanes/internal/tui/app"
 )
 
 func TestExtractRepoName(t *testing.T) {
@@ -66,7 +66,7 @@ func TestRunDashboardCommandHelp(t *testing.T) {
 	}()
 
 	called := false
-	runMenuFn = func(_ *peakypanes.AutoStartSpec) { called = true }
+	runMenuFn = func(_ *app.AutoStartSpec) { called = true }
 
 	out := captureStdout(func() {
 		runDashboardCommand([]string{"--help"})
@@ -86,7 +86,7 @@ func TestRunDashboardCommandRunsMenu(t *testing.T) {
 	}()
 
 	called := false
-	runMenuFn = func(spec *peakypanes.AutoStartSpec) {
+	runMenuFn = func(spec *app.AutoStartSpec) {
 		called = true
 		if spec != nil {
 			t.Fatalf("runDashboardCommand should not pass autoStart")
@@ -105,8 +105,8 @@ func TestRunStartAutoStartSpec(t *testing.T) {
 		runMenuFn = origRunMenu
 	}()
 
-	var got *peakypanes.AutoStartSpec
-	runMenuFn = func(spec *peakypanes.AutoStartSpec) { got = spec }
+	var got *app.AutoStartSpec
+	runMenuFn = func(spec *app.AutoStartSpec) { got = spec }
 
 	runStart([]string{"--layout", "dev-3", "--session", "sess", "--path", "/tmp"})
 	if got == nil {

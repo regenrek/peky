@@ -1,8 +1,6 @@
 package terminal
 
 import (
-	"strings"
-
 	uv "github.com/charmbracelet/ultraviolet"
 )
 
@@ -452,74 +450,6 @@ func (w *Window) adjustToNonContinuation(absY, x, dir int) int {
 		}
 	}
 	return x
-}
-
-func (w *Window) extractText(startX, startAbsY, endX, endAbsY int) string {
-	if w == nil {
-		return ""
-	}
-	if startAbsY > endAbsY || (startAbsY == endAbsY && startX > endX) {
-		startX, endX = endX, startX
-		startAbsY, endAbsY = endAbsY, startAbsY
-	}
-
-	width := w.cols
-	if width <= 0 {
-		return ""
-	}
-
-	w.termMu.Lock()
-	defer w.termMu.Unlock()
-	term := w.term
-	if term == nil {
-		return ""
-	}
-
-	sbLen := term.ScrollbackLen()
-	total := sbLen + w.rows
-	if total <= 0 {
-		return ""
-	}
-
-	startAbsY = clampInt(startAbsY, 0, total-1)
-	endAbsY = clampInt(endAbsY, 0, total-1)
-	startX = clampInt(startX, 0, maxInt(0, width-1))
-	endX = clampInt(endX, 0, maxInt(0, width-1))
-
-	var out strings.Builder
-
-	for y := startAbsY; y <= endAbsY; y++ {
-		x0 := 0
-		x1 := width - 1
-		if y == startAbsY {
-			x0 = startX
-		}
-		if y == endAbsY {
-			x1 = endX
-		}
-		x0 = clampInt(x0, 0, width-1)
-		x1 = clampInt(x1, 0, width-1)
-
-		var line strings.Builder
-		for x := x0; x <= x1; x++ {
-			cell := cellAtAbs(term, sbLen, w.rows, x, y)
-			if cell != nil && cell.Width == 0 {
-				continue
-			}
-			if cell != nil && cell.Content != "" {
-				line.WriteString(cell.Content)
-			} else {
-				line.WriteByte(' ')
-			}
-		}
-
-		out.WriteString(strings.TrimRight(line.String(), " "))
-		if y != endAbsY {
-			out.WriteByte('\n')
-		}
-	}
-
-	return strings.TrimRight(out.String(), "\n")
 }
 
 func cellAtAbs(term vtEmulator, sbLen, rows, x, absY int) *uv.Cell {

@@ -10,6 +10,7 @@ Runs the full release flow:
 - runs tests (always)
 - tags and pushes
 - runs GoReleaser
+- updates the Homebrew tap formula
 - builds npm packages
 - publishes npm packages (platform packages first, then meta)
 USAGE
@@ -91,6 +92,14 @@ npm whoami >/dev/null 2>&1 || {
   fi
 }
 
+if [[ -z ${GITHUB_TOKEN:-} ]]; then
+  if [[ $dry_run == true ]]; then
+    echo "warning: GITHUB_TOKEN missing (export GITHUB_TOKEN=\$(gh auth token))"
+  else
+    die "GITHUB_TOKEN missing (export GITHUB_TOKEN=\$(gh auth token))"
+  fi
+fi
+
 if git rev-parse "$tag" >/dev/null 2>&1; then
   if [[ $dry_run == true ]]; then
     echo "warning: tag already exists: $tag"
@@ -117,6 +126,80 @@ run_in_dir() {
   (cd "$dir" && "$@")
 }
 
+update_homebrew_tap() {
+  if ! command -v brew >/dev/null 2>&1; then
+    if [[ $dry_run == true ]]; then
+      echo "warning: brew not found (homebrew update skipped)"
+      return 0
+    fi
+    die "brew not found (install Homebrew to update the tap)"
+  fi
+
+  local tap_repo
+  tap_repo=$(brew --repository regenrek/homebrew-tap 2>/dev/null || true)
+  if [[ -z $tap_repo || ! -d $tap_repo ]]; then
+    if [[ $dry_run == true ]]; then
+      echo "warning: homebrew tap regenrek/homebrew-tap not found (run 'brew tap regenrek/tap')"
+      return 0
+    fi
+    die "homebrew tap regenrek/homebrew-tap not found (run: brew tap regenrek/tap)"
+  fi
+
+  if [[ -n $(git -C "$tap_repo" status --porcelain) ]]; then
+    if [[ $dry_run == true ]]; then
+      echo "warning: homebrew tap repo has uncommitted changes: $tap_repo"
+    else
+      die "homebrew tap repo has uncommitted changes: $tap_repo"
+    fi
+  fi
+
+  local tarball_url sha256 formula_path
+  tarball_url="https://github.com/regenrek/peakypanes/archive/refs/tags/${tag}.tar.gz"
+
+  if [[ $dry_run == true ]]; then
+    sha256="DRY_RUN_SHA256"
+  else
+    sha256=$(curl -fsSL --max-time 60 "$tarball_url" | shasum -a 256 | awk '{print $1}')
+    if [[ -z $sha256 ]]; then
+      die "failed to compute sha256 for $tarball_url"
+    fi
+  fi
+
+  formula_path="$tap_repo/Formula/peakypanes.rb"
+
+  if [[ $dry_run == true ]]; then
+    echo "+ write $formula_path (version $version)"
+  else
+    cat > "$formula_path" <<EOF
+class Peakypanes < Formula
+  desc "Terminal dashboard with YAML-based layouts and native live previews."
+  homepage "https://github.com/regenrek/peakypanes"
+  url "$tarball_url"
+  sha256 "$sha256"
+  depends_on "go" => :build
+
+  def install
+    ldflags = "-s -w -X main.version=#{version}"
+    system "go", "build", *std_go_args(ldflags: ldflags), "./cmd/peakypanes"
+  end
+
+  test do
+    system "#{bin}/peakypanes", "--version"
+  end
+end
+EOF
+  fi
+
+  if [[ $dry_run == true ]]; then
+    echo "+ (cd \"$tap_repo\" && git add Formula/peakypanes.rb)"
+    echo "+ (cd \"$tap_repo\" && git commit -m \"peakypanes ${tag}\")"
+    echo "+ (cd \"$tap_repo\" && git push)"
+    return 0
+  fi
+
+  (cd "$tap_repo" && git add Formula/peakypanes.rb && git commit -m "peakypanes ${tag}" && git push)
+}
+
 printf "Running tests...\n"
 go test ./...
 
@@ -126,6 +209,9 @@ run git push origin HEAD --tags
 
 printf "Running GoReleaser...\n"
 run goreleaser release --clean
+
+printf "Updating Homebrew tap...\n"
+update_homebrew_tap
 
 printf "Building npm packages...\n"
 run npm run build:npm-packages

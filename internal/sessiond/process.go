@@ -8,53 +8,166 @@ import (
 	"time"
 )
 
+type daemonOps struct {
+	defaultSocketPath func() (string, error)
+	probe             func(context.Context, string, string) error
+	start             func(string) error
+	wait              func(context.Context, string, string) error
+}
+
+type connectOps struct {
+	defaultSocketPath func() (string, error)
+	ensureRunning     func(context.Context, string) error
+	dial              func(context.Context, string, string) (*Client, error)
+}
+
+type daemonProcessDeps struct {
+	executable   func() (string, error)
+	execCommand  func(string, ...string) *exec.Cmd
+	defaultLog   func() (string, error)
+	environ      func() []string
+	openFile     func(string, int, os.FileMode) (*os.File, error)
+	releaseProc  func(*os.Process) error
+	startProcess func(*exec.Cmd) error
+}
+
 // EnsureDaemonRunning starts the daemon if needed.
 func EnsureDaemonRunning(ctx context.Context, version string) error {
-	socketPath, err := DefaultSocketPath()
-	if err != nil {
-		return err
-	}
-	if err := probeDaemon(ctx, socketPath, version); err == nil {
-		return nil
-	}
-	if err := startDaemonProcess(socketPath); err != nil {
-		return err
-	}
-	return waitForDaemon(ctx, socketPath, version)
+	return ensureDaemonRunning(ctx, version, daemonOps{
+		defaultSocketPath: DefaultSocketPath,
+		probe:             probeDaemon,
+		start:             startDaemonProcess,
+		wait:              waitForDaemon,
+	})
 }
 
 // ConnectDefault ensures the daemon is running and returns a client.
 func ConnectDefault(ctx context.Context, version string) (*Client, error) {
-	socketPath, err := DefaultSocketPath()
+	return connectDefault(ctx, version, connectOps{
+		defaultSocketPath: DefaultSocketPath,
+		ensureRunning:     EnsureDaemonRunning,
+		dial:              Dial,
+	})
+}
+
+func ensureDaemonRunning(ctx context.Context, version string, ops daemonOps) error {
+	defaultSocketPath := ops.defaultSocketPath
+	if defaultSocketPath == nil {
+		defaultSocketPath = DefaultSocketPath
+	}
+	probe := ops.probe
+	if probe == nil {
+		probe = probeDaemon
+	}
+	start := ops.start
+	if start == nil {
+		start = startDaemonProcess
+	}
+	wait := ops.wait
+	if wait == nil {
+		wait = waitForDaemon
+	}
+
+	socketPath, err := defaultSocketPath()
+	if err != nil {
+		return err
+	}
+	if err := probe(ctx, socketPath, version); err == nil {
+		return nil
+	}
+	if err := start(socketPath); err != nil {
+		return err
+	}
+	return wait(ctx, socketPath, version)
+}
+
+func connectDefault(ctx context.Context, version string, ops connectOps) (*Client, error) {
+	defaultSocketPath := ops.defaultSocketPath
+	if defaultSocketPath == nil {
+		defaultSocketPath = DefaultSocketPath
+	}
+	ensureRunning := ops.ensureRunning
+	if ensureRunning == nil {
+		ensureRunning = EnsureDaemonRunning
+	}
+	dial := ops.dial
+	if dial == nil {
+		dial = Dial
+	}
+
+	socketPath, err := defaultSocketPath()
 	if err != nil {
 		return nil, err
 	}
-	if err := EnsureDaemonRunning(ctx, version); err != nil {
+	if err := ensureRunning(ctx, version); err != nil {
 		return nil, err
 	}
-	return Dial(ctx, socketPath, version)
+	return dial(ctx, socketPath, version)
 }
 
 func startDaemonProcess(socketPath string) error {
-	exe, err := os.Executable()
+	return startDaemonProcessWith(socketPath, daemonProcessDeps{
+		executable:   os.Executable,
+		execCommand:  exec.Command,
+		defaultLog:   DefaultLogPath,
+		environ:      os.Environ,
+		openFile:     os.OpenFile,
+		releaseProc:  func(p *os.Process) error { return p.Release() },
+		startProcess: func(cmd *exec.Cmd) error { return cmd.Start() },
+	})
+}
+
+func startDaemonProcessWith(socketPath string, deps daemonProcessDeps) error {
+	executable := deps.executable
+	if executable == nil {
+		executable = os.Executable
+	}
+	execCommand := deps.execCommand
+	if execCommand == nil {
+		execCommand = exec.Command
+	}
+	defaultLog := deps.defaultLog
+	if defaultLog == nil {
+		defaultLog = DefaultLogPath
+	}
+	environ := deps.environ
+	if environ == nil {
+		environ = os.Environ
+	}
+	openFile := deps.openFile
+	if openFile == nil {
+		openFile = os.OpenFile
+	}
+	releaseProc := deps.releaseProc
+	if releaseProc == nil {
+		releaseProc = func(p *os.Process) error { return p.Release() }
+	}
+	startProcess := deps.startProcess
+	if startProcess == nil {
+		startProcess = func(cmd *exec.Cmd) error { return cmd.Start() }
+	}
+
+	exe, err := executable()
 	if err != nil {
 		return fmt.Errorf("sessiond: resolve executable: %w", err)
 	}
-	cmd := exec.Command(exe, "daemon")
-	cmd.Env = append(os.Environ(), socketEnv+"="+socketPath)
+	cmd := execCommand(exe, "daemon")
+	cmd.Env = append(environ(), socketEnv+"="+socketPath)
 
-	logPath, err := DefaultLogPath()
+	logPath, err := defaultLog()
 	if err == nil && logPath != "" {
-		if file, openErr := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600); openErr == nil {
+		if file, openErr := openFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600); openErr == nil {
 			cmd.Stdout = file
 			cmd.Stderr = file
 		}
 	}
 
-	if err := cmd.Start(); err != nil {
+	if err := startProcess(cmd); err != nil {
 		return fmt.Errorf("sessiond: start daemon: %w", err)
 	}
-	_ = cmd.Process.Release()
+	if cmd.Process != nil {
+		_ = releaseProc(cmd.Process)
+	}
 	return nil
 }
 

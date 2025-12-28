@@ -2,43 +2,45 @@ package icons
 
 import "testing"
 
-func TestActiveDefaultsToUnicode(t *testing.T) {
-	t.Setenv("PEAKYPANES_ICON_SET", "")
-	set := Active()
-	if set.PaneLabel != Unicode.PaneLabel {
-		t.Fatalf("Active() = %#v, want Unicode", set.PaneLabel)
+func TestVariantsBySize(t *testing.T) {
+	v := Variants{Small: "s", Medium: "m", Large: "l"}
+	if got := v.BySize(SizeSmall); got != "s" {
+		t.Fatalf("BySize(small) = %q", got)
+	}
+	if got := v.BySize(SizeLarge); got != "l" {
+		t.Fatalf("BySize(large) = %q", got)
+	}
+	if got := v.BySize(SizeMedium); got != "m" {
+		t.Fatalf("BySize(medium) = %q", got)
+	}
+	v = Variants{Medium: "", Small: "s", Large: "l"}
+	if got := v.BySize(SizeMedium); got != "s" {
+		t.Fatalf("BySize fallback = %q", got)
 	}
 }
 
-func TestActiveUsesASCII(t *testing.T) {
+func TestActiveIconSet(t *testing.T) {
 	t.Setenv("PEAKYPANES_ICON_SET", "ascii")
-	set := Active()
-	if set.PaneLabel != ASCII.PaneLabel {
-		t.Fatalf("Active() = %#v, want ASCII", set.PaneLabel)
+	if got := Active().Caret.Medium; got != ASCII.Caret.Medium {
+		t.Fatalf("Active() ascii = %q", got)
+	}
+	t.Setenv("PEAKYPANES_ICON_SET", "unicode")
+	if got := Active().Caret.Medium; got != Unicode.Caret.Medium {
+		t.Fatalf("Active() unicode = %q", got)
 	}
 }
 
 func TestActiveSize(t *testing.T) {
-	t.Setenv("PEAKYPANES_ICON_SIZE", "small")
-	if ActiveSize() != SizeSmall {
-		t.Fatalf("ActiveSize(small) = %v", ActiveSize())
+	t.Setenv("PEAKYPANES_ICON_SIZE", "sm")
+	if got := ActiveSize(); got != SizeSmall {
+		t.Fatalf("ActiveSize(sm) = %v", got)
 	}
-	t.Setenv("PEAKYPANES_ICON_SIZE", "large")
-	if ActiveSize() != SizeLarge {
-		t.Fatalf("ActiveSize(large) = %v", ActiveSize())
+	t.Setenv("PEAKYPANES_ICON_SIZE", "lg")
+	if got := ActiveSize(); got != SizeLarge {
+		t.Fatalf("ActiveSize(lg) = %v", got)
 	}
 	t.Setenv("PEAKYPANES_ICON_SIZE", "medium")
-	if ActiveSize() != SizeMedium {
-		t.Fatalf("ActiveSize(medium) = %v", ActiveSize())
-	}
-}
-
-func TestVariantsBySizeFallback(t *testing.T) {
-	variant := Variants{Medium: "m"}
-	if got := variant.BySize(SizeSmall); got != "m" {
-		t.Fatalf("BySize(small) = %q", got)
-	}
-	if got := variant.BySize(SizeLarge); got != "m" {
-		t.Fatalf("BySize(large) = %q", got)
+	if got := ActiveSize(); got != SizeMedium {
+		t.Fatalf("ActiveSize(default) = %v", got)
 	}
 }

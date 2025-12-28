@@ -1,0 +1,146 @@
+package app
+
+func resolveSelection(groups []ProjectGroup, desired selectionState) selectionState {
+	resolved := selectionState{}
+	if len(groups) == 0 {
+		return resolved
+	}
+	project := findProject(groups, desired.Project)
+	if project == nil {
+		project = &groups[0]
+	}
+	resolved.Project = project.Name
+	if len(project.Sessions) == 0 {
+		return resolved
+	}
+	session := findSession(project, desired.Session)
+	if session == nil {
+		session = &project.Sessions[0]
+	}
+	resolved.Session = session.Name
+	resolved.Pane = desired.Pane
+	return resolved
+}
+
+func resolveDashboardSelection(groups []ProjectGroup, desired selectionState) selectionState {
+	columns := collectDashboardColumns(groups)
+	if len(columns) == 0 {
+		return selectionState{}
+	}
+	if selected := resolveDashboardSelectionFromColumns(columns, desired); selected.Project != "" {
+		return selected
+	}
+	return selectionState{}
+}
+
+func resolveDashboardSelectionFromColumns(columns []DashboardProjectColumn, desired selectionState) selectionState {
+	if len(columns) == 0 {
+		return selectionState{}
+	}
+	if desired.Session != "" {
+		for _, column := range columns {
+			if len(column.Panes) == 0 {
+				continue
+			}
+			if idx := dashboardPaneIndex(column.Panes, desired); idx >= 0 {
+				pane := column.Panes[idx]
+				return selectionState{
+					Project: column.ProjectName,
+					Session: pane.SessionName,
+					Pane:    pane.Pane.Index,
+				}
+			}
+		}
+	}
+	if desired.Project != "" {
+		for _, column := range columns {
+			if column.ProjectName != desired.Project {
+				continue
+			}
+			if len(column.Panes) == 0 {
+				return selectionState{Project: column.ProjectName}
+			}
+			idx := dashboardPaneIndex(column.Panes, desired)
+			if idx < 0 {
+				idx = 0
+			}
+			pane := column.Panes[idx]
+			return selectionState{
+				Project: column.ProjectName,
+				Session: pane.SessionName,
+				Pane:    pane.Pane.Index,
+			}
+		}
+	}
+	for _, column := range columns {
+		if len(column.Panes) == 0 {
+			continue
+		}
+		pane := column.Panes[0]
+		return selectionState{
+			Project: column.ProjectName,
+			Session: pane.SessionName,
+			Pane:    pane.Pane.Index,
+		}
+	}
+	if len(columns) > 0 {
+		return selectionState{Project: columns[0].ProjectName}
+	}
+	return selectionState{}
+}
+
+func resolvePaneSelection(desired string, panes []PaneItem) string {
+	if desired != "" && paneExists(panes, desired) {
+		return desired
+	}
+	if active := activePaneIndex(panes); active != "" {
+		return active
+	}
+	if len(panes) > 0 {
+		return panes[0].Index
+	}
+	return ""
+}
+
+func findProject(groups []ProjectGroup, name string) *ProjectGroup {
+	for i := range groups {
+		if groups[i].Name == name {
+			return &groups[i]
+		}
+	}
+	return nil
+}
+
+func findSession(group *ProjectGroup, name string) *SessionItem {
+	if group == nil {
+		return nil
+	}
+	for i := range group.Sessions {
+		if group.Sessions[i].Name == name {
+			return &group.Sessions[i]
+		}
+	}
+	return nil
+}
+
+func findSessionByName(groups []ProjectGroup, name string) *SessionItem {
+	for gi := range groups {
+		for si := range groups[gi].Sessions {
+			if groups[gi].Sessions[si].Name == name {
+				return &groups[gi].Sessions[si]
+			}
+		}
+	}
+	return nil
+}
+
+func findProjectForSession(groups []ProjectGroup, name string) (*ProjectGroup, *SessionItem) {
+	for gi := range groups {
+		for si := range groups[gi].Sessions {
+			if groups[gi].Sessions[si].Name == name {
+				return &groups[gi], &groups[gi].Sessions[si]
+			}
+		}
+	}
+	return nil, nil
+}

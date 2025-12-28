@@ -104,54 +104,74 @@ func (l *Loader) LoadBuiltins() error {
 
 // LoadGlobalLayouts loads layouts from the user's config directory.
 func (l *Loader) LoadGlobalLayouts() error {
-	// Load from layouts directory
-	if l.globalLayoutsDir != "" {
-		if info, err := os.Stat(l.globalLayoutsDir); err == nil && info.IsDir() {
-			entries, err := os.ReadDir(l.globalLayoutsDir)
-			if err != nil {
-				return fmt.Errorf("read layouts dir: %w", err)
-			}
-
-			for _, entry := range entries {
-				if entry.IsDir() {
-					continue
-				}
-				name := entry.Name()
-				if !strings.HasSuffix(name, ".yml") && !strings.HasSuffix(name, ".yaml") {
-					continue
-				}
-
-				path := filepath.Join(l.globalLayoutsDir, name)
-				layout, err := LoadLayoutFile(path)
-				if err != nil {
-					// Log but don't fail on individual file errors
-					continue
-				}
-
-				key := layout.Name
-				if key == "" {
-					key = strings.TrimSuffix(strings.TrimSuffix(name, ".yml"), ".yaml")
-					layout.Name = key
-				}
-				l.globalLayouts[key] = layout
-			}
-		}
+	if err := l.loadGlobalLayoutsDir(); err != nil {
+		return err
 	}
-
-	// Also load inline layouts from config file
-	if l.globalConfigPath != "" {
-		cfg, err := LoadConfig(l.globalConfigPath)
-		if err == nil && cfg.Layouts != nil {
-			for name, layout := range cfg.Layouts {
-				if layout.Name == "" {
-					layout.Name = name
-				}
-				l.globalLayouts[name] = layout
-			}
-		}
+	if err := l.loadGlobalLayoutsFromConfig(); err != nil {
+		return err
 	}
-
 	return nil
+}
+
+func (l *Loader) loadGlobalLayoutsDir() error {
+	if l.globalLayoutsDir == "" {
+		return nil
+	}
+	info, err := os.Stat(l.globalLayoutsDir)
+	if err != nil || !info.IsDir() {
+		return nil
+	}
+	entries, err := os.ReadDir(l.globalLayoutsDir)
+	if err != nil {
+		return fmt.Errorf("read layouts dir: %w", err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !isLayoutFileName(name) {
+			continue
+		}
+		path := filepath.Join(l.globalLayoutsDir, name)
+		layout, err := LoadLayoutFile(path)
+		if err != nil {
+			// Log but don't fail on individual file errors
+			continue
+		}
+		l.addGlobalLayout(name, layout)
+	}
+	return nil
+}
+
+func (l *Loader) loadGlobalLayoutsFromConfig() error {
+	if l.globalConfigPath == "" {
+		return nil
+	}
+	cfg, err := LoadConfig(l.globalConfigPath)
+	if err != nil || cfg.Layouts == nil {
+		return nil
+	}
+	for name, layout := range cfg.Layouts {
+		if layout.Name == "" {
+			layout.Name = name
+		}
+		l.globalLayouts[name] = layout
+	}
+	return nil
+}
+
+func (l *Loader) addGlobalLayout(filename string, layout *LayoutConfig) {
+	key := layout.Name
+	if key == "" {
+		key = strings.TrimSuffix(strings.TrimSuffix(filename, ".yml"), ".yaml")
+		layout.Name = key
+	}
+	l.globalLayouts[key] = layout
+}
+
+func isLayoutFileName(name string) bool {
+	return strings.HasSuffix(name, ".yml") || strings.HasSuffix(name, ".yaml")
 }
 
 // LoadProjectLayout loads the .peakypanes.yml from the project directory.

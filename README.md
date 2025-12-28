@@ -43,6 +43,13 @@ peakypanes
 npx -y peakypanes
 ```
 
+**Using Homebrew**
+
+```bash
+brew tap regenrek/tap
+brew install regenrek/tap/peakypanes
+```
+
 Using Go
 
 ```bash

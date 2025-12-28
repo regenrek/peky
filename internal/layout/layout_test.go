@@ -36,3 +36,23 @@ func TestParse(t *testing.T) {
 		})
 	}
 }
+
+func TestGridPanesAndPresets(t *testing.T) {
+	grid := Grid{Rows: 2, Columns: 3}
+	if grid.Panes() != 6 {
+		t.Fatalf("Panes() = %d", grid.Panes())
+	}
+	presets := CommonPresets()
+	if len(presets) == 0 {
+		t.Fatalf("CommonPresets() returned empty list")
+	}
+	found := false
+	for _, preset := range presets {
+		if preset.Rows == 2 && preset.Columns == 2 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("CommonPresets() missing 2x2")
+	}
+}

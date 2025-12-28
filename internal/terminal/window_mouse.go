@@ -21,17 +21,17 @@ func (w *Window) updateMouseMode(mode ansi.Mode, enabled bool) {
 	}
 	var mask uint32
 	switch dec {
-	case ansi.X10MouseMode:
+	case ansi.ModeMouseX10:
 		mask = mouseModeX10
-	case ansi.NormalMouseMode:
+	case ansi.ModeMouseNormal:
 		mask = mouseModeNormal
-	case ansi.HighlightMouseMode:
+	case ansi.ModeMouseHighlight:
 		mask = mouseModeHighlight
-	case ansi.ButtonEventMouseMode:
+	case ansi.ModeMouseButtonEvent:
 		mask = mouseModeButtonEvent
-	case ansi.AnyEventMouseMode:
+	case ansi.ModeMouseAnyEvent:
 		mask = mouseModeAnyEvent
-	case ansi.SgrExtMouseMode:
+	case ansi.ModeMouseExtSgr:
 		mask = mouseModeSGR
 	default:
 		return

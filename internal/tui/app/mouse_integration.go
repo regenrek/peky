@@ -1,0 +1,161 @@
+package app
+
+import (
+	"context"
+	"strings"
+
+	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/regenrek/peakypanes/internal/sessiond"
+	"github.com/regenrek/peakypanes/internal/tui/mouse"
+)
+
+func selectionFromMouse(sel mouse.Selection) selectionState {
+	return selectionState{
+		Project: sel.Project,
+		Session: sel.Session,
+		Pane:    sel.Pane,
+	}
+}
+
+func (m *Model) updateDashboardMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	cmd := m.mouse.UpdateDashboard(msg, mouse.DashboardCallbacks{
+		HitHeader:             m.hitTestHeader,
+		HitPane:               m.hitTestPane,
+		HitIsSelected:         m.hitIsSelected,
+		ApplySelection:        m.applySelectionFromHit,
+		SelectDashboardTab:    m.selectDashboardTab,
+		SelectProjectTab:      m.selectProjectTab,
+		OpenProjectPicker:     m.openProjectPicker,
+		SetTerminalFocus:      m.setTerminalFocus,
+		TerminalFocus:         func() bool { return m.terminalFocus },
+		SupportsTerminalFocus: m.supportsTerminalFocus,
+		SelectionCmd:          m.selectionCmd,
+		SelectionRefreshCmd:   m.selectionRefreshCmd,
+		RefreshPaneViewsCmd:   m.refreshPaneViewsCmd,
+		ForwardMouseEvent:     m.forwardMouseEvent,
+		FocusUnavailable: func() {
+			m.setToast("Terminal focus is only available for PeakyPanes-managed sessions", toastInfo)
+		},
+	})
+	return m, cmd
+}
+
+func (m *Model) allowMouseMotion() bool {
+	if m == nil {
+		return false
+	}
+	if m.state != StateDashboard || !m.terminalFocus {
+		return false
+	}
+	if !m.supportsTerminalFocus() {
+		return false
+	}
+	pane := m.selectedPane()
+	if pane == nil || strings.TrimSpace(pane.ID) == "" {
+		return false
+	}
+	return m.paneMouseMotion[pane.ID]
+}
+
+func (m *Model) applySelectionFromHit(sel mouse.Selection) bool {
+	appSelection := selectionFromMouse(sel)
+	if m.selection == appSelection {
+		return false
+	}
+	m.applySelection(appSelection)
+	m.selectionVersion++
+	return true
+}
+
+func (m *Model) selectionCmd() tea.Cmd {
+	if m.tab == TabDashboard {
+		return nil
+	}
+	return m.selectionRefreshCmd()
+}
+
+func (m *Model) hitIsSelected(hit mouse.PaneHit) bool {
+	pane := m.selectedPane()
+	if pane == nil {
+		return false
+	}
+	if strings.TrimSpace(pane.ID) != "" {
+		return pane.ID == hit.PaneID
+	}
+	return m.selection == selectionFromMouse(hit.Selection)
+}
+
+func (m *Model) forwardMouseEvent(hit mouse.PaneHit, msg tea.MouseMsg) tea.Cmd {
+	if m == nil || m.client == nil {
+		return nil
+	}
+	if !m.supportsTerminalFocus() {
+		return nil
+	}
+	if strings.TrimSpace(hit.PaneID) == "" {
+		return nil
+	}
+	if !hit.Content.Contains(msg.X, msg.Y) {
+		return nil
+	}
+	relX := msg.X - hit.Content.X
+	relY := msg.Y - hit.Content.Y
+	if relX < 0 || relY < 0 {
+		return nil
+	}
+
+	payload, ok := mousePayloadFromTea(msg, relX, relY)
+	if !ok {
+		return nil
+	}
+	if payload.Action == sessiond.MouseActionMotion && !m.paneMouseMotion[hit.PaneID] {
+		return nil
+	}
+	paneID := hit.PaneID
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), terminalActionTimeout)
+		defer cancel()
+		if err := m.client.SendMouse(ctx, paneID, payload); err != nil {
+			return ErrorMsg{Err: err, Context: "send mouse"}
+		}
+		return nil
+	}
+}
+
+func mousePayloadFromTea(msg tea.MouseMsg, x, y int) (sessiond.MouseEventPayload, bool) {
+	if x < 0 || y < 0 {
+		return sessiond.MouseEventPayload{}, false
+	}
+	var action sessiond.MouseAction
+	switch msg.Action {
+	case tea.MouseActionPress:
+		action = sessiond.MouseActionPress
+	case tea.MouseActionRelease:
+		action = sessiond.MouseActionRelease
+	case tea.MouseActionMotion:
+		action = sessiond.MouseActionMotion
+	default:
+		return sessiond.MouseEventPayload{}, false
+	}
+	payload := sessiond.MouseEventPayload{
+		X:      x,
+		Y:      y,
+		Button: int(msg.Button),
+		Action: action,
+		Shift:  msg.Shift,
+		Alt:    msg.Alt,
+		Ctrl:   msg.Ctrl,
+		Wheel:  isWheelButton(msg.Button),
+	}
+	return payload, true
+}
+
+func isWheelButton(button tea.MouseButton) bool {
+	switch button {
+	case tea.MouseButtonWheelUp, tea.MouseButtonWheelDown, tea.MouseButtonWheelLeft, tea.MouseButtonWheelRight:
+		return true
+	default:
+		return false
+	}
+}

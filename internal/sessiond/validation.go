@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/regenrek/peakypanes/internal/pathutil"
+	"github.com/regenrek/peakypanes/internal/userpath"
 )
 
 func validateSessionName(name string) (string, error) {
@@ -45,7 +45,7 @@ func validatePath(path string) (string, error) {
 	if path == "" {
 		return "", errors.New("path is required")
 	}
-	path = pathutil.ExpandUser(path)
+	path = userpath.ExpandUser(path)
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return "", fmt.Errorf("resolve path %q: %w", path, err)

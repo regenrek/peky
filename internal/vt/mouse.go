@@ -68,11 +68,11 @@ func (e *Emulator) SendMouse(m Mouse) {
 	)
 
 	for _, m := range []ansi.DECMode{
-		ansi.X10MouseMode,         // Button press
-		ansi.NormalMouseMode,      // Button press/release
-		ansi.HighlightMouseMode,   // Button press/release/hilight
-		ansi.ButtonEventMouseMode, // Button press/release/cell motion
-		ansi.AnyEventMouseMode,    // Button press/release/all motion
+		ansi.ModeMouseX10,         // Button press
+		ansi.ModeMouseNormal,      // Button press/release
+		ansi.ModeMouseHighlight,   // Button press/release/hilight
+		ansi.ModeMouseButtonEvent, // Button press/release/cell motion
+		ansi.ModeMouseAnyEvent,    // Button press/release/all motion
 	} {
 		if e.isModeSet(m) {
 			mode = m
@@ -85,7 +85,7 @@ func (e *Emulator) SendMouse(m Mouse) {
 
 	for _, mm := range []ansi.DECMode{
 		// ansi.Utf8ExtMouseMode,
-		ansi.SgrExtMouseMode,
+		ansi.ModeMouseExtSgr,
 		// ansi.UrxvtExtMouseMode,
 		// ansi.SgrPixelExtMouseMode,
 	} {
@@ -104,12 +104,12 @@ func (e *Emulator) SendMouse(m Mouse) {
 		mouse.Mod.Contains(ModCtrl))
 
 	switch enc {
-	// XXX: Support [ansi.HighlightMouseMode].
+	// XXX: Support [ansi.ModeMouseHighlight].
 	// XXX: Support [ansi.Utf8ExtMouseMode], [ansi.UrxvtExtMouseMode], and
 	// [ansi.SgrPixelExtMouseMode].
 	case nil: // X10 mouse encoding
 		_, _ = io.WriteString(e.pw, ansi.MouseX10(b, mouse.X, mouse.Y))
-	case ansi.SgrExtMouseMode: // SGR mouse encoding
+	case ansi.ModeMouseExtSgr: // SGR mouse encoding
 		_, _ = io.WriteString(e.pw, ansi.MouseSgr(b, mouse.X, mouse.Y, isRelease))
 	}
 }

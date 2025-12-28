@@ -10,14 +10,10 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	uv "github.com/charmbracelet/ultraviolet"
-
-	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/native"
 )
 
@@ -37,8 +33,9 @@ type DaemonConfig struct {
 
 // Daemon owns persistent sessions and serves clients over a local socket.
 type Daemon struct {
-	manager    *native.Manager
+	manager    sessionManager
 	listener   net.Listener
+	listenerMu sync.RWMutex
 	socketPath string
 	pidPath    string
 	version    string
@@ -83,7 +80,7 @@ func NewDaemon(cfg DaemonConfig) (*Daemon, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	d := &Daemon{
-		manager:    native.NewManager(),
+		manager:    wrapManager(native.NewManager()),
 		socketPath: socketPath,
 		pidPath:    pidPath,
 		version:    cfg.Version,
@@ -112,7 +109,7 @@ func (d *Daemon) Start() error {
 	if err != nil {
 		return fmt.Errorf("sessiond: listen on %s: %w", d.socketPath, err)
 	}
-	d.listener = listener
+	d.setListener(listener)
 	if err := os.Chmod(d.socketPath, 0o700); err != nil {
 		_ = listener.Close()
 		return fmt.Errorf("sessiond: chmod socket: %w", err)
@@ -152,8 +149,8 @@ func (d *Daemon) Stop() error {
 }
 
 func (d *Daemon) shutdown() error {
-	if d.listener != nil {
-		_ = d.listener.Close()
+	if listener := d.clearListener(); listener != nil {
+		_ = listener.Close()
 	}
 
 	d.clientsMu.Lock()
@@ -176,8 +173,12 @@ func (d *Daemon) shutdown() error {
 
 func (d *Daemon) acceptLoop() {
 	defer d.wg.Done()
+	listener := d.listenerValue()
+	if listener == nil {
+		return
+	}
 	for {
-		conn, err := d.listener.Accept()
+		conn, err := listener.Accept()
 		if err != nil {
 			if d.closing.Load() {
 				return
@@ -191,6 +192,27 @@ func (d *Daemon) acceptLoop() {
 		d.wg.Add(1)
 		go d.writeLoop(client)
 	}
+}
+
+func (d *Daemon) setListener(listener net.Listener) {
+	d.listenerMu.Lock()
+	d.listener = listener
+	d.listenerMu.Unlock()
+}
+
+func (d *Daemon) listenerValue() net.Listener {
+	d.listenerMu.RLock()
+	listener := d.listener
+	d.listenerMu.RUnlock()
+	return listener
+}
+
+func (d *Daemon) clearListener() net.Listener {
+	d.listenerMu.Lock()
+	listener := d.listener
+	d.listener = nil
+	d.listenerMu.Unlock()
+	return listener
 }
 
 func (d *Daemon) eventLoop() {
@@ -278,6 +300,11 @@ func (d *Daemon) writeLoop(client *clientConn) {
 
 func sendEnvelope(client *clientConn, env Envelope) error {
 	select {
+	case <-client.done:
+		return errors.New("sessiond: client closed")
+	default:
+	}
+	select {
 	case client.sendCh <- env:
 		return nil
 	case <-client.done:
@@ -298,513 +325,6 @@ func closeClient(client *clientConn) {
 		_ = client.conn.Close()
 	}
 	close(client.sendCh)
-}
-
-func (d *Daemon) handleRequest(env Envelope) Envelope {
-	resp := Envelope{
-		Kind: EnvelopeResponse,
-		Op:   env.Op,
-		ID:   env.ID,
-	}
-	payload, err := d.handleRequestPayload(env)
-	if err != nil {
-		resp.Error = err.Error()
-		return resp
-	}
-	resp.Payload = payload
-	return resp
-}
-
-func (d *Daemon) handleRequestPayload(env Envelope) ([]byte, error) {
-	switch env.Op {
-	case OpHello:
-		var req HelloRequest
-		if err := decodePayload(env.Payload, &req); err != nil {
-			return nil, err
-		}
-		resp := HelloResponse{Version: d.version, PID: os.Getpid()}
-		return encodePayload(resp)
-	case OpSessionNames:
-		if d.manager == nil {
-			return nil, errors.New("sessiond: manager unavailable")
-		}
-		return encodePayload(SessionNamesResponse{Names: d.manager.SessionNames()})
-	case OpSnapshot:
-		var req SnapshotRequest
-		if err := decodePayload(env.Payload, &req); err != nil {
-			return nil, err
-		}
-		sessions := d.manager.Snapshot(req.PreviewLines)
-		resp := SnapshotResponse{Version: d.manager.Version(), Sessions: sessions}
-		return encodePayload(resp)
-	case OpStartSession:
-		var req StartSessionRequest
-		if err := decodePayload(env.Payload, &req); err != nil {
-			return nil, err
-		}
-		resp, err := d.startSession(req)
-		if err != nil {
-			return nil, err
-		}
-		d.broadcast(Event{Type: EventSessionChanged, Session: resp.Name})
-		return encodePayload(resp)
-	case OpKillSession:
-		var req KillSessionRequest
-		if err := decodePayload(env.Payload, &req); err != nil {
-			return nil, err
-		}
-		name, err := validateSessionName(req.Name)
-		if err != nil {
-			return nil, err
-		}
-		if err := d.manager.KillSession(name); err != nil {
-			return nil, err
-		}
-		d.broadcast(Event{Type: EventSessionChanged, Session: name})
-		return nil, nil
-	case OpRenameSession:
-		var req RenameSessionRequest
-		if err := decodePayload(env.Payload, &req); err != nil {
-			return nil, err
-		}
-		oldName, err := validateSessionName(req.OldName)
-		if err != nil {
-			return nil, err
-		}
-		newName, err := validateSessionName(req.NewName)
-		if err != nil {
-			return nil, err
-		}
-		if err := d.manager.RenameSession(oldName, newName); err != nil {
-			return nil, err
-		}
-		d.broadcast(Event{Type: EventSessionChanged, Session: newName})
-		return encodePayload(RenameSessionResponse{NewName: newName})
-	case OpRenamePane:
-		var req RenamePaneRequest
-		if err := decodePayload(env.Payload, &req); err != nil {
-			return nil, err
-		}
-		sessionName, err := validateSessionName(req.SessionName)
-		if err != nil {
-			return nil, err
-		}
-		paneIndex, err := validatePaneIndex(req.PaneIndex)
-		if err != nil {
-			return nil, err
-		}
-		newTitle := strings.TrimSpace(req.NewTitle)
-		if newTitle == "" {
-			return nil, errors.New("sessiond: pane title is required")
-		}
-		if err := d.manager.RenamePane(sessionName, paneIndex, newTitle); err != nil {
-			return nil, err
-		}
-		return nil, nil
-	case OpSplitPane:
-		var req SplitPaneRequest
-		if err := decodePayload(env.Payload, &req); err != nil {
-			return nil, err
-		}
-		sessionName, err := validateSessionName(req.SessionName)
-		if err != nil {
-			return nil, err
-		}
-		paneIndex, err := validatePaneIndex(req.PaneIndex)
-		if err != nil {
-			return nil, err
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
-		defer cancel()
-		newIndex, err := d.manager.SplitPane(ctx, sessionName, paneIndex, req.Vertical, req.Percent)
-		if err != nil {
-			return nil, err
-		}
-		return encodePayload(SplitPaneResponse{NewIndex: newIndex})
-	case OpClosePane:
-		var req ClosePaneRequest
-		if err := decodePayload(env.Payload, &req); err != nil {
-			return nil, err
-		}
-		sessionName, err := validateSessionName(req.SessionName)
-		if err != nil {
-			return nil, err
-		}
-		paneIndex, err := validatePaneIndex(req.PaneIndex)
-		if err != nil {
-			return nil, err
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
-		defer cancel()
-		if err := d.manager.ClosePane(ctx, sessionName, paneIndex); err != nil {
-			return nil, err
-		}
-		return nil, nil
-	case OpSwapPanes:
-		var req SwapPanesRequest
-		if err := decodePayload(env.Payload, &req); err != nil {
-			return nil, err
-		}
-		sessionName, err := validateSessionName(req.SessionName)
-		if err != nil {
-			return nil, err
-		}
-		paneA, err := validatePaneIndex(req.PaneA)
-		if err != nil {
-			return nil, err
-		}
-		paneB, err := validatePaneIndex(req.PaneB)
-		if err != nil {
-			return nil, err
-		}
-		if err := d.manager.SwapPanes(sessionName, paneA, paneB); err != nil {
-			return nil, err
-		}
-		return nil, nil
-	case OpSendInput:
-		var req SendInputRequest
-		if err := decodePayload(env.Payload, &req); err != nil {
-			return nil, err
-		}
-		paneID := strings.TrimSpace(req.PaneID)
-		if paneID == "" {
-			return nil, errors.New("sessiond: pane id is required")
-		}
-		if err := d.manager.SendInput(paneID, req.Input); err != nil {
-			return nil, err
-		}
-		return nil, nil
-	case OpSendMouse:
-		var req SendMouseRequest
-		if err := decodePayload(env.Payload, &req); err != nil {
-			return nil, err
-		}
-		paneID := strings.TrimSpace(req.PaneID)
-		if paneID == "" {
-			return nil, errors.New("sessiond: pane id is required")
-		}
-		event, ok := mousePayloadToEvent(req.Event)
-		if !ok {
-			return nil, nil
-		}
-		if err := d.manager.SendMouse(paneID, event); err != nil {
-			return nil, err
-		}
-		return nil, nil
-	case OpResizePane:
-		var req ResizePaneRequest
-		if err := decodePayload(env.Payload, &req); err != nil {
-			return nil, err
-		}
-		paneID := strings.TrimSpace(req.PaneID)
-		if paneID == "" {
-			return nil, errors.New("sessiond: pane id is required")
-		}
-		win := d.manager.Window(paneID)
-		if win == nil {
-			return nil, fmt.Errorf("sessiond: pane %q not found", paneID)
-		}
-		cols := req.Cols
-		rows := req.Rows
-		if cols < 1 {
-			cols = 1
-		}
-		if rows < 1 {
-			rows = 1
-		}
-		if err := win.Resize(cols, rows); err != nil {
-			return nil, err
-		}
-		return nil, nil
-	case OpPaneView:
-		var req PaneViewRequest
-		if err := decodePayload(env.Payload, &req); err != nil {
-			return nil, err
-		}
-		paneID := strings.TrimSpace(req.PaneID)
-		if paneID == "" {
-			return nil, errors.New("sessiond: pane id is required")
-		}
-		win := d.manager.Window(paneID)
-		if win == nil {
-			return nil, fmt.Errorf("sessiond: pane %q not found", paneID)
-		}
-		cols := req.Cols
-		rows := req.Rows
-		if cols < 1 {
-			cols = 1
-		}
-		if rows < 1 {
-			rows = 1
-		}
-		_ = win.Resize(cols, rows)
-		view := ""
-		switch req.Mode {
-		case PaneViewLipgloss:
-			view = win.ViewLipgloss(req.ShowCursor)
-		default:
-			view = win.ViewANSI()
-		}
-		hasMouse := win.HasMouseMode()
-		allowMotion := win.AllowsMouseMotion()
-		resp := PaneViewResponse{
-			PaneID:      paneID,
-			Cols:        cols,
-			Rows:        rows,
-			Mode:        req.Mode,
-			ShowCursor:  req.ShowCursor,
-			View:        view,
-			HasMouse:    hasMouse,
-			AllowMotion: allowMotion,
-		}
-		return encodePayload(resp)
-	case OpTerminalAction:
-		var req TerminalActionRequest
-		if err := decodePayload(env.Payload, &req); err != nil {
-			return nil, err
-		}
-		resp, err := d.terminalAction(req)
-		if err != nil {
-			return nil, err
-		}
-		return encodePayload(resp)
-	case OpHandleKey:
-		var req TerminalKeyRequest
-		if err := decodePayload(env.Payload, &req); err != nil {
-			return nil, err
-		}
-		resp, err := d.handleTerminalKey(req)
-		if err != nil {
-			return nil, err
-		}
-		return encodePayload(resp)
-	default:
-		return nil, fmt.Errorf("sessiond: unknown op %q", env.Op)
-	}
-}
-
-func (d *Daemon) startSession(req StartSessionRequest) (StartSessionResponse, error) {
-	if d.manager == nil {
-		return StartSessionResponse{}, errors.New("sessiond: manager unavailable")
-	}
-	path, err := validatePath(req.Path)
-	if err != nil {
-		return StartSessionResponse{}, err
-	}
-	nameOverride, err := validateOptionalSessionName(req.Name)
-	if err != nil {
-		return StartSessionResponse{}, err
-	}
-	loader, err := layout.NewLoader()
-	if err != nil {
-		return StartSessionResponse{}, err
-	}
-	loader.SetProjectDir(path)
-	if err := loader.LoadAll(); err != nil {
-		return StartSessionResponse{}, err
-	}
-	sessionName := layout.ResolveSessionName(path, nameOverride, loader.GetProjectConfig())
-	sessionName = strings.TrimSpace(sessionName)
-	if sessionName == "" {
-		return StartSessionResponse{}, errors.New("sessiond: session name is required")
-	}
-	if _, err := validateSessionName(sessionName); err != nil {
-		return StartSessionResponse{}, err
-	}
-
-	layoutName := strings.TrimSpace(req.LayoutName)
-	var selectedLayout *layout.LayoutConfig
-	if layoutName != "" {
-		selectedLayout, _, err = loader.GetLayout(layoutName)
-		if err != nil {
-			return StartSessionResponse{}, err
-		}
-	} else if loader.HasProjectConfig() {
-		selectedLayout = loader.GetProjectLayout()
-		if selectedLayout == nil {
-			selectedLayout, _, _ = loader.GetLayout("dev-3")
-		}
-	} else {
-		selectedLayout, _, _ = loader.GetLayout("dev-3")
-	}
-	if selectedLayout == nil {
-		return StartSessionResponse{}, errors.New("sessiond: no layout found")
-	}
-
-	projectName := filepath.Base(path)
-	var projectVars map[string]string
-	if loader.GetProjectConfig() != nil {
-		projectVars = loader.GetProjectConfig().Vars
-	}
-	expanded := layout.ExpandLayoutVars(selectedLayout, projectVars, path, projectName)
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
-	defer cancel()
-	_, err = d.manager.StartSession(ctx, native.SessionSpec{
-		Name:       sessionName,
-		Path:       path,
-		Layout:     expanded,
-		LayoutName: selectedLayout.Name,
-	})
-	if err != nil {
-		return StartSessionResponse{}, err
-	}
-	return StartSessionResponse{Name: sessionName, Path: path, LayoutName: selectedLayout.Name}, nil
-}
-
-func (d *Daemon) terminalAction(req TerminalActionRequest) (TerminalActionResponse, error) {
-	paneID := strings.TrimSpace(req.PaneID)
-	if paneID == "" {
-		return TerminalActionResponse{}, errors.New("sessiond: pane id is required")
-	}
-	win := d.manager.Window(paneID)
-	if win == nil {
-		return TerminalActionResponse{}, fmt.Errorf("sessiond: pane %q not found", paneID)
-	}
-	switch req.Action {
-	case TerminalEnterScrollback:
-		win.EnterScrollback()
-	case TerminalExitScrollback:
-		win.ExitScrollback()
-	case TerminalScrollUp:
-		win.ScrollUp(req.Lines)
-	case TerminalScrollDown:
-		win.ScrollDown(req.Lines)
-	case TerminalPageUp:
-		win.PageUp()
-	case TerminalPageDown:
-		win.PageDown()
-	case TerminalScrollTop:
-		win.ScrollToTop()
-	case TerminalScrollBottom:
-		win.ScrollToBottom()
-	case TerminalEnterCopyMode:
-		win.EnterCopyMode()
-	case TerminalExitCopyMode:
-		win.ExitCopyMode()
-	case TerminalCopyMove:
-		win.CopyMove(req.DeltaX, req.DeltaY)
-	case TerminalCopyPageUp:
-		win.CopyPageUp()
-	case TerminalCopyPageDown:
-		win.CopyPageDown()
-	case TerminalCopyToggleSelect:
-		win.CopyToggleSelect()
-	case TerminalCopyYank:
-		text := win.CopyYankText()
-		return TerminalActionResponse{PaneID: paneID, Text: text}, nil
-	default:
-		return TerminalActionResponse{}, errors.New("sessiond: unknown terminal action")
-	}
-	return TerminalActionResponse{PaneID: paneID}, nil
-}
-
-func (d *Daemon) handleTerminalKey(req TerminalKeyRequest) (TerminalKeyResponse, error) {
-	paneID := strings.TrimSpace(req.PaneID)
-	if paneID == "" {
-		return TerminalKeyResponse{}, errors.New("sessiond: pane id is required")
-	}
-	win := d.manager.Window(paneID)
-	if win == nil {
-		return TerminalKeyResponse{}, fmt.Errorf("sessiond: pane %q not found", paneID)
-	}
-	key := req.Key
-
-	if win.IsAltScreen() {
-		if win.CopyModeActive() {
-			win.ExitCopyMode()
-		}
-		if win.ScrollbackModeActive() || win.GetScrollbackOffset() > 0 {
-			win.ExitScrollback()
-		}
-		return TerminalKeyResponse{Handled: false}, nil
-	}
-
-	if win.CopyModeActive() {
-		switch key {
-		case "esc", "q":
-			win.ExitCopyMode()
-			return TerminalKeyResponse{Handled: true, Toast: "Copy mode exited", ToastKind: ToastInfo}, nil
-		case "up", "k":
-			win.CopyMove(0, -1)
-			return TerminalKeyResponse{Handled: true}, nil
-		case "down", "j":
-			win.CopyMove(0, 1)
-			return TerminalKeyResponse{Handled: true}, nil
-		case "left", "h":
-			win.CopyMove(-1, 0)
-			return TerminalKeyResponse{Handled: true}, nil
-		case "right", "l":
-			win.CopyMove(1, 0)
-			return TerminalKeyResponse{Handled: true}, nil
-		case "pgup":
-			win.CopyPageUp()
-			return TerminalKeyResponse{Handled: true}, nil
-		case "pgdown":
-			win.CopyPageDown()
-			return TerminalKeyResponse{Handled: true}, nil
-		case "v":
-			win.CopyToggleSelect()
-			return TerminalKeyResponse{Handled: true, Toast: "Selection toggled (v) | Yank (y) | Exit (esc/q)", ToastKind: ToastInfo}, nil
-		case "y":
-			text := win.CopyYankText()
-			win.ExitCopyMode()
-			if text == "" {
-				return TerminalKeyResponse{Handled: true, Toast: "Nothing to yank", ToastKind: ToastWarning}, nil
-			}
-			return TerminalKeyResponse{Handled: true, Toast: "Yanked to clipboard", ToastKind: ToastSuccess, YankText: text}, nil
-		default:
-			return TerminalKeyResponse{Handled: true}, nil
-		}
-	}
-
-	if win.ScrollbackModeActive() || win.GetScrollbackOffset() > 0 {
-		if req.CopyToggle {
-			win.EnterCopyMode()
-			return TerminalKeyResponse{Handled: true, Toast: "Copy mode: hjkl/arrows | v select | y yank | esc/q exit", ToastKind: ToastInfo}, nil
-		}
-		if req.ScrollbackToggle {
-			win.PageUp()
-			return TerminalKeyResponse{Handled: true}, nil
-		}
-		switch key {
-		case "esc", "q":
-			win.ExitScrollback()
-			return TerminalKeyResponse{Handled: true, Toast: "Scrollback exited", ToastKind: ToastInfo}, nil
-		case "up", "k":
-			win.ScrollUp(1)
-			return TerminalKeyResponse{Handled: true}, nil
-		case "down", "j":
-			win.ScrollDown(1)
-			return TerminalKeyResponse{Handled: true}, nil
-		case "pgup":
-			win.PageUp()
-			return TerminalKeyResponse{Handled: true}, nil
-		case "pgdown":
-			win.PageDown()
-			return TerminalKeyResponse{Handled: true}, nil
-		case "home", "g":
-			win.ScrollToTop()
-			return TerminalKeyResponse{Handled: true}, nil
-		case "end", "G":
-			win.ScrollToBottom()
-			return TerminalKeyResponse{Handled: true}, nil
-		default:
-			return TerminalKeyResponse{Handled: true}, nil
-		}
-	}
-
-	if req.ScrollbackToggle {
-		win.EnterScrollback()
-		win.PageUp()
-		return TerminalKeyResponse{Handled: true, Toast: "Scrollback: up/down/pgup/pgdown | Copy (f8) | Exit (esc/q)", ToastKind: ToastInfo}, nil
-	}
-	if req.CopyToggle {
-		win.EnterCopyMode()
-		return TerminalKeyResponse{Handled: true, Toast: "Copy mode: hjkl/arrows | v select | y yank | esc/q exit", ToastKind: ToastInfo}, nil
-	}
-
-	return TerminalKeyResponse{Handled: false}, nil
 }
 
 func (d *Daemon) broadcast(event Event) {
@@ -874,34 +394,4 @@ func isTimeout(err error) bool {
 		return ne.Timeout()
 	}
 	return false
-}
-
-func mousePayloadToEvent(payload MouseEventPayload) (uv.MouseEvent, bool) {
-	if payload.X < 0 || payload.Y < 0 {
-		return nil, false
-	}
-	mod := uv.KeyMod(0)
-	if payload.Shift {
-		mod |= uv.ModShift
-	}
-	if payload.Alt {
-		mod |= uv.ModAlt
-	}
-	if payload.Ctrl {
-		mod |= uv.ModCtrl
-	}
-	mouse := uv.Mouse{X: payload.X, Y: payload.Y, Button: uv.MouseButton(payload.Button), Mod: mod}
-	if payload.Wheel {
-		return uv.MouseWheelEvent(mouse), true
-	}
-	switch payload.Action {
-	case MouseActionPress:
-		return uv.MouseClickEvent(mouse), true
-	case MouseActionRelease:
-		return uv.MouseReleaseEvent(mouse), true
-	case MouseActionMotion:
-		return uv.MouseMotionEvent(mouse), true
-	default:
-		return nil, false
-	}
 }

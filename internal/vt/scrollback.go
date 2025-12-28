@@ -191,7 +191,7 @@ func (sb *Scrollback) Reflow(newWidth int) {
 	for i < len(lines) {
 		// Build one logical line by concatenating physical soft-wrapped lines.
 		var logical []uv.Cell
-		lastSoft := wrap[i]
+		var lastSoft bool
 
 		for {
 			logical = append(logical, flattenForReflow(lines[i])...)

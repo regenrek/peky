@@ -17,13 +17,13 @@ func TestAltScreenDoesNotAffectScrollback(t *testing.T) {
 		t.Fatalf("expected scrollback to grow on main screen")
 	}
 
-	_, _ = emu.Write([]byte("\x1b[?1049h"))
+	_, _ = emu.Write(readTestdataSequence(t, "alt_screen_on.seq"))
 	writeLines(emu, 4)
 	if emu.ScrollbackLen() != base {
 		t.Fatalf("alt screen should not grow scrollback: before=%d after=%d", base, emu.ScrollbackLen())
 	}
 
-	_, _ = emu.Write([]byte("\x1b[?1049l"))
+	_, _ = emu.Write(readTestdataSequence(t, "alt_screen_off.seq"))
 	writeLines(emu, 4)
 	if emu.ScrollbackLen() <= base {
 		t.Fatalf("main screen should grow scrollback after alt: before=%d after=%d", base, emu.ScrollbackLen())
