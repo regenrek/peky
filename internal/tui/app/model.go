@@ -1,13 +1,17 @@
 package app
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"os"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/sessiond"
@@ -52,11 +56,12 @@ type dashboardKeyMap struct {
 
 // Model implements tea.Model for peakypanes TUI.
 type Model struct {
-	client *sessiond.Client
-	state  ViewState
-	tab    DashboardTab
-	width  int
-	height int
+	client         *sessiond.Client
+	paneViewClient *sessiond.Client
+	state          ViewState
+	tab            DashboardTab
+	width          int
+	height         int
 
 	configPath string
 
@@ -116,8 +121,13 @@ type Model struct {
 
 	autoStart *AutoStartSpec
 
+	paneViewProfile termenv.Profile
 	paneViews       map[paneViewKey]string
 	paneMouseMotion map[string]bool
+
+	paneViewInFlight  bool
+	paneViewQueued    bool
+	paneViewQueuedIDs map[string]struct{}
 }
 
 // NewModel creates a new peakypanes TUI model.
@@ -129,9 +139,16 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 	if client == nil {
 		return nil, errors.New("session client is required")
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	paneViewClient, err := client.Clone(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("pane view connection: %w", err)
+	}
 
 	m := &Model{
 		client:             client,
+		paneViewClient:     paneViewClient,
 		state:              StateDashboard,
 		tab:                TabDashboard,
 		configPath:         configPath,
@@ -139,6 +156,7 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 		selectionByProject: make(map[string]selectionState),
 		paneViews:          make(map[paneViewKey]string),
 		paneMouseMotion:    make(map[string]bool),
+		paneViewProfile:    detectPaneViewProfile(),
 	}
 
 	m.filterInput = textinput.New()
@@ -173,16 +191,19 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 
 	cfg, err := loadConfig(configPath)
 	if err != nil {
+		_ = paneViewClient.Close()
 		return nil, err
 	}
 	m.config = cfg
 	settings, err := defaultDashboardConfig(cfg.Dashboard)
 	if err != nil {
+		_ = paneViewClient.Close()
 		return nil, err
 	}
 	m.settings = settings
 	keys, err := buildDashboardKeyMap(cfg.Dashboard.Keymap)
 	if err != nil {
+		_ = paneViewClient.Close()
 		return nil, err
 	}
 	m.keys = keys

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/muesli/termenv"
 )
 
 func TestWindowScrollbackCopySmoke(t *testing.T) {
@@ -24,7 +26,7 @@ func TestWindowScrollbackCopySmoke(t *testing.T) {
 	})
 
 	w.ScrollToTop()
-	view := w.ViewLipgloss(false)
+	view := w.ViewLipgloss(false, termenv.TrueColor)
 	lines := trimLinesSmoke(view)
 	if !containsLineSmoke(lines, "line00") {
 		t.Fatalf("expected scrollback to show line00, got %q", lines)

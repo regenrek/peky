@@ -59,7 +59,7 @@ func (m *Model) handleTerminalFocusInput(msg tea.KeyMsg) (tea.Cmd, bool) {
 	if !m.supportsTerminalFocus() || !m.terminalFocus {
 		return nil, false
 	}
-	if msg.String() == "esc" || key.Matches(msg, m.keys.terminalFocus) {
+	if key.Matches(msg, m.keys.terminalFocus) {
 		m.setTerminalFocus(false)
 		return m.refreshPaneViewsCmd(), true
 	}

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/muesli/termenv"
 
 	"github.com/regenrek/peakypanes/internal/sessiond"
 	"github.com/regenrek/peakypanes/internal/tui/mouse"
@@ -13,20 +14,22 @@ import (
 const paneViewTimeout = 2 * time.Second
 
 type paneViewKey struct {
-	PaneID     string
-	Cols       int
-	Rows       int
-	Mode       sessiond.PaneViewMode
-	ShowCursor bool
+	PaneID       string
+	Cols         int
+	Rows         int
+	Mode         sessiond.PaneViewMode
+	ShowCursor   bool
+	ColorProfile termenv.Profile
 }
 
 func paneViewKeyFrom(view sessiond.PaneViewResponse) paneViewKey {
 	return paneViewKey{
-		PaneID:     view.PaneID,
-		Cols:       view.Cols,
-		Rows:       view.Rows,
-		Mode:       view.Mode,
-		ShowCursor: view.ShowCursor,
+		PaneID:       view.PaneID,
+		Cols:         view.Cols,
+		Rows:         view.Rows,
+		Mode:         view.Mode,
+		ShowCursor:   view.ShowCursor,
+		ColorProfile: view.ColorProfile,
 	}
 }
 
@@ -34,11 +37,19 @@ func (m *Model) refreshPaneViewsCmd() tea.Cmd {
 	if m == nil {
 		return nil
 	}
-	return m.fetchPaneViewsCmd(m.paneViewRequests())
+	if m.paneViewInFlight {
+		m.paneViewQueued = true
+		return nil
+	}
+	return m.startPaneViewFetch(m.paneViewRequests())
 }
 
 func (m *Model) refreshPaneViewFor(paneID string) tea.Cmd {
 	if m == nil || paneID == "" {
+		return nil
+	}
+	if m.paneViewInFlight {
+		m.queuePaneViewID(paneID)
 		return nil
 	}
 	hit, ok := m.paneHitFor(paneID)
@@ -49,7 +60,7 @@ func (m *Model) refreshPaneViewFor(paneID string) tea.Cmd {
 	if req == nil {
 		return nil
 	}
-	return m.fetchPaneViewsCmd([]sessiond.PaneViewRequest{*req})
+	return m.startPaneViewFetch([]sessiond.PaneViewRequest{*req})
 }
 
 func (m *Model) paneHitFor(paneID string) (mouse.PaneHit, bool) {
@@ -74,11 +85,62 @@ func (m *Model) paneViewRequests() []sessiond.PaneViewRequest {
 			continue
 		}
 		key := paneViewKey{
-			PaneID:     req.PaneID,
-			Cols:       req.Cols,
-			Rows:       req.Rows,
-			Mode:       req.Mode,
-			ShowCursor: req.ShowCursor,
+			PaneID:       req.PaneID,
+			Cols:         req.Cols,
+			Rows:         req.Rows,
+			Mode:         req.Mode,
+			ShowCursor:   req.ShowCursor,
+			ColorProfile: req.ColorProfile,
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		reqs = append(reqs, *req)
+	}
+	return reqs
+}
+
+func (m *Model) startPaneViewFetch(reqs []sessiond.PaneViewRequest) tea.Cmd {
+	if m == nil || m.client == nil || len(reqs) == 0 {
+		return nil
+	}
+	m.paneViewInFlight = true
+	return m.fetchPaneViewsCmd(reqs)
+}
+
+func (m *Model) queuePaneViewID(paneID string) {
+	if m == nil || paneID == "" {
+		return
+	}
+	if m.paneViewQueuedIDs == nil {
+		m.paneViewQueuedIDs = make(map[string]struct{})
+	}
+	m.paneViewQueuedIDs[paneID] = struct{}{}
+}
+
+func (m *Model) paneViewRequestsForIDs(ids map[string]struct{}) []sessiond.PaneViewRequest {
+	if m == nil || len(ids) == 0 {
+		return nil
+	}
+	reqs := make([]sessiond.PaneViewRequest, 0, len(ids))
+	seen := make(map[paneViewKey]struct{})
+	for paneID := range ids {
+		hit, ok := m.paneHitFor(paneID)
+		if !ok {
+			continue
+		}
+		req := m.paneViewRequestForHit(hit)
+		if req == nil {
+			continue
+		}
+		key := paneViewKey{
+			PaneID:       req.PaneID,
+			Cols:         req.Cols,
+			Rows:         req.Rows,
+			Mode:         req.Mode,
+			ShowCursor:   req.ShowCursor,
+			ColorProfile: req.ColorProfile,
 		}
 		if _, ok := seen[key]; ok {
 			continue
@@ -110,19 +172,26 @@ func (m *Model) paneViewRequestForHit(hit mouse.PaneHit) *sessiond.PaneViewReque
 		}
 	}
 	return &sessiond.PaneViewRequest{
-		PaneID:     hit.PaneID,
-		Cols:       cols,
-		Rows:       rows,
-		Mode:       mode,
-		ShowCursor: showCursor,
+		PaneID:       hit.PaneID,
+		Cols:         cols,
+		Rows:         rows,
+		Mode:         mode,
+		ShowCursor:   showCursor,
+		ColorProfile: m.paneViewProfile,
 	}
 }
 
 func (m *Model) fetchPaneViewsCmd(reqs []sessiond.PaneViewRequest) tea.Cmd {
-	if m == nil || m.client == nil || len(reqs) == 0 {
+	if m == nil || len(reqs) == 0 {
 		return nil
 	}
-	client := m.client
+	client := m.paneViewClient
+	if client == nil {
+		client = m.client
+	}
+	if client == nil {
+		return nil
+	}
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), paneViewTimeout)
 		defer cancel()
@@ -145,19 +214,24 @@ func (m *Model) fetchPaneViewsCmd(reqs []sessiond.PaneViewRequest) tea.Cmd {
 	}
 }
 
-func (m Model) paneView(paneID string, cols, rows int, mode sessiond.PaneViewMode, showCursor bool) string {
+func (m Model) paneView(paneID string, cols, rows int, mode sessiond.PaneViewMode, showCursor bool, profile termenv.Profile) string {
 	if paneID == "" || cols <= 0 || rows <= 0 {
 		return ""
 	}
 	key := paneViewKey{
-		PaneID:     paneID,
-		Cols:       cols,
-		Rows:       rows,
-		Mode:       mode,
-		ShowCursor: showCursor,
+		PaneID:       paneID,
+		Cols:         cols,
+		Rows:         rows,
+		Mode:         mode,
+		ShowCursor:   showCursor,
+		ColorProfile: profile,
 	}
 	if m.paneViews == nil {
 		return ""
 	}
 	return m.paneViews[key]
+}
+
+func detectPaneViewProfile() termenv.Profile {
+	return termenv.EnvColorProfile()
 }

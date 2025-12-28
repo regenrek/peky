@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/muesli/termenv"
 
 	"github.com/regenrek/peakypanes/internal/vt"
 )
@@ -109,7 +110,7 @@ func TestScrollbackOffsetAndRender(t *testing.T) {
 		t.Fatalf("offset=%d", got)
 	}
 
-	view := w.ViewLipgloss(false)
+	view := w.ViewLipgloss(false, termenv.TrueColor)
 	lines := trimLines(view)
 
 	// offset=2, sbLen=5 -> topAbsY=3 -> S3,S4,A0

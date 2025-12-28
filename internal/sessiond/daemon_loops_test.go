@@ -48,7 +48,7 @@ func TestReadLoopHandlesHello(t *testing.T) {
 		t.Fatalf("encode request: %v", err)
 	}
 
-	resp := <-client.sendCh
+	resp := <-client.respCh
 	if resp.Kind != EnvelopeResponse || resp.Op != OpHello {
 		t.Fatalf("unexpected response: %#v", resp)
 	}
@@ -76,7 +76,7 @@ func TestWriteLoopSendsEnvelope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encodePayload: %v", err)
 	}
-	client.sendCh <- Envelope{Kind: EnvelopeResponse, Op: OpHello, ID: 1, Payload: payload}
+	client.respCh <- Envelope{Kind: EnvelopeResponse, Op: OpHello, ID: 1, Payload: payload}
 
 	dec := gob.NewDecoder(c2)
 	var got Envelope

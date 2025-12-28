@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/muesli/termenv"
 
 	"github.com/regenrek/peakypanes/internal/sessiond"
 	"github.com/regenrek/peakypanes/internal/tui/mouse"
@@ -56,20 +57,26 @@ func TestPaneViewHelpers(t *testing.T) {
 	hit := mouse.PaneHit{PaneID: "p1", Content: mouse.Rect{X: 0, Y: 0, W: 12, H: 6}}
 
 	req := m.paneViewRequestForHit(hit)
-	if req == nil || req.Mode != sessiond.PaneViewANSI || req.ShowCursor {
+	if req == nil || req.Mode != sessiond.PaneViewANSI || req.ShowCursor || req.ColorProfile != termenv.TrueColor {
 		t.Fatalf("expected ANSI pane view request")
 	}
 
 	m.client = &sessiond.Client{}
 	m.terminalFocus = true
 	req = m.paneViewRequestForHit(hit)
-	if req == nil || req.Mode != sessiond.PaneViewLipgloss || !req.ShowCursor {
+	if req == nil || req.Mode != sessiond.PaneViewLipgloss || !req.ShowCursor || req.ColorProfile != termenv.TrueColor {
 		t.Fatalf("expected lipgloss pane view request")
 	}
 
-	key := paneViewKeyFrom(sessiond.PaneViewResponse{PaneID: "p1", Cols: 12, Rows: 6, Mode: sessiond.PaneViewANSI})
+	key := paneViewKeyFrom(sessiond.PaneViewResponse{
+		PaneID:       "p1",
+		Cols:         12,
+		Rows:         6,
+		Mode:         sessiond.PaneViewANSI,
+		ColorProfile: termenv.TrueColor,
+	})
 	m.paneViews[key] = "view"
-	if got := m.paneView("p1", 12, 6, sessiond.PaneViewANSI, false); got != "view" {
+	if got := m.paneView("p1", 12, 6, sessiond.PaneViewANSI, false, termenv.TrueColor); got != "view" {
 		t.Fatalf("expected pane view lookup, got %q", got)
 	}
 

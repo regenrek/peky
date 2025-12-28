@@ -52,12 +52,13 @@ type Daemon struct {
 }
 
 type clientConn struct {
-	id     uint64
-	conn   net.Conn
-	enc    *gob.Encoder
-	dec    *gob.Decoder
-	sendCh chan Envelope
-	done   chan struct{}
+	id      uint64
+	conn    net.Conn
+	enc     *gob.Encoder
+	dec     *gob.Decoder
+	respCh  chan Envelope
+	eventCh chan Envelope
+	done    chan struct{}
 }
 
 // NewDaemon creates a daemon instance.
@@ -228,12 +229,13 @@ func (d *Daemon) eventLoop() {
 func (d *Daemon) newClient(conn net.Conn) *clientConn {
 	id := d.clientSeq.Add(1)
 	return &clientConn{
-		id:     id,
-		conn:   conn,
-		enc:    gob.NewEncoder(conn),
-		dec:    gob.NewDecoder(conn),
-		sendCh: make(chan Envelope, 64),
-		done:   make(chan struct{}),
+		id:      id,
+		conn:    conn,
+		enc:     gob.NewEncoder(conn),
+		dec:     gob.NewDecoder(conn),
+		respCh:  make(chan Envelope, 64),
+		eventCh: make(chan Envelope, 128),
+		done:    make(chan struct{}),
 	}
 }
 
@@ -251,10 +253,7 @@ func (d *Daemon) removeClient(client *clientConn) {
 
 func (d *Daemon) readLoop(client *clientConn) {
 	defer d.wg.Done()
-	defer func() {
-		d.removeClient(client)
-		closeClient(client)
-	}()
+	defer d.shutdownClientConn(client)
 	for {
 		if err := client.conn.SetReadDeadline(time.Now().Add(defaultReadTimeout)); err != nil {
 			return
@@ -280,14 +279,32 @@ func (d *Daemon) writeLoop(client *clientConn) {
 	defer d.wg.Done()
 	for {
 		select {
-		case env, ok := <-client.sendCh:
-			if !ok {
+		case <-client.done:
+			return
+		case <-d.ctx.Done():
+			return
+		default:
+		}
+
+		select {
+		case env := <-client.respCh:
+			if err := d.writeEnvelope(client, env); err != nil {
+				d.shutdownClientConn(client)
 				return
 			}
-			if err := client.conn.SetWriteDeadline(time.Now().Add(defaultWriteTimeout)); err != nil {
+			continue
+		default:
+		}
+
+		select {
+		case env := <-client.respCh:
+			if err := d.writeEnvelope(client, env); err != nil {
+				d.shutdownClientConn(client)
 				return
 			}
-			if err := client.enc.Encode(env); err != nil {
+		case env := <-client.eventCh:
+			if err := d.writeEnvelope(client, env); err != nil {
+				d.shutdownClientConn(client)
 				return
 			}
 		case <-client.done:
@@ -305,7 +322,7 @@ func sendEnvelope(client *clientConn, env Envelope) error {
 	default:
 	}
 	select {
-	case client.sendCh <- env:
+	case client.respCh <- env:
 		return nil
 	case <-client.done:
 		return errors.New("sessiond: client closed")
@@ -324,7 +341,27 @@ func closeClient(client *clientConn) {
 	if client.conn != nil {
 		_ = client.conn.Close()
 	}
-	close(client.sendCh)
+}
+
+func (d *Daemon) shutdownClientConn(client *clientConn) {
+	if client == nil {
+		return
+	}
+	d.removeClient(client)
+	closeClient(client)
+}
+
+func (d *Daemon) writeEnvelope(client *clientConn, env Envelope) error {
+	if client == nil {
+		return errors.New("sessiond: client unavailable")
+	}
+	if err := client.conn.SetWriteDeadline(time.Now().Add(defaultWriteTimeout)); err != nil {
+		return err
+	}
+	if err := client.enc.Encode(env); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (d *Daemon) broadcast(event Event) {
@@ -340,7 +377,12 @@ func (d *Daemon) broadcast(event Event) {
 	env := Envelope{Kind: EnvelopeEvent, Event: event.Type, Payload: payload}
 	for _, client := range d.clients {
 		select {
-		case client.sendCh <- env:
+		case <-client.done:
+			continue
+		default:
+		}
+		select {
+		case client.eventCh <- env:
 		default:
 		}
 	}

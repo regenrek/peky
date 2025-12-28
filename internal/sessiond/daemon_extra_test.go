@@ -9,15 +9,16 @@ import (
 
 func TestSendEnvelopeAndCloseClient(t *testing.T) {
 	client := &clientConn{
-		sendCh: make(chan Envelope, 1),
-		done:   make(chan struct{}),
+		respCh:  make(chan Envelope, 1),
+		eventCh: make(chan Envelope, 1),
+		done:    make(chan struct{}),
 	}
 	env := Envelope{Kind: EnvelopeResponse, Op: OpHello, ID: 1}
 	if err := sendEnvelope(client, env); err != nil {
 		t.Fatalf("sendEnvelope: %v", err)
 	}
 	select {
-	case got := <-client.sendCh:
+	case got := <-client.respCh:
 		if got.Op != OpHello || got.ID != 1 {
 			t.Fatalf("unexpected envelope: %#v", got)
 		}
@@ -33,12 +34,10 @@ func TestSendEnvelopeAndCloseClient(t *testing.T) {
 	c1, c2 := net.Pipe()
 	defer func() { _ = c2.Close() }()
 	client.conn = c1
-	client.sendCh = make(chan Envelope, 1)
+	client.respCh = make(chan Envelope, 1)
+	client.eventCh = make(chan Envelope, 1)
 	client.done = make(chan struct{})
 	closeClient(client)
-	if _, ok := <-client.sendCh; ok {
-		t.Fatalf("expected send channel closed")
-	}
 	select {
 	case <-client.done:
 	default:
@@ -48,8 +47,8 @@ func TestSendEnvelopeAndCloseClient(t *testing.T) {
 
 func TestBroadcast(t *testing.T) {
 	d := &Daemon{clients: make(map[uint64]*clientConn)}
-	clientA := &clientConn{sendCh: make(chan Envelope, 1)}
-	clientB := &clientConn{sendCh: make(chan Envelope, 1)}
+	clientA := &clientConn{eventCh: make(chan Envelope, 1), done: make(chan struct{})}
+	clientB := &clientConn{eventCh: make(chan Envelope, 1), done: make(chan struct{})}
 	d.clients[1] = clientA
 	d.clients[2] = clientB
 
@@ -57,7 +56,7 @@ func TestBroadcast(t *testing.T) {
 
 	for _, client := range []*clientConn{clientA, clientB} {
 		select {
-		case env := <-client.sendCh:
+		case env := <-client.eventCh:
 			var evt Event
 			if err := decodePayload(env.Payload, &evt); err != nil {
 				t.Fatalf("decode payload: %v", err)

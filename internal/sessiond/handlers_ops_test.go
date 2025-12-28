@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/muesli/termenv"
+
 	"github.com/regenrek/peakypanes/internal/native"
 )
 
@@ -13,11 +15,13 @@ type stubPaneView struct {
 	lipglossCalled bool
 	ansiCalled     bool
 	showCursor     bool
+	profile        termenv.Profile
 }
 
-func (s *stubPaneView) ViewLipgloss(showCursor bool) string {
+func (s *stubPaneView) ViewLipgloss(showCursor bool, profile termenv.Profile) string {
 	s.lipglossCalled = true
 	s.showCursor = showCursor
+	s.profile = profile
 	return "lipgloss"
 }
 
@@ -52,8 +56,8 @@ func TestNormalizeDimensions(t *testing.T) {
 
 func TestPaneViewString(t *testing.T) {
 	win := &stubPaneView{}
-	out := paneViewString(win, PaneViewRequest{Mode: PaneViewLipgloss, ShowCursor: true})
-	if out != "lipgloss" || !win.lipglossCalled || !win.showCursor {
+	out := paneViewString(win, PaneViewRequest{Mode: PaneViewLipgloss, ShowCursor: true, ColorProfile: termenv.ANSI256})
+	if out != "lipgloss" || !win.lipglossCalled || !win.showCursor || win.profile != termenv.ANSI256 {
 		t.Fatalf("expected lipgloss render")
 	}
 

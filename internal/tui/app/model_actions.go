@@ -84,9 +84,13 @@ func (m *Model) startNewSessionWithLayout(layoutName string) tea.Cmd {
 
 func (m *Model) shutdownCmd() tea.Cmd {
 	client := m.client
+	paneViewClient := m.paneViewClient
 	return func() tea.Msg {
 		if client != nil {
 			_ = client.Close()
+		}
+		if paneViewClient != nil && paneViewClient != client {
+			_ = paneViewClient.Close()
 		}
 		return nil
 	}

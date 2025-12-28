@@ -9,7 +9,7 @@ This format is based on Keep a Changelog.
 - Native multiplexer manager with PTY/VT panes and full-screen TUI support.
 - Live pane rendering in the dashboard and project views for native sessions.
 - Terminal focus toggle for native panes (default `ctrl+\`, configurable).
-- Native mouse support in the dashboard: single-click selects panes, double-click toggles terminal focus, ESC exits focus, and motion forwarding is throttled to avoid CPU spikes.
+- Native mouse support in the dashboard: single-click selects panes, double-click toggles terminal focus, and motion forwarding is throttled to avoid CPU spikes.
 - Project config change detection to refresh selection without reopening projects.
 - Pane management actions: add pane (split), move pane to new window, swap panes, and close pane with a running-process confirmation.
 - Session-only jump keys (`alt+w` / `alt+s`) alongside the flat session/window navigation.
@@ -34,6 +34,11 @@ This format is based on Keep a Changelog.
 - Native manager no longer panics on shutdown when pane updates arrive after close.
 - Project tabs and pane lists no longer reorder during rapid navigation thanks to deterministic ordering.
 - Stale refresh results are ignored so fast navigation cannot apply out-of-order snapshots.
+- Terminal focus no longer exits on Escape, so ESC passes through to in-pane TUIs.
+- Terminal focus pane rendering now preserves ANSI colors by honoring the client color profile.
+- Pane view refreshes are serialized and queued to avoid daemon socket write timeouts under rapid updates.
+- Refresh snapshots no longer time out behind pane view rendering thanks to a dedicated pane view connection.
+- Daemon transport now shuts down dead client links and client writes honor request deadlines to prevent refresh timeouts.
 
 ## 0.0.4 - 2025-12-25
 

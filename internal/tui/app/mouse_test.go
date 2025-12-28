@@ -51,14 +51,14 @@ func TestMouseDoubleClickEntersFocus(t *testing.T) {
 	}
 }
 
-func TestEscExitsTerminalFocus(t *testing.T) {
+func TestEscKeepsTerminalFocus(t *testing.T) {
 	m := newTestModel(t)
 	seedMouseTestData(m)
 	m.setTerminalFocus(true)
 
 	_, _ = m.updateDashboard(tea.KeyMsg{Type: tea.KeyEsc})
-	if m.terminalFocus {
-		t.Fatalf("terminalFocus should be false after esc")
+	if !m.terminalFocus {
+		t.Fatalf("terminalFocus should remain true after esc")
 	}
 }
 

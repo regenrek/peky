@@ -4,12 +4,13 @@ import (
 	"context"
 
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/muesli/termenv"
 
 	"github.com/regenrek/peakypanes/internal/native"
 )
 
 type paneViewWindow interface {
-	ViewLipgloss(showCursor bool) string
+	ViewLipgloss(showCursor bool, profile termenv.Profile) string
 	ViewANSI() string
 }
 

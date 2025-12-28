@@ -10,6 +10,7 @@ import (
 
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
 )
 
 func TestLooksLikeCPR(t *testing.T) {
@@ -299,7 +300,7 @@ func TestViewANSIAndRenderHelpers(t *testing.T) {
 		},
 	}
 	term := &renderTerm{cell: cell, cursor: uv.Pos(0, 0)}
-	out := RenderEmulatorLipgloss(term, 1, 1, RenderOptions{ShowCursor: true})
+	out := RenderEmulatorLipgloss(term, 1, 1, RenderOptions{ShowCursor: true, Profile: termenv.TrueColor})
 	if !strings.Contains(out, "A") {
 		t.Fatalf("expected rendered cell, got %q", out)
 	}

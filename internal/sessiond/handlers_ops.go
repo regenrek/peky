@@ -301,14 +301,15 @@ func (d *Daemon) handlePaneView(payload []byte) ([]byte, error) {
 	_ = win.Resize(cols, rows)
 	view := paneViewString(win, req)
 	resp := PaneViewResponse{
-		PaneID:      paneID,
-		Cols:        cols,
-		Rows:        rows,
-		Mode:        req.Mode,
-		ShowCursor:  req.ShowCursor,
-		View:        view,
-		HasMouse:    win.HasMouseMode(),
-		AllowMotion: win.AllowsMouseMotion(),
+		PaneID:       paneID,
+		Cols:         cols,
+		Rows:         rows,
+		Mode:         req.Mode,
+		ShowCursor:   req.ShowCursor,
+		ColorProfile: req.ColorProfile,
+		View:         view,
+		HasMouse:     win.HasMouseMode(),
+		AllowMotion:  win.AllowsMouseMotion(),
 	}
 	return encodePayload(resp)
 }
@@ -358,7 +359,7 @@ func normalizeDimensions(cols, rows int) (int, int) {
 func paneViewString(win paneViewWindow, req PaneViewRequest) string {
 	switch req.Mode {
 	case PaneViewLipgloss:
-		return win.ViewLipgloss(req.ShowCursor)
+		return win.ViewLipgloss(req.ShowCursor, req.ColorProfile)
 	default:
 		return win.ViewANSI()
 	}

@@ -3,11 +3,13 @@ package terminal
 import (
 	"fmt"
 	"image/color"
+	"io"
 	"reflect"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/muesli/termenv"
 )
 
 // ViewANSI returns the VT's own ANSI-rendered screen.
@@ -45,7 +47,7 @@ func (w *Window) ViewANSI() string {
 
 // ViewLipgloss renders the VT screen by walking cells and applying lipgloss styles.
 // This is useful when you need to composite the pane inside other lipgloss layouts.
-func (w *Window) ViewLipgloss(showCursor bool) string {
+func (w *Window) ViewLipgloss(showCursor bool, profile termenv.Profile) string {
 	if w == nil {
 		return ""
 	}
@@ -65,6 +67,7 @@ func (w *Window) ViewLipgloss(showCursor bool) string {
 		CursorX:    state.cursorX,
 		CursorY:    state.cursorY,
 		Highlight:  state.highlight,
+		Profile:    profile,
 	}
 
 	return renderCellsLipgloss(w.cols, w.rows, cellAt, opts)
@@ -79,6 +82,8 @@ type RenderOptions struct {
 	ShowCursor bool
 	CursorX    int
 	CursorY    int
+
+	Profile termenv.Profile
 
 	// Optional: override cursor/selection highlights.
 	Highlight func(x, y int) (cursor bool, selection bool)
@@ -231,16 +236,29 @@ type lipglossRenderer struct {
 	rows       int
 	cellAt     func(x, y int) *uv.Cell
 	opts       RenderOptions
+	renderer   *lipgloss.Renderer
 	styleCache map[renderKey]lipgloss.Style
 }
 
 func newLipglossRenderer(cols, rows int, cellAt func(x, y int) *uv.Cell, opts RenderOptions) *lipglossRenderer {
+	renderer := lipgloss.NewRenderer(io.Discard)
+	renderer.SetColorProfile(normalizeProfile(opts.Profile))
 	return &lipglossRenderer{
 		cols:       cols,
 		rows:       rows,
 		cellAt:     cellAt,
 		opts:       opts,
+		renderer:   renderer,
 		styleCache: make(map[renderKey]lipgloss.Style, 128),
+	}
+}
+
+func normalizeProfile(profile termenv.Profile) termenv.Profile {
+	switch profile {
+	case termenv.TrueColor, termenv.ANSI256, termenv.ANSI, termenv.Ascii:
+		return profile
+	default:
+		return termenv.TrueColor
 	}
 }
 
@@ -307,7 +325,7 @@ func (r *lipglossRenderer) styleForKey(k renderKey) lipgloss.Style {
 	if st, ok := r.styleCache[k]; ok {
 		return st
 	}
-	st := lipgloss.NewStyle()
+	st := r.renderer.NewStyle()
 	if k.fg != "" {
 		st = st.Foreground(lipgloss.Color(k.fg))
 	}
@@ -379,6 +397,7 @@ func RenderEmulatorLipgloss(term interface {
 		CursorX:    cursor.X,
 		CursorY:    cursor.Y,
 		Highlight:  opts.Highlight,
+		Profile:    opts.Profile,
 	})
 }
 

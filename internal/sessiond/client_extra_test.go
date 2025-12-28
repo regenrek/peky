@@ -6,6 +6,7 @@ import (
 	"net"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/regenrek/peakypanes/internal/native"
 )
@@ -127,7 +128,7 @@ func TestClientPaneOps(t *testing.T) {
 
 func TestClientSendNoConn(t *testing.T) {
 	c := &Client{}
-	if err := c.send(Envelope{}); err == nil {
+	if err := c.send(context.Background(), Envelope{}); err == nil {
 		t.Fatalf("expected send error")
 	}
 }
@@ -200,17 +201,19 @@ func encodeMust(t *testing.T, v any) []byte {
 
 func waitForEvent(t *testing.T, ch <-chan Event) Event {
 	t.Helper()
-	for i := 0; i < 2000; i++ {
+	deadline := time.After(250 * time.Millisecond)
+	for {
 		select {
 		case evt, ok := <-ch:
 			if !ok {
 				t.Fatalf("events channel closed")
 			}
 			return evt
+		case <-deadline:
+			t.Fatalf("expected event")
 		default:
 			runtime.Gosched()
 		}
 	}
-	t.Fatalf("expected event")
 	return Event{}
 }

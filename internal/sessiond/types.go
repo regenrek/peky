@@ -1,6 +1,10 @@
 package sessiond
 
-import "github.com/regenrek/peakypanes/internal/native"
+import (
+	"github.com/muesli/termenv"
+
+	"github.com/regenrek/peakypanes/internal/native"
+)
 
 // Op identifies the request/response operation.
 type Op string
@@ -181,23 +185,25 @@ const (
 
 // PaneViewRequest asks for a rendered pane view.
 type PaneViewRequest struct {
-	PaneID     string
-	Cols       int
-	Rows       int
-	Mode       PaneViewMode
-	ShowCursor bool
+	PaneID       string
+	Cols         int
+	Rows         int
+	Mode         PaneViewMode
+	ShowCursor   bool
+	ColorProfile termenv.Profile
 }
 
 // PaneViewResponse returns a rendered pane view.
 type PaneViewResponse struct {
-	PaneID      string
-	Cols        int
-	Rows        int
-	Mode        PaneViewMode
-	ShowCursor  bool
-	View        string
-	HasMouse    bool
-	AllowMotion bool
+	PaneID       string
+	Cols         int
+	Rows         int
+	Mode         PaneViewMode
+	ShowCursor   bool
+	ColorProfile termenv.Profile
+	View         string
+	HasMouse     bool
+	AllowMotion  bool
 }
 
 // TerminalAction identifies scrollback/copy-mode actions.

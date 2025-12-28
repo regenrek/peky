@@ -3,6 +3,8 @@ package app
 import (
 	"testing"
 
+	"github.com/muesli/termenv"
+
 	"github.com/regenrek/peakypanes/internal/sessiond"
 )
 
@@ -77,9 +79,16 @@ func TestPaneViewRequestsAndLookup(t *testing.T) {
 		t.Fatalf("expected pane view request, got %#v", req)
 	}
 
-	key := paneViewKey{PaneID: "p1", Cols: req.Cols, Rows: req.Rows, Mode: sessiond.PaneViewANSI, ShowCursor: false}
+	key := paneViewKey{
+		PaneID:       "p1",
+		Cols:         req.Cols,
+		Rows:         req.Rows,
+		Mode:         sessiond.PaneViewANSI,
+		ShowCursor:   false,
+		ColorProfile: termenv.TrueColor,
+	}
 	m.paneViews[key] = "view"
-	if got := m.paneView("p1", req.Cols, req.Rows, sessiond.PaneViewANSI, false); got != "view" {
+	if got := m.paneView("p1", req.Cols, req.Rows, sessiond.PaneViewANSI, false, termenv.TrueColor); got != "view" {
 		t.Fatalf("expected pane view lookup, got %q", got)
 	}
 }

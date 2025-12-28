@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/muesli/termenv"
 
 	"github.com/regenrek/peakypanes/internal/native"
 )
@@ -87,7 +88,14 @@ func TestHandlePaneViewSuccess(t *testing.T) {
 	manager := &fakeManager{windowID: "pane-1", window: win}
 	d := &Daemon{manager: manager}
 
-	payload, err := encodePayload(PaneViewRequest{PaneID: "pane-1", Cols: 0, Rows: 0, Mode: PaneViewLipgloss, ShowCursor: true})
+	payload, err := encodePayload(PaneViewRequest{
+		PaneID:       "pane-1",
+		Cols:         0,
+		Rows:         0,
+		Mode:         PaneViewLipgloss,
+		ShowCursor:   true,
+		ColorProfile: termenv.ANSI256,
+	})
 	if err != nil {
 		t.Fatalf("encodePayload: %v", err)
 	}
@@ -101,6 +109,9 @@ func TestHandlePaneViewSuccess(t *testing.T) {
 	}
 	if resp.View != "lip" || resp.PaneID != "pane-1" {
 		t.Fatalf("unexpected pane view response: %#v", resp)
+	}
+	if resp.ColorProfile != termenv.ANSI256 {
+		t.Fatalf("expected color profile echoed, got %v", resp.ColorProfile)
 	}
 	if win.resizeCols != 1 || win.resizeRows != 1 {
 		t.Fatalf("expected resize to 1x1, got %dx%d", win.resizeCols, win.resizeRows)

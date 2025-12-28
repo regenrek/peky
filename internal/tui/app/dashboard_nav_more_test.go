@@ -65,7 +65,7 @@ func TestTerminalFocusInput(t *testing.T) {
 	if cmd, handled := m.handleTerminalFocusInput(tea.KeyMsg{Type: tea.KeyEsc}); !handled || cmd == nil {
 		t.Fatalf("expected terminal focus escape handled")
 	}
-	if m.terminalFocus {
-		t.Fatalf("expected terminal focus disabled")
+	if !m.terminalFocus {
+		t.Fatalf("expected terminal focus to remain enabled")
 	}
 }

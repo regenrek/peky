@@ -25,8 +25,12 @@ func TestDashboardActionsAndNav(t *testing.T) {
 	}
 
 	m.updateDashboard(tea.KeyMsg{Type: tea.KeyEsc})
+	if !m.terminalFocus {
+		t.Fatalf("expected terminal focus to remain enabled")
+	}
+	m.updateDashboard(keyRune('t'))
 	if m.terminalFocus {
-		t.Fatalf("expected terminal focus disabled")
+		t.Fatalf("expected terminal focus disabled via toggle")
 	}
 
 	m.tab = TabProject

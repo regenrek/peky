@@ -376,6 +376,8 @@ func (m *Model) sendQuickReply() tea.Cmd {
 	if pane == nil || strings.TrimSpace(pane.ID) == "" {
 		return NewWarningCmd("No pane selected")
 	}
+	paneID := strings.TrimSpace(pane.ID)
+	payload := quickReplyTextBytes(*pane, text)
 	label := strings.TrimSpace(pane.Title)
 	if label == "" {
 		label = fmt.Sprintf("pane %s", pane.Index)
@@ -386,10 +388,10 @@ func (m *Model) sendQuickReply() tea.Cmd {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), terminalActionTimeout)
 		defer cancel()
-		if err := m.client.SendInput(ctx, pane.ID, []byte(text)); err != nil {
+		if err := m.client.SendInput(ctx, paneID, payload); err != nil {
 			return ErrorMsg{Err: err, Context: "send to pane"}
 		}
-		if err := m.client.SendInput(ctx, pane.ID, []byte{'\r'}); err != nil {
+		if err := m.client.SendInput(ctx, paneID, []byte{'\r'}); err != nil {
 			return ErrorMsg{Err: err, Context: "send to pane"}
 		}
 		if label != "" {

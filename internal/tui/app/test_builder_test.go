@@ -3,6 +3,7 @@ package app
 import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/muesli/termenv"
 )
 
 func newTestModelLite() *Model {
@@ -15,6 +16,7 @@ func newTestModelLite() *Model {
 		selectionByProject: make(map[string]selectionState),
 		paneViews:          make(map[paneViewKey]string),
 		paneMouseMotion:    make(map[string]bool),
+		paneViewProfile:    termenv.TrueColor,
 		settings: DashboardConfig{
 			PreviewMode:    "grid",
 			PreviewLines:   12,

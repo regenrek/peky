@@ -66,6 +66,7 @@ Desktop.ini
 
 # Project-specific
 # Add any project-specific ignore patterns here
+peakypanes
 
 docs/internal
 .spezi

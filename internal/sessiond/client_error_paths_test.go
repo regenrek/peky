@@ -3,6 +3,9 @@ package sessiond
 import (
 	"context"
 	"encoding/gob"
+	"errors"
+	"io"
+	"net"
 	"testing"
 	"time"
 )
@@ -17,7 +20,7 @@ func TestClientNilAndSendErrors(t *testing.T) {
 	}
 
 	c = &Client{}
-	if err := c.send(Envelope{Kind: EnvelopeRequest}); err == nil {
+	if err := c.send(context.Background(), Envelope{Kind: EnvelopeRequest}); err == nil {
 		t.Fatalf("expected send error without conn")
 	}
 }
@@ -104,7 +107,7 @@ func TestClientSendSuccess(t *testing.T) {
 		var env Envelope
 		done <- dec.Decode(&env)
 	}()
-	if err := client.send(Envelope{Kind: EnvelopeRequest, Op: OpHello, ID: 1}); err != nil {
+	if err := client.send(context.Background(), Envelope{Kind: EnvelopeRequest, Op: OpHello, ID: 1}); err != nil {
 		t.Fatalf("send: %v", err)
 	}
 	if err := <-done; err != nil {
@@ -137,5 +140,52 @@ func TestClientHelloError(t *testing.T) {
 	}
 	if err := <-errCh; err != nil {
 		t.Fatalf("server error: %v", err)
+	}
+}
+
+type timeoutConn struct {
+	started chan struct{}
+	done    <-chan struct{}
+}
+
+func (c *timeoutConn) Read([]byte) (int, error) { return 0, io.EOF }
+func (c *timeoutConn) Write([]byte) (int, error) {
+	select {
+	case <-c.started:
+	default:
+		close(c.started)
+	}
+	<-c.done
+	return 0, timeoutErr{}
+}
+func (c *timeoutConn) Close() error                     { return nil }
+func (c *timeoutConn) LocalAddr() net.Addr              { return dummyAddr("local") }
+func (c *timeoutConn) RemoteAddr() net.Addr             { return dummyAddr("remote") }
+func (c *timeoutConn) SetDeadline(time.Time) error      { return nil }
+func (c *timeoutConn) SetReadDeadline(time.Time) error  { return nil }
+func (c *timeoutConn) SetWriteDeadline(time.Time) error { return nil }
+
+type dummyAddr string
+
+func (d dummyAddr) Network() string { return string(d) }
+func (d dummyAddr) String() string  { return string(d) }
+
+func TestClientSendHonorsContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	started := make(chan struct{})
+	conn := &timeoutConn{started: started, done: ctx.Done()}
+	client := &Client{conn: conn, enc: gob.NewEncoder(conn)}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- client.send(ctx, Envelope{Kind: EnvelopeRequest, Op: OpHello, ID: 1})
+	}()
+
+	<-started
+	cancel()
+
+	err := <-errCh
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context cancellation error, got %v", err)
 	}
 }

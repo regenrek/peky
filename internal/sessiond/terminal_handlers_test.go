@@ -1,6 +1,10 @@
 package sessiond
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/muesli/termenv"
+)
 
 type fakeTerminalWindow struct {
 	altScreen     bool
@@ -59,7 +63,7 @@ func (f *fakeTerminalWindow) ScrollToBottom()            { f.record("scrollBotto
 func (f *fakeTerminalWindow) ScrollToTop()               { f.record("scrollTop") }
 func (f *fakeTerminalWindow) ScrollUp(lines int)         { f.record("scrollUp") }
 func (f *fakeTerminalWindow) ScrollbackModeActive() bool { return f.scrollback }
-func (f *fakeTerminalWindow) ViewLipgloss(showCursor bool) string {
+func (f *fakeTerminalWindow) ViewLipgloss(showCursor bool, profile termenv.Profile) string {
 	f.record("viewLipgloss")
 	return f.viewLipgloss
 }

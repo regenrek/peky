@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -82,6 +83,22 @@ func (c *Client) Events() <-chan Event {
 	return c.events
 }
 
+// Clone opens a new client connection to the same daemon.
+func (c *Client) Clone(ctx context.Context) (*Client, error) {
+	if c == nil {
+		return nil, errors.New("sessiond: client is nil")
+	}
+	socketPath := strings.TrimSpace(c.socketPath)
+	if socketPath == "" {
+		return nil, errors.New("sessiond: socket path unavailable")
+	}
+	version := strings.TrimSpace(c.version)
+	if version == "" {
+		return nil, errors.New("sessiond: version unavailable")
+	}
+	return Dial(ctx, socketPath, version)
+}
+
 func (c *Client) hello(ctx context.Context) error {
 	_, err := c.call(ctx, OpHello, HelloRequest{Version: c.version}, &HelloResponse{})
 	if err != nil {
@@ -144,7 +161,7 @@ func (c *Client) call(ctx context.Context, op Op, req any, out any) (Envelope, e
 	c.pendingMu.Lock()
 	c.pending[id] = respCh
 	c.pendingMu.Unlock()
-	if err := c.send(Envelope{Kind: EnvelopeRequest, Op: op, ID: id, Payload: payload}); err != nil {
+	if err := c.send(ctx, Envelope{Kind: EnvelopeRequest, Op: op, ID: id, Payload: payload}); err != nil {
 		c.pendingMu.Lock()
 		delete(c.pending, id)
 		c.pendingMu.Unlock()
@@ -172,16 +189,30 @@ func (c *Client) call(ctx context.Context, op Op, req any, out any) (Envelope, e
 	}
 }
 
-func (c *Client) send(env Envelope) error {
+func (c *Client) send(ctx context.Context, env Envelope) error {
 	if c.conn == nil {
 		return errors.New("sessiond: connection unavailable")
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	c.sendMu.Lock()
 	defer c.sendMu.Unlock()
-	if err := c.conn.SetWriteDeadline(time.Now().Add(defaultWriteTimeout)); err != nil {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	deadline := time.Now().Add(defaultWriteTimeout)
+	if dl, ok := ctx.Deadline(); ok && dl.Before(deadline) {
+		deadline = dl
+	}
+	if err := c.conn.SetWriteDeadline(deadline); err != nil {
 		return err
 	}
 	if err := c.enc.Encode(env); err != nil {
+		if ctx.Err() != nil && isTimeout(err) {
+			return ctx.Err()
+		}
 		return err
 	}
 	return nil

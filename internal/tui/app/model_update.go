@@ -31,8 +31,7 @@ func (m *Model) handleUpdateMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case daemonEventMsg:
 		return m, m.handleDaemonEvent(msg), true
 	case paneViewsMsg:
-		m.handlePaneViews(msg)
-		return m, nil, true
+		return m, m.handlePaneViews(msg), true
 	case sessionStartedMsg:
 		return m, m.handleSessionStarted(msg), true
 	case SuccessMsg:
@@ -215,7 +214,8 @@ func (m *Model) handleDaemonEvent(msg daemonEventMsg) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-func (m *Model) handlePaneViews(msg paneViewsMsg) {
+func (m *Model) handlePaneViews(msg paneViewsMsg) tea.Cmd {
+	var cmd tea.Cmd
 	if msg.Err != nil {
 		m.setToast("Pane view failed: "+msg.Err.Error(), toastWarning)
 	}
@@ -226,6 +226,17 @@ func (m *Model) handlePaneViews(msg paneViewsMsg) {
 			m.paneMouseMotion[view.PaneID] = view.AllowMotion
 		}
 	}
+	m.paneViewInFlight = false
+	if m.paneViewQueued {
+		m.paneViewQueued = false
+		m.paneViewQueuedIDs = nil
+		cmd = m.refreshPaneViewsCmd()
+	} else if len(m.paneViewQueuedIDs) > 0 {
+		queued := m.paneViewQueuedIDs
+		m.paneViewQueuedIDs = nil
+		cmd = m.startPaneViewFetch(m.paneViewRequestsForIDs(queued))
+	}
+	return cmd
 }
 
 func (m *Model) handleSessionStarted(msg sessionStartedMsg) tea.Cmd {

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/muesli/termenv"
 
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/sessiond"
@@ -48,8 +49,15 @@ func TestUpdateHandlers(t *testing.T) {
 		t.Fatalf("expected dashboard data applied")
 	}
 
-	view := sessiond.PaneViewResponse{PaneID: "p1", Cols: 1, Rows: 1, View: "view", AllowMotion: true}
-	m.handlePaneViews(paneViewsMsg{Views: []sessiond.PaneViewResponse{view}})
+	view := sessiond.PaneViewResponse{
+		PaneID:       "p1",
+		Cols:         1,
+		Rows:         1,
+		View:         "view",
+		AllowMotion:  true,
+		ColorProfile: termenv.TrueColor,
+	}
+	_ = m.handlePaneViews(paneViewsMsg{Views: []sessiond.PaneViewResponse{view}})
 	key := paneViewKeyFrom(view)
 	if m.paneViews[key] != "view" {
 		t.Fatalf("expected pane view stored")
@@ -58,6 +66,37 @@ func TestUpdateHandlers(t *testing.T) {
 	m.handleSessionStarted(sessionStartedMsg{Name: "alpha-1", Path: "/alpha", Focus: true})
 	if m.selection.Session != "alpha-1" {
 		t.Fatalf("expected selection updated")
+	}
+}
+
+func TestPaneViewQueueing(t *testing.T) {
+	m := newTestModelLite()
+	m.client = &sessiond.Client{}
+	m.paneViewInFlight = true
+	if cmd := m.refreshPaneViewsCmd(); cmd != nil {
+		t.Fatalf("expected nil cmd while in flight")
+	}
+	if !m.paneViewQueued {
+		t.Fatalf("expected queued refresh")
+	}
+
+	m.paneViewQueued = false
+	m.paneViewQueuedIDs = nil
+	m.paneViewInFlight = true
+	if cmd := m.refreshPaneViewFor("p1"); cmd != nil {
+		t.Fatalf("expected nil cmd while in flight")
+	}
+	if len(m.paneViewQueuedIDs) == 0 {
+		t.Fatalf("expected queued pane id")
+	}
+
+	m.paneViewInFlight = true
+	cmd := m.handlePaneViews(paneViewsMsg{Views: []sessiond.PaneViewResponse{}})
+	if cmd == nil {
+		t.Fatalf("expected follow-up pane view cmd")
+	}
+	if !m.paneViewInFlight {
+		t.Fatalf("expected in flight set for queued refresh")
 	}
 }
 

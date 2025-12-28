@@ -96,7 +96,7 @@ func (m *Model) paneViewProvider() func(id string, width, height int, showCursor
 		if showCursor {
 			mode = sessiond.PaneViewLipgloss
 		}
-		return m.paneView(id, width, height, mode, showCursor)
+		return m.paneView(id, width, height, mode, showCursor, m.paneViewProfile)
 	}
 }
 
