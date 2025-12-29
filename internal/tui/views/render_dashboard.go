@@ -406,15 +406,17 @@ func (m Model) viewFooter(width int) string {
 		paneLabel = "project"
 	}
 	modeHint := ""
+	modeHintRendered := ""
 	if m.SupportsTerminalFocus {
 		label := "terminal"
 		if m.TerminalFocus {
 			label = "terminal on"
 		}
 		modeHint = fmt.Sprintf(" · %s %s", strings.ToLower(m.Keys.TerminalFocus), label)
+		modeHintRendered = theme.TerminalFocusHint.Render(modeHint)
 	}
 	base := fmt.Sprintf(
-		"%s ←/→ project · %s ↑/↓ %s · %s %s · %s commands · %s help · %s quit%s",
+		"%s ←/→ project · %s ↑/↓ %s · %s %s · %s commands · %s help · %s quit",
 		projectKeys,
 		sessionKeys,
 		sessionLabel,
@@ -423,9 +425,8 @@ func (m Model) viewFooter(width int) string {
 		m.Keys.CommandPalette,
 		m.Keys.Help,
 		m.Keys.Quit,
-		modeHint,
 	)
-	base = theme.ListDimmed.Render(base)
+	base = theme.ListDimmed.Render(base) + modeHintRendered
 	toast := m.Toast
 	if toast == "" {
 		return fitLine(base, width)
