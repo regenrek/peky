@@ -9,19 +9,19 @@ Runs PeakyPanes from npm in a clean HOME/XDG_CONFIG_HOME so it behaves like a
 fresh install. By default it runs the dashboard in a temp project directory.
 
 Options:
-  version        npm version to run (default: 0.0.1)
+  version        npm version to run (default: 0.0.5)
   --with-project create a .peakypanes.yml in the temp project
   --cmd          custom command after version (e.g. "start --layout dev-3")
 
 Examples:
   scripts/fresh-run
-  scripts/fresh-run 0.0.1
-  scripts/fresh-run 0.0.1 --with-project
-  scripts/fresh-run 0.0.1 --cmd "start --layout dev-3"
+  scripts/fresh-run 0.0.5
+  scripts/fresh-run 0.0.5 --with-project
+  scripts/fresh-run 0.0.5 --cmd "start --layout dev-3"
 USAGE
 }
 
-version="0.0.1"
+version="0.0.5"
 with_project=false
 custom_cmd=""
 

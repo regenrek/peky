@@ -6,6 +6,16 @@ This format is based on Keep a Changelog.
 ## Unreleased
 
 ### Added
+
+### Changed
+
+### Removed
+
+### Fixed
+
+## 0.0.5 - 2025-12-29
+
+### Added
 - Native multiplexer manager with PTY/VT panes and full-screen TUI support.
 - Live pane rendering in the dashboard and project views for native sessions.
 - Terminal focus toggle for native panes (default `ctrl+\`, configurable).
