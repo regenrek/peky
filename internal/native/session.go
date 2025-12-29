@@ -52,6 +52,7 @@ func (m *Manager) SessionNames() []string {
 	for _, session := range m.sessions {
 		sessions = append(sessions, session)
 	}
+	m.mu.RUnlock()
 
 	sort.Slice(sessions, func(i, j int) bool {
 		if sessions[i].CreatedAt.Equal(sessions[j].CreatedAt) {
