@@ -54,4 +54,3 @@ func TestPadLinesKeepsRightBorderForDashboardPaneTiles(t *testing.T) {
 		}
 	}
 }
-
