@@ -210,5 +210,4 @@ func waitForEvent(t *testing.T, ch <-chan Event) Event {
 			runtime.Gosched()
 		}
 	}
-	return Event{}
 }
