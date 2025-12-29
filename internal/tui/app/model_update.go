@@ -90,6 +90,9 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	case StateConfirmCloseProject:
 		model, cmd := m.updateConfirmCloseProject(msg)
 		return model, cmd, true
+	case StateConfirmCloseAllProjects:
+		model, cmd := m.updateConfirmCloseAllProjects(msg)
+		return model, cmd, true
 	case StateConfirmClosePane:
 		model, cmd := m.updateConfirmClosePane(msg)
 		return model, cmd, true

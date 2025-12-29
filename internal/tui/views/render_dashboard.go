@@ -102,7 +102,10 @@ func (m Model) viewDashboardGrid(width, height int) string {
 	}
 	columns := m.DashboardColumns
 	if len(columns) == 0 {
-		return padLines(m.EmptyStateMessage, width, height)
+		if strings.TrimSpace(m.FilterInput.Value()) != "" {
+			return padLines("No panes match the current filter.", width, height)
+		}
+		return m.viewSplash(width, height)
 	}
 	totalPanes := 0
 	for _, column := range columns {
@@ -112,15 +115,58 @@ func (m Model) viewDashboardGrid(width, height int) string {
 		if strings.TrimSpace(m.FilterInput.Value()) != "" {
 			return padLines("No panes match the current filter.", width, height)
 		}
-		return padLines(m.EmptyStateMessage, width, height)
+		return m.viewSplash(width, height)
 	}
 	ctx := dashboardRenderContext{
 		selectionSession: m.SelectionSession,
 		selectionPane:    m.SelectionPane,
 		previewLines:     m.DashboardPreviewLines,
+		terminalFocus:    m.TerminalFocus,
 		renderer:         m.renderDashboardPaneTileLive,
 	}
 	return renderDashboardColumnsWithRenderer(columns, width, height, m.DashboardSelectedProject, ctx)
+}
+
+func (m Model) viewSplash(width, height int) string {
+	if width <= 0 || height <= 0 {
+		return ""
+	}
+	if len(m.SplashLogo) == 0 && strings.TrimSpace(m.SplashInfo) == "" {
+		return padLines(m.EmptyStateMessage, width, height)
+	}
+	lines := make([]string, 0, len(m.SplashLogo)+2)
+	for _, line := range m.SplashLogo {
+		trimmed := strings.TrimRight(line, " ")
+		lines = append(lines, centerLine(theme.LogoStyle.Render(trimmed), width))
+	}
+	info := strings.TrimSpace(m.SplashInfo)
+	if info != "" {
+		lines = append(lines, "")
+		lines = append(lines, centerLine(theme.DialogNote.Render(info), width))
+	}
+	if len(lines) == 0 {
+		return padLines(m.EmptyStateMessage, width, height)
+	}
+	contentHeight := len(lines)
+	if contentHeight >= height {
+		return padLines(strings.Join(lines, "\n"), width, height)
+	}
+	padTop := (height - contentHeight) / 2
+	if padTop < 1 {
+		padTop = 1
+	}
+	blank := padRight("", width)
+	out := make([]string, 0, height)
+	for i := 0; i < padTop; i++ {
+		out = append(out, blank)
+	}
+	for _, line := range lines {
+		out = append(out, padRight(line, width))
+	}
+	for len(out) < height {
+		out = append(out, blank)
+	}
+	return strings.Join(out, "\n")
 }
 
 func (m Model) viewSidebar(width, height int) string {
@@ -269,10 +315,11 @@ func (m Model) viewPreview(width, height int) string {
 	}
 	gridWidth := width
 	grid := renderPanePreviewWithRenderer(panes, gridWidth, gridHeight, panePreviewContext{
-		mode:       m.PreviewMode,
-		compact:    m.PreviewCompact,
-		targetPane: m.SelectionPane,
-		renderer:   m.renderPaneTileLive,
+		mode:          m.PreviewMode,
+		compact:       m.PreviewCompact,
+		targetPane:    m.SelectionPane,
+		terminalFocus: m.TerminalFocus,
+		renderer:      m.renderPaneTileLive,
 	})
 	lines = append(lines, grid)
 
@@ -333,7 +380,7 @@ func (m Model) viewFooter(width int) string {
 		if m.TerminalFocus {
 			label = "terminal on"
 		}
-		modeHint = fmt.Sprintf(" · %s %s", m.Keys.TerminalFocus, label)
+		modeHint = fmt.Sprintf(" · %s %s", strings.ToLower(m.Keys.TerminalFocus), label)
 	}
 	base := fmt.Sprintf(
 		"%s ←/→ project · %s ↑/↓ %s · %s %s · %s commands · %s help · %s quit%s",

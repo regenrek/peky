@@ -20,6 +20,14 @@ func TestHandleKeyMsgAdditionalStates(t *testing.T) {
 		t.Fatalf("expected dashboard after cancel")
 	}
 
+	m.state = StateConfirmCloseAllProjects
+	if _, _, handled := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}}); !handled {
+		t.Fatalf("expected close all projects key handled")
+	}
+	if m.state != StateDashboard {
+		t.Fatalf("expected dashboard after cancel")
+	}
+
 	m.state = StateConfirmClosePane
 	m.confirmPaneSession = "alpha-1"
 	m.confirmPaneIndex = "1"

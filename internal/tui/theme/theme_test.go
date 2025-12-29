@@ -92,6 +92,7 @@ func TestColorsAreDefined(t *testing.T) {
 		"Accent":        Accent,
 		"AccentSoft":    AccentSoft,
 		"AccentAlt":     AccentAlt,
+		"AccentFocus":   AccentFocus,
 		"TextPrimary":   TextPrimary,
 		"TextSecondary": TextSecondary,
 		"TextMuted":     TextMuted,
@@ -101,6 +102,8 @@ func TestColorsAreDefined(t *testing.T) {
 		"SurfaceMuted":  SurfaceMuted,
 		"Border":        Border,
 		"BorderFocused": BorderFocused,
+		"BorderTarget":  BorderTarget,
+		"BorderFocus":   BorderFocus,
 		"Logo":          Logo,
 	}
 

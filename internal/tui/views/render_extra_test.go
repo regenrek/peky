@@ -54,15 +54,15 @@ func TestRenderPanePreviewModes(t *testing.T) {
 		{Index: "0", Title: "main", Left: 0, Top: 0, Width: 50, Height: 20, Active: true, Status: paneStatusRunning},
 		{Index: "1", Title: "side", Left: 50, Top: 0, Width: 50, Height: 20, Active: false, Status: paneStatusIdle},
 	}
-	grid := renderPanePreview(panes, 40, 10, "grid", true, "0")
+	grid := renderPanePreview(panes, 40, 10, "grid", true, "0", false)
 	if strings.TrimSpace(grid) == "" {
 		t.Fatalf("renderPanePreview(grid) empty")
 	}
-	layout := renderPanePreview(panes, 40, 10, "layout", false, "1")
+	layout := renderPanePreview(panes, 40, 10, "layout", false, "1", false)
 	if strings.TrimSpace(layout) == "" {
 		t.Fatalf("renderPanePreview(layout) empty")
 	}
-	tiles := renderPanePreview(panes, 40, 10, "tiles", false, "")
+	tiles := renderPanePreview(panes, 40, 10, "tiles", false, "", false)
 	if strings.TrimSpace(tiles) == "" {
 		t.Fatalf("renderPanePreview(tiles) empty")
 	}
@@ -120,6 +120,7 @@ func TestViewStates(t *testing.T) {
 		viewHelp,
 		viewConfirmKill,
 		viewConfirmCloseProject,
+		viewConfirmCloseAllProjects,
 		viewConfirmRestart,
 		viewRenameSession,
 		viewRenamePane,

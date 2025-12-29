@@ -14,6 +14,8 @@ type Model struct {
 	Tab                      int
 	HeaderLine               string
 	EmptyStateMessage        string
+	SplashLogo               []string
+	SplashInfo               string
 	Projects                 []Project
 	DashboardColumns         []DashboardColumn
 	DashboardSelectedProject string
@@ -35,6 +37,7 @@ type Model struct {
 	CommandPalette           list.Model
 	ConfirmKill              ConfirmKill
 	ConfirmCloseProject      ConfirmCloseProject
+	ConfirmCloseAllProjects  ConfirmCloseAllProjects
 	ConfirmClosePane         ConfirmClosePane
 	Rename                   Rename
 	ProjectRootInput         textinput.Model
@@ -121,6 +124,11 @@ type ConfirmKill struct {
 
 type ConfirmCloseProject struct {
 	Project         string
+	RunningSessions int
+}
+
+type ConfirmCloseAllProjects struct {
+	ProjectCount    int
 	RunningSessions int
 }
 

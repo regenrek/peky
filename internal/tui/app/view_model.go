@@ -32,6 +32,8 @@ func (m *Model) viewModel() views.Model {
 		Tab:                      int(m.tab),
 		HeaderLine:               headerLine(m.headerParts()),
 		EmptyStateMessage:        m.emptyStateMessage(),
+		SplashLogo:               Logo,
+		SplashInfo:               m.splashInfo(),
 		Projects:                 toViewProjects(m.data.Projects),
 		DashboardColumns:         toViewColumns(filteredColumns),
 		DashboardSelectedProject: selectedProject,
@@ -58,6 +60,10 @@ func (m *Model) viewModel() views.Model {
 		ConfirmCloseProject: views.ConfirmCloseProject{
 			Project:         m.confirmClose,
 			RunningSessions: runningSessionsForProject(m.data.Projects, m.confirmCloseID),
+		},
+		ConfirmCloseAllProjects: views.ConfirmCloseAllProjects{
+			ProjectCount:    len(m.data.Projects),
+			RunningSessions: runningSessionsCount(m.data.Projects),
 		},
 		ConfirmClosePane: views.ConfirmClosePane{
 			Title:   m.confirmPaneTitle,
@@ -112,6 +118,18 @@ func runningSessionsForProject(projects []ProjectGroup, projectID string) int {
 	for _, s := range project.Sessions {
 		if s.Status != StatusStopped {
 			running++
+		}
+	}
+	return running
+}
+
+func runningSessionsCount(projects []ProjectGroup) int {
+	running := 0
+	for _, project := range projects {
+		for _, session := range project.Sessions {
+			if session.Status != StatusStopped {
+				running++
+			}
 		}
 	}
 	return running

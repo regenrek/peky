@@ -62,6 +62,10 @@ func (m *Model) commandPaletteItems() []list.Item {
 			m.openCloseProjectConfirm()
 			return nil
 		}},
+		{Label: "Project: Close all projects", Desc: "Hide all projects from tabs (sessions stay running)", Run: func() tea.Cmd {
+			m.openCloseAllProjectsConfirm()
+			return nil
+		}},
 	}
 	for _, entry := range m.hiddenProjectEntries() {
 		entry := entry

@@ -20,6 +20,7 @@ const (
 	StatePaneSwapPicker
 	StateConfirmKill
 	StateConfirmCloseProject
+	StateConfirmCloseAllProjects
 	StateConfirmClosePane
 	StateConfirmRestart
 	StateHelp
