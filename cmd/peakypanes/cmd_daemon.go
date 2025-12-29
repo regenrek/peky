@@ -62,7 +62,9 @@ func runDaemonRestart(args []string) {
 		return
 	}
 
-	fmt.Fprintln(stderr, "Restarting the daemon will disconnect clients; sessions will be restored.")
+	if _, err := fmt.Fprintln(stderr, "Restarting the daemon will disconnect clients; sessions will be restored."); err != nil {
+		fatal("failed to write restart warning: %v", err)
+	}
 	if !assumeYes && !confirmPrompt("Restart daemon? [y/N]: ") {
 		return
 	}
@@ -72,11 +74,15 @@ func runDaemonRestart(args []string) {
 	if err := sessiond.RestartDaemon(ctx, version); err != nil {
 		fatal("failed to restart daemon: %v", err)
 	}
-	fmt.Fprintln(stderr, "Daemon restarted.")
+	if _, err := fmt.Fprintln(stderr, "Daemon restarted."); err != nil {
+		fatal("failed to write restart confirmation: %v", err)
+	}
 }
 
 func confirmPrompt(prompt string) bool {
-	fmt.Fprint(stderr, prompt)
+	if _, err := fmt.Fprint(stderr, prompt); err != nil {
+		return false
+	}
 	reader := bufio.NewReader(os.Stdin)
 	line, err := reader.ReadString('\n')
 	if err != nil {

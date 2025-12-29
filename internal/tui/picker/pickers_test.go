@@ -33,8 +33,8 @@ func TestNewCommandPalette(t *testing.T) {
 	if picker.Title != "⌘ Command Palette" {
 		t.Fatalf("unexpected title %q", picker.Title)
 	}
-	if !picker.ShowStatusBar() {
-		t.Fatalf("expected status bar enabled")
+	if picker.ShowStatusBar() {
+		t.Fatalf("expected status bar disabled")
 	}
 	if !picker.FilteringEnabled() {
 		t.Fatalf("expected filtering enabled")

@@ -170,11 +170,9 @@ func (w *Writer) loop() {
 					}
 				}
 			}
-			timerCh = nil
 			var err error
 			if hasPending {
 				err = w.writeState(pending)
-				hasPending = false
 			}
 			resp <- err
 			return

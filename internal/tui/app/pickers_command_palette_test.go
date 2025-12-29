@@ -74,7 +74,7 @@ func TestCommandPaletteItemsAndRun(t *testing.T) {
 	if !foundPane || !foundSession || !foundProject {
 		t.Fatalf("expected pane, session, and project groups")
 	}
-	if !(paneIndex < sessionIndex && sessionIndex < projectIndex) {
+	if paneIndex >= sessionIndex || sessionIndex >= projectIndex {
 		t.Fatalf("expected pane items before session and project items")
 	}
 }
@@ -135,6 +135,7 @@ func TestUpdateCommandPaletteFilteringAndQuit(t *testing.T) {
 
 func TestCommandPaletteNavigationWhileFiltering(t *testing.T) {
 	m := newTestModelLite()
+	m.setCommandPaletteSize()
 	items := []list.Item{
 		picker.CommandItem{Label: "Alpha"},
 		picker.CommandItem{Label: "Beta"},
