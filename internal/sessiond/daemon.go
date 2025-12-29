@@ -51,6 +51,11 @@ type Daemon struct {
 	statePath   string
 	stateWriter *state.Writer
 	version     string
+	startMu     sync.Mutex
+	spawnMu     sync.Mutex
+	shutdownMu  sync.Mutex
+	shutdownErr error
+	shutdownOne sync.Once
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -133,6 +138,14 @@ func (d *Daemon) Start() error {
 	if d == nil {
 		return errors.New("sessiond: daemon is nil")
 	}
+	d.startMu.Lock()
+	defer d.startMu.Unlock()
+	if d.closing.Load() {
+		return errors.New("sessiond: daemon is shutting down")
+	}
+	if d.listenerValue() != nil {
+		return errors.New("sessiond: daemon already started")
+	}
 	if err := ensureSocketDir(d.socketPath); err != nil {
 		return err
 	}
@@ -170,7 +183,7 @@ func (d *Daemon) Run() error {
 		return err
 	}
 	<-d.ctx.Done()
-	return d.shutdown()
+	return d.shutdownOnce()
 }
 
 // Stop signals the daemon to shut down.
@@ -182,13 +195,19 @@ func (d *Daemon) Stop() error {
 		return nil
 	}
 	d.cancel()
-	return d.shutdown()
+	d.startMu.Lock()
+	d.startMu.Unlock()
+	return d.shutdownOnce()
 }
 
 func (d *Daemon) shutdown() error {
+	d.closing.Store(true)
 	if listener := d.clearListener(); listener != nil {
 		_ = listener.Close()
 	}
+
+	d.spawnMu.Lock()
+	d.spawnMu.Unlock()
 
 	d.clientsMu.Lock()
 	for _, client := range d.clients {
@@ -217,6 +236,22 @@ func (d *Daemon) shutdown() error {
 	return nil
 }
 
+func (d *Daemon) shutdownOnce() error {
+	if d == nil {
+		return nil
+	}
+	d.shutdownOne.Do(func() {
+		err := d.shutdown()
+		d.shutdownMu.Lock()
+		d.shutdownErr = err
+		d.shutdownMu.Unlock()
+	})
+	d.shutdownMu.Lock()
+	err := d.shutdownErr
+	d.shutdownMu.Unlock()
+	return err
+}
+
 func (d *Daemon) acceptLoop() {
 	defer d.wg.Done()
 	listener := d.listenerValue()
@@ -224,12 +259,30 @@ func (d *Daemon) acceptLoop() {
 		return
 	}
 	for {
+		if d.closing.Load() {
+			return
+		}
+		select {
+		case <-d.ctx.Done():
+			return
+		default:
+		}
 		conn, err := listener.Accept()
 		if err != nil {
 			if d.closing.Load() {
 				return
 			}
 			continue
+		}
+		if d.closing.Load() {
+			_ = conn.Close()
+			return
+		}
+		d.spawnMu.Lock()
+		if d.closing.Load() {
+			d.spawnMu.Unlock()
+			_ = conn.Close()
+			return
 		}
 		client := d.newClient(conn)
 		d.registerClient(client)
@@ -238,6 +291,7 @@ func (d *Daemon) acceptLoop() {
 		go d.readLoop(client)
 		d.wg.Add(1)
 		go d.writeLoop(client)
+		d.spawnMu.Unlock()
 	}
 }
 
