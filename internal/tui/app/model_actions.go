@@ -178,6 +178,14 @@ func (m *Model) openCloseProjectConfirm() {
 	m.setState(StateConfirmCloseProject)
 }
 
+func (m *Model) openCloseAllProjectsConfirm() {
+	if len(m.data.Projects) == 0 {
+		m.setToast("No projects to close", toastInfo)
+		return
+	}
+	m.setState(StateConfirmCloseAllProjects)
+}
+
 func (m *Model) openClosePaneConfirm() tea.Cmd {
 	session := m.selectedSession()
 	if session == nil {
@@ -224,6 +232,19 @@ func (m *Model) updateConfirmCloseProject(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "n", "esc":
 		m.confirmClose = ""
 		m.confirmCloseID = ""
+		m.setState(StateDashboard)
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m *Model) updateConfirmCloseAllProjects(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "enter":
+		return m, m.applyCloseAllProjects()
+	case "k":
+		return m, m.killAllProjectSessions()
+	case "n", "esc":
 		m.setState(StateDashboard)
 		return m, nil
 	}
@@ -277,6 +298,28 @@ func (m *Model) applyCloseProject() tea.Cmd {
 		return nil
 	}
 	m.setToast("Closed project "+name, toastSuccess)
+	return m.requestRefreshCmd()
+}
+
+func (m *Model) applyCloseAllProjects() tea.Cmd {
+	m.setState(StateDashboard)
+	if len(m.data.Projects) == 0 {
+		m.setToast("No projects to close", toastInfo)
+		return nil
+	}
+	hidden, err := m.hideAllProjectsInConfig(m.data.Projects)
+	if err != nil {
+		m.setToast("Close failed: "+err.Error(), toastError)
+		return nil
+	}
+	if hidden == 0 {
+		m.setToast("Projects already hidden", toastInfo)
+		return nil
+	}
+	m.selection = selectionState{}
+	m.selectionVersion++
+	m.rememberSelection(m.selection)
+	m.setToast("Closed all projects", toastSuccess)
 	return m.requestRefreshCmd()
 }
 
@@ -369,6 +412,44 @@ func (m *Model) killProjectSessions() tea.Cmd {
 		return m.requestRefreshCmd()
 	}
 	m.setToast("Killed sessions for "+name, toastSuccess)
+	return m.requestRefreshCmd()
+}
+
+func (m *Model) killAllProjectSessions() tea.Cmd {
+	m.setState(StateDashboard)
+	if len(m.data.Projects) == 0 {
+		m.setToast("No running sessions to kill", toastInfo)
+		return nil
+	}
+	var running []SessionItem
+	for _, project := range m.data.Projects {
+		for _, session := range project.Sessions {
+			if session.Status != StatusStopped {
+				running = append(running, session)
+			}
+		}
+	}
+	if len(running) == 0 {
+		m.setToast("No running sessions to kill", toastInfo)
+		return nil
+	}
+	var failed []string
+	for _, s := range running {
+		if m.client == nil {
+			failed = append(failed, s.Name)
+			continue
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		if err := m.client.KillSession(ctx, s.Name); err != nil {
+			failed = append(failed, s.Name)
+		}
+		cancel()
+	}
+	if len(failed) > 0 {
+		m.setToast("Kill failed: "+strings.Join(failed, ", "), toastError)
+		return m.requestRefreshCmd()
+	}
+	m.setToast("Killed all running sessions", toastSuccess)
 	return m.requestRefreshCmd()
 }
 

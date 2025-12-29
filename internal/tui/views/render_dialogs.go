@@ -7,112 +7,136 @@ import (
 	"github.com/regenrek/peakypanes/internal/tui/theme"
 )
 
+type dialogChoice struct {
+	Key   string
+	Label string
+}
+
 func (m Model) viewConfirmKill() string {
-	var dialogContent strings.Builder
-
-	dialogContent.WriteString(dialogTitleStyle.Render("⚠️  Kill Session?"))
-	dialogContent.WriteString("\n\n")
+	var body strings.Builder
 	if m.ConfirmKill.Session != "" {
-		dialogContent.WriteString(theme.DialogLabel.Render("Session: "))
-		dialogContent.WriteString(theme.DialogValue.Render(m.ConfirmKill.Session))
-		dialogContent.WriteString("\n")
+		body.WriteString(theme.DialogLabel.Render("Session: "))
+		body.WriteString(theme.DialogValue.Render(m.ConfirmKill.Session))
+		body.WriteString("\n")
 		if m.ConfirmKill.Project != "" {
-			dialogContent.WriteString(theme.DialogLabel.Render("Project: "))
-			dialogContent.WriteString(theme.DialogValue.Render(m.ConfirmKill.Project))
-			dialogContent.WriteString("\n")
+			body.WriteString(theme.DialogLabel.Render("Project: "))
+			body.WriteString(theme.DialogValue.Render(m.ConfirmKill.Project))
+			body.WriteString("\n")
 		}
-		dialogContent.WriteString("\n")
+		body.WriteString("\n")
 	}
-
-	dialogContent.WriteString(theme.DialogNote.Render("Kill the session: This won't delete your project"))
-	dialogContent.WriteString("\n\n")
-
-	dialogContent.WriteString(theme.DialogChoiceKey.Render("y"))
-	dialogContent.WriteString(theme.DialogChoiceSep.Render(" confirm • "))
-	dialogContent.WriteString(theme.DialogChoiceKey.Render("n"))
-	dialogContent.WriteString(theme.DialogChoiceSep.Render(" cancel"))
-
-	dialog := dialogStyle.Render(dialogContent.String())
-	return m.overlayDialog(dialog)
+	body.WriteString(theme.DialogNote.Render("Kill the session: This won't delete your project"))
+	return m.renderConfirmDialog("⚠️  Kill Session?", body.String(), []dialogChoice{
+		{Key: "y", Label: "confirm"},
+		{Key: "n", Label: "cancel"},
+	})
 }
 
 func (m Model) viewConfirmCloseProject() string {
-	var dialogContent strings.Builder
-
-	dialogContent.WriteString(dialogTitleStyle.Render("⚠️  Close Project?"))
-	dialogContent.WriteString("\n\n")
+	var body strings.Builder
 	if m.ConfirmCloseProject.Project != "" {
-		dialogContent.WriteString(theme.DialogLabel.Render("Project: "))
-		dialogContent.WriteString(theme.DialogValue.Render(m.ConfirmCloseProject.Project))
-		dialogContent.WriteString("\n")
-		dialogContent.WriteString(theme.DialogLabel.Render("Running sessions: "))
-		dialogContent.WriteString(theme.DialogValue.Render(fmt.Sprintf("%d", m.ConfirmCloseProject.RunningSessions)))
-		dialogContent.WriteString("\n")
-		dialogContent.WriteString("\n")
+		body.WriteString(theme.DialogLabel.Render("Project: "))
+		body.WriteString(theme.DialogValue.Render(m.ConfirmCloseProject.Project))
+		body.WriteString("\n")
+		body.WriteString(theme.DialogLabel.Render("Running sessions: "))
+		body.WriteString(theme.DialogValue.Render(fmt.Sprintf("%d", m.ConfirmCloseProject.RunningSessions)))
+		body.WriteString("\n\n")
 	}
+	body.WriteString(theme.DialogNote.Render("Close hides the project from tabs; sessions stay running."))
+	body.WriteString("\n")
+	body.WriteString(theme.DialogNote.Render("Press k to kill running sessions instead."))
+	return m.renderConfirmDialog("⚠️  Close Project?", body.String(), []dialogChoice{
+		{Key: "y", Label: "close"},
+		{Key: "k", Label: "kill sessions"},
+		{Key: "n", Label: "cancel"},
+	})
+}
 
-	dialogContent.WriteString(theme.DialogNote.Render("Close hides the project from tabs; sessions stay running."))
-	dialogContent.WriteString("\n")
-	dialogContent.WriteString(theme.DialogNote.Render("Press k to kill running sessions instead."))
-	dialogContent.WriteString("\n\n")
-
-	dialogContent.WriteString(theme.DialogChoiceKey.Render("y"))
-	dialogContent.WriteString(theme.DialogChoiceSep.Render(" close • "))
-	dialogContent.WriteString(theme.DialogChoiceKey.Render("k"))
-	dialogContent.WriteString(theme.DialogChoiceSep.Render(" kill sessions • "))
-	dialogContent.WriteString(theme.DialogChoiceKey.Render("n"))
-	dialogContent.WriteString(theme.DialogChoiceSep.Render(" cancel"))
-
-	dialog := dialogStyle.Render(dialogContent.String())
-	return m.overlayDialog(dialog)
+func (m Model) viewConfirmCloseAllProjects() string {
+	var body strings.Builder
+	body.WriteString(theme.DialogLabel.Render("Projects: "))
+	body.WriteString(theme.DialogValue.Render(fmt.Sprintf("%d", m.ConfirmCloseAllProjects.ProjectCount)))
+	body.WriteString("\n")
+	body.WriteString(theme.DialogLabel.Render("Running sessions: "))
+	body.WriteString(theme.DialogValue.Render(fmt.Sprintf("%d", m.ConfirmCloseAllProjects.RunningSessions)))
+	body.WriteString("\n\n")
+	body.WriteString(theme.DialogNote.Render("Close hides projects from tabs; sessions stay running."))
+	body.WriteString("\n")
+	body.WriteString(theme.DialogNote.Render("Press k to kill running sessions instead."))
+	return m.renderConfirmDialog("⚠️  Close All Projects?", body.String(), []dialogChoice{
+		{Key: "y", Label: "close all"},
+		{Key: "k", Label: "kill sessions"},
+		{Key: "n", Label: "cancel"},
+	})
 }
 
 func (m Model) viewConfirmClosePane() string {
-	var dialogContent strings.Builder
-
-	dialogContent.WriteString(dialogTitleStyle.Render("⚠️  Close Pane?"))
-	dialogContent.WriteString("\n\n")
+	var body strings.Builder
 	if m.ConfirmClosePane.Title != "" {
-		dialogContent.WriteString(theme.DialogLabel.Render("Pane: "))
-		dialogContent.WriteString(theme.DialogValue.Render(m.ConfirmClosePane.Title))
-		dialogContent.WriteString("\n")
+		body.WriteString(theme.DialogLabel.Render("Pane: "))
+		body.WriteString(theme.DialogValue.Render(m.ConfirmClosePane.Title))
+		body.WriteString("\n")
 	}
 	if m.ConfirmClosePane.Session != "" {
-		dialogContent.WriteString(theme.DialogLabel.Render("Session: "))
-		dialogContent.WriteString(theme.DialogValue.Render(m.ConfirmClosePane.Session))
-		dialogContent.WriteString("\n")
+		body.WriteString(theme.DialogLabel.Render("Session: "))
+		body.WriteString(theme.DialogValue.Render(m.ConfirmClosePane.Session))
+		body.WriteString("\n")
 	}
-	dialogContent.WriteString("\n")
-
+	body.WriteString("\n")
 	if m.ConfirmClosePane.Running {
-		dialogContent.WriteString(theme.DialogNote.Render("The pane is still running. Closing it will stop the process."))
-		dialogContent.WriteString("\n\n")
+		body.WriteString(theme.DialogNote.Render("The pane is still running. Closing it will stop the process."))
 	}
+	return m.renderConfirmDialog("⚠️  Close Pane?", body.String(), []dialogChoice{
+		{Key: "y", Label: "close"},
+		{Key: "n", Label: "cancel"},
+	})
+}
 
-	dialogContent.WriteString(theme.DialogChoiceKey.Render("y"))
-	dialogContent.WriteString(theme.DialogChoiceSep.Render(" close • "))
-	dialogContent.WriteString(theme.DialogChoiceKey.Render("n"))
-	dialogContent.WriteString(theme.DialogChoiceSep.Render(" cancel"))
+func (m Model) viewConfirmRestart() string {
+	body := theme.DialogNote.Render("Restarting will disconnect clients. Sessions will be restored on startup.")
+	return m.renderConfirmDialog("Restart Daemon?", body, []dialogChoice{
+		{Key: "y", Label: "restart"},
+		{Key: "n", Label: "cancel"},
+	})
+}
 
+func (m Model) renderConfirmDialog(title, body string, choices []dialogChoice) string {
+	var dialogContent strings.Builder
+	dialogContent.WriteString(dialogTitleStyle.Render(title))
+	body = strings.TrimRight(body, "\n")
+	if body != "" {
+		dialogContent.WriteString("\n\n")
+		dialogContent.WriteString(body)
+	}
+	if choicesLine := renderDialogChoices(choices); choicesLine != "" {
+		dialogContent.WriteString("\n\n")
+		dialogContent.WriteString(choicesLine)
+	}
 	dialog := dialogStyle.Render(dialogContent.String())
 	return m.overlayDialog(dialog)
 }
 
-func (m Model) viewConfirmRestart() string {
-	var dialogContent strings.Builder
-
-	dialogContent.WriteString(dialogTitleStyle.Render("Restart Daemon?"))
-	dialogContent.WriteString("\n\n")
-	dialogContent.WriteString(theme.DialogNote.Render("Restarting will disconnect clients. Sessions will be restored on startup."))
-	dialogContent.WriteString("\n\n")
-
-	dialogContent.WriteString(theme.DialogChoiceKey.Render("y"))
-	dialogContent.WriteString(theme.DialogChoiceSep.Render(" restart • "))
-	dialogContent.WriteString(theme.DialogChoiceKey.Render("n"))
-	dialogContent.WriteString(theme.DialogChoiceSep.Render(" cancel"))
-
-	dialog := dialogStyle.Render(dialogContent.String())
-	return m.overlayDialog(dialog)
+func renderDialogChoices(choices []dialogChoice) string {
+	if len(choices) == 0 {
+		return ""
+	}
+	var builder strings.Builder
+	for i, choice := range choices {
+		if key := strings.TrimSpace(choice.Key); key != "" {
+			builder.WriteString(theme.DialogChoiceKey.Render(key))
+		}
+		if label := strings.TrimSpace(choice.Label); label != "" {
+			prefix := " "
+			if strings.TrimSpace(choice.Key) == "" {
+				prefix = ""
+			}
+			builder.WriteString(theme.DialogChoiceSep.Render(prefix + label))
+		}
+		if i < len(choices)-1 {
+			builder.WriteString(theme.DialogChoiceSep.Render(" • "))
+		}
+	}
+	return builder.String()
 }
 
 func (m Model) viewRename() string {

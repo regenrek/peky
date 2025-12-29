@@ -19,6 +19,8 @@ This format is based on Keep a Changelog.
 - Daemon runtime state persistence (`state.json`) with automatic restore on startup.
 - CLI and TUI daemon restart commands with confirmation.
 - Per-pane restore failure tracking surfaced in snapshots.
+- Command palette action to close all projects with a bulk close/kill confirmation.
+- Dashboard empty-state splash with centered logo and quick open/help hint.
 
 ### Changed
 - Native-only sessions; tmux UI integration and commands are removed.
@@ -31,6 +33,7 @@ This format is based on Keep a Changelog.
 - Default pane titles now compress path-like window names to readable repo-relative labels and de-duplicate duplicates.
 - Session env overrides are persisted and reapplied on restore; splits inherit session env.
 - State persistence is debounced and flushed on shutdown to reduce write amplification.
+- Terminal-focus tiles use a distinct border accent while focused.
 
 ### Fixed
 - Space key now passes correctly in native terminal focus.

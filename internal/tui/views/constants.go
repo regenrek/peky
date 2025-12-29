@@ -9,6 +9,7 @@ const (
 	viewPaneSwapPicker
 	viewConfirmKill
 	viewConfirmCloseProject
+	viewConfirmCloseAllProjects
 	viewConfirmClosePane
 	viewConfirmRestart
 	viewHelp

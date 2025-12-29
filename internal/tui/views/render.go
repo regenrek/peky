@@ -17,6 +17,8 @@ func Render(m Model) string {
 		return m.viewConfirmKill()
 	case viewConfirmCloseProject:
 		return m.viewConfirmCloseProject()
+	case viewConfirmCloseAllProjects:
+		return m.viewConfirmCloseAllProjects()
 	case viewConfirmClosePane:
 		return m.viewConfirmClosePane()
 	case viewConfirmRestart:

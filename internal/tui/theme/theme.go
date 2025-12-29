@@ -7,9 +7,10 @@ import "github.com/charmbracelet/lipgloss"
 // Design tokens for consistent TUI colors.
 var (
 	// Accent colors
-	Accent     = lipgloss.Color("#3B82F6") // highlight blue
-	AccentSoft = lipgloss.Color("#60A5FA")
-	AccentAlt  = lipgloss.Color("#22C55E")
+	Accent      = lipgloss.Color("#3B82F6") // highlight blue
+	AccentSoft  = lipgloss.Color("#60A5FA")
+	AccentAlt   = lipgloss.Color("#22C55E")
+	AccentFocus = lipgloss.Color("#F9F871")
 
 	// Status colors
 	Success = lipgloss.AdaptiveColor{Light: "#16A34A", Dark: "#22C55E"}
@@ -33,6 +34,7 @@ var (
 	Border        = lipgloss.Color("#3A3A3A")
 	BorderFocused = Accent
 	BorderTarget  = AccentAlt
+	BorderFocus   = AccentFocus
 	Background    = Surface
 	Highlight     = SurfaceAlt
 	QuickReplyBg  = SurfaceMuted

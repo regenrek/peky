@@ -15,12 +15,13 @@ type paneIconContext struct {
 	size icons.Size
 }
 
-type dashboardPaneRenderer func(pane DashboardPane, width, height, previewLines int, selected bool, iconCtx paneIconContext) string
+type dashboardPaneRenderer func(pane DashboardPane, width, height, previewLines int, selected bool, focused bool, iconCtx paneIconContext) string
 
 type dashboardRenderContext struct {
 	selectionSession string
 	selectionPane    string
 	previewLines     int
+	terminalFocus    bool
 	icons            paneIconContext
 	renderer         dashboardPaneRenderer
 }
@@ -195,7 +196,8 @@ func renderDashboardPaneBlocks(column DashboardColumn, layout dashboardColumnLay
 	blocks := make([]string, 0, layout.visibleBlocks)
 	for i := layout.start; i < layout.end; i++ {
 		selectedPane := selected && i == layout.selectedIndex
-		blocks = append(blocks, ctx.renderer(column.Panes[i], width, layout.blockHeight, ctx.previewLines, selectedPane, ctx.icons))
+		focused := selectedPane && ctx.terminalFocus
+		blocks = append(blocks, ctx.renderer(column.Panes[i], width, layout.blockHeight, ctx.previewLines, selectedPane, focused, ctx.icons))
 	}
 	return blocks
 }
@@ -221,21 +223,21 @@ func dashboardPaneRange(selected bool, selectedIndex, visibleBlocks, total int) 
 	return start, end
 }
 
-func renderDashboardPaneTile(pane DashboardPane, width, height, previewLines int, selected bool, iconCtx paneIconContext) string {
+func renderDashboardPaneTile(pane DashboardPane, width, height, previewLines int, selected bool, focused bool, iconCtx paneIconContext) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
-	layout := buildPaneTileLayout(width, height, previewLines, selected)
+	layout := buildPaneTileLayout(width, height, previewLines, selected, focused)
 	lines := paneTileBaseLines(pane, selected, iconCtx, layout.contentWidth)
 	lines = append(lines, panePreviewLinesWithWidth(pane, layout.availablePreview, layout.contentWidth, false)...)
 	return layout.style.Render(strings.Join(trimLines(lines, layout.contentHeight), "\n"))
 }
 
-func (m Model) renderDashboardPaneTileLive(pane DashboardPane, width, height, previewLines int, selected bool, iconCtx paneIconContext) string {
+func (m Model) renderDashboardPaneTileLive(pane DashboardPane, width, height, previewLines int, selected bool, focused bool, iconCtx paneIconContext) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
-	layout := buildPaneTileLayout(width, height, previewLines, selected)
+	layout := buildPaneTileLayout(width, height, previewLines, selected, focused)
 	lines := paneTileBaseLines(pane, selected, iconCtx, layout.contentWidth)
 	lines = append(lines, paneLivePreviewLines(m, pane, layout, selected)...)
 	return layout.style.Render(strings.Join(trimLines(lines, layout.contentHeight), "\n"))
@@ -248,13 +250,16 @@ type paneTileLayout struct {
 	availablePreview int
 }
 
-func buildPaneTileLayout(width, height, previewLines int, selected bool) paneTileLayout {
+func buildPaneTileLayout(width, height, previewLines int, selected bool, focused bool) paneTileLayout {
 	if previewLines < 0 {
 		previewLines = 0
 	}
 	borderColor := theme.Border
 	if selected {
 		borderColor = theme.BorderTarget
+	}
+	if focused {
+		borderColor = theme.BorderFocus
 	}
 	style := lipgloss.NewStyle().
 		Width(width).

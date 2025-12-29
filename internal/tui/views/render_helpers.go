@@ -137,6 +137,19 @@ func fitLine(text string, width int) string {
 	return truncated + strings.Repeat(" ", padding)
 }
 
+func centerLine(text string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	lineWidth := lipgloss.Width(text)
+	if lineWidth >= width {
+		return ansi.Truncate(text, width, "")
+	}
+	leftPad := (width - lineWidth) / 2
+	rightPad := width - lineWidth - leftPad
+	return strings.Repeat(" ", leftPad) + text + strings.Repeat(" ", rightPad)
+}
+
 func truncateRunes(text string, width int) string {
 	if width <= 0 {
 		return ""
