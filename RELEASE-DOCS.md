@@ -50,13 +50,31 @@ git push origin main --tags
 goreleaser release --clean
 ```
 
-5) Generate npm packages from `dist/`:
+5) Update the Homebrew tap formula (regenrek/tap):
+
+- Update `Formula/peakypanes.rb` with the new `url` + `sha256`.
+- Run a local install/test:
+
+```bash
+brew install --build-from-source regenrek/tap/peakypanes
+brew test regenrek/tap/peakypanes
+```
+
+- (Optional but recommended) Lint the formula:
+
+```bash
+brew audit --strict --online regenrek/tap/peakypanes
+```
+
+- Commit and push the tap repo.
+
+6) Generate npm packages from `dist/`:
 
 ```bash
 npm run build:npm-packages
 ```
 
-6) Publish npm packages (platform packages first, then the meta package):
+7) Publish npm packages (platform packages first, then the meta package):
 
 Note: Windows npm packages are currently disabled due to npm spam-detection blocks.
 
