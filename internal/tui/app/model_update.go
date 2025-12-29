@@ -1,6 +1,9 @@
 package app
 
 import (
+	"context"
+	"errors"
+
 	"github.com/regenrek/peakypanes/internal/sessiond"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -275,7 +278,7 @@ func (m *Model) handleDaemonEvent(msg daemonEventMsg) tea.Cmd {
 
 func (m *Model) handlePaneViews(msg paneViewsMsg) tea.Cmd {
 	var cmd tea.Cmd
-	if msg.Err != nil {
+	if msg.Err != nil && len(msg.Views) == 0 && !errors.Is(msg.Err, context.DeadlineExceeded) && !errors.Is(msg.Err, context.Canceled) {
 		m.setToast("Pane view failed: "+msg.Err.Error(), toastWarning)
 	}
 	if m.paneViews == nil {

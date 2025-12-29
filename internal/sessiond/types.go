@@ -191,6 +191,9 @@ type PaneViewRequest struct {
 	Mode         PaneViewMode
 	ShowCursor   bool
 	ColorProfile termenv.Profile
+	// DeadlineUnixNano carries the client-side deadline for this request.
+	// Zero means no deadline provided.
+	DeadlineUnixNano int64
 }
 
 // PaneViewResponse returns a rendered pane view.

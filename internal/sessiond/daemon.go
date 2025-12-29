@@ -26,11 +26,6 @@ const (
 // DefaultStateDebounce controls the default persistence debounce interval.
 const DefaultStateDebounce = 250 * time.Millisecond
 
-const (
-	paneViewMaxConcurrency = 4
-	paneViewQueueSize      = 128
-)
-
 // DaemonConfig configures a session daemon instance.
 type DaemonConfig struct {
 	Version       string
@@ -66,23 +61,6 @@ type Daemon struct {
 
 	closing atomic.Bool
 	wg      sync.WaitGroup
-}
-
-type clientConn struct {
-	id      uint64
-	conn    net.Conn
-	respCh  chan outboundEnvelope
-	eventCh chan outboundEnvelope
-	done    chan struct{}
-
-	paneViewCh chan Envelope
-
-	closed atomic.Bool
-}
-
-type outboundEnvelope struct {
-	env     Envelope
-	timeout time.Duration
 }
 
 // NewDaemon creates a daemon instance.
@@ -196,6 +174,7 @@ func (d *Daemon) Stop() error {
 	}
 	d.cancel()
 	d.startMu.Lock()
+	_ = d.listenerValue()
 	d.startMu.Unlock()
 	return d.shutdownOnce()
 }
@@ -207,6 +186,7 @@ func (d *Daemon) shutdown() error {
 	}
 
 	d.spawnMu.Lock()
+	_ = d.closing.Load()
 	d.spawnMu.Unlock()
 
 	d.clientsMu.Lock()
@@ -252,49 +232,6 @@ func (d *Daemon) shutdownOnce() error {
 	return err
 }
 
-func (d *Daemon) acceptLoop() {
-	defer d.wg.Done()
-	listener := d.listenerValue()
-	if listener == nil {
-		return
-	}
-	for {
-		if d.closing.Load() {
-			return
-		}
-		select {
-		case <-d.ctx.Done():
-			return
-		default:
-		}
-		conn, err := listener.Accept()
-		if err != nil {
-			if d.closing.Load() {
-				return
-			}
-			continue
-		}
-		if d.closing.Load() {
-			_ = conn.Close()
-			return
-		}
-		d.spawnMu.Lock()
-		if d.closing.Load() {
-			d.spawnMu.Unlock()
-			_ = conn.Close()
-			return
-		}
-		client := d.newClient(conn)
-		d.registerClient(client)
-		d.startPaneViewWorkers(client)
-		d.wg.Add(1)
-		go d.readLoop(client)
-		d.wg.Add(1)
-		go d.writeLoop(client)
-		d.spawnMu.Unlock()
-	}
-}
-
 func (d *Daemon) setListener(listener net.Listener) {
 	d.listenerMu.Lock()
 	d.listener = listener
@@ -314,237 +251,6 @@ func (d *Daemon) clearListener() net.Listener {
 	d.listener = nil
 	d.listenerMu.Unlock()
 	return listener
-}
-
-func (d *Daemon) eventLoop() {
-	defer d.wg.Done()
-	if d.manager == nil {
-		return
-	}
-	for event := range d.manager.Events() {
-		d.broadcast(Event{Type: EventPaneUpdated, PaneID: event.PaneID})
-	}
-}
-
-func (d *Daemon) newClient(conn net.Conn) *clientConn {
-	id := d.clientSeq.Add(1)
-	return &clientConn{
-		id:         id,
-		conn:       conn,
-		respCh:     make(chan outboundEnvelope, 64),
-		eventCh:    make(chan outboundEnvelope, 128),
-		paneViewCh: make(chan Envelope, paneViewQueueSize),
-		done:       make(chan struct{}),
-	}
-}
-
-func (d *Daemon) startPaneViewWorkers(client *clientConn) {
-	if client == nil {
-		return
-	}
-	workers := paneViewMaxConcurrency
-	if workers < 1 {
-		workers = 1
-	}
-	for i := 0; i < workers; i++ {
-		d.wg.Add(1)
-		go d.paneViewWorker(client)
-	}
-}
-
-func (d *Daemon) paneViewWorker(client *clientConn) {
-	defer d.wg.Done()
-	for {
-		select {
-		case <-client.done:
-			return
-		case <-d.ctx.Done():
-			return
-		default:
-		}
-
-		select {
-		case env := <-client.paneViewCh:
-			resp := d.handleRequest(env)
-			timeout := d.responseTimeout(env)
-			if err := sendEnvelope(client, resp, timeout); err != nil {
-				d.shutdownClientConn(client)
-				return
-			}
-		case <-client.done:
-			return
-		case <-d.ctx.Done():
-			return
-		}
-	}
-}
-
-func (d *Daemon) registerClient(client *clientConn) {
-	d.clientsMu.Lock()
-	d.clients[client.id] = client
-	d.clientsMu.Unlock()
-}
-
-func (d *Daemon) removeClient(client *clientConn) {
-	d.clientsMu.Lock()
-	delete(d.clients, client.id)
-	d.clientsMu.Unlock()
-}
-
-func (d *Daemon) readLoop(client *clientConn) {
-	defer d.wg.Done()
-	defer d.shutdownClientConn(client)
-	for {
-		if err := client.conn.SetReadDeadline(time.Now().Add(defaultReadTimeout)); err != nil {
-			return
-		}
-		env, err := readEnvelope(client.conn)
-		if err != nil {
-			if isTimeout(err) {
-				continue
-			}
-			return
-		}
-		if env.Kind != EnvelopeRequest {
-			continue
-		}
-		if env.Op == OpPaneView && client.paneViewCh != nil {
-			select {
-			case client.paneViewCh <- env:
-				continue
-			case <-client.done:
-				return
-			case <-d.ctx.Done():
-				return
-			}
-		}
-		resp := d.handleRequest(env)
-		timeout := d.responseTimeout(env)
-		if err := sendEnvelope(client, resp, timeout); err != nil {
-			return
-		}
-	}
-}
-
-func (d *Daemon) responseTimeout(env Envelope) time.Duration {
-	return defaultWriteTimeout
-}
-
-func (d *Daemon) writeLoop(client *clientConn) {
-	defer d.wg.Done()
-	for {
-		select {
-		case <-client.done:
-			return
-		case <-d.ctx.Done():
-			return
-		default:
-		}
-
-		select {
-		case out := <-client.respCh:
-			if err := d.writeEnvelopeWithTimeout(client, out.env, out.timeout); err != nil {
-				d.shutdownClientConn(client)
-				return
-			}
-			continue
-		default:
-		}
-
-		select {
-		case out := <-client.respCh:
-			if err := d.writeEnvelopeWithTimeout(client, out.env, out.timeout); err != nil {
-				d.shutdownClientConn(client)
-				return
-			}
-		case out := <-client.eventCh:
-			if err := d.writeEnvelopeWithTimeout(client, out.env, out.timeout); err != nil {
-				d.shutdownClientConn(client)
-				return
-			}
-		case <-client.done:
-			return
-		case <-d.ctx.Done():
-			return
-		}
-	}
-}
-
-func sendEnvelope(client *clientConn, env Envelope, timeout time.Duration) error {
-	if timeout <= 0 {
-		timeout = defaultWriteTimeout
-	}
-	select {
-	case <-client.done:
-		return errors.New("sessiond: client closed")
-	default:
-	}
-	select {
-	case client.respCh <- outboundEnvelope{env: env, timeout: timeout}:
-		return nil
-	case <-client.done:
-		return errors.New("sessiond: client closed")
-	case <-time.After(timeout):
-		return errors.New("sessiond: client send timeout")
-	}
-}
-
-func closeClient(client *clientConn) {
-	if client == nil {
-		return
-	}
-	if client.closed.Swap(true) {
-		return
-	}
-	close(client.done)
-	if client.conn != nil {
-		_ = client.conn.Close()
-	}
-}
-
-func (d *Daemon) shutdownClientConn(client *clientConn) {
-	if client == nil {
-		return
-	}
-	d.removeClient(client)
-	closeClient(client)
-}
-
-func (d *Daemon) writeEnvelopeWithTimeout(client *clientConn, env Envelope, timeout time.Duration) error {
-	if client == nil {
-		return errors.New("sessiond: client unavailable")
-	}
-	if timeout <= 0 {
-		timeout = defaultWriteTimeout
-	}
-	if err := client.conn.SetWriteDeadline(time.Now().Add(timeout)); err != nil {
-		return err
-	}
-	return writeEnvelope(client.conn, env)
-}
-
-func (d *Daemon) broadcast(event Event) {
-	d.clientsMu.RLock()
-	defer d.clientsMu.RUnlock()
-	if len(d.clients) == 0 {
-		return
-	}
-	payload, err := encodePayload(event)
-	if err != nil {
-		return
-	}
-	env := Envelope{Kind: EnvelopeEvent, Event: event.Type, Payload: payload}
-	for _, client := range d.clients {
-		select {
-		case <-client.done:
-			continue
-		default:
-		}
-		select {
-		case client.eventCh <- outboundEnvelope{env: env, timeout: defaultWriteTimeout}:
-		default:
-		}
-	}
 }
 
 func (d *Daemon) queuePersistState() {

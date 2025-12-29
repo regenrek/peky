@@ -15,6 +15,7 @@ import (
 const (
 	paneViewTimeout        = 2 * time.Second
 	paneViewMaxConcurrency = 4
+	paneViewMinInterval    = 50 * time.Millisecond
 )
 
 type paneViewKey struct {
@@ -54,6 +55,9 @@ func (m *Model) refreshPaneViewFor(paneID string) tea.Cmd {
 	}
 	if m.paneViewInFlight {
 		m.queuePaneViewID(paneID)
+		return nil
+	}
+	if !m.allowPaneViewRequest(paneID) {
 		return nil
 	}
 	hit, ok := m.paneHitFor(paneID)
@@ -185,6 +189,23 @@ func (m *Model) paneViewRequestForHit(hit mouse.PaneHit) *sessiond.PaneViewReque
 	}
 }
 
+func (m *Model) allowPaneViewRequest(paneID string) bool {
+	if m == nil || paneID == "" {
+		return false
+	}
+	if m.paneViewLastReq == nil {
+		m.paneViewLastReq = make(map[string]time.Time)
+	}
+	now := time.Now()
+	if last, ok := m.paneViewLastReq[paneID]; ok {
+		if now.Sub(last) < paneViewMinInterval {
+			return false
+		}
+	}
+	m.paneViewLastReq[paneID] = now
+	return true
+}
+
 func (m *Model) fetchPaneViewsCmd(reqs []sessiond.PaneViewRequest) tea.Cmd {
 	if m == nil || len(reqs) == 0 {
 		return nil
@@ -222,6 +243,9 @@ func (m *Model) fetchPaneViewsCmd(reqs []sessiond.PaneViewRequest) tea.Cmd {
 				defer wg.Done()
 				for req := range jobs {
 					ctx, cancel := context.WithTimeout(context.Background(), paneViewTimeout)
+					if deadline, ok := ctx.Deadline(); ok {
+						req.DeadlineUnixNano = deadline.UnixNano()
+					}
 					resp, err := client.GetPaneView(ctx, req)
 					cancel()
 					if err != nil {

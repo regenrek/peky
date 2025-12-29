@@ -289,40 +289,6 @@ func (d *Daemon) handleResizePane(payload []byte) ([]byte, error) {
 	return nil, nil
 }
 
-func (d *Daemon) handlePaneView(payload []byte) ([]byte, error) {
-	var req PaneViewRequest
-	if err := decodePayload(payload, &req); err != nil {
-		return nil, err
-	}
-	paneID, err := requirePaneID(req.PaneID)
-	if err != nil {
-		return nil, err
-	}
-	manager, err := d.requireManager()
-	if err != nil {
-		return nil, err
-	}
-	win := manager.Window(paneID)
-	if win == nil {
-		return nil, fmt.Errorf("sessiond: pane %q not found", paneID)
-	}
-	cols, rows := normalizeDimensions(req.Cols, req.Rows)
-	_ = win.Resize(cols, rows)
-	view := paneViewString(win, req)
-	resp := PaneViewResponse{
-		PaneID:       paneID,
-		Cols:         cols,
-		Rows:         rows,
-		Mode:         req.Mode,
-		ShowCursor:   req.ShowCursor,
-		ColorProfile: req.ColorProfile,
-		View:         view,
-		HasMouse:     win.HasMouseMode(),
-		AllowMotion:  win.AllowsMouseMotion(),
-	}
-	return encodePayload(resp)
-}
-
 func (d *Daemon) handleTerminalActionPayload(payload []byte) ([]byte, error) {
 	var req TerminalActionRequest
 	if err := decodePayload(payload, &req); err != nil {
@@ -363,15 +329,6 @@ func normalizeDimensions(cols, rows int) (int, int) {
 		rows = 1
 	}
 	return cols, rows
-}
-
-func paneViewString(win paneViewWindow, req PaneViewRequest) string {
-	switch req.Mode {
-	case PaneViewLipgloss:
-		return win.ViewLipgloss(req.ShowCursor, req.ColorProfile)
-	default:
-		return win.ViewANSI()
-	}
 }
 
 func (d *Daemon) startSession(req StartSessionRequest) (StartSessionResponse, error) {

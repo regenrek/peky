@@ -1,6 +1,7 @@
 package sessiond
 
 import (
+	"context"
 	"testing"
 
 	"github.com/muesli/termenv"
@@ -63,6 +64,14 @@ func (f *fakeTerminalWindow) ScrollToBottom()            { f.record("scrollBotto
 func (f *fakeTerminalWindow) ScrollToTop()               { f.record("scrollTop") }
 func (f *fakeTerminalWindow) ScrollUp(lines int)         { f.record("scrollUp") }
 func (f *fakeTerminalWindow) ScrollbackModeActive() bool { return f.scrollback }
+func (f *fakeTerminalWindow) ViewLipglossCtx(ctx context.Context, showCursor bool, profile termenv.Profile) (string, error) {
+	f.record("viewLipgloss")
+	return f.viewLipgloss, nil
+}
+func (f *fakeTerminalWindow) ViewANSICtx(ctx context.Context) (string, error) {
+	f.record("viewANSI")
+	return f.viewANSI, nil
+}
 func (f *fakeTerminalWindow) ViewLipgloss(showCursor bool, profile termenv.Profile) string {
 	f.record("viewLipgloss")
 	return f.viewLipgloss
