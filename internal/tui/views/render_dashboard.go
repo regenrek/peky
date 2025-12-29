@@ -413,7 +413,11 @@ func (m Model) viewFooter(width int) string {
 			label = "terminal on"
 		}
 		modeHint = fmt.Sprintf(" · %s %s", strings.ToLower(m.Keys.TerminalFocus), label)
-		modeHintRendered = theme.TerminalFocusHint.Render(modeHint)
+		if m.TerminalFocus {
+			modeHintRendered = theme.TerminalFocusHint.Render(modeHint)
+		} else {
+			modeHintRendered = theme.ListDimmed.Render(modeHint)
+		}
 	}
 	base := fmt.Sprintf(
 		"%s ←/→ project · %s ↑/↓ %s · %s %s · %s commands · %s help · %s quit",
