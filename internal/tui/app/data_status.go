@@ -40,6 +40,9 @@ func classifyPane(pane PaneItem, lines []string, settings DashboardConfig, now t
 	if status, ok := paneStatusForDead(pane); ok {
 		return status
 	}
+	if pane.RestoreFailed {
+		return PaneStatusError
+	}
 	if status, ok := classifyPaneFromAgent(pane, lines, settings, now); ok {
 		return status
 	}

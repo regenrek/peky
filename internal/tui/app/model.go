@@ -123,9 +123,10 @@ type Model struct {
 
 	autoStart *AutoStartSpec
 
-	paneViewProfile termenv.Profile
-	paneViews       map[paneViewKey]string
-	paneMouseMotion map[string]bool
+	paneViewProfile   termenv.Profile
+	paneViews         map[paneViewKey]string
+	paneMouseMotion   map[string]bool
+	paneInputDisabled map[string]struct{}
 
 	paneViewInFlight  bool
 	paneViewQueued    bool
@@ -159,6 +160,7 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 		paneViews:          make(map[paneViewKey]string),
 		paneMouseMotion:    make(map[string]bool),
 		paneViewProfile:    detectPaneViewProfile(),
+		paneInputDisabled:  make(map[string]struct{}),
 	}
 
 	m.filterInput = textinput.New()

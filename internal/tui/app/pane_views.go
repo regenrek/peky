@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -11,7 +12,10 @@ import (
 	"github.com/regenrek/peakypanes/internal/tui/mouse"
 )
 
-const paneViewTimeout = 2 * time.Second
+const (
+	paneViewTimeout        = 2 * time.Second
+	paneViewMaxConcurrency = 4
+)
 
 type paneViewKey struct {
 	PaneID       string
@@ -193,20 +197,61 @@ func (m *Model) fetchPaneViewsCmd(reqs []sessiond.PaneViewRequest) tea.Cmd {
 		return nil
 	}
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), paneViewTimeout)
-		defer cancel()
 		views := make([]sessiond.PaneViewResponse, 0, len(reqs))
 		var firstErr error
-		for _, req := range reqs {
-			resp, err := client.GetPaneView(ctx, req)
-			if err != nil {
+
+		type result struct {
+			view sessiond.PaneViewResponse
+			err  error
+		}
+		results := make(chan result, len(reqs))
+		jobs := make(chan sessiond.PaneViewRequest)
+
+		workers := paneViewMaxConcurrency
+		if len(reqs) < workers {
+			workers = len(reqs)
+		}
+		if workers < 1 {
+			workers = 1
+		}
+
+		var wg sync.WaitGroup
+		wg.Add(workers)
+		for i := 0; i < workers; i++ {
+			go func() {
+				defer wg.Done()
+				for req := range jobs {
+					ctx, cancel := context.WithTimeout(context.Background(), paneViewTimeout)
+					resp, err := client.GetPaneView(ctx, req)
+					cancel()
+					if err != nil {
+						results <- result{err: err}
+						continue
+					}
+					results <- result{view: resp}
+				}
+			}()
+		}
+
+		go func() {
+			for _, req := range reqs {
+				jobs <- req
+			}
+			close(jobs)
+			wg.Wait()
+			close(results)
+		}()
+
+		for res := range results {
+			if res.err != nil {
 				if firstErr == nil {
-					firstErr = err
+					firstErr = res.err
 				}
 				continue
 			}
-			views = append(views, resp)
+			views = append(views, res.view)
 		}
+
 		if len(views) == 0 && firstErr != nil {
 			return paneViewsMsg{Err: firstErr}
 		}

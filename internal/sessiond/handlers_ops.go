@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	uv "github.com/charmbracelet/ultraviolet"
 
@@ -48,11 +47,7 @@ func (d *Daemon) handleSnapshot(payload []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	timeout := time.Duration(req.MaxDurationMS) * time.Millisecond
-	if timeout <= 0 {
-		timeout = defaultOpTimeout
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
 	defer cancel()
 	sessions := manager.Snapshot(ctx, req.PreviewLines)
 	resp := SnapshotResponse{Version: manager.Version(), Sessions: sessions}
@@ -69,6 +64,7 @@ func (d *Daemon) handleStartSession(payload []byte) ([]byte, error) {
 		return nil, err
 	}
 	d.broadcast(Event{Type: EventSessionChanged, Session: resp.Name})
+	d.queuePersistState()
 	return encodePayload(resp)
 }
 
@@ -89,6 +85,7 @@ func (d *Daemon) handleKillSession(payload []byte) ([]byte, error) {
 		return nil, err
 	}
 	d.broadcast(Event{Type: EventSessionChanged, Session: name})
+	d.queuePersistState()
 	return nil, nil
 }
 
@@ -113,6 +110,7 @@ func (d *Daemon) handleRenameSession(payload []byte) ([]byte, error) {
 		return nil, err
 	}
 	d.broadcast(Event{Type: EventSessionChanged, Session: newName})
+	d.queuePersistState()
 	return encodePayload(RenameSessionResponse{NewName: newName})
 }
 
@@ -140,6 +138,7 @@ func (d *Daemon) handleRenamePane(payload []byte) ([]byte, error) {
 	if err := manager.RenamePane(sessionName, paneIndex, newTitle); err != nil {
 		return nil, err
 	}
+	d.queuePersistState()
 	return nil, nil
 }
 
@@ -166,6 +165,7 @@ func (d *Daemon) handleSplitPane(payload []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	d.queuePersistState()
 	return encodePayload(SplitPaneResponse{NewIndex: newIndex})
 }
 
@@ -191,6 +191,7 @@ func (d *Daemon) handleClosePane(payload []byte) ([]byte, error) {
 	if err := manager.ClosePane(ctx, sessionName, paneIndex); err != nil {
 		return nil, err
 	}
+	d.queuePersistState()
 	return nil, nil
 }
 
@@ -218,6 +219,7 @@ func (d *Daemon) handleSwapPanes(payload []byte) ([]byte, error) {
 	if err := manager.SwapPanes(sessionName, paneA, paneB); err != nil {
 		return nil, err
 	}
+	d.queuePersistState()
 	return nil, nil
 }
 

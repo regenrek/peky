@@ -6,7 +6,6 @@ import (
 	"net"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/regenrek/peakypanes/internal/native"
 )
@@ -73,9 +72,6 @@ func TestClientSnapshot(t *testing.T) {
 			if req.PreviewLines != 3 {
 				return fmt.Errorf("expected preview lines 3, got %d", req.PreviewLines)
 			}
-			if req.MaxDurationMS <= 0 {
-				return fmt.Errorf("expected max duration set")
-			}
 			return nil
 		},
 		respond: SnapshotResponse{
@@ -83,7 +79,7 @@ func TestClientSnapshot(t *testing.T) {
 			Sessions: []native.SessionSnapshot{{Name: "demo"}},
 		},
 		call: func(c *Client) error {
-			sessions, version, err := c.Snapshot(context.Background(), 3, 250*time.Millisecond)
+			sessions, version, err := c.Snapshot(context.Background(), 3)
 			if err != nil {
 				return err
 			}

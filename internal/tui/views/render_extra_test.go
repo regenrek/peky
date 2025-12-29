@@ -120,6 +120,7 @@ func TestViewStates(t *testing.T) {
 		viewHelp,
 		viewConfirmKill,
 		viewConfirmCloseProject,
+		viewConfirmRestart,
 		viewRenameSession,
 		viewRenamePane,
 		viewProjectRootSetup,

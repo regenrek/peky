@@ -115,7 +115,7 @@ func TestClosePaneRetilesAndActivates(t *testing.T) {
 	if !session.Panes[0].Active {
 		t.Fatalf("ClosePane() should activate remaining pane")
 	}
-	if session.Panes[0].Width != layoutBaseSize || session.Panes[0].Height != layoutBaseSize {
+	if session.Panes[0].Width != LayoutBaseSize || session.Panes[0].Height != LayoutBaseSize {
 		t.Fatalf("ClosePane() did not retile to full size")
 	}
 	if got := drainEvents(m.Events()); got < 2 {

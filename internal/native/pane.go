@@ -17,21 +17,23 @@ import (
 
 // Pane represents a running terminal pane.
 type Pane struct {
-	ID           string
-	Index        string
-	Title        string
-	Command      string
-	StartCommand string
-	PID          int
-	Active       bool
-	Left         int
-	Top          int
-	Width        int
-	Height       int
-	Dead         bool
-	DeadStatus   int
-	LastActive   time.Time
-	window       *terminal.Window
+	ID            string
+	Index         string
+	Title         string
+	Command       string
+	StartCommand  string
+	PID           int
+	Active        bool
+	Left          int
+	Top           int
+	Width         int
+	Height        int
+	Dead          bool
+	DeadStatus    int
+	RestoreFailed bool
+	RestoreError  string
+	LastActive    time.Time
+	window        *terminal.Window
 }
 
 // Window returns the terminal window for a pane ID.
@@ -191,6 +193,7 @@ func (m *Manager) SplitPane(ctx context.Context, sessionName, paneIndex string, 
 	}
 	newIndex := nextPaneIndex(session.Panes)
 	startDir := strings.TrimSpace(session.Path)
+	env := append([]string(nil), session.Env...)
 	m.mu.RUnlock()
 
 	if strings.TrimSpace(startDir) != "" {
@@ -198,7 +201,7 @@ func (m *Manager) SplitPane(ctx context.Context, sessionName, paneIndex string, 
 			return "", err
 		}
 	}
-	pane, err := m.createPane(ctx, startDir, "", "", nil)
+	pane, err := m.createPane(ctx, startDir, "", "", env)
 	if err != nil {
 		return "", err
 	}
@@ -288,6 +291,9 @@ func (m *Manager) SendInput(id string, input []byte) error {
 		return fmt.Errorf("native: pane %q not found", id)
 	}
 	if err := pane.window.SendInput(input); err != nil {
+		if errors.Is(err, terminal.ErrPaneClosed) {
+			m.notify(id)
+		}
 		return err
 	}
 	m.markActive(id)
@@ -388,10 +394,10 @@ func retilePanes(panes []*Pane) {
 		rows = 1
 	}
 
-	cellW := layoutBaseSize / cols
-	cellH := layoutBaseSize / rows
-	remainderW := layoutBaseSize % cols
-	remainderH := layoutBaseSize % rows
+	cellW := LayoutBaseSize / cols
+	cellH := LayoutBaseSize / rows
+	remainderW := LayoutBaseSize % cols
+	remainderH := LayoutBaseSize % rows
 
 	for i, pane := range panes {
 		row := i / cols
@@ -422,7 +428,7 @@ type rect struct {
 
 func rectFromPane(p *Pane) rect {
 	if p == nil {
-		return rect{x: 0, y: 0, w: layoutBaseSize, h: layoutBaseSize}
+		return rect{x: 0, y: 0, w: LayoutBaseSize, h: LayoutBaseSize}
 	}
 	return rect{x: p.Left, y: p.Top, w: p.Width, h: p.Height}
 }

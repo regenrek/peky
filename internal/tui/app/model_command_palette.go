@@ -112,6 +112,10 @@ func (m *Model) commandPaletteItems() []list.Item {
 			m.openRenameSession()
 			return nil
 		}},
+		{Label: "Daemon: Restart daemon...", Desc: "Restart daemon and restore sessions", Run: func() tea.Cmd {
+			m.openRestartConfirm()
+			return nil
+		}},
 		{Label: "Other: Refresh", Desc: "Refresh dashboard data", Run: func() tea.Cmd {
 			m.setToast("Refreshing...", toastInfo)
 			return m.requestRefreshCmd()

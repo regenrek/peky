@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -109,4 +110,50 @@ func FormatStatusWarning(msg string) string {
 // FormatStatusInfo formats an info message for the status bar.
 func FormatStatusInfo(msg string) string {
 	return theme.FormatInfo(msg)
+}
+
+func isPaneClosedError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(strings.TrimSpace(err.Error()))
+	if strings.HasPrefix(msg, "pane closed") {
+		return true
+	}
+	if strings.Contains(msg, "pane") && strings.Contains(msg, "not found") {
+		return true
+	}
+	return false
+}
+
+func paneClosedMessage(err error) string {
+	if err == nil {
+		return "Pane closed"
+	}
+	msg := strings.TrimSpace(err.Error())
+	if msg == "" {
+		return "Pane closed"
+	}
+	lower := strings.ToLower(msg)
+	if strings.HasPrefix(lower, "pane closed") {
+		return capitalizeFirst(msg)
+	}
+	if strings.Contains(lower, "pane") && strings.Contains(lower, "not found") {
+		return "Pane closed"
+	}
+	return "Pane closed"
+}
+
+func newPaneClosedMsg(paneID string, err error) PaneClosedMsg {
+	return PaneClosedMsg{
+		PaneID:  paneID,
+		Message: paneClosedMessage(err),
+	}
+}
+
+func capitalizeFirst(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }

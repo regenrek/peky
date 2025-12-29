@@ -62,8 +62,7 @@ type SessionNamesResponse struct {
 
 // SnapshotRequest requests a dashboard snapshot.
 type SnapshotRequest struct {
-	PreviewLines  int
-	MaxDurationMS int
+	PreviewLines int
 }
 
 // SnapshotResponse returns dashboard snapshots.

@@ -7,7 +7,8 @@ import (
 	"time"
 )
 
-const layoutBaseSize = 1000
+// LayoutBaseSize is the normalized coordinate space for pane layouts.
+const LayoutBaseSize = 1000
 
 // PaneEvent signals that a pane updated.
 type PaneEvent struct {

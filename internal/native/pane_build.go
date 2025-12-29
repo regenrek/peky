@@ -41,10 +41,10 @@ func (m *Manager) buildGridPanes(ctx context.Context, path string, layoutCfg *la
 	commands := layout.ResolveGridCommands(layoutCfg, grid.Panes())
 	titles := layout.ResolveGridTitles(layoutCfg, grid.Panes())
 
-	cellW := layoutBaseSize / grid.Columns
-	cellH := layoutBaseSize / grid.Rows
-	remainderW := layoutBaseSize % grid.Columns
-	remainderH := layoutBaseSize % grid.Rows
+	cellW := LayoutBaseSize / grid.Columns
+	cellH := LayoutBaseSize / grid.Rows
+	remainderW := LayoutBaseSize % grid.Columns
+	remainderH := LayoutBaseSize % grid.Rows
 
 	panes := make([]*Pane, 0, grid.Panes())
 	for r := 0; r < grid.Rows; r++ {
@@ -99,7 +99,7 @@ func (m *Manager) buildSplitPanes(ctx context.Context, path string, defs []layou
 		pane.Index = strconv.Itoa(i)
 		if i == 0 {
 			pane.Active = true
-			pane.Left, pane.Top, pane.Width, pane.Height = 0, 0, layoutBaseSize, layoutBaseSize
+			pane.Left, pane.Top, pane.Width, pane.Height = 0, 0, LayoutBaseSize, LayoutBaseSize
 			active = pane
 		} else if active != nil {
 			vertical := strings.EqualFold(paneDef.Split, "vertical") || strings.EqualFold(paneDef.Split, "v")
@@ -108,7 +108,7 @@ func (m *Manager) buildSplitPanes(ctx context.Context, path string, defs []layou
 			active.Left, active.Top, active.Width, active.Height = oldRect.x, oldRect.y, oldRect.w, oldRect.h
 			pane.Left, pane.Top, pane.Width, pane.Height = newRect.x, newRect.y, newRect.w, newRect.h
 		} else {
-			pane.Left, pane.Top, pane.Width, pane.Height = 0, 0, layoutBaseSize, layoutBaseSize
+			pane.Left, pane.Top, pane.Width, pane.Height = 0, 0, LayoutBaseSize, LayoutBaseSize
 		}
 		panes = append(panes, pane)
 	}

@@ -32,6 +32,10 @@ func (m *Model) handleUpdateMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return m, m.handleDaemonEvent(msg), true
 	case paneViewsMsg:
 		return m, m.handlePaneViews(msg), true
+	case daemonRestartMsg:
+		return m, m.handleDaemonRestart(msg), true
+	case PaneClosedMsg:
+		return m, m.handlePaneClosed(msg), true
 	case sessionStartedMsg:
 		return m, m.handleSessionStarted(msg), true
 	case SuccessMsg:
@@ -88,6 +92,9 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		return model, cmd, true
 	case StateConfirmClosePane:
 		model, cmd := m.updateConfirmClosePane(msg)
+		return model, cmd, true
+	case StateConfirmRestart:
+		model, cmd := m.updateConfirmRestart(msg)
 		return model, cmd, true
 	case StateHelp:
 		model, cmd := m.updateHelp(msg)
@@ -194,6 +201,7 @@ func (m *Model) handleDashboardSnapshot(msg dashboardSnapshotMsg) tea.Cmd {
 		m.setToast("Dashboard config: "+msg.Result.Warning, toastWarning)
 	}
 	m.data = msg.Result.Data
+	m.reconcilePaneInputDisabled()
 	m.settings = msg.Result.Settings
 	m.config = msg.Result.RawConfig
 	if msg.Result.Keymap != nil {
@@ -216,6 +224,21 @@ func (m *Model) handleDashboardSnapshot(msg dashboardSnapshotMsg) tea.Cmd {
 	return cmd
 }
 
+func (m *Model) handlePaneClosed(msg PaneClosedMsg) tea.Cmd {
+	if msg.PaneID != "" {
+		if m.isPaneInputDisabled(msg.PaneID) {
+			return nil
+		}
+		m.markPaneInputDisabled(msg.PaneID)
+	}
+	if msg.Message != "" {
+		m.setToast(msg.Message, toastWarning)
+	} else {
+		m.setToast("Pane closed", toastWarning)
+	}
+	return m.requestRefreshCmd()
+}
+
 func (m *Model) handleDaemonEvent(msg daemonEventMsg) tea.Cmd {
 	cmds := []tea.Cmd{waitDaemonEvent(m.client)}
 	switch msg.Event.Type {
@@ -235,6 +258,12 @@ func (m *Model) handlePaneViews(msg paneViewsMsg) tea.Cmd {
 	var cmd tea.Cmd
 	if msg.Err != nil {
 		m.setToast("Pane view failed: "+msg.Err.Error(), toastWarning)
+	}
+	if m.paneViews == nil {
+		m.paneViews = make(map[paneViewKey]string)
+	}
+	if m.paneMouseMotion == nil {
+		m.paneMouseMotion = make(map[string]bool)
 	}
 	for _, view := range msg.Views {
 		key := paneViewKeyFrom(view)

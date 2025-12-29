@@ -17,6 +17,7 @@ func newTestModelLite() *Model {
 		paneViews:          make(map[paneViewKey]string),
 		paneMouseMotion:    make(map[string]bool),
 		paneViewProfile:    termenv.TrueColor,
+		paneInputDisabled:  make(map[string]struct{}),
 		settings: DashboardConfig{
 			PreviewMode:    "grid",
 			PreviewLines:   12,

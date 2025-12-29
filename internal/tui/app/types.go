@@ -21,6 +21,7 @@ const (
 	StateConfirmKill
 	StateConfirmCloseProject
 	StateConfirmClosePane
+	StateConfirmRestart
 	StateHelp
 	StateCommandPalette
 	StateRenameSession
@@ -107,22 +108,24 @@ type DashboardProjectColumn struct {
 
 // PaneItem represents a pane with preview content.
 type PaneItem struct {
-	ID           string
-	Index        string
-	Title        string
-	Command      string
-	StartCommand string
-	PID          int
-	Active       bool
-	Left         int
-	Top          int
-	Width        int
-	Height       int
-	Dead         bool
-	DeadStatus   int
-	LastActive   time.Time
-	Preview      []string
-	Status       PaneStatus
+	ID            string
+	Index         string
+	Title         string
+	Command       string
+	StartCommand  string
+	PID           int
+	Active        bool
+	Left          int
+	Top           int
+	Width         int
+	Height        int
+	Dead          bool
+	DeadStatus    int
+	RestoreFailed bool
+	RestoreError  string
+	LastActive    time.Time
+	Preview       []string
+	Status        PaneStatus
 }
 
 // PaneSummary holds lightweight preview info for thumbnails.
@@ -206,6 +209,18 @@ type daemonEventMsg struct {
 type paneViewsMsg struct {
 	Views []sessiond.PaneViewResponse
 	Err   error
+}
+
+type daemonRestartMsg struct {
+	Client         *sessiond.Client
+	PaneViewClient *sessiond.Client
+	Err            error
+}
+
+// PaneClosedMsg signals the selected pane can no longer accept input.
+type PaneClosedMsg struct {
+	PaneID  string
+	Message string
 }
 
 // sessionStartedMsg signals a session creation result.

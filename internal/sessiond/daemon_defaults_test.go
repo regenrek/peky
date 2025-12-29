@@ -14,5 +14,8 @@ func TestNewDaemonDefaults(t *testing.T) {
 	if d.socketPath == "" || d.pidPath == "" {
 		t.Fatalf("expected default paths set")
 	}
+	if d.statePath == "" || d.stateWriter == nil {
+		t.Fatalf("expected default state writer set")
+	}
 	_ = d.Stop()
 }

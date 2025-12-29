@@ -190,6 +190,28 @@ peakypanes clone user/repo     # Clone from GitHub and start session
 peakypanes version             # Show version
 ```
 
+## Troubleshooting: daemon stuck / restart
+
+The daemon owns sessions and PTYs. If it becomes unresponsive, the only recovery
+today is a manual restart, which **will terminate all running sessions**.
+
+**Manual restart (macOS default path):**
+```bash
+kill "$(cat "$HOME/Library/Application Support/peakypanes/daemon.pid")"
+```
+
+**Manual restart (Linux default path):**
+```bash
+kill "$(cat "$HOME/.config/peakypanes/daemon.pid")"
+```
+
+You can also set `PEAKYPANES_DAEMON_PID` to control the pid file location.
+
+### Proposed UX (future)
+If the app detects a hung daemon, it should show a dialog like:
+**“Restart daemon? This will stop all running sessions and close their PTYs.”**
+This makes the data-loss tradeoff explicit before taking action.
+
 ## Built-in Layouts
 
 Core (general) layouts:

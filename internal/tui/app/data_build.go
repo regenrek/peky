@@ -271,21 +271,23 @@ func panesFromNative(panes []native.PaneSnapshot, settings DashboardConfig, now 
 	items := make([]PaneItem, len(panes))
 	for i, p := range panes {
 		item := PaneItem{
-			ID:           p.ID,
-			Index:        p.Index,
-			Title:        p.Title,
-			Command:      p.Command,
-			StartCommand: p.StartCommand,
-			PID:          p.PID,
-			Active:       p.Active,
-			Left:         p.Left,
-			Top:          p.Top,
-			Width:        p.Width,
-			Height:       p.Height,
-			Dead:         p.Dead,
-			DeadStatus:   p.DeadStatus,
-			LastActive:   p.LastActive,
-			Preview:      p.Preview,
+			ID:            p.ID,
+			Index:         p.Index,
+			Title:         p.Title,
+			Command:       p.Command,
+			StartCommand:  p.StartCommand,
+			PID:           p.PID,
+			Active:        p.Active,
+			Left:          p.Left,
+			Top:           p.Top,
+			Width:         p.Width,
+			Height:        p.Height,
+			Dead:          p.Dead,
+			DeadStatus:    p.DeadStatus,
+			RestoreFailed: p.RestoreFailed,
+			RestoreError:  p.RestoreError,
+			LastActive:    p.LastActive,
+			Preview:       p.Preview,
 		}
 		item.Status = classifyPane(item, item.Preview, settings, now)
 		items[i] = item

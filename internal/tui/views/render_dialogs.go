@@ -98,6 +98,23 @@ func (m Model) viewConfirmClosePane() string {
 	return m.overlayDialog(dialog)
 }
 
+func (m Model) viewConfirmRestart() string {
+	var dialogContent strings.Builder
+
+	dialogContent.WriteString(dialogTitleStyle.Render("Restart Daemon?"))
+	dialogContent.WriteString("\n\n")
+	dialogContent.WriteString(theme.DialogNote.Render("Restarting will disconnect clients. Sessions will be restored on startup."))
+	dialogContent.WriteString("\n\n")
+
+	dialogContent.WriteString(theme.DialogChoiceKey.Render("y"))
+	dialogContent.WriteString(theme.DialogChoiceSep.Render(" restart • "))
+	dialogContent.WriteString(theme.DialogChoiceKey.Render("n"))
+	dialogContent.WriteString(theme.DialogChoiceSep.Render(" cancel"))
+
+	dialog := dialogStyle.Render(dialogContent.String())
+	return m.overlayDialog(dialog)
+}
+
 func (m Model) viewRename() string {
 	var dialogContent strings.Builder
 

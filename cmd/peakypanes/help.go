@@ -10,7 +10,7 @@ Commands:
   dashboard        Open dashboard UI
   open             Start a session and open dashboard
   start            Start a session and open dashboard (alias)
-  daemon           Run the session daemon
+  daemon           Run or manage the session daemon
   init             Initialize configuration
   layouts          List and manage layouts
   clone            Clone from GitHub and open
@@ -23,6 +23,7 @@ Examples:
   peakypanes start --layout dev-3     # Start with specific layout
   peakypanes open --path ~/repo       # Start from a path
   peakypanes daemon                   # Run daemon in foreground
+  peakypanes daemon restart           # Restart daemon in background
   peakypanes init                     # Create global config
   peakypanes init --local             # Create .peakypanes.yml in current dir
   peakypanes layouts                  # List available layouts
@@ -64,13 +65,32 @@ Examples:
 const daemonHelpText = `Run the Peaky Panes session daemon.
 
 Usage:
-  peakypanes daemon [options]
+  peakypanes daemon [subcommand] [options]
+
+Subcommands:
+  (none)           Run daemon in foreground
+  restart          Restart daemon and restore sessions
 
 Options:
   -h, --help           Show this help
 
 Examples:
   peakypanes daemon
+  peakypanes daemon restart --yes
+`
+
+const daemonRestartHelpText = `Restart the Peaky Panes session daemon.
+
+Usage:
+  peakypanes daemon restart [options]
+
+Options:
+  -y, --yes            Skip confirmation prompt
+  -h, --help           Show this help
+
+Examples:
+  peakypanes daemon restart
+  peakypanes daemon restart --yes
 `
 
 const layoutsHelpText = `List and manage layouts.

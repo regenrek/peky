@@ -16,6 +16,9 @@ This format is based on Keep a Changelog.
 - Native pane scrollback and copy mode (selection + yank) with configurable key bindings.
 - Scrollback reflow on resize for native panes.
 - Smoke/integration coverage for native scrollback/copy, VT alt-screen + reflow, and key TUI state transitions.
+- Daemon runtime state persistence (`state.json`) with automatic restore on startup.
+- CLI and TUI daemon restart commands with confirmation.
+- Per-pane restore failure tracking surfaced in snapshots.
 
 ### Changed
 - Native-only sessions; tmux UI integration and commands are removed.
@@ -26,12 +29,15 @@ This format is based on Keep a Changelog.
 - Window rendering now supports scrollback viewports and copy-mode highlights for native panes.
 - Alternate screen panes no longer record scrollback history.
 - Default pane titles now compress path-like window names to readable repo-relative labels and de-duplicate duplicates.
+- Session env overrides are persisted and reapplied on restore; splits inherit session env.
+- State persistence is debounced and flushed on shutdown to reduce write amplification.
 
 ### Fixed
 - Space key now passes correctly in native terminal focus.
 - Command palette and project picker filters now reset on open/selection.
 - Scrollback view stays anchored when new output arrives while scrolled up.
 - Native manager no longer panics on shutdown when pane updates arrive after close.
+- Input to closed PTYs now yields a friendly "pane closed" toast, marks panes dead, and prevents repeated send errors.
 - Project tabs and pane lists no longer reorder during rapid navigation thanks to deterministic ordering.
 - Stale refresh results are ignored so fast navigation cannot apply out-of-order snapshots.
 - Terminal focus no longer exits on Escape, so ESC passes through to in-pane TUIs.
@@ -39,6 +45,7 @@ This format is based on Keep a Changelog.
 - Pane view refreshes are serialized and queued to avoid daemon socket write timeouts under rapid updates.
 - Refresh snapshots no longer time out behind pane view rendering thanks to a dedicated pane view connection.
 - Daemon transport now shuts down dead client links and client writes honor request deadlines to prevent refresh timeouts.
+- Client calls now guard against closed connections during daemon restarts.
 
 ## 0.0.4 - 2025-12-25
 

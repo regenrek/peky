@@ -13,18 +13,7 @@ import (
 
 const (
 	defaultSnapshotTimeout = 2 * time.Second
-	snapshotBudgetPadding  = 200 * time.Millisecond
 )
-
-func snapshotBudget(timeout time.Duration) time.Duration {
-	if timeout <= 0 {
-		return 0
-	}
-	if timeout <= snapshotBudgetPadding {
-		return timeout
-	}
-	return timeout - snapshotBudgetPadding
-}
 
 // SetAutoStart queues a session to start when the TUI launches.
 func (m *Model) SetAutoStart(spec AutoStartSpec) {
@@ -122,7 +111,7 @@ func (m Model) refreshCmd(seq uint64) tea.Cmd {
 			timeout := defaultSnapshotTimeout
 			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			defer cancel()
-			sessions, _, err = client.Snapshot(ctx, previewLines, snapshotBudget(timeout))
+			sessions, _, err = client.Snapshot(ctx, previewLines)
 			if err != nil {
 				result := buildDashboardData(dashboardSnapshotInput{
 					Selection:  selection,

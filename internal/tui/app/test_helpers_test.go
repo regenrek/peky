@@ -101,7 +101,7 @@ func waitForSessionSnapshot(t *testing.T, client *sessiond.Client, name string) 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	for start := time.Now(); time.Since(start) < 2*time.Second; {
-		sessions, _, err := client.Snapshot(ctx, 2, 0)
+		sessions, _, err := client.Snapshot(ctx, 2)
 		if err != nil {
 			t.Fatalf("Snapshot() error: %v", err)
 		}
@@ -123,7 +123,7 @@ func sessionExists(t *testing.T, client *sessiond.Client, name string) bool {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	sessions, _, err := client.Snapshot(ctx, 1, 0)
+	sessions, _, err := client.Snapshot(ctx, 1)
 	if err != nil {
 		t.Fatalf("Snapshot() error: %v", err)
 	}

@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
@@ -16,12 +17,12 @@ func TestSendInputErrorPaths(t *testing.T) {
 		t.Fatalf("expected nil error for empty input, got %v", err)
 	}
 	w.closed.Store(true)
-	if err := w.SendInput([]byte("hi")); err == nil {
-		t.Fatalf("expected error for closed window")
+	if err := w.SendInput([]byte("hi")); err == nil || !errors.Is(err, ErrPaneClosed) {
+		t.Fatalf("expected pane closed error for closed window, got %v", err)
 	}
 	w.closed.Store(false)
-	if err := w.SendInput([]byte("hi")); err == nil {
-		t.Fatalf("expected error for missing pty")
+	if err := w.SendInput([]byte("hi")); err == nil || !errors.Is(err, ErrPaneClosed) {
+		t.Fatalf("expected pane closed error for missing pty, got %v", err)
 	}
 }
 

@@ -14,13 +14,21 @@ import (
 	"time"
 
 	"github.com/regenrek/peakypanes/internal/native"
+	"github.com/regenrek/peakypanes/internal/sessiond/state"
 )
 
 const (
 	defaultReadTimeout  = 2 * time.Minute
 	defaultWriteTimeout = 5 * time.Second
 	defaultOpTimeout    = 5 * time.Second
-	snapshotResponsePad = 200 * time.Millisecond
+)
+
+// DefaultStateDebounce controls the default persistence debounce interval.
+const DefaultStateDebounce = 250 * time.Millisecond
+
+const (
+	paneViewMaxConcurrency = 4
+	paneViewQueueSize      = 128
 )
 
 // DaemonConfig configures a session daemon instance.
@@ -28,17 +36,21 @@ type DaemonConfig struct {
 	Version       string
 	SocketPath    string
 	PidPath       string
+	StatePath     string
+	StateDebounce time.Duration
 	HandleSignals bool
 }
 
 // Daemon owns persistent sessions and serves clients over a local socket.
 type Daemon struct {
-	manager    sessionManager
-	listener   net.Listener
-	listenerMu sync.RWMutex
-	socketPath string
-	pidPath    string
-	version    string
+	manager     sessionManager
+	listener    net.Listener
+	listenerMu  sync.RWMutex
+	socketPath  string
+	pidPath     string
+	statePath   string
+	stateWriter *state.Writer
+	version     string
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -57,6 +69,10 @@ type clientConn struct {
 	respCh  chan outboundEnvelope
 	eventCh chan outboundEnvelope
 	done    chan struct{}
+
+	paneViewCh chan Envelope
+
+	closed atomic.Bool
 }
 
 type outboundEnvelope struct {
@@ -82,15 +98,29 @@ func NewDaemon(cfg DaemonConfig) (*Daemon, error) {
 		}
 		pidPath = path
 	}
+	statePath := cfg.StatePath
+	if statePath == "" {
+		statePath = filepath.Join(filepath.Dir(socketPath), "state.json")
+	}
+	debounce := cfg.StateDebounce
+	if debounce < 0 {
+		debounce = DefaultStateDebounce
+	}
+	stateWriter := state.NewWriter(statePath, state.WriterOptions{
+		Debounce: debounce,
+		FileMode: 0o600,
+	})
 	ctx, cancel := context.WithCancel(context.Background())
 	d := &Daemon{
-		manager:    wrapManager(native.NewManager()),
-		socketPath: socketPath,
-		pidPath:    pidPath,
-		version:    cfg.Version,
-		ctx:        ctx,
-		cancel:     cancel,
-		clients:    make(map[uint64]*clientConn),
+		manager:     wrapManager(native.NewManager()),
+		socketPath:  socketPath,
+		pidPath:     pidPath,
+		statePath:   statePath,
+		stateWriter: stateWriter,
+		version:     cfg.Version,
+		ctx:         ctx,
+		cancel:      cancel,
+		clients:     make(map[uint64]*clientConn),
 	}
 	if cfg.HandleSignals {
 		d.handleSignals()
@@ -121,6 +151,9 @@ func (d *Daemon) Start() error {
 	if err := d.writePidFile(); err != nil {
 		_ = listener.Close()
 		return err
+	}
+	if err := d.restorePersistedState(); err != nil {
+		log.Printf("sessiond: restore state: %v", err)
 	}
 
 	d.wg.Add(2)
@@ -164,6 +197,15 @@ func (d *Daemon) shutdown() error {
 	d.clients = make(map[uint64]*clientConn)
 	d.clientsMu.Unlock()
 
+	d.queuePersistState()
+	if d.stateWriter != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
+		if err := d.stateWriter.Close(ctx); err != nil {
+			log.Printf("sessiond: flush state: %v", err)
+		}
+		cancel()
+	}
+
 	if d.manager != nil {
 		d.manager.Close()
 	}
@@ -191,6 +233,7 @@ func (d *Daemon) acceptLoop() {
 		}
 		client := d.newClient(conn)
 		d.registerClient(client)
+		d.startPaneViewWorkers(client)
 		d.wg.Add(1)
 		go d.readLoop(client)
 		d.wg.Add(1)
@@ -232,11 +275,53 @@ func (d *Daemon) eventLoop() {
 func (d *Daemon) newClient(conn net.Conn) *clientConn {
 	id := d.clientSeq.Add(1)
 	return &clientConn{
-		id:      id,
-		conn:    conn,
-		respCh:  make(chan outboundEnvelope, 64),
-		eventCh: make(chan outboundEnvelope, 128),
-		done:    make(chan struct{}),
+		id:         id,
+		conn:       conn,
+		respCh:     make(chan outboundEnvelope, 64),
+		eventCh:    make(chan outboundEnvelope, 128),
+		paneViewCh: make(chan Envelope, paneViewQueueSize),
+		done:       make(chan struct{}),
+	}
+}
+
+func (d *Daemon) startPaneViewWorkers(client *clientConn) {
+	if client == nil {
+		return
+	}
+	workers := paneViewMaxConcurrency
+	if workers < 1 {
+		workers = 1
+	}
+	for i := 0; i < workers; i++ {
+		d.wg.Add(1)
+		go d.paneViewWorker(client)
+	}
+}
+
+func (d *Daemon) paneViewWorker(client *clientConn) {
+	defer d.wg.Done()
+	for {
+		select {
+		case <-client.done:
+			return
+		case <-d.ctx.Done():
+			return
+		default:
+		}
+
+		select {
+		case env := <-client.paneViewCh:
+			resp := d.handleRequest(env)
+			timeout := d.responseTimeout(env)
+			if err := sendEnvelope(client, resp, timeout); err != nil {
+				d.shutdownClientConn(client)
+				return
+			}
+		case <-client.done:
+			return
+		case <-d.ctx.Done():
+			return
+		}
 	}
 }
 
@@ -269,6 +354,16 @@ func (d *Daemon) readLoop(client *clientConn) {
 		if env.Kind != EnvelopeRequest {
 			continue
 		}
+		if env.Op == OpPaneView && client.paneViewCh != nil {
+			select {
+			case client.paneViewCh <- env:
+				continue
+			case <-client.done:
+				return
+			case <-d.ctx.Done():
+				return
+			}
+		}
 		resp := d.handleRequest(env)
 		timeout := d.responseTimeout(env)
 		if err := sendEnvelope(client, resp, timeout); err != nil {
@@ -278,21 +373,7 @@ func (d *Daemon) readLoop(client *clientConn) {
 }
 
 func (d *Daemon) responseTimeout(env Envelope) time.Duration {
-	if env.Op != OpSnapshot {
-		return defaultWriteTimeout
-	}
-	var req SnapshotRequest
-	if err := decodePayload(env.Payload, &req); err != nil {
-		return defaultWriteTimeout
-	}
-	if req.MaxDurationMS <= 0 {
-		return defaultWriteTimeout
-	}
-	timeout := time.Duration(req.MaxDurationMS) * time.Millisecond
-	if timeout < 0 {
-		return defaultWriteTimeout
-	}
-	return timeout + snapshotResponsePad
+	return defaultWriteTimeout
 }
 
 func (d *Daemon) writeLoop(client *clientConn) {
@@ -355,12 +436,13 @@ func sendEnvelope(client *clientConn, env Envelope, timeout time.Duration) error
 }
 
 func closeClient(client *clientConn) {
-	select {
-	case <-client.done:
+	if client == nil {
 		return
-	default:
-		close(client.done)
 	}
+	if client.closed.Swap(true) {
+		return
+	}
+	close(client.done)
 	if client.conn != nil {
 		_ = client.conn.Close()
 	}
@@ -409,6 +491,17 @@ func (d *Daemon) broadcast(event Event) {
 		default:
 		}
 	}
+}
+
+func (d *Daemon) queuePersistState() {
+	if d == nil || d.stateWriter == nil || d.manager == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
+	defer cancel()
+	sessions := d.manager.Snapshot(ctx, 0)
+	st := state.FromSnapshots(d.version, sessions)
+	d.stateWriter.Persist(st)
 }
 
 func (d *Daemon) writePidFile() error {

@@ -10,6 +10,7 @@ const (
 	viewConfirmKill
 	viewConfirmCloseProject
 	viewConfirmClosePane
+	viewConfirmRestart
 	viewHelp
 	viewCommandPalette
 	viewRenameSession

@@ -29,6 +29,7 @@ type Session struct {
 	LayoutName string
 	Panes      []*Pane
 	CreatedAt  time.Time
+	Env        []string
 }
 
 // Session returns a snapshot pointer for a session name.
@@ -159,6 +160,9 @@ func (m *Manager) StartSession(ctx context.Context, spec SessionSpec) (*Session,
 	if session.LayoutName == "" && spec.Layout != nil {
 		session.LayoutName = spec.Layout.Name
 	}
+	if len(spec.Env) > 0 {
+		session.Env = append([]string(nil), spec.Env...)
+	}
 
 	panes, err := m.buildPanes(ctx, spec)
 	if err != nil {
@@ -234,6 +238,7 @@ func (m *Manager) Snapshot(ctx context.Context, previewLines int) []SessionSnaps
 			Path:       session.Path,
 			LayoutName: session.LayoutName,
 			CreatedAt:  session.CreatedAt,
+			Env:        append([]string(nil), session.Env...),
 		}
 		panes := append([]*Pane(nil), session.Panes...)
 		sortPanesByIndex(panes)
@@ -248,20 +253,22 @@ func (m *Manager) Snapshot(ctx context.Context, previewLines int) []SessionSnaps
 				title = strings.TrimSpace(pane.window.Title())
 			}
 			out[si].Panes[pi] = PaneSnapshot{
-				ID:           pane.ID,
-				Index:        pane.Index,
-				Title:        title,
-				Command:      pane.Command,
-				StartCommand: pane.StartCommand,
-				PID:          pane.PID,
-				Active:       pane.Active,
-				Left:         pane.Left,
-				Top:          pane.Top,
-				Width:        pane.Width,
-				Height:       pane.Height,
-				Dead:         pane.window != nil && pane.window.Exited(),
-				DeadStatus:   pane.windowExitStatus(),
-				LastActive:   pane.LastActive,
+				ID:            pane.ID,
+				Index:         pane.Index,
+				Title:         title,
+				Command:       pane.Command,
+				StartCommand:  pane.StartCommand,
+				PID:           pane.PID,
+				Active:        pane.Active,
+				Left:          pane.Left,
+				Top:           pane.Top,
+				Width:         pane.Width,
+				Height:        pane.Height,
+				Dead:          pane.window != nil && pane.window.Dead(),
+				DeadStatus:    pane.windowExitStatus(),
+				LastActive:    pane.LastActive,
+				RestoreFailed: pane.RestoreFailed,
+				RestoreError:  pane.RestoreError,
 			}
 			paneRefs = append(paneRefs, panePreviewRef{
 				id:         pane.ID,
@@ -354,23 +361,26 @@ type SessionSnapshot struct {
 	LayoutName string
 	Panes      []PaneSnapshot
 	CreatedAt  time.Time
+	Env        []string
 }
 
 // PaneSnapshot describes a pane snapshot.
 type PaneSnapshot struct {
-	ID           string
-	Index        string
-	Title        string
-	Command      string
-	StartCommand string
-	PID          int
-	Active       bool
-	Left         int
-	Top          int
-	Width        int
-	Height       int
-	Dead         bool
-	DeadStatus   int
-	LastActive   time.Time
-	Preview      []string
+	ID            string
+	Index         string
+	Title         string
+	Command       string
+	StartCommand  string
+	PID           int
+	Active        bool
+	Left          int
+	Top           int
+	Width         int
+	Height        int
+	Dead          bool
+	DeadStatus    int
+	LastActive    time.Time
+	Preview       []string
+	RestoreFailed bool
+	RestoreError  string
 }

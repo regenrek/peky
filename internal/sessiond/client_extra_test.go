@@ -61,7 +61,7 @@ func TestClientSessionQueries(t *testing.T) {
 		t.Fatalf("SessionNames: %#v err=%v", names, err)
 	}
 
-	sessions, version, err := client.Snapshot(ctx, 2, 0)
+	sessions, version, err := client.Snapshot(ctx, 2)
 	if err != nil || version != 42 || len(sessions) != 1 || sessions[0].Name != "alpha" {
 		t.Fatalf("Snapshot: sessions=%#v version=%d err=%v", sessions, version, err)
 	}

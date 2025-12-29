@@ -377,6 +377,14 @@ func (m *Model) sendQuickReply() tea.Cmd {
 		return NewWarningCmd("No pane selected")
 	}
 	paneID := strings.TrimSpace(pane.ID)
+	if m.isPaneInputDisabled(paneID) {
+		return nil
+	}
+	if pane.Dead {
+		return func() tea.Msg {
+			return newPaneClosedMsg(paneID, nil)
+		}
+	}
 	payload := quickReplyTextBytes(*pane, text)
 	label := strings.TrimSpace(pane.Title)
 	if label == "" {
@@ -386,12 +394,24 @@ func (m *Model) sendQuickReply() tea.Cmd {
 		if m.client == nil {
 			return ErrorMsg{Err: errors.New("session client unavailable"), Context: "send to pane"}
 		}
+		if m.isPaneInputDisabled(paneID) {
+			return nil
+		}
+		if pane := m.paneByID(paneID); pane == nil || pane.Dead {
+			return newPaneClosedMsg(paneID, nil)
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), terminalActionTimeout)
 		defer cancel()
 		if err := m.client.SendInput(ctx, paneID, payload); err != nil {
+			if isPaneClosedError(err) {
+				return newPaneClosedMsg(paneID, err)
+			}
 			return ErrorMsg{Err: err, Context: "send to pane"}
 		}
 		if err := m.client.SendInput(ctx, paneID, []byte{'\r'}); err != nil {
+			if isPaneClosedError(err) {
+				return newPaneClosedMsg(paneID, err)
+			}
 			return ErrorMsg{Err: err, Context: "send to pane"}
 		}
 		if label != "" {

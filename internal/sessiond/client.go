@@ -78,6 +78,14 @@ func (c *Client) Events() <-chan Event {
 	return c.events
 }
 
+// Version returns the daemon version used by this client.
+func (c *Client) Version() string {
+	if c == nil {
+		return ""
+	}
+	return c.version
+}
+
 // Clone opens a new client connection to the same daemon.
 func (c *Client) Clone(ctx context.Context) (*Client, error) {
 	if c == nil {
@@ -151,6 +159,9 @@ func (c *Client) call(ctx context.Context, op Op, req any, out any) (Envelope, e
 	if c == nil {
 		return Envelope{}, errors.New("sessiond: client is nil")
 	}
+	if c.closed.Load() {
+		return Envelope{}, errors.New("sessiond: client closed")
+	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -161,6 +172,10 @@ func (c *Client) call(ctx context.Context, op Op, req any, out any) (Envelope, e
 	}
 	respCh := make(chan Envelope, 1)
 	c.pendingMu.Lock()
+	if c.pending == nil {
+		c.pendingMu.Unlock()
+		return Envelope{}, errors.New("sessiond: client closed")
+	}
 	c.pending[id] = respCh
 	c.pendingMu.Unlock()
 	if err := c.send(ctx, Envelope{Kind: EnvelopeRequest, Op: op, ID: id, Payload: payload}); err != nil {
@@ -198,6 +213,9 @@ func (c *Client) send(ctx context.Context, env Envelope) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	if c.closed.Load() {
+		return errors.New("sessiond: client closed")
+	}
 	c.sendMu.Lock()
 	defer c.sendMu.Unlock()
 	if err := ctx.Err(); err != nil {
@@ -230,14 +248,8 @@ func (c *Client) SessionNames(ctx context.Context) ([]string, error) {
 }
 
 // Snapshot fetches session snapshots.
-func (c *Client) Snapshot(ctx context.Context, previewLines int, maxDuration time.Duration) ([]native.SessionSnapshot, uint64, error) {
-	if maxDuration < 0 {
-		maxDuration = 0
-	}
+func (c *Client) Snapshot(ctx context.Context, previewLines int) ([]native.SessionSnapshot, uint64, error) {
 	req := SnapshotRequest{PreviewLines: previewLines}
-	if maxDuration > 0 {
-		req.MaxDurationMS = int(maxDuration / time.Millisecond)
-	}
 	var resp SnapshotResponse
 	if _, err := c.call(ctx, OpSnapshot, req, &resp); err != nil {
 		return nil, 0, err

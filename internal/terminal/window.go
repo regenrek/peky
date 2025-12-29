@@ -83,8 +83,10 @@ type Window struct {
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 
-	closed atomic.Bool
-	exited atomic.Bool
+	closed            atomic.Bool
+	exited            atomic.Bool
+	inputClosed       atomic.Bool
+	inputClosedReason atomic.Int32
 
 	exitStatus    atomic.Int64
 	cursorVisible atomic.Bool
@@ -313,6 +315,14 @@ func (w *Window) Exited() bool { return w.exited.Load() }
 
 func (w *Window) ExitStatus() int { return int(w.exitStatus.Load()) }
 
+// Dead reports whether the pane can no longer accept input.
+func (w *Window) Dead() bool {
+	if w == nil {
+		return true
+	}
+	return w.closed.Load() || w.exited.Load() || w.inputClosed.Load()
+}
+
 func (w *Window) PID() int {
 	if w == nil || w.cmd == nil || w.cmd.Process == nil {
 		return 0
@@ -376,7 +386,45 @@ func (w *Window) waitExit(ctx context.Context) {
 		w.exitStatus.Store(int64(w.cmd.ProcessState.ExitCode()))
 	}
 	w.exited.Store(true)
+	w.markInputClosed(PaneClosedProcessExited)
 	w.markDirty()
+}
+
+func (w *Window) markInputClosed(reason PaneClosedReason) {
+	if w == nil {
+		return
+	}
+	if reason != PaneClosedUnknown {
+		w.inputClosedReason.Store(int32(reason))
+	}
+	if w.inputClosed.Swap(true) {
+		return
+	}
+	w.detachPTY()
+}
+
+func (w *Window) inputClosedReasonValue() PaneClosedReason {
+	if w == nil || !w.inputClosed.Load() {
+		return PaneClosedUnknown
+	}
+	if reason := w.inputClosedReason.Load(); reason != 0 {
+		return PaneClosedReason(reason)
+	}
+	return PaneClosedUnknown
+}
+
+func (w *Window) detachPTY() {
+	var pty xpty.Pty
+	w.ptyMu.Lock()
+	pty = w.pty
+	w.pty = nil
+	w.ptyMu.Unlock()
+	if pty == nil {
+		return
+	}
+	w.writeMu.Lock()
+	_ = pty.Close()
+	w.writeMu.Unlock()
 }
 
 func (w *Window) markDirty() {
