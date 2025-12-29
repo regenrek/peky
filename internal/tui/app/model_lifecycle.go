@@ -11,6 +11,21 @@ import (
 	"github.com/regenrek/peakypanes/internal/sessiond"
 )
 
+const (
+	defaultSnapshotTimeout = 2 * time.Second
+	snapshotBudgetPadding  = 200 * time.Millisecond
+)
+
+func snapshotBudget(timeout time.Duration) time.Duration {
+	if timeout <= 0 {
+		return 0
+	}
+	if timeout <= snapshotBudgetPadding {
+		return timeout
+	}
+	return timeout - snapshotBudgetPadding
+}
+
 // SetAutoStart queues a session to start when the TUI launches.
 func (m *Model) SetAutoStart(spec AutoStartSpec) {
 	m.autoStart = &spec
@@ -104,9 +119,10 @@ func (m Model) refreshCmd(seq uint64) tea.Cmd {
 			if dashboard := dashboardPreviewLines(settings); dashboard > previewLines {
 				previewLines = dashboard
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			timeout := defaultSnapshotTimeout
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			defer cancel()
-			sessions, _, err = client.Snapshot(ctx, previewLines)
+			sessions, _, err = client.Snapshot(ctx, previewLines, snapshotBudget(timeout))
 			if err != nil {
 				result := buildDashboardData(dashboardSnapshotInput{
 					Selection:  selection,
@@ -144,4 +160,15 @@ func (m *Model) startRefreshCmd() tea.Cmd {
 	}
 	seq := m.beginRefresh()
 	return m.refreshCmd(seq)
+}
+
+func (m *Model) requestRefreshCmd() tea.Cmd {
+	if m == nil {
+		return nil
+	}
+	if m.refreshInFlight > 0 {
+		m.refreshQueued = true
+		return nil
+	}
+	return m.startRefreshCmd()
 }

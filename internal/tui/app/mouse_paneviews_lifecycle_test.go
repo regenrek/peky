@@ -17,9 +17,9 @@ func TestMouseHelpersAndForwarding(t *testing.T) {
 	hit := mouse.PaneHit{
 		PaneID: "p1",
 		Selection: mouse.Selection{
-			Project: "Alpha",
-			Session: "alpha-1",
-			Pane:    "1",
+			ProjectID: projectKey("/alpha", "Alpha"),
+			Session:   "alpha-1",
+			Pane:      "1",
 		},
 		Content: mouse.Rect{X: 0, Y: 0, W: 10, H: 5},
 	}
@@ -27,8 +27,8 @@ func TestMouseHelpersAndForwarding(t *testing.T) {
 		t.Fatalf("expected hit to be selected")
 	}
 
-	changed := m.applySelectionFromHit(mouse.Selection{Project: "Beta", Session: "beta-1", Pane: "1"})
-	if !changed || m.selection.Project != "Beta" {
+	changed := m.applySelectionFromHit(mouse.Selection{ProjectID: projectKey("/beta", "Beta"), Session: "beta-1", Pane: "1"})
+	if !changed || m.selection.ProjectID != projectKey("/beta", "Beta") {
 		t.Fatalf("expected selection change")
 	}
 

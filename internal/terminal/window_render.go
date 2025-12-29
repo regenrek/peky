@@ -21,18 +21,37 @@ func (w *Window) ViewANSI() string {
 	}
 
 	w.cacheMu.Lock()
-	if !w.cacheDirty && w.cacheANSI != "" {
+	if !w.cacheDirty {
 		s := w.cacheANSI
 		w.cacheMu.Unlock()
 		return s
 	}
 	w.cacheMu.Unlock()
 
+	w.refreshANSICache()
+	cached, _ := w.ViewANSICached()
+	return cached
+}
+
+// ViewANSICached returns the cached ANSI render and whether it is up to date.
+func (w *Window) ViewANSICached() (string, bool) {
+	if w == nil {
+		return "", false
+	}
+	w.cacheMu.Lock()
+	defer w.cacheMu.Unlock()
+	return w.cacheANSI, !w.cacheDirty
+}
+
+func (w *Window) refreshANSICache() {
+	if w == nil {
+		return
+	}
 	w.termMu.Lock()
 	term := w.term
 	if term == nil {
 		w.termMu.Unlock()
-		return ""
+		return
 	}
 	s := term.Render()
 	w.termMu.Unlock()
@@ -41,8 +60,6 @@ func (w *Window) ViewANSI() string {
 	w.cacheANSI = s
 	w.cacheDirty = false
 	w.cacheMu.Unlock()
-
-	return s
 }
 
 // ViewLipgloss renders the VT screen by walking cells and applying lipgloss styles.

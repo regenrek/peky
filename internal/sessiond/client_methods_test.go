@@ -2,11 +2,11 @@ package sessiond
 
 import (
 	"context"
-	"encoding/gob"
 	"fmt"
 	"net"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/regenrek/peakypanes/internal/native"
 )
@@ -25,10 +25,8 @@ func runClientCase(t *testing.T, tc clientCase) {
 	errCh := make(chan error, 1)
 
 	go func() {
-		dec := gob.NewDecoder(server)
-		enc := gob.NewEncoder(server)
-		var env Envelope
-		if err := dec.Decode(&env); err != nil {
+		env, err := readEnvelope(server)
+		if err != nil {
 			errCh <- err
 			return
 		}
@@ -48,7 +46,7 @@ func runClientCase(t *testing.T, tc clientCase) {
 			return
 		}
 		resp := Envelope{Kind: EnvelopeResponse, Op: env.Op, ID: env.ID, Payload: payload}
-		if err := enc.Encode(resp); err != nil {
+		if err := writeEnvelope(server, resp); err != nil {
 			errCh <- err
 			return
 		}
@@ -75,6 +73,9 @@ func TestClientSnapshot(t *testing.T) {
 			if req.PreviewLines != 3 {
 				return fmt.Errorf("expected preview lines 3, got %d", req.PreviewLines)
 			}
+			if req.MaxDurationMS <= 0 {
+				return fmt.Errorf("expected max duration set")
+			}
 			return nil
 		},
 		respond: SnapshotResponse{
@@ -82,7 +83,7 @@ func TestClientSnapshot(t *testing.T) {
 			Sessions: []native.SessionSnapshot{{Name: "demo"}},
 		},
 		call: func(c *Client) error {
-			sessions, version, err := c.Snapshot(context.Background(), 3)
+			sessions, version, err := c.Snapshot(context.Background(), 3, 250*time.Millisecond)
 			if err != nil {
 				return err
 			}
@@ -413,10 +414,8 @@ func serveHello(t *testing.T, ln net.Listener, expectedVersion string) <-chan er
 		}
 		defer func() { _ = conn.Close() }()
 
-		dec := gob.NewDecoder(conn)
-		enc := gob.NewEncoder(conn)
-		var env Envelope
-		if err := dec.Decode(&env); err != nil {
+		env, err := readEnvelope(conn)
+		if err != nil {
 			errCh <- err
 			return
 		}
@@ -439,7 +438,7 @@ func serveHello(t *testing.T, ln net.Listener, expectedVersion string) <-chan er
 			return
 		}
 		resp := Envelope{Kind: EnvelopeResponse, Op: env.Op, ID: env.ID, Payload: payload}
-		if err := enc.Encode(resp); err != nil {
+		if err := writeEnvelope(conn, resp); err != nil {
 			errCh <- err
 			return
 		}
@@ -500,10 +499,8 @@ func TestClientClone(t *testing.T) {
 				errCh <- err
 				return
 			}
-			dec := gob.NewDecoder(conn)
-			enc := gob.NewEncoder(conn)
-			var env Envelope
-			if err := dec.Decode(&env); err != nil {
+			env, err := readEnvelope(conn)
+			if err != nil {
 				_ = conn.Close()
 				errCh <- err
 				return
@@ -531,7 +528,7 @@ func TestClientClone(t *testing.T) {
 				return
 			}
 			resp := Envelope{Kind: EnvelopeResponse, Op: env.Op, ID: env.ID, Payload: payload}
-			if err := enc.Encode(resp); err != nil {
+			if err := writeEnvelope(conn, resp); err != nil {
 				_ = conn.Close()
 				errCh <- err
 				return

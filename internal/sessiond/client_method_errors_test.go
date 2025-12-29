@@ -11,7 +11,7 @@ func TestClientMethodErrorsWithoutConnection(t *testing.T) {
 	if _, err := client.SessionNames(context.Background()); err == nil {
 		t.Fatalf("expected SessionNames error without connection")
 	}
-	if _, _, err := client.Snapshot(context.Background(), 1); err == nil {
+	if _, _, err := client.Snapshot(context.Background(), 1, 0); err == nil {
 		t.Fatalf("expected Snapshot error without connection")
 	}
 	if _, err := client.StartSession(context.Background(), StartSessionRequest{Name: "demo", Path: "/tmp"}); err == nil {

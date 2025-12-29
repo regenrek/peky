@@ -2,6 +2,7 @@ package sessiond
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -74,6 +75,8 @@ func ensureDaemonRunning(ctx context.Context, version string, ops daemonOps) err
 	}
 	if err := probe(ctx, socketPath, version); err == nil {
 		return nil
+	} else if errors.Is(err, ErrDaemonProbeTimeout) {
+		return err
 	}
 	if err := start(socketPath); err != nil {
 		return err
@@ -152,6 +155,7 @@ func startDaemonProcessWith(socketPath string, deps daemonProcessDeps) error {
 		return fmt.Errorf("sessiond: resolve executable: %w", err)
 	}
 	cmd := execCommand(exe, "daemon")
+	configureDaemonCommand(cmd)
 	cmd.Env = append(environ(), socketEnv+"="+socketPath)
 
 	logPath, err := defaultLog()

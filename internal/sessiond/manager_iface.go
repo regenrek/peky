@@ -44,7 +44,7 @@ type paneWindow interface {
 
 type sessionManager interface {
 	SessionNames() []string
-	Snapshot(previewLines int) []native.SessionSnapshot
+	Snapshot(ctx context.Context, previewLines int) []native.SessionSnapshot
 	Version() uint64
 	StartSession(ctx context.Context, spec native.SessionSpec) (*native.Session, error)
 	KillSession(name string) error

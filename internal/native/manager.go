@@ -25,14 +25,19 @@ type Manager struct {
 	nextID       atomic.Uint64
 	version      atomic.Uint64
 	closed       atomic.Bool
+
+	previewMu     sync.Mutex
+	previewCache  map[string]previewState
+	previewCursor int
 }
 
 // NewManager creates a new native session manager.
 func NewManager() *Manager {
 	return &Manager{
-		sessions: make(map[string]*Session),
-		panes:    make(map[string]*Pane),
-		events:   make(chan PaneEvent, 128),
+		sessions:     make(map[string]*Session),
+		panes:        make(map[string]*Pane),
+		events:       make(chan PaneEvent, 128),
+		previewCache: make(map[string]previewState),
 	}
 }
 
@@ -71,6 +76,11 @@ func (m *Manager) Close() {
 	m.sessions = nil
 	m.panes = nil
 	m.mu.Unlock()
+
+	m.previewMu.Lock()
+	m.previewCache = nil
+	m.previewCursor = 0
+	m.previewMu.Unlock()
 
 	m.eventsMu.Lock()
 	if !m.eventsClosed {

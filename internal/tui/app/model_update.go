@@ -162,19 +162,31 @@ func (m *Model) handleSelectionRefresh(msg selectionRefreshMsg) tea.Cmd {
 	if msg.Version != m.selectionVersion {
 		return nil
 	}
-	return m.startRefreshCmd()
+	return m.requestRefreshCmd()
 }
 
 func (m *Model) handleDashboardSnapshot(msg dashboardSnapshotMsg) tea.Cmd {
 	m.endRefresh()
 	if msg.Result.RefreshSeq > 0 && msg.Result.RefreshSeq < m.refreshSeq {
+		if m.refreshQueued {
+			m.refreshQueued = false
+			return m.startRefreshCmd()
+		}
 		return nil
 	}
 	if msg.Result.RefreshSeq < m.lastAppliedSeq {
+		if m.refreshQueued {
+			m.refreshQueued = false
+			return m.startRefreshCmd()
+		}
 		return nil
 	}
 	if msg.Result.Err != nil {
 		m.setToast("Refresh failed: "+msg.Result.Err.Error(), toastError)
+		if m.refreshQueued {
+			m.refreshQueued = false
+			return m.startRefreshCmd()
+		}
 		return nil
 	}
 	m.lastAppliedSeq = msg.Result.RefreshSeq
@@ -190,13 +202,18 @@ func (m *Model) handleDashboardSnapshot(msg dashboardSnapshotMsg) tea.Cmd {
 	if msg.Result.Version == m.selectionVersion {
 		m.applySelection(msg.Result.Resolved)
 	} else {
-		m.applySelection(resolveSelection(m.data.Projects, m.selection))
+		m.applySelection(resolveSelectionForTab(m.tab, m.data.Projects, m.selection))
 	}
 	m.syncExpandedSessions()
 	if m.refreshSelectionForProjectConfig() {
 		m.setToast("Project config changed: selection refreshed", toastInfo)
 	}
-	return m.refreshPaneViewsCmd()
+	cmd := m.refreshPaneViewsCmd()
+	if m.refreshQueued {
+		m.refreshQueued = false
+		cmd = tea.Batch(cmd, m.startRefreshCmd())
+	}
+	return cmd
 }
 
 func (m *Model) handleDaemonEvent(msg daemonEventMsg) tea.Cmd {
@@ -207,8 +224,8 @@ func (m *Model) handleDaemonEvent(msg daemonEventMsg) tea.Cmd {
 			cmds = append(cmds, cmd)
 		}
 	case sessiond.EventSessionChanged:
-		if m.refreshInFlight == 0 {
-			cmds = append(cmds, m.startRefreshCmd())
+		if cmd := m.requestRefreshCmd(); cmd != nil {
+			cmds = append(cmds, cmd)
 		}
 	}
 	return tea.Batch(cmds...)
@@ -247,8 +264,9 @@ func (m *Model) handleSessionStarted(msg sessionStartedMsg) tea.Cmd {
 	if msg.Name != "" {
 		m.setToast("Session started: "+msg.Name, toastSuccess)
 		projectName := m.projectNameForPath(msg.Path)
-		if projectName != "" {
-			m.selection.Project = projectName
+		projectID := projectKey(msg.Path, projectName)
+		if projectID != "" {
+			m.selection.ProjectID = projectID
 		}
 		m.selection.Session = msg.Name
 		m.selection.Pane = ""
@@ -258,5 +276,5 @@ func (m *Model) handleSessionStarted(msg sessionStartedMsg) tea.Cmd {
 		m.setToast("Session started", toastSuccess)
 	}
 	m.setTerminalFocus(msg.Focus)
-	return m.startRefreshCmd()
+	return m.requestRefreshCmd()
 }

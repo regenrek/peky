@@ -18,11 +18,11 @@ const (
 )
 
 type headerPart struct {
-	Kind        headerPartKind
-	Label       string
-	ProjectName string
-	Rendered    string
-	Width       int
+	Kind      headerPartKind
+	Label     string
+	ProjectID string
+	Rendered  string
+	Width     int
 }
 
 func (k headerPartKind) clickable() bool {
@@ -67,19 +67,19 @@ func (m Model) headerParts() []headerPart {
 			Width:    lipgloss.Width(noneRendered),
 		})
 	} else {
-		activeProject := m.headerActiveProjectName()
+		activeProjectID := m.headerActiveProjectID()
 		for _, p := range m.data.Projects {
 			style := theme.TabInactive
-			if m.tab == TabProject && p.Name == activeProject {
+			if m.tab == TabProject && p.ID == activeProjectID {
 				style = theme.TabActive
 			}
 			rendered := style.Render(p.Name)
 			parts = append(parts, headerPart{
-				Kind:        headerPartProject,
-				Label:       p.Name,
-				ProjectName: p.Name,
-				Rendered:    rendered,
-				Width:       lipgloss.Width(rendered),
+				Kind:      headerPartProject,
+				Label:     p.Name,
+				ProjectID: p.ID,
+				Rendered:  rendered,
+				Width:     lipgloss.Width(rendered),
 			})
 		}
 	}
@@ -95,22 +95,20 @@ func (m Model) headerParts() []headerPart {
 	return parts
 }
 
-func (m Model) headerActiveProjectName() string {
-	activeProject := m.selection.Project
+func (m Model) headerActiveProjectID() string {
+	activeProjectID := m.selection.ProjectID
 	if m.tab != TabProject {
-		return activeProject
+		return activeProjectID
 	}
-	found := false
-	for _, p := range m.data.Projects {
-		if p.Name == activeProject {
-			found = true
-			break
+	if activeProjectID != "" {
+		if project := findProjectByID(m.data.Projects, activeProjectID); project != nil {
+			return project.ID
 		}
 	}
-	if !found && len(m.data.Projects) > 0 {
-		activeProject = m.data.Projects[0].Name
+	if len(m.data.Projects) > 0 {
+		return m.data.Projects[0].ID
 	}
-	return activeProject
+	return ""
 }
 
 func headerLine(parts []headerPart) string {

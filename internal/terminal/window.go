@@ -20,6 +20,11 @@ import (
 	"github.com/regenrek/peakypanes/internal/vt"
 )
 
+const (
+	ansiRenderDebounce    = 50 * time.Millisecond
+	ansiRenderMaxInterval = 250 * time.Millisecond
+)
+
 // vtEmulator is the subset of the VT emulator API Window depends on.
 // This makes scrollback + copy mode testable without a real PTY.
 type vtEmulator interface {
@@ -92,6 +97,7 @@ type Window struct {
 	cacheMu    sync.Mutex
 	cacheDirty bool
 	cacheANSI  string
+	renderCh   chan struct{}
 
 	stateMu sync.Mutex
 	// ScrollbackMode enables scrollback navigation (no PTY input).
@@ -180,6 +186,7 @@ func NewWindow(opts Options) (*Window, error) {
 		cols:       cols,
 		rows:       rows,
 		updates:    make(chan struct{}, 1),
+		renderCh:   make(chan struct{}, 1),
 		cancel:     cancel,
 		cacheDirty: true,
 	}
@@ -208,10 +215,85 @@ func NewWindow(opts Options) (*Window, error) {
 	})
 
 	w.startIO(ctx)
+	w.startANSIRenderer(ctx)
 	w.wg.Add(1)
 	go w.waitExit(ctx)
 
 	return w, nil
+}
+
+func (w *Window) startANSIRenderer(ctx context.Context) {
+	w.wg.Add(1)
+	go func() {
+		defer w.wg.Done()
+
+		var timer *time.Timer
+		pending := false
+		var lastRender time.Time
+
+		stopTimer := func() {
+			if timer == nil {
+				return
+			}
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			timer = nil
+		}
+
+		for {
+			var timerCh <-chan time.Time
+			if timer != nil {
+				timerCh = timer.C
+			}
+			select {
+			case <-ctx.Done():
+				stopTimer()
+				return
+			case <-w.renderCh:
+				pending = true
+				if !lastRender.IsZero() && time.Since(lastRender) >= ansiRenderMaxInterval {
+					w.refreshANSICache()
+					lastRender = time.Now()
+					pending = false
+					stopTimer()
+					continue
+				}
+				if timer == nil {
+					timer = time.NewTimer(ansiRenderDebounce)
+				} else {
+					if !timer.Stop() {
+						select {
+						case <-timer.C:
+						default:
+						}
+					}
+					timer.Reset(ansiRenderDebounce)
+				}
+			case <-timerCh:
+				if pending {
+					w.refreshANSICache()
+					lastRender = time.Now()
+					pending = false
+				}
+				stopTimer()
+			}
+		}
+	}()
+}
+
+// RequestANSIRender schedules a background ANSI render for cached previews.
+func (w *Window) RequestANSIRender() {
+	if w == nil || w.closed.Load() {
+		return
+	}
+	select {
+	case w.renderCh <- struct{}{}:
+	default:
+	}
 }
 
 func (w *Window) ID() string { return w.id }
@@ -303,6 +385,7 @@ func (w *Window) markDirty() {
 	w.cacheMu.Lock()
 	w.cacheDirty = true
 	w.cacheMu.Unlock()
+	w.RequestANSIRender()
 
 	// Coalesce signals.
 	select {

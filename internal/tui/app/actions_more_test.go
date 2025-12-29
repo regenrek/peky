@@ -9,7 +9,7 @@ import (
 
 func TestKillAndCloseFlows(t *testing.T) {
 	m := newTestModelLite()
-	m.selection = selectionState{Project: "Alpha", Session: "alpha-1", Pane: "1"}
+	m.selection = selectionState{ProjectID: projectKey("/alpha", "Alpha"), Session: "alpha-1", Pane: "1"}
 
 	m.openKillConfirm()
 	if m.state != StateConfirmKill || m.confirmSession == "" {
@@ -32,6 +32,7 @@ func TestKillAndCloseFlows(t *testing.T) {
 	}
 
 	m.confirmClose = "Alpha"
+	m.confirmCloseID = projectKey("/alpha", "Alpha")
 	m.configPath = filepath.Join(t.TempDir(), "config.yml")
 	m.applyCloseProject()
 	if len(m.settings.HiddenProjects) == 0 {
@@ -41,7 +42,7 @@ func TestKillAndCloseFlows(t *testing.T) {
 
 func TestPaneCloseAndSplitSwap(t *testing.T) {
 	m := newTestModelLite()
-	m.selection = selectionState{Project: "Alpha", Session: "alpha-1", Pane: "1"}
+	m.selection = selectionState{ProjectID: projectKey("/alpha", "Alpha"), Session: "alpha-1", Pane: "1"}
 
 	cmd := m.openClosePaneConfirm()
 	if cmd != nil {

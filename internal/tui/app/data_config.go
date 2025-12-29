@@ -158,7 +158,14 @@ func normalizeProjectPath(path string) string {
 	}
 	path = userpath.ExpandUser(path)
 	path = filepath.Clean(path)
-	return path
+	if filepath.IsAbs(path) {
+		return path
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return path
+	}
+	return abs
 }
 
 func normalizeProjectRoots(roots []string) []string {
@@ -172,7 +179,7 @@ func normalizeProjectRoots(roots []string) []string {
 		if root == "" {
 			continue
 		}
-		root = filepath.Clean(userpath.ExpandUser(root))
+		root = normalizeProjectPath(root)
 		if _, ok := seen[root]; ok {
 			continue
 		}

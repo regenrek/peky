@@ -2,7 +2,6 @@ package sessiond
 
 import (
 	"context"
-	"encoding/gob"
 	"errors"
 	"fmt"
 	"log"
@@ -21,6 +20,7 @@ const (
 	defaultReadTimeout  = 2 * time.Minute
 	defaultWriteTimeout = 5 * time.Second
 	defaultOpTimeout    = 5 * time.Second
+	snapshotResponsePad = 200 * time.Millisecond
 )
 
 // DaemonConfig configures a session daemon instance.
@@ -54,11 +54,14 @@ type Daemon struct {
 type clientConn struct {
 	id      uint64
 	conn    net.Conn
-	enc     *gob.Encoder
-	dec     *gob.Decoder
-	respCh  chan Envelope
-	eventCh chan Envelope
+	respCh  chan outboundEnvelope
+	eventCh chan outboundEnvelope
 	done    chan struct{}
+}
+
+type outboundEnvelope struct {
+	env     Envelope
+	timeout time.Duration
 }
 
 // NewDaemon creates a daemon instance.
@@ -231,10 +234,8 @@ func (d *Daemon) newClient(conn net.Conn) *clientConn {
 	return &clientConn{
 		id:      id,
 		conn:    conn,
-		enc:     gob.NewEncoder(conn),
-		dec:     gob.NewDecoder(conn),
-		respCh:  make(chan Envelope, 64),
-		eventCh: make(chan Envelope, 128),
+		respCh:  make(chan outboundEnvelope, 64),
+		eventCh: make(chan outboundEnvelope, 128),
 		done:    make(chan struct{}),
 	}
 }
@@ -258,8 +259,8 @@ func (d *Daemon) readLoop(client *clientConn) {
 		if err := client.conn.SetReadDeadline(time.Now().Add(defaultReadTimeout)); err != nil {
 			return
 		}
-		var env Envelope
-		if err := client.dec.Decode(&env); err != nil {
+		env, err := readEnvelope(client.conn)
+		if err != nil {
 			if isTimeout(err) {
 				continue
 			}
@@ -269,10 +270,29 @@ func (d *Daemon) readLoop(client *clientConn) {
 			continue
 		}
 		resp := d.handleRequest(env)
-		if err := sendEnvelope(client, resp); err != nil {
+		timeout := d.responseTimeout(env)
+		if err := sendEnvelope(client, resp, timeout); err != nil {
 			return
 		}
 	}
+}
+
+func (d *Daemon) responseTimeout(env Envelope) time.Duration {
+	if env.Op != OpSnapshot {
+		return defaultWriteTimeout
+	}
+	var req SnapshotRequest
+	if err := decodePayload(env.Payload, &req); err != nil {
+		return defaultWriteTimeout
+	}
+	if req.MaxDurationMS <= 0 {
+		return defaultWriteTimeout
+	}
+	timeout := time.Duration(req.MaxDurationMS) * time.Millisecond
+	if timeout < 0 {
+		return defaultWriteTimeout
+	}
+	return timeout + snapshotResponsePad
 }
 
 func (d *Daemon) writeLoop(client *clientConn) {
@@ -287,8 +307,8 @@ func (d *Daemon) writeLoop(client *clientConn) {
 		}
 
 		select {
-		case env := <-client.respCh:
-			if err := d.writeEnvelope(client, env); err != nil {
+		case out := <-client.respCh:
+			if err := d.writeEnvelopeWithTimeout(client, out.env, out.timeout); err != nil {
 				d.shutdownClientConn(client)
 				return
 			}
@@ -297,13 +317,13 @@ func (d *Daemon) writeLoop(client *clientConn) {
 		}
 
 		select {
-		case env := <-client.respCh:
-			if err := d.writeEnvelope(client, env); err != nil {
+		case out := <-client.respCh:
+			if err := d.writeEnvelopeWithTimeout(client, out.env, out.timeout); err != nil {
 				d.shutdownClientConn(client)
 				return
 			}
-		case env := <-client.eventCh:
-			if err := d.writeEnvelope(client, env); err != nil {
+		case out := <-client.eventCh:
+			if err := d.writeEnvelopeWithTimeout(client, out.env, out.timeout); err != nil {
 				d.shutdownClientConn(client)
 				return
 			}
@@ -315,18 +335,21 @@ func (d *Daemon) writeLoop(client *clientConn) {
 	}
 }
 
-func sendEnvelope(client *clientConn, env Envelope) error {
+func sendEnvelope(client *clientConn, env Envelope, timeout time.Duration) error {
+	if timeout <= 0 {
+		timeout = defaultWriteTimeout
+	}
 	select {
 	case <-client.done:
 		return errors.New("sessiond: client closed")
 	default:
 	}
 	select {
-	case client.respCh <- env:
+	case client.respCh <- outboundEnvelope{env: env, timeout: timeout}:
 		return nil
 	case <-client.done:
 		return errors.New("sessiond: client closed")
-	case <-time.After(defaultWriteTimeout):
+	case <-time.After(timeout):
 		return errors.New("sessiond: client send timeout")
 	}
 }
@@ -351,17 +374,17 @@ func (d *Daemon) shutdownClientConn(client *clientConn) {
 	closeClient(client)
 }
 
-func (d *Daemon) writeEnvelope(client *clientConn, env Envelope) error {
+func (d *Daemon) writeEnvelopeWithTimeout(client *clientConn, env Envelope, timeout time.Duration) error {
 	if client == nil {
 		return errors.New("sessiond: client unavailable")
 	}
-	if err := client.conn.SetWriteDeadline(time.Now().Add(defaultWriteTimeout)); err != nil {
+	if timeout <= 0 {
+		timeout = defaultWriteTimeout
+	}
+	if err := client.conn.SetWriteDeadline(time.Now().Add(timeout)); err != nil {
 		return err
 	}
-	if err := client.enc.Encode(env); err != nil {
-		return err
-	}
-	return nil
+	return writeEnvelope(client.conn, env)
 }
 
 func (d *Daemon) broadcast(event Event) {
@@ -382,7 +405,7 @@ func (d *Daemon) broadcast(event Event) {
 		default:
 		}
 		select {
-		case client.eventCh <- env:
+		case client.eventCh <- outboundEnvelope{env: env, timeout: defaultWriteTimeout}:
 		default:
 		}
 	}
@@ -413,6 +436,8 @@ func (d *Daemon) removeStaleSocket() error {
 	defer cancel()
 	if err := probeDaemon(ctx, d.socketPath, d.version); err == nil {
 		return fmt.Errorf("sessiond: daemon already running on %s", d.socketPath)
+	} else if errors.Is(err, ErrDaemonProbeTimeout) {
+		return err
 	}
 	if err := os.Remove(d.socketPath); err != nil {
 		return fmt.Errorf("sessiond: remove stale socket: %w", err)

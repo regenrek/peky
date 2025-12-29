@@ -62,4 +62,3 @@ func bracketedPasteBytes(text string) []byte {
 	copy(out[n:], bracketedPasteEnd[:])
 	return out
 }
-

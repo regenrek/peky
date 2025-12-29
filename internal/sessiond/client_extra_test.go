@@ -2,7 +2,6 @@ package sessiond
 
 import (
 	"context"
-	"encoding/gob"
 	"net"
 	"runtime"
 	"testing"
@@ -17,8 +16,6 @@ func newClientWithTestServer(t *testing.T) (*Client, func()) {
 
 	client := &Client{
 		conn:    clientConn,
-		enc:     gob.NewEncoder(clientConn),
-		dec:     gob.NewDecoder(clientConn),
 		pending: make(map[uint64]chan Envelope),
 		events:  make(chan Event, 4),
 		version: "test",
@@ -64,7 +61,7 @@ func TestClientSessionQueries(t *testing.T) {
 		t.Fatalf("SessionNames: %#v err=%v", names, err)
 	}
 
-	sessions, version, err := client.Snapshot(ctx, 2)
+	sessions, version, err := client.Snapshot(ctx, 2, 0)
 	if err != nil || version != 42 || len(sessions) != 1 || sessions[0].Name != "alpha" {
 		t.Fatalf("Snapshot: sessions=%#v version=%d err=%v", sessions, version, err)
 	}
@@ -142,11 +139,9 @@ func TestClientCallNil(t *testing.T) {
 
 func serveClientTestConn(t *testing.T, conn net.Conn) {
 	t.Helper()
-	dec := gob.NewDecoder(conn)
-	enc := gob.NewEncoder(conn)
 	for {
-		var env Envelope
-		if err := dec.Decode(&env); err != nil {
+		env, err := readEnvelope(conn)
+		if err != nil {
 			return
 		}
 		if env.Kind != EnvelopeRequest {
@@ -180,12 +175,12 @@ func serveClientTestConn(t *testing.T, conn net.Conn) {
 		}
 
 		resp := Envelope{Kind: EnvelopeResponse, Op: env.Op, ID: env.ID, Payload: payload}
-		if err := enc.Encode(resp); err != nil {
+		if err := writeEnvelope(conn, resp); err != nil {
 			return
 		}
 		if env.Op == OpHello {
 			evtPayload := encodeMust(t, Event{Type: EventSessionChanged, Session: "alpha"})
-			_ = enc.Encode(Envelope{Kind: EnvelopeEvent, Event: EventSessionChanged, Payload: evtPayload})
+			_ = writeEnvelope(conn, Envelope{Kind: EnvelopeEvent, Event: EventSessionChanged, Payload: evtPayload})
 		}
 	}
 }

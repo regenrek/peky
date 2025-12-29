@@ -141,6 +141,7 @@ func (m *Manager) removePaneFromSession(sessionName, paneIndex string) (*termina
 
 	session.Panes = append(session.Panes[:paneIdx], session.Panes[paneIdx+1:]...)
 	delete(m.panes, pane.ID)
+	m.dropPreviewCache(pane.ID)
 	paneWindow := pane.window
 
 	if len(session.Panes) == 0 {

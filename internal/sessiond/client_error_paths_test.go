@@ -2,7 +2,6 @@ package sessiond
 
 import (
 	"context"
-	"encoding/gob"
 	"errors"
 	"io"
 	"net"
@@ -30,15 +29,13 @@ func TestClientCallErrorResponse(t *testing.T) {
 	errCh := make(chan error, 1)
 
 	go func() {
-		dec := gob.NewDecoder(server)
-		enc := gob.NewEncoder(server)
-		var env Envelope
-		if err := dec.Decode(&env); err != nil {
+		env, err := readEnvelope(server)
+		if err != nil {
 			errCh <- err
 			return
 		}
 		resp := Envelope{Kind: EnvelopeResponse, Op: env.Op, ID: env.ID, Error: "boom"}
-		if err := enc.Encode(resp); err != nil {
+		if err := writeEnvelope(server, resp); err != nil {
 			errCh <- err
 			return
 		}
@@ -59,10 +56,8 @@ func TestClientCallNilContext(t *testing.T) {
 	errCh := make(chan error, 1)
 
 	go func() {
-		dec := gob.NewDecoder(server)
-		enc := gob.NewEncoder(server)
-		var env Envelope
-		if err := dec.Decode(&env); err != nil {
+		env, err := readEnvelope(server)
+		if err != nil {
 			errCh <- err
 			return
 		}
@@ -72,7 +67,7 @@ func TestClientCallNilContext(t *testing.T) {
 			return
 		}
 		resp := Envelope{Kind: EnvelopeResponse, Op: env.Op, ID: env.ID, Payload: payload}
-		if err := enc.Encode(resp); err != nil {
+		if err := writeEnvelope(server, resp); err != nil {
 			errCh <- err
 			return
 		}
@@ -103,9 +98,8 @@ func TestClientSendSuccess(t *testing.T) {
 	client, server := newTestClient(t)
 	done := make(chan error, 1)
 	go func() {
-		dec := gob.NewDecoder(server)
-		var env Envelope
-		done <- dec.Decode(&env)
+		_, err := readEnvelope(server)
+		done <- err
 	}()
 	if err := client.send(context.Background(), Envelope{Kind: EnvelopeRequest, Op: OpHello, ID: 1}); err != nil {
 		t.Fatalf("send: %v", err)
@@ -120,15 +114,13 @@ func TestClientHelloError(t *testing.T) {
 	errCh := make(chan error, 1)
 
 	go func() {
-		dec := gob.NewDecoder(server)
-		enc := gob.NewEncoder(server)
-		var env Envelope
-		if err := dec.Decode(&env); err != nil {
+		env, err := readEnvelope(server)
+		if err != nil {
 			errCh <- err
 			return
 		}
 		resp := Envelope{Kind: EnvelopeResponse, Op: env.Op, ID: env.ID, Error: "bad hello"}
-		if err := enc.Encode(resp); err != nil {
+		if err := writeEnvelope(server, resp); err != nil {
 			errCh <- err
 			return
 		}
@@ -174,7 +166,7 @@ func TestClientSendHonorsContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	started := make(chan struct{})
 	conn := &timeoutConn{started: started, done: ctx.Done()}
-	client := &Client{conn: conn, enc: gob.NewEncoder(conn)}
+	client := &Client{conn: conn}
 
 	errCh := make(chan error, 1)
 	go func() {

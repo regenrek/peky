@@ -2,7 +2,6 @@ package sessiond
 
 import (
 	"context"
-	"encoding/gob"
 	"errors"
 	"fmt"
 	"net"
@@ -17,8 +16,6 @@ import (
 // Client is a daemon connection used by the UI.
 type Client struct {
 	conn       net.Conn
-	enc        *gob.Encoder
-	dec        *gob.Decoder
 	socketPath string
 	version    string
 
@@ -40,8 +37,6 @@ func Dial(ctx context.Context, socketPath, version string) (*Client, error) {
 	}
 	client := &Client{
 		conn:       conn,
-		enc:        gob.NewEncoder(conn),
-		dec:        gob.NewDecoder(conn),
 		socketPath: socketPath,
 		version:    version,
 		pending:    make(map[uint64]chan Envelope),
@@ -117,8 +112,15 @@ func (c *Client) readLoop() {
 		if c.conn == nil {
 			return
 		}
-		var env Envelope
-		if err := c.dec.Decode(&env); err != nil {
+		if err := c.conn.SetReadDeadline(time.Now().Add(defaultReadTimeout)); err != nil {
+			_ = c.Close()
+			return
+		}
+		env, err := readEnvelope(c.conn)
+		if err != nil {
+			if isTimeout(err) {
+				continue
+			}
 			_ = c.Close()
 			return
 		}
@@ -209,7 +211,7 @@ func (c *Client) send(ctx context.Context, env Envelope) error {
 	if err := c.conn.SetWriteDeadline(deadline); err != nil {
 		return err
 	}
-	if err := c.enc.Encode(env); err != nil {
+	if err := writeEnvelope(c.conn, env); err != nil {
 		if ctx.Err() != nil && isTimeout(err) {
 			return ctx.Err()
 		}
@@ -228,9 +230,16 @@ func (c *Client) SessionNames(ctx context.Context) ([]string, error) {
 }
 
 // Snapshot fetches session snapshots.
-func (c *Client) Snapshot(ctx context.Context, previewLines int) ([]native.SessionSnapshot, uint64, error) {
+func (c *Client) Snapshot(ctx context.Context, previewLines int, maxDuration time.Duration) ([]native.SessionSnapshot, uint64, error) {
+	if maxDuration < 0 {
+		maxDuration = 0
+	}
+	req := SnapshotRequest{PreviewLines: previewLines}
+	if maxDuration > 0 {
+		req.MaxDurationMS = int(maxDuration / time.Millisecond)
+	}
 	var resp SnapshotResponse
-	if _, err := c.call(ctx, OpSnapshot, SnapshotRequest{PreviewLines: previewLines}, &resp); err != nil {
+	if _, err := c.call(ctx, OpSnapshot, req, &resp); err != nil {
 		return nil, 0, err
 	}
 	return resp.Sessions, resp.Version, nil
@@ -347,6 +356,9 @@ func dialSocket(ctx context.Context, socketPath string) (net.Conn, error) {
 func probeDaemon(ctx context.Context, socketPath, version string) error {
 	client, err := Dial(ctx, socketPath, version)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || isTimeout(err) {
+			return fmt.Errorf("%w: %v", ErrDaemonProbeTimeout, err)
+		}
 		return err
 	}
 	return client.Close()

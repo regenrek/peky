@@ -16,10 +16,10 @@ func TestDashboardSelectionHelpers(t *testing.T) {
 		t.Fatalf("expected columns")
 	}
 
-	if got := dashboardSelectedProject(columns, selectionState{Project: "Beta"}); got != "Beta" {
+	if got := dashboardSelectedProject(columns, selectionState{ProjectID: projectKey("/beta", "Beta")}); got != projectKey("/beta", "Beta") {
 		t.Fatalf("expected Beta, got %q", got)
 	}
-	if got := dashboardSelectedProject(columns, selectionState{Session: "alpha-2"}); got != "Alpha" {
+	if got := dashboardSelectedProject(columns, selectionState{Session: "alpha-2"}); got != projectKey("/alpha", "Alpha") {
 		t.Fatalf("expected Alpha, got %q", got)
 	}
 
@@ -27,13 +27,13 @@ func TestDashboardSelectionHelpers(t *testing.T) {
 		t.Fatalf("expected pane index for alpha-1 pane 2")
 	}
 
-	selected := resolveDashboardSelectionFromColumns(columns, selectionState{Project: "Beta"})
-	if selected.Project != "Beta" {
+	selected := resolveDashboardSelectionFromColumns(columns, selectionState{ProjectID: projectKey("/beta", "Beta")})
+	if selected.ProjectID != projectKey("/beta", "Beta") {
 		t.Fatalf("expected selection for Beta, got %#v", selected)
 	}
 
-	resolved := resolveSelection(groups, selectionState{Project: "Missing"})
-	if resolved.Project == "" || resolved.Session == "" {
+	resolved := resolveSelection(groups, selectionState{ProjectID: "missing"})
+	if resolved.ProjectID == "" || resolved.Session == "" {
 		t.Fatalf("expected resolved selection fallback, got %#v", resolved)
 	}
 
@@ -48,9 +48,9 @@ func TestDashboardSelectionHelpers(t *testing.T) {
 
 func TestGroupForSessionAndHiddenProject(t *testing.T) {
 	idx := newDashboardGroupIndex(1)
-	idx.groups = []ProjectGroup{{Name: "Alpha", Path: "/alpha"}}
+	idx.groups = []ProjectGroup{{ID: projectKey("/alpha", "Alpha"), Name: "Alpha", Path: "/alpha"}}
 	idx.bySession["alpha-1"] = 0
-	idx.byPath["/alpha"] = 0
+	idx.byKey[projectKey("/alpha", "Alpha")] = 0
 	if group := idx.groupForSession("alpha-1", "/alpha"); group == nil || group.Name != "Alpha" {
 		t.Fatalf("expected group for session")
 	}

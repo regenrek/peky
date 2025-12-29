@@ -159,7 +159,11 @@ func (m *Model) openKillConfirm() {
 		return
 	}
 	m.confirmSession = session.Name
-	m.confirmProject = m.selection.Project
+	if project := m.selectedProject(); project != nil {
+		m.confirmProject = project.Name
+	} else {
+		m.confirmProject = ""
+	}
 	m.setState(StateConfirmKill)
 }
 
@@ -170,6 +174,7 @@ func (m *Model) openCloseProjectConfirm() {
 		return
 	}
 	m.confirmClose = project.Name
+	m.confirmCloseID = project.ID
 	m.setState(StateConfirmCloseProject)
 }
 
@@ -218,6 +223,7 @@ func (m *Model) updateConfirmCloseProject(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.killProjectSessions()
 	case "n", "esc":
 		m.confirmClose = ""
+		m.confirmCloseID = ""
 		m.setState(StateDashboard)
 		return m, nil
 	}
@@ -246,15 +252,20 @@ func (m *Model) resetConfirmPane() {
 
 func (m *Model) applyCloseProject() tea.Cmd {
 	name := strings.TrimSpace(m.confirmClose)
+	projectID := strings.TrimSpace(m.confirmCloseID)
 	m.confirmClose = ""
+	m.confirmCloseID = ""
 	m.setState(StateDashboard)
-	if name == "" {
+	if projectID == "" {
 		return nil
 	}
-	project := findProject(m.data.Projects, name)
+	project := findProjectByID(m.data.Projects, projectID)
 	if project == nil {
 		m.setToast("Project not found", toastWarning)
 		return nil
+	}
+	if name == "" {
+		name = project.Name
 	}
 	hidden, err := m.hideProjectInConfig(*project)
 	if err != nil {
@@ -266,7 +277,7 @@ func (m *Model) applyCloseProject() tea.Cmd {
 		return nil
 	}
 	m.setToast("Closed project "+name, toastSuccess)
-	return m.startRefreshCmd()
+	return m.requestRefreshCmd()
 }
 
 func (m *Model) applyClosePane() tea.Cmd {
@@ -311,20 +322,25 @@ func (m *Model) closePane(sessionName, paneIndex, paneID string) tea.Cmd {
 	m.selectionVersion++
 	m.rememberSelection(m.selection)
 	m.setToast("Closed pane", toastSuccess)
-	return m.startRefreshCmd()
+	return m.requestRefreshCmd()
 }
 
 func (m *Model) killProjectSessions() tea.Cmd {
 	name := strings.TrimSpace(m.confirmClose)
+	projectID := strings.TrimSpace(m.confirmCloseID)
 	m.confirmClose = ""
+	m.confirmCloseID = ""
 	m.setState(StateDashboard)
-	if name == "" {
+	if projectID == "" {
 		return nil
 	}
-	project := findProject(m.data.Projects, name)
+	project := findProjectByID(m.data.Projects, projectID)
 	if project == nil {
 		m.setToast("Project not found", toastWarning)
 		return nil
+	}
+	if name == "" {
+		name = project.Name
 	}
 	var running []SessionItem
 	for _, s := range project.Sessions {
@@ -350,10 +366,10 @@ func (m *Model) killProjectSessions() tea.Cmd {
 	}
 	if len(failed) > 0 {
 		m.setToast("Kill failed: "+strings.Join(failed, ", "), toastError)
-		return m.startRefreshCmd()
+		return m.requestRefreshCmd()
 	}
 	m.setToast("Killed sessions for "+name, toastSuccess)
-	return m.startRefreshCmd()
+	return m.requestRefreshCmd()
 }
 
 func (m *Model) updateConfirmKill(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -376,7 +392,7 @@ func (m *Model) updateConfirmKill(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.confirmSession = ""
 			m.confirmProject = ""
 			m.setState(StateDashboard)
-			return m, m.startRefreshCmd()
+			return m, m.requestRefreshCmd()
 		}
 		m.setState(StateDashboard)
 		return m, nil
@@ -437,7 +453,7 @@ func (m *Model) addPaneSplit(vertical bool) tea.Cmd {
 	m.selectionVersion++
 	m.rememberSelection(m.selection)
 	m.setToast("Added pane", toastSuccess)
-	return m.startRefreshCmd()
+	return m.requestRefreshCmd()
 }
 
 func (m *Model) swapPaneWith(target PaneSwapChoice) tea.Cmd {
@@ -480,5 +496,5 @@ func (m *Model) swapPaneWith(target PaneSwapChoice) tea.Cmd {
 	m.selectionVersion++
 	m.rememberSelection(m.selection)
 	m.setToast("Swapped panes", toastSuccess)
-	return m.startRefreshCmd()
+	return m.requestRefreshCmd()
 }

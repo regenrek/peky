@@ -92,6 +92,7 @@ type Model struct {
 	confirmSession     string
 	confirmProject     string
 	confirmClose       string
+	confirmCloseID     string
 	confirmPaneSession string
 	confirmPaneIndex   string
 	confirmPaneID      string
@@ -114,6 +115,7 @@ type Model struct {
 
 	selectionVersion uint64
 	refreshInFlight  int
+	refreshQueued    bool
 	refreshSeq       uint64
 	lastAppliedSeq   uint64
 

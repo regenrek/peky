@@ -54,4 +54,3 @@ func TestCommandIsCodex(t *testing.T) {
 		})
 	}
 }
-

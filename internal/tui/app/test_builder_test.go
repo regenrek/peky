@@ -11,7 +11,7 @@ func newTestModelLite() *Model {
 		state:              StateDashboard,
 		tab:                TabProject,
 		data:               DashboardData{Projects: sampleProjects()},
-		selection:          selectionState{Project: "Alpha", Session: "alpha-1", Pane: "1"},
+		selection:          selectionState{ProjectID: projectKey("/alpha", "Alpha"), Session: "alpha-1", Pane: "1"},
 		expandedSessions:   map[string]bool{"alpha-1": true, "alpha-2": false, "beta-1": true},
 		selectionByProject: make(map[string]selectionState),
 		paneViews:          make(map[paneViewKey]string),
@@ -39,6 +39,7 @@ func newTestModelLite() *Model {
 func sampleProjects() []ProjectGroup {
 	return []ProjectGroup{
 		{
+			ID:   projectKey("/alpha", "Alpha"),
 			Name: "Alpha",
 			Path: "/alpha",
 			Sessions: []SessionItem{
@@ -62,6 +63,7 @@ func sampleProjects() []ProjectGroup {
 			},
 		},
 		{
+			ID:   projectKey("/beta", "Beta"),
 			Name: "Beta",
 			Path: "/beta",
 			Sessions: []SessionItem{

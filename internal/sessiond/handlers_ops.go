@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	uv "github.com/charmbracelet/ultraviolet"
 
@@ -47,7 +48,13 @@ func (d *Daemon) handleSnapshot(payload []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	sessions := manager.Snapshot(req.PreviewLines)
+	timeout := time.Duration(req.MaxDurationMS) * time.Millisecond
+	if timeout <= 0 {
+		timeout = defaultOpTimeout
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	sessions := manager.Snapshot(ctx, req.PreviewLines)
 	resp := SnapshotResponse{Version: manager.Version(), Sessions: sessions}
 	return encodePayload(resp)
 }

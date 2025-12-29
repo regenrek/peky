@@ -164,5 +164,5 @@ func (m *Model) reopenHiddenProject(entry layout.HiddenProjectConfig) tea.Cmd {
 		return nil
 	}
 	m.setToast("Reopened project "+label, toastSuccess)
-	return m.startRefreshCmd()
+	return m.requestRefreshCmd()
 }

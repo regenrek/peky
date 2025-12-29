@@ -108,7 +108,7 @@ func buildDashboardColumnsLayout(columns []DashboardColumn, width int, selectedP
 
 func dashboardColumnIndex(columns []DashboardColumn, selectedProject string) int {
 	for i, column := range columns {
-		if column.ProjectName == selectedProject {
+		if column.ProjectID == selectedProject {
 			return i
 		}
 	}

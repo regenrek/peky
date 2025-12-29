@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/muesli/termenv"
@@ -13,21 +14,29 @@ import (
 )
 
 type fakeManager struct {
-	windowID   string
-	window     paneWindow
-	sessions   []string
-	snapshot   []native.SessionSnapshot
-	version    uint64
-	events     chan native.PaneEvent
-	lastInput  []byte
-	lastMouse  uv.MouseEvent
-	lastKilled string
-	lastRename [2]string
-	lastSwap   [3]string
+	windowID             string
+	window               paneWindow
+	sessions             []string
+	snapshot             []native.SessionSnapshot
+	version              uint64
+	events               chan native.PaneEvent
+	lastSnapshotPreview  int
+	lastSnapshotDeadline time.Time
+	lastInput            []byte
+	lastMouse            uv.MouseEvent
+	lastKilled           string
+	lastRename           [2]string
+	lastSwap             [3]string
 }
 
 func (m *fakeManager) SessionNames() []string { return m.sessions }
-func (m *fakeManager) Snapshot(int) []native.SessionSnapshot {
+func (m *fakeManager) Snapshot(ctx context.Context, previewLines int) []native.SessionSnapshot {
+	m.lastSnapshotPreview = previewLines
+	if ctx != nil {
+		if deadline, ok := ctx.Deadline(); ok {
+			m.lastSnapshotDeadline = deadline
+		}
+	}
 	return m.snapshot
 }
 func (m *fakeManager) Version() uint64 { return m.version }
@@ -160,7 +169,7 @@ func TestHandleSessionNamesSnapshotAndRename(t *testing.T) {
 		t.Fatalf("expected 2 session names")
 	}
 
-	payload, err := encodePayload(SnapshotRequest{PreviewLines: 2})
+	payload, err := encodePayload(SnapshotRequest{PreviewLines: 2, MaxDurationMS: 250})
 	if err != nil {
 		t.Fatalf("encodePayload: %v", err)
 	}
@@ -174,6 +183,12 @@ func TestHandleSessionNamesSnapshotAndRename(t *testing.T) {
 	}
 	if snapResp.Version != 7 || len(snapResp.Sessions) != 1 {
 		t.Fatalf("unexpected snapshot response: %#v", snapResp)
+	}
+	if manager.lastSnapshotPreview != 2 {
+		t.Fatalf("snapshot preview=%d want 2", manager.lastSnapshotPreview)
+	}
+	if manager.lastSnapshotDeadline.IsZero() {
+		t.Fatalf("expected snapshot deadline to be set")
 	}
 
 	payload, err = encodePayload(RenameSessionRequest{OldName: "alpha", NewName: "gamma"})

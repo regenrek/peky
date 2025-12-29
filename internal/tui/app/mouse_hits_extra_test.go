@@ -12,13 +12,13 @@ func TestDashboardPaneHits(t *testing.T) {
 	m := newTestModelLite()
 	m.state = StateDashboard
 	m.tab = TabDashboard
-	m.selection = selectionState{Project: "Alpha", Session: "alpha-1", Pane: "1"}
+	m.selection = selectionState{ProjectID: projectKey("/alpha", "Alpha"), Session: "alpha-1", Pane: "1"}
 
 	hits := m.dashboardPaneHits()
 	if len(hits) == 0 {
 		t.Fatalf("expected dashboard hits")
 	}
-	if hits[0].Selection.Project == "" || hits[0].Selection.Session == "" {
+	if hits[0].Selection.ProjectID == "" || hits[0].Selection.Session == "" {
 		t.Fatalf("unexpected hit selection: %#v", hits[0].Selection)
 	}
 
@@ -42,7 +42,7 @@ func TestProjectPaneHitsLayoutAndGrid(t *testing.T) {
 	m := newTestModelLite()
 	m.state = StateDashboard
 	m.tab = TabProject
-	m.selection = selectionState{Project: "Alpha", Session: "alpha-1", Pane: "1"}
+	m.selection = selectionState{ProjectID: projectKey("/alpha", "Alpha"), Session: "alpha-1", Pane: "1"}
 
 	m.settings.PreviewMode = "layout"
 	layoutHits := m.projectPaneHits()
@@ -64,7 +64,7 @@ func TestPaneViewRequestsAndLookup(t *testing.T) {
 	m := newTestModelLite()
 	m.state = StateDashboard
 	m.tab = TabProject
-	m.selection = selectionState{Project: "Alpha", Session: "alpha-1", Pane: "1"}
+	m.selection = selectionState{ProjectID: projectKey("/alpha", "Alpha"), Session: "alpha-1", Pane: "1"}
 
 	reqs := m.paneViewRequests()
 	if len(reqs) == 0 {

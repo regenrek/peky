@@ -38,7 +38,7 @@ func (m *Model) viewModel() views.Model {
 		SidebarProject:           toViewProjectPtr(sidebarProject),
 		SidebarSessions:          toViewSessions(sidebarSessions),
 		PreviewSession:           toViewSessionPtr(previewSession),
-		SelectionProject:         m.selection.Project,
+		SelectionProject:         m.selection.ProjectID,
 		SelectionSession:         m.selection.Session,
 		SelectionPane:            m.selection.Pane,
 		ExpandedSessions:         m.expandedSessions,
@@ -57,7 +57,7 @@ func (m *Model) viewModel() views.Model {
 		},
 		ConfirmCloseProject: views.ConfirmCloseProject{
 			Project:         m.confirmClose,
-			RunningSessions: runningSessionsForProject(m.data.Projects, m.confirmClose),
+			RunningSessions: runningSessionsForProject(m.data.Projects, m.confirmCloseID),
 		},
 		ConfirmClosePane: views.ConfirmClosePane{
 			Title:   m.confirmPaneTitle,
@@ -100,11 +100,11 @@ func (m *Model) paneViewProvider() func(id string, width, height int, showCursor
 	}
 }
 
-func runningSessionsForProject(projects []ProjectGroup, name string) int {
-	if strings.TrimSpace(name) == "" {
+func runningSessionsForProject(projects []ProjectGroup, projectID string) int {
+	if strings.TrimSpace(projectID) == "" {
 		return 0
 	}
-	project := findProject(projects, name)
+	project := findProjectByID(projects, projectID)
 	if project == nil {
 		return 0
 	}
@@ -228,12 +228,14 @@ func toViewColumns(columns []DashboardProjectColumn) []views.DashboardColumn {
 	out := make([]views.DashboardColumn, 0, len(columns))
 	for _, column := range columns {
 		viewColumn := views.DashboardColumn{
+			ProjectID:   column.ProjectID,
 			ProjectName: column.ProjectName,
 			ProjectPath: displayPath(column.ProjectPath),
 			Panes:       make([]views.DashboardPane, 0, len(column.Panes)),
 		}
 		for _, pane := range column.Panes {
 			viewColumn.Panes = append(viewColumn.Panes, views.DashboardPane{
+				ProjectID:   pane.ProjectID,
 				ProjectName: pane.ProjectName,
 				ProjectPath: displayPath(pane.ProjectPath),
 				SessionName: pane.SessionName,

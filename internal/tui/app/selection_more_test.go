@@ -12,11 +12,11 @@ func TestSelectionTabNavigation(t *testing.T) {
 	m.tab = TabDashboard
 	m.selection = selectionState{Session: "alpha-1"}
 	m.selectTab(1)
-	if m.tab != TabProject || m.selection.Project != "Alpha" {
+	if m.tab != TabProject || m.selection.ProjectID != projectKey("/alpha", "Alpha") {
 		t.Fatalf("expected project tab Alpha, got tab=%v sel=%#v", m.tab, m.selection)
 	}
 	m.selectTab(1)
-	if m.selection.Project != "Beta" {
+	if m.selection.ProjectID != projectKey("/beta", "Beta") {
 		t.Fatalf("expected project Beta, got %#v", m.selection)
 	}
 	m.selectTab(1)
@@ -29,13 +29,13 @@ func TestSelectionSessionAndPaneNavigation(t *testing.T) {
 	m := newTestModelLite()
 
 	m.tab = TabProject
-	m.selection = selectionState{Project: "Alpha", Session: "alpha-1"}
+	m.selection = selectionState{ProjectID: projectKey("/alpha", "Alpha"), Session: "alpha-1"}
 	m.selectSession(1)
 	if m.selection.Session != "alpha-2" {
 		t.Fatalf("expected session alpha-2, got %#v", m.selection)
 	}
 
-	m.selection = selectionState{Project: "Alpha", Session: "alpha-1"}
+	m.selection = selectionState{ProjectID: projectKey("/alpha", "Alpha"), Session: "alpha-1"}
 	m.selectSessionOrPane(1)
 	if m.selection.Pane != "1" {
 		t.Fatalf("expected pane 1, got %#v", m.selection)
@@ -45,7 +45,7 @@ func TestSelectionSessionAndPaneNavigation(t *testing.T) {
 		t.Fatalf("expected pane 2, got %#v", m.selection)
 	}
 
-	m.selection = selectionState{Project: "Alpha", Session: "alpha-1"}
+	m.selection = selectionState{ProjectID: projectKey("/alpha", "Alpha"), Session: "alpha-1"}
 	m.selectPane(1)
 	if m.selection.Pane == "" {
 		t.Fatalf("expected pane selected")
@@ -63,12 +63,12 @@ func TestSelectionDashboardAndToggle(t *testing.T) {
 	m.tab = TabDashboard
 	m.selection = selectionState{Session: "alpha-1"}
 	m.selectDashboardPane(1)
-	if m.selection.Project == "" || m.selection.Session == "" || m.selection.Pane == "" {
+	if m.selection.ProjectID == "" || m.selection.Session == "" || m.selection.Pane == "" {
 		t.Fatalf("expected dashboard pane selection, got %#v", m.selection)
 	}
 
 	m.selectDashboardProject(1)
-	if m.selection.Project == "" {
+	if m.selection.ProjectID == "" {
 		t.Fatalf("expected dashboard project selection")
 	}
 
@@ -106,7 +106,7 @@ func TestRefreshSelectionForProjectConfig(t *testing.T) {
 	}
 
 	m.data.Projects[0].Path = dir
-	m.selection = selectionState{Project: "Alpha"}
+	m.selection = selectionState{ProjectID: projectKey(dir, "Alpha")}
 	projectPath := normalizeProjectPath(dir)
 	m.projectConfigState = map[string]projectConfigState{
 		projectPath: {exists: false},
@@ -115,7 +115,7 @@ func TestRefreshSelectionForProjectConfig(t *testing.T) {
 	if !m.refreshSelectionForProjectConfig() {
 		t.Fatalf("expected selection refresh")
 	}
-	if m.selection.Project == "" {
+	if m.selection.ProjectID == "" {
 		t.Fatalf("expected selection populated")
 	}
 }
@@ -123,19 +123,19 @@ func TestRefreshSelectionForProjectConfig(t *testing.T) {
 func TestResolveSelections(t *testing.T) {
 	projects := sampleProjects()
 
-	sel := resolveSelection(projects, selectionState{Project: "missing"})
-	if sel.Project != "Alpha" || sel.Session == "" {
+	sel := resolveSelection(projects, selectionState{ProjectID: "missing"})
+	if sel.ProjectID != projectKey("/alpha", "Alpha") || sel.Session == "" {
 		t.Fatalf("expected default selection, got %#v", sel)
 	}
 
 	dashSel := resolveDashboardSelection(projects, selectionState{Session: "beta-1"})
-	if dashSel.Project != "Beta" || dashSel.Session != "beta-1" {
+	if dashSel.ProjectID != projectKey("/beta", "Beta") || dashSel.Session != "beta-1" {
 		t.Fatalf("expected dashboard selection, got %#v", dashSel)
 	}
 
 	columns := collectDashboardColumns(projects)
-	byProject := resolveDashboardSelectionFromColumns(columns, selectionState{Project: "Alpha"})
-	if byProject.Project != "Alpha" {
+	byProject := resolveDashboardSelectionFromColumns(columns, selectionState{ProjectID: projectKey("/alpha", "Alpha")})
+	if byProject.ProjectID != projectKey("/alpha", "Alpha") {
 		t.Fatalf("expected project Alpha, got %#v", byProject)
 	}
 
@@ -147,7 +147,7 @@ func TestResolveSelections(t *testing.T) {
 		t.Fatalf("expected fallback pane, got %q", got)
 	}
 
-	if findProject(projects, "Beta") == nil || findSession(&projects[0], "alpha-1") == nil {
+	if findProjectByID(projects, projectKey("/beta", "Beta")) == nil || findSession(&projects[0], "alpha-1") == nil {
 		t.Fatalf("expected project/session lookup")
 	}
 	if _, sess := findProjectForSession(projects, "alpha-1"); sess == nil {

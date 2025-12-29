@@ -10,7 +10,7 @@ import (
 func TestDashboardActionsAndNav(t *testing.T) {
 	m := newTestModelLite()
 	m.client = &sessiond.Client{}
-	m.selection = selectionState{Project: "Alpha", Session: "alpha-1", Pane: "1"}
+	m.selection = selectionState{ProjectID: projectKey("/alpha", "Alpha"), Session: "alpha-1", Pane: "1"}
 
 	m.filterActive = true
 	m.updateDashboard(tea.KeyMsg{Type: tea.KeyEnter})
@@ -34,9 +34,9 @@ func TestDashboardActionsAndNav(t *testing.T) {
 	}
 
 	m.tab = TabProject
-	m.selection.Project = "Alpha"
+	m.selection.ProjectID = projectKey("/alpha", "Alpha")
 	m.updateDashboard(keyRune('l'))
-	if m.selection.Project != "Beta" {
+	if m.selection.ProjectID != projectKey("/beta", "Beta") {
 		t.Fatalf("expected project navigation to Beta, got %#v", m.selection)
 	}
 
@@ -51,7 +51,7 @@ func TestDashboardActionsAndNav(t *testing.T) {
 		t.Fatalf("expected pane navigation to set pane")
 	}
 
-	m.selection = selectionState{Project: "Alpha", Session: "alpha-1", Pane: "1"}
+	m.selection = selectionState{ProjectID: projectKey("/alpha", "Alpha"), Session: "alpha-1", Pane: "1"}
 	before := m.expandedSessions["alpha-1"]
 	m.updateDashboard(keyRune('g'))
 	if m.expandedSessions["alpha-1"] == before {

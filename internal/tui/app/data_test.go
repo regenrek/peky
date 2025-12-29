@@ -205,23 +205,25 @@ func TestProjectKeyAndGroupName(t *testing.T) {
 func TestResolveSelection(t *testing.T) {
 	groups := []ProjectGroup{
 		{
+			ID:   projectKey("", "A"),
 			Name: "A",
 			Sessions: []SessionItem{
 				{Name: "s1", ActivePane: "0", Panes: []PaneItem{{Index: "0"}, {Index: "1"}}},
 			},
 		},
 		{
+			ID:   projectKey("", "B"),
 			Name: "B",
 			Sessions: []SessionItem{
 				{Name: "s2", ActivePane: "2", Panes: []PaneItem{{Index: "2"}}},
 			},
 		},
 	}
-	resolved := resolveSelection(groups, selectionState{Project: "B", Session: "s2", Pane: "2"})
-	if resolved.Project != "B" || resolved.Session != "s2" || resolved.Pane != "2" {
+	resolved := resolveSelection(groups, selectionState{ProjectID: projectKey("", "B"), Session: "s2", Pane: "2"})
+	if resolved.ProjectID != projectKey("", "B") || resolved.Session != "s2" || resolved.Pane != "2" {
 		t.Fatalf("resolveSelection() = %#v", resolved)
 	}
-	resolved = resolveSelection(groups, selectionState{Project: "B", Session: "s2", Pane: "missing"})
+	resolved = resolveSelection(groups, selectionState{ProjectID: projectKey("", "B"), Session: "s2", Pane: "missing"})
 	if resolved.Pane != "missing" {
 		t.Fatalf("resolveSelection() pane passthrough = %#v", resolved)
 	}
@@ -230,6 +232,7 @@ func TestResolveSelection(t *testing.T) {
 func TestResolveDashboardSelection(t *testing.T) {
 	groups := []ProjectGroup{
 		{
+			ID:   projectKey("", "A"),
 			Name: "A",
 			Sessions: []SessionItem{
 				{
@@ -240,6 +243,7 @@ func TestResolveDashboardSelection(t *testing.T) {
 			},
 		},
 		{
+			ID:   projectKey("", "B"),
 			Name: "B",
 			Sessions: []SessionItem{
 				{
@@ -252,7 +256,7 @@ func TestResolveDashboardSelection(t *testing.T) {
 	}
 	desired := selectionState{Session: "s2", Pane: "2"}
 	resolved := resolveDashboardSelection(groups, desired)
-	if resolved.Project != "B" || resolved.Session != "s2" || resolved.Pane != "2" {
+	if resolved.ProjectID != projectKey("", "B") || resolved.Session != "s2" || resolved.Pane != "2" {
 		t.Fatalf("resolveDashboardSelection() = %#v", resolved)
 	}
 }

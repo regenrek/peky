@@ -100,14 +100,38 @@ func TestPaneViewQueueing(t *testing.T) {
 	}
 }
 
+func TestRefreshQueueing(t *testing.T) {
+	m := newTestModelLite()
+	m.refreshInFlight = 1
+	if cmd := m.requestRefreshCmd(); cmd != nil {
+		t.Fatalf("expected nil cmd while refresh in flight")
+	}
+	if !m.refreshQueued {
+		t.Fatalf("expected refreshQueued set")
+	}
+
+	snapshot := dashboardSnapshotMsg{Result: dashboardSnapshotResult{
+		Data:     DashboardData{Projects: sampleProjects()},
+		Settings: m.settings,
+		Version:  m.selectionVersion,
+	}}
+	m.handleDashboardSnapshot(snapshot)
+	if m.refreshQueued {
+		t.Fatalf("expected refreshQueued cleared")
+	}
+	if m.refreshInFlight == 0 {
+		t.Fatalf("expected queued refresh started")
+	}
+}
+
 func TestHandleDashboardSnapshotRefreshSeq(t *testing.T) {
 	m := newTestModelLite()
-	m.data = DashboardData{Projects: []ProjectGroup{{Name: "Keep"}}}
+	m.data = DashboardData{Projects: []ProjectGroup{{ID: projectKey("", "Keep"), Name: "Keep"}}}
 	m.refreshSeq = 5
 	m.lastAppliedSeq = 4
 
 	stale := dashboardSnapshotMsg{Result: dashboardSnapshotResult{
-		Data:       DashboardData{Projects: []ProjectGroup{{Name: "Stale"}}},
+		Data:       DashboardData{Projects: []ProjectGroup{{ID: projectKey("", "Stale"), Name: "Stale"}}},
 		Settings:   m.settings,
 		Version:    m.selectionVersion,
 		RefreshSeq: 4,
@@ -118,7 +142,7 @@ func TestHandleDashboardSnapshotRefreshSeq(t *testing.T) {
 	}
 
 	fresh := dashboardSnapshotMsg{Result: dashboardSnapshotResult{
-		Data:       DashboardData{Projects: []ProjectGroup{{Name: "Fresh"}}},
+		Data:       DashboardData{Projects: []ProjectGroup{{ID: projectKey("", "Fresh"), Name: "Fresh"}}},
 		Settings:   m.settings,
 		Version:    m.selectionVersion,
 		RefreshSeq: 5,

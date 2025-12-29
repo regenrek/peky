@@ -128,7 +128,7 @@ func (m *Model) applyRenameSession(newName string) tea.Cmd {
 	m.rememberSelection(m.selection)
 	m.setState(StateDashboard)
 	m.setToast("Renamed session to "+newName, toastSuccess)
-	return m.startRefreshCmd()
+	return m.requestRefreshCmd()
 }
 
 func (m *Model) applyRenamePane(newName string) tea.Cmd {
@@ -155,7 +155,7 @@ func (m *Model) applyRenamePane(newName string) tea.Cmd {
 	m.selectionVersion++
 	m.setState(StateDashboard)
 	m.setToast("Renamed pane to "+newName, toastSuccess)
-	return m.startRefreshCmd()
+	return m.requestRefreshCmd()
 }
 
 func (m *Model) renamePaneTarget() (string, string, bool) {

@@ -23,9 +23,9 @@ func (r Rect) Contains(x, y int) bool {
 
 // Selection identifies the currently selected project/session/pane.
 type Selection struct {
-	Project string
-	Session string
-	Pane    string
+	ProjectID string
+	Session   string
+	Pane      string
 }
 
 // PaneHit captures a pane hit-test match.
@@ -47,6 +47,6 @@ const (
 
 // HeaderHit captures a header hit-test match.
 type HeaderHit struct {
-	Kind        HeaderKind
-	ProjectName string
+	Kind      HeaderKind
+	ProjectID string
 }

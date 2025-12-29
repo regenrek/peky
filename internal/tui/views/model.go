@@ -79,12 +79,14 @@ type Pane struct {
 }
 
 type DashboardColumn struct {
+	ProjectID   string
 	ProjectName string
 	ProjectPath string
 	Panes       []DashboardPane
 }
 
 type DashboardPane struct {
+	ProjectID   string
 	ProjectName string
 	ProjectPath string
 	SessionName string

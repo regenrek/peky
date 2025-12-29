@@ -12,9 +12,9 @@ import (
 
 func selectionFromMouse(sel mouse.Selection) selectionState {
 	return selectionState{
-		Project: sel.Project,
-		Session: sel.Session,
-		Pane:    sel.Pane,
+		ProjectID: sel.ProjectID,
+		Session:   sel.Session,
+		Pane:      sel.Pane,
 	}
 }
 

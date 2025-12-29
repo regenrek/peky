@@ -171,20 +171,23 @@ func (m *Manager) createPane(ctx context.Context, path, title, command string, e
 	return pane, nil
 }
 
-func renderPreviewLines(win *terminal.Window, max int) []string {
+func renderPreviewLines(win *terminal.Window, max int) ([]string, bool) {
 	if win == nil || max <= 0 {
-		return nil
+		return nil, false
 	}
-	view := win.ViewANSI()
+	view, ready := win.ViewANSICached()
+	if !ready {
+		win.RequestANSIRender()
+	}
 	if view == "" {
-		return nil
+		return nil, ready
 	}
 	plain := ansi.Strip(view)
 	lines := strings.Split(plain, "\n")
 	if len(lines) <= max {
-		return lines
+		return lines, ready
 	}
-	return lines[len(lines)-max:]
+	return lines[len(lines)-max:], ready
 }
 
 func splitCommand(command string) (string, []string, error) {

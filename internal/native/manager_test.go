@@ -298,7 +298,7 @@ func TestSnapshotWithNilWindow(t *testing.T) {
 	session := &Session{Name: "sess", Panes: []*Pane{pane}}
 	m.sessions["sess"] = session
 
-	snaps := m.Snapshot(3)
+	snaps := m.Snapshot(context.Background(), 3)
 	if len(snaps) != 1 || len(snaps[0].Panes) != 1 {
 		t.Fatalf("Snapshot() length mismatch")
 	}

@@ -26,6 +26,7 @@ func (m *Model) filteredDashboardColumns(columns []DashboardProjectColumn) []Das
 	out := make([]DashboardProjectColumn, 0, len(columns))
 	for _, column := range columns {
 		next := DashboardProjectColumn{
+			ProjectID:   column.ProjectID,
 			ProjectName: column.ProjectName,
 			ProjectPath: column.ProjectPath,
 		}
@@ -44,9 +45,9 @@ func (m *Model) filteredDashboardColumns(columns []DashboardProjectColumn) []Das
 	return out
 }
 
-func (m *Model) projectIndexFor(name string) (int, bool) {
+func (m *Model) projectIndexForID(projectID string) (int, bool) {
 	for i := range m.data.Projects {
-		if m.data.Projects[i].Name == name {
+		if m.data.Projects[i].ID == projectID {
 			return i, true
 		}
 	}
@@ -57,9 +58,9 @@ func (m *Model) dashboardProjectIndex(columns []DashboardProjectColumn) int {
 	if len(columns) == 0 {
 		return -1
 	}
-	if m.selection.Project != "" {
+	if m.selection.ProjectID != "" {
 		for i, column := range columns {
-			if column.ProjectName == m.selection.Project {
+			if column.ProjectID == m.selection.ProjectID {
 				return i
 			}
 		}

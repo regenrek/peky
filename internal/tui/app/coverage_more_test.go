@@ -119,8 +119,8 @@ func TestSelectionHelpers(t *testing.T) {
 		filterInput: filter,
 		data: DashboardData{
 			Projects: []ProjectGroup{
-				{Name: "proj"},
-				{Name: "other"},
+				{ID: projectKey("", "proj"), Name: "proj"},
+				{ID: projectKey("", "other"), Name: "other"},
 			},
 		},
 	}
@@ -135,17 +135,19 @@ func TestSelectionHelpers(t *testing.T) {
 
 	columns := []DashboardProjectColumn{
 		{
+			ProjectID:   projectKey("", "proj"),
 			ProjectName: "proj",
 			ProjectPath: "/tmp/proj",
 			Panes: []DashboardPane{
-				{ProjectName: "proj", SessionName: "s1", Pane: PaneItem{Title: "build"}},
+				{ProjectID: projectKey("", "proj"), ProjectName: "proj", SessionName: "s1", Pane: PaneItem{Title: "build"}},
 			},
 		},
 		{
+			ProjectID:   projectKey("", "other"),
 			ProjectName: "other",
 			ProjectPath: "/tmp/other",
 			Panes: []DashboardPane{
-				{ProjectName: "other", SessionName: "s2", Pane: PaneItem{Title: "misc"}},
+				{ProjectID: projectKey("", "other"), ProjectName: "other", SessionName: "s2", Pane: PaneItem{Title: "misc"}},
 			},
 		},
 	}
@@ -154,15 +156,15 @@ func TestSelectionHelpers(t *testing.T) {
 		t.Fatalf("filteredDashboardColumns = %#v", filteredCols)
 	}
 
-	if idx, ok := m.projectIndexFor("proj"); !ok || idx != 0 {
+	if idx, ok := m.projectIndexForID(projectKey("", "proj")); !ok || idx != 0 {
 		t.Fatalf("projectIndexFor = %d %v", idx, ok)
 	}
 
-	m.selection = selectionState{Project: "other"}
+	m.selection = selectionState{ProjectID: projectKey("", "other")}
 	if idx := m.dashboardProjectIndex(columns); idx != 1 {
 		t.Fatalf("dashboardProjectIndex by project = %d", idx)
 	}
-	m.selection = selectionState{Project: "", Session: "s1"}
+	m.selection = selectionState{ProjectID: "", Session: "s1"}
 	if idx := m.dashboardProjectIndex(columns); idx != 0 {
 		t.Fatalf("dashboardProjectIndex by session = %d", idx)
 	}
@@ -209,7 +211,7 @@ func TestPaneSwapChoiceMethods(t *testing.T) {
 func TestViewModelHelpers(t *testing.T) {
 	pane := PaneItem{ID: "id", Index: "1", Title: "bash", Command: "bash", Active: true, Width: 10, Height: 5}
 	session := SessionItem{Name: "sess", Status: StatusRunning, PaneCount: 1, ActivePane: "1", Panes: []PaneItem{pane}, Thumbnail: PaneSummary{Line: "sum", Status: PaneStatusRunning}}
-	project := ProjectGroup{Name: "proj", Path: "/tmp/proj", Sessions: []SessionItem{session}}
+	project := ProjectGroup{ID: projectKey("/tmp/proj", "proj"), Name: "proj", Path: "/tmp/proj", Sessions: []SessionItem{session}}
 
 	view := toViewProject(project)
 	if view.Name != "proj" || view.Path == "" {
@@ -222,12 +224,12 @@ func TestViewModelHelpers(t *testing.T) {
 		t.Fatalf("toViewPane = %#v", got)
 	}
 
-	columns := []DashboardProjectColumn{{ProjectName: "proj", ProjectPath: "/tmp/proj", Panes: []DashboardPane{{ProjectName: "proj", ProjectPath: "/tmp/proj", SessionName: "sess", Pane: pane}}}}
+	columns := []DashboardProjectColumn{{ProjectID: projectKey("/tmp/proj", "proj"), ProjectName: "proj", ProjectPath: "/tmp/proj", Panes: []DashboardPane{{ProjectID: projectKey("/tmp/proj", "proj"), ProjectName: "proj", ProjectPath: "/tmp/proj", SessionName: "sess", Pane: pane}}}}
 	if got := toViewColumns(columns); len(got) != 1 || len(got[0].Panes) != 1 {
 		t.Fatalf("toViewColumns = %#v", got)
 	}
 
-	if count := runningSessionsForProject([]ProjectGroup{project}, "proj"); count != 1 {
+	if count := runningSessionsForProject([]ProjectGroup{project}, project.ID); count != 1 {
 		t.Fatalf("runningSessionsForProject = %d", count)
 	}
 
@@ -307,7 +309,7 @@ func modelWithMouseMotion() *Model {
 			},
 		},
 	}
-	m.selection = selectionState{Project: "proj", Session: "sess", Pane: "1"}
+	m.selection = selectionState{ProjectID: projectKey("", "proj"), Session: "sess", Pane: "1"}
 	return m
 }
 
@@ -319,7 +321,7 @@ func TestEncodeKeyMsgSequences(t *testing.T) {
 }
 
 func TestToViewProjects(t *testing.T) {
-	projects := []ProjectGroup{{Name: "proj", Path: "/tmp/proj"}}
+	projects := []ProjectGroup{{ID: projectKey("/tmp/proj", "proj"), Name: "proj", Path: "/tmp/proj"}}
 	got := toViewProjects(projects)
 	if len(got) != 1 || got[0].Name != "proj" {
 		t.Fatalf("toViewProjects = %#v", got)

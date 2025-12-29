@@ -6,6 +6,7 @@ func collectDashboardColumns(projects []ProjectGroup) []DashboardProjectColumn {
 	columns := make([]DashboardProjectColumn, 0, len(projects))
 	for _, project := range projects {
 		column := DashboardProjectColumn{
+			ProjectID:   project.ID,
 			ProjectName: project.Name,
 			ProjectPath: project.Path,
 		}
@@ -15,6 +16,7 @@ func collectDashboardColumns(projects []ProjectGroup) []DashboardProjectColumn {
 			}
 			for _, pane := range session.Panes {
 				column.Panes = append(column.Panes, DashboardPane{
+					ProjectID:   project.ID,
 					ProjectName: project.Name,
 					ProjectPath: project.Path,
 					SessionName: session.Name,
@@ -31,10 +33,10 @@ func dashboardSelectedProject(columns []DashboardProjectColumn, selection select
 	if len(columns) == 0 {
 		return ""
 	}
-	if selection.Project != "" {
+	if selection.ProjectID != "" {
 		for _, column := range columns {
-			if column.ProjectName == selection.Project {
-				return column.ProjectName
+			if column.ProjectID == selection.ProjectID {
+				return column.ProjectID
 			}
 		}
 	}
@@ -42,12 +44,12 @@ func dashboardSelectedProject(columns []DashboardProjectColumn, selection select
 		for _, column := range columns {
 			for _, pane := range column.Panes {
 				if pane.SessionName == selection.Session {
-					return column.ProjectName
+					return column.ProjectID
 				}
 			}
 		}
 	}
-	return columns[0].ProjectName
+	return columns[0].ProjectID
 }
 
 func dashboardPaneIndex(panes []DashboardPane, desired selectionState) int {

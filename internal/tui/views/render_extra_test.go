@@ -18,8 +18,8 @@ func TestViewDashboardContentRenders(t *testing.T) {
 		EmptyStateMessage:        "empty",
 		ShowThumbnails:           true,
 		QuickReplyInput:          input,
-		DashboardColumns:         []DashboardColumn{{ProjectName: "Proj", ProjectPath: "", Panes: []DashboardPane{{ProjectName: "Proj", SessionName: "sess", Pane: Pane{Index: "0"}}}}},
-		DashboardSelectedProject: "Proj",
+		DashboardColumns:         []DashboardColumn{{ProjectID: "proj", ProjectName: "Proj", ProjectPath: "", Panes: []DashboardPane{{ProjectID: "proj", ProjectName: "Proj", SessionName: "sess", Pane: Pane{Index: "0"}}}}},
+		DashboardSelectedProject: "proj",
 		Projects: []Project{{
 			Name: "Proj",
 			Sessions: []Session{{
@@ -101,8 +101,8 @@ func TestViewStates(t *testing.T) {
 		Height:                   24,
 		HeaderLine:               "Peaky Panes",
 		EmptyStateMessage:        "empty",
-		DashboardColumns:         []DashboardColumn{{ProjectName: "Proj", ProjectPath: "", Panes: []DashboardPane{{ProjectName: "Proj", SessionName: "sess", Pane: Pane{Index: "0"}}}}},
-		DashboardSelectedProject: "Proj",
+		DashboardColumns:         []DashboardColumn{{ProjectID: "proj", ProjectName: "Proj", ProjectPath: "", Panes: []DashboardPane{{ProjectID: "proj", ProjectName: "Proj", SessionName: "sess", Pane: Pane{Index: "0"}}}}},
+		DashboardSelectedProject: "proj",
 		Projects:                 []Project{{Name: "Proj"}},
 		SidebarProject:           &Project{Name: "Proj"},
 		SidebarSessions:          []Session{{Name: "sess", Status: sessionRunning}},

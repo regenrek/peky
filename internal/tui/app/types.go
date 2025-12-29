@@ -68,6 +68,7 @@ type DashboardData struct {
 
 // ProjectGroup represents a project grouping with sessions.
 type ProjectGroup struct {
+	ID         string
 	Name       string
 	Path       string
 	FromConfig bool
@@ -89,6 +90,7 @@ type SessionItem struct {
 
 // DashboardPane represents a pane with project metadata for the dashboard.
 type DashboardPane struct {
+	ProjectID   string
 	ProjectName string
 	ProjectPath string
 	SessionName string
@@ -97,6 +99,7 @@ type DashboardPane struct {
 
 // DashboardProjectColumn represents a dashboard column for a project.
 type DashboardProjectColumn struct {
+	ProjectID   string
 	ProjectName string
 	ProjectPath string
 	Panes       []DashboardPane
@@ -150,11 +153,11 @@ type DashboardConfig struct {
 	HiddenProjects  map[string]struct{}
 }
 
-// selectionState tracks the current selection by name/index.
+// selectionState tracks the current selection by stable project ID.
 type selectionState struct {
-	Project string
-	Session string
-	Pane    string
+	ProjectID string
+	Session   string
+	Pane      string
 }
 
 // dashboardSnapshotInput carries the state needed for refresh.
