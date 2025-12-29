@@ -9,9 +9,10 @@ import (
 )
 
 const (
-	word         = "PEAKYPANES"
-	fullSpacing  = 2
-	compactLabel = "PEAKY PANES"
+	word          = "PEAKYPANES"
+	fullSpacing   = 2
+	compactLabel  = "PEAKY PANES"
+	fallbackWidth = 5
 )
 
 // Render returns the full Peaky Panes wordmark. Width truncates the output
@@ -45,12 +46,27 @@ func FullWidth() int {
 	if len(lines) == 0 {
 		return 0
 	}
-	return utf8.RuneCountInString(lines[0])
+	maxWidth := 0
+	for _, line := range lines {
+		if width := utf8.RuneCountInString(line); width > maxWidth {
+			maxWidth = width
+		}
+	}
+	return maxWidth
 }
 
 // FullHeight reports the height of the full wordmark.
 func FullHeight() int {
-	return len(letterForms['P'])
+	maxHeight := 0
+	for _, form := range letterForms {
+		if len(form) > maxHeight {
+			maxHeight = len(form)
+		}
+	}
+	if maxHeight == 0 {
+		return 0
+	}
+	return maxHeight
 }
 
 func renderWord(text string, spacing int) []string {
@@ -64,6 +80,7 @@ func renderWord(text string, spacing int) []string {
 		if !ok {
 			form = fallbackLetter(r, height)
 		}
+		form = normalizeLetterform(form, height)
 		for i := 0; i < height; i++ {
 			if idx > 0 && spacing > 0 {
 				lines[i] += strings.Repeat(" ", spacing)
@@ -78,16 +95,20 @@ func renderWord(text string, spacing int) []string {
 }
 
 func fallbackLetter(r rune, height int) []string {
-	line := strings.Repeat(" ", 3)
 	if height <= 0 {
 		return nil
 	}
+	line := strings.Repeat(" ", fallbackWidth)
 	out := make([]string, height)
 	center := height / 2
 	for i := range out {
 		out[i] = line
 	}
-	out[center] = " " + string(r) + " "
+	if fallbackWidth >= 3 {
+		out[center] = " " + string(r) + strings.Repeat(" ", fallbackWidth-2)
+	} else {
+		out[center] = string(r)
+	}
 	return out
 }
 
@@ -95,34 +116,44 @@ var letterForms = map[rune][]string{
 	'P': {
 		"████ ",
 		"█   █",
+		"█   █",
 		"████ ",
+		"█    ",
 		"█    ",
 		"█    ",
 	},
 	'E': {
 		"█████",
 		"█    ",
+		"█    ",
 		"████ ",
+		"█    ",
 		"█    ",
 		"█████",
 	},
 	'A': {
 		" ███ ",
 		"█   █",
+		"█   █",
 		"█████",
+		"█   █",
 		"█   █",
 		"█   █",
 	},
 	'K': {
 		"█   █",
 		"█  █ ",
-		"███  ",
+		"█ █  ",
+		"██   ",
+		"█ █  ",
 		"█  █ ",
 		"█   █",
 	},
 	'Y': {
 		"█   █",
+		"█   █",
 		" █ █ ",
+		"  █  ",
 		"  █  ",
 		"  █  ",
 		"  █  ",
@@ -130,15 +161,47 @@ var letterForms = map[rune][]string{
 	'N': {
 		"█   █",
 		"██  █",
-		"█ █ █",
+		"███ █",
+		"█ ██ ",
 		"█  ██",
+		"█   █",
 		"█   █",
 	},
 	'S': {
 		" ████",
 		"█    ",
+		"█    ",
 		" ███ ",
+		"    █",
 		"    █",
 		"████ ",
 	},
+}
+
+func normalizeLetterform(form []string, height int) []string {
+	if height <= 0 {
+		return nil
+	}
+	maxWidth := 0
+	for _, line := range form {
+		if width := utf8.RuneCountInString(line); width > maxWidth {
+			maxWidth = width
+		}
+	}
+	if maxWidth == 0 {
+		maxWidth = fallbackWidth
+	}
+	out := make([]string, height)
+	for i := 0; i < height; i++ {
+		line := ""
+		if i < len(form) {
+			line = form[i]
+		}
+		lineWidth := utf8.RuneCountInString(line)
+		if lineWidth < maxWidth {
+			line += strings.Repeat(" ", maxWidth-lineWidth)
+		}
+		out[i] = line
+	}
+	return out
 }
