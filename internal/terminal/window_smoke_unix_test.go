@@ -7,10 +7,16 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/muesli/termenv"
 )
 
 func TestWindowScrollbackCopySmoke(t *testing.T) {
 	w := newCatWindow(t, 20, 3)
+	expectedSB := 9 - w.rows
+	if expectedSB < 0 {
+		expectedSB = 0
+	}
 
 	for i := 0; i < 9; i++ {
 		line := fmt.Sprintf("line%02d\n", i)
@@ -20,15 +26,15 @@ func TestWindowScrollbackCopySmoke(t *testing.T) {
 	}
 
 	waitFor(t, 2*time.Second, "scrollback populated", func() bool {
-		return w.ScrollbackLen() >= 4
+		return w.ScrollbackLen() >= expectedSB
 	})
 
-	w.ScrollToTop()
-	view := w.ViewLipgloss(false)
-	lines := trimLinesSmoke(view)
-	if !containsLineSmoke(lines, "line00") {
-		t.Fatalf("expected scrollback to show line00, got %q", lines)
-	}
+	waitFor(t, 2*time.Second, "scrollback shows line00", func() bool {
+		w.ScrollToTop()
+		view := w.ViewLipgloss(false, termenv.TrueColor)
+		lines := trimLinesSmoke(view)
+		return containsLineSmoke(lines, "line00")
+	})
 
 	w.EnterCopyMode()
 	w.CopyMove(0, -999)

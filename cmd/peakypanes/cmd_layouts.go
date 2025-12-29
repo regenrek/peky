@@ -49,8 +49,12 @@ func listLayouts() {
 	fmt.Println()
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tSOURCE\tDESCRIPTION")
-	fmt.Fprintln(w, "----\t------\t-----------")
+	if _, err := fmt.Fprintln(w, "NAME\tSOURCE\tDESCRIPTION"); err != nil {
+		fatal("failed to write layout table header: %v", err)
+	}
+	if _, err := fmt.Fprintln(w, "----\t------\t-----------"); err != nil {
+		fatal("failed to write layout table divider: %v", err)
+	}
 
 	for _, l := range layouts {
 		source := l.Source
@@ -66,9 +70,13 @@ func listLayouts() {
 		if len(desc) > 50 {
 			desc = desc[:47] + "..."
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\n", l.Name, source, desc)
+		if _, err := fmt.Fprintf(w, "%s\t%s\t%s\n", l.Name, source, desc); err != nil {
+			fatal("failed to write layout row: %v", err)
+		}
 	}
-	w.Flush()
+	if err := w.Flush(); err != nil {
+		fatal("failed to flush layout table: %v", err)
+	}
 
 	fmt.Println()
 	fmt.Println("Use 'peakypanes layouts export <name>' to view layout YAML")

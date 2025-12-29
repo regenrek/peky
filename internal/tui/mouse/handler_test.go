@@ -28,9 +28,9 @@ func TestHandlerSingleClickSelectsPane(t *testing.T) {
 	hit := PaneHit{
 		PaneID: "pane-1",
 		Selection: Selection{
-			Project: "proj",
-			Session: "sess",
-			Pane:    "1",
+			ProjectID: "proj",
+			Session:   "sess",
+			Pane:      "1",
 		},
 		Outer:   Rect{X: 0, Y: 0, W: 10, H: 10},
 		Content: Rect{X: 0, Y: 0, W: 10, H: 10},
@@ -73,9 +73,9 @@ func TestHandlerDoubleClickEntersFocus(t *testing.T) {
 	hit := PaneHit{
 		PaneID: "pane-2",
 		Selection: Selection{
-			Project: "proj",
-			Session: "sess",
-			Pane:    "2",
+			ProjectID: "proj",
+			Session:   "sess",
+			Pane:      "2",
 		},
 		Outer:   Rect{X: 0, Y: 0, W: 10, H: 10},
 		Content: Rect{X: 0, Y: 0, W: 10, H: 10},
@@ -128,9 +128,9 @@ func TestHandlerFocusUnavailable(t *testing.T) {
 	hit := PaneHit{
 		PaneID: "pane-3",
 		Selection: Selection{
-			Project: "proj",
-			Session: "sess",
-			Pane:    "3",
+			ProjectID: "proj",
+			Session:   "sess",
+			Pane:      "3",
 		},
 		Outer:   Rect{X: 0, Y: 0, W: 10, H: 10},
 		Content: Rect{X: 0, Y: 0, W: 10, H: 10},
@@ -211,9 +211,9 @@ func TestHandlerTerminalFocusMouse(t *testing.T) {
 	hit := PaneHit{
 		PaneID: "pane-1",
 		Selection: Selection{
-			Project: "proj",
-			Session: "sess",
-			Pane:    "1",
+			ProjectID: "proj",
+			Session:   "sess",
+			Pane:      "1",
 		},
 		Outer:   Rect{X: 0, Y: 0, W: 10, H: 10},
 		Content: Rect{X: 0, Y: 0, W: 10, H: 10},

@@ -17,6 +17,30 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
 
+      - name: Go mod tidy check
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      - name: Install pinned Go tools
+        run: |
+          set -euo pipefail
+          install_tool() {
+            local mod="$1"
+            local pkg="$2"
+            local version
+            version=$(go list -m -f '{{.Version}}' "$mod")
+            if [ -z "$version" ] || [ "$version" = "None" ]; then
+              echo "tool module not pinned: $mod" >&2
+              exit 1
+            fi
+            go install "${pkg}@${version}"
+          }
+          install_tool github.com/golangci/golangci-lint/v2 github.com/golangci/golangci-lint/v2/cmd/golangci-lint
+          install_tool github.com/fzipp/gocyclo github.com/fzipp/gocyclo/cmd/gocyclo
+          install_tool golang.org/x/vuln golang.org/x/vuln/cmd/govulncheck
+          install_tool github.com/mfridman/tparse github.com/mfridman/tparse
+
       - name: Go fmt
         run: |
           files=$(git ls-files '*.go')
@@ -33,10 +57,19 @@ jobs:
         run: go vet ./...
 
       - name: Go test
-        run: go test ./... -coverprofile=cover.out
+        run: go test -json -coverprofile=cover.out ./... | tparse
 
       - name: Go test (race)
         run: go test ./... -race
+
+      - name: Golangci-lint
+        run: golangci-lint run ./...
+
+      - name: Gocyclo
+        run: gocyclo -over 15 ./...
+
+      - name: Govulncheck
+        run: govulncheck ./...
 
       - name: Coverage summary
         run: go tool cover -func=cover.out | tail -n 1

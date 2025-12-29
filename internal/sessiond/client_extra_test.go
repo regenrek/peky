@@ -2,10 +2,10 @@ package sessiond
 
 import (
 	"context"
-	"encoding/gob"
 	"net"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/regenrek/peakypanes/internal/native"
 )
@@ -16,8 +16,6 @@ func newClientWithTestServer(t *testing.T) (*Client, func()) {
 
 	client := &Client{
 		conn:    clientConn,
-		enc:     gob.NewEncoder(clientConn),
-		dec:     gob.NewDecoder(clientConn),
 		pending: make(map[uint64]chan Envelope),
 		events:  make(chan Event, 4),
 		version: "test",
@@ -127,7 +125,7 @@ func TestClientPaneOps(t *testing.T) {
 
 func TestClientSendNoConn(t *testing.T) {
 	c := &Client{}
-	if err := c.send(Envelope{}); err == nil {
+	if err := c.send(context.Background(), Envelope{}); err == nil {
 		t.Fatalf("expected send error")
 	}
 }
@@ -141,11 +139,9 @@ func TestClientCallNil(t *testing.T) {
 
 func serveClientTestConn(t *testing.T, conn net.Conn) {
 	t.Helper()
-	dec := gob.NewDecoder(conn)
-	enc := gob.NewEncoder(conn)
 	for {
-		var env Envelope
-		if err := dec.Decode(&env); err != nil {
+		env, err := readEnvelope(conn)
+		if err != nil {
 			return
 		}
 		if env.Kind != EnvelopeRequest {
@@ -179,12 +175,12 @@ func serveClientTestConn(t *testing.T, conn net.Conn) {
 		}
 
 		resp := Envelope{Kind: EnvelopeResponse, Op: env.Op, ID: env.ID, Payload: payload}
-		if err := enc.Encode(resp); err != nil {
+		if err := writeEnvelope(conn, resp); err != nil {
 			return
 		}
 		if env.Op == OpHello {
 			evtPayload := encodeMust(t, Event{Type: EventSessionChanged, Session: "alpha"})
-			_ = enc.Encode(Envelope{Kind: EnvelopeEvent, Event: EventSessionChanged, Payload: evtPayload})
+			_ = writeEnvelope(conn, Envelope{Kind: EnvelopeEvent, Event: EventSessionChanged, Payload: evtPayload})
 		}
 	}
 }
@@ -200,17 +196,18 @@ func encodeMust(t *testing.T, v any) []byte {
 
 func waitForEvent(t *testing.T, ch <-chan Event) Event {
 	t.Helper()
-	for i := 0; i < 2000; i++ {
+	deadline := time.After(250 * time.Millisecond)
+	for {
 		select {
 		case evt, ok := <-ch:
 			if !ok {
 				t.Fatalf("events channel closed")
 			}
 			return evt
+		case <-deadline:
+			t.Fatalf("expected event")
 		default:
 			runtime.Gosched()
 		}
 	}
-	t.Fatalf("expected event")
-	return Event{}
 }

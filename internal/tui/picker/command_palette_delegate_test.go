@@ -2,6 +2,7 @@ package picker
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -58,5 +59,23 @@ func TestCommandPaletteDelegateRenderNoWidth(t *testing.T) {
 	delegate.Render(&buf, model, 0, items[0])
 	if buf.Len() != 0 {
 		t.Fatalf("Render() should be empty for zero width")
+	}
+}
+
+func TestCommandPaletteDelegateRenderShortcut(t *testing.T) {
+	delegate := newCommandPaletteDelegate()
+	delegate.ShowDescription = false
+
+	items := []list.Item{
+		CommandItem{Label: "Run", Shortcut: "ctrl+n"},
+	}
+
+	model := list.New(items, delegate, 30, 2)
+	model.SetSize(30, 2)
+
+	var buf bytes.Buffer
+	delegate.Render(&buf, model, 0, items[0])
+	if !strings.Contains(buf.String(), "ctrl+n") {
+		t.Fatalf("expected shortcut in render output, got %q", buf.String())
 	}
 }

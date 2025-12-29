@@ -1,10 +1,13 @@
 package sessiond
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/muesli/termenv"
 
 	"github.com/regenrek/peakypanes/internal/native"
 )
@@ -13,11 +16,25 @@ type stubPaneView struct {
 	lipglossCalled bool
 	ansiCalled     bool
 	showCursor     bool
+	profile        termenv.Profile
 }
 
-func (s *stubPaneView) ViewLipgloss(showCursor bool) string {
+func (s *stubPaneView) ViewLipglossCtx(ctx context.Context, showCursor bool, profile termenv.Profile) (string, error) {
 	s.lipglossCalled = true
 	s.showCursor = showCursor
+	s.profile = profile
+	return "lipgloss", nil
+}
+
+func (s *stubPaneView) ViewANSICtx(ctx context.Context) (string, error) {
+	s.ansiCalled = true
+	return "ansi", nil
+}
+
+func (s *stubPaneView) ViewLipgloss(showCursor bool, profile termenv.Profile) string {
+	s.lipglossCalled = true
+	s.showCursor = showCursor
+	s.profile = profile
 	return "lipgloss"
 }
 
@@ -52,13 +69,19 @@ func TestNormalizeDimensions(t *testing.T) {
 
 func TestPaneViewString(t *testing.T) {
 	win := &stubPaneView{}
-	out := paneViewString(win, PaneViewRequest{Mode: PaneViewLipgloss, ShowCursor: true})
-	if out != "lipgloss" || !win.lipglossCalled || !win.showCursor {
+	out, err := paneViewString(context.Background(), win, PaneViewRequest{Mode: PaneViewLipgloss, ShowCursor: true, ColorProfile: termenv.ANSI256})
+	if err != nil {
+		t.Fatalf("paneViewString: %v", err)
+	}
+	if out != "lipgloss" || !win.lipglossCalled || !win.showCursor || win.profile != termenv.ANSI256 {
 		t.Fatalf("expected lipgloss render")
 	}
 
 	win = &stubPaneView{}
-	out = paneViewString(win, PaneViewRequest{Mode: PaneViewANSI})
+	out, err = paneViewString(context.Background(), win, PaneViewRequest{Mode: PaneViewANSI})
+	if err != nil {
+		t.Fatalf("paneViewString: %v", err)
+	}
 	if out != "ansi" || !win.ansiCalled {
 		t.Fatalf("expected ansi render")
 	}

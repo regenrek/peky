@@ -7,9 +7,10 @@ import "github.com/charmbracelet/lipgloss"
 // Design tokens for consistent TUI colors.
 var (
 	// Accent colors
-	Accent     = lipgloss.Color("#3B82F6") // highlight blue
-	AccentSoft = lipgloss.Color("#60A5FA")
-	AccentAlt  = lipgloss.Color("#22C55E")
+	Accent      = lipgloss.Color("#3B82F6") // highlight blue
+	AccentSoft  = lipgloss.Color("#60A5FA")
+	AccentAlt   = lipgloss.Color("#22C55E")
+	AccentFocus = lipgloss.Color("#F9F871")
 
 	// Status colors
 	Success = lipgloss.AdaptiveColor{Light: "#16A34A", Dark: "#22C55E"}
@@ -33,6 +34,7 @@ var (
 	Border        = lipgloss.Color("#3A3A3A")
 	BorderFocused = Accent
 	BorderTarget  = AccentAlt
+	BorderFocus   = AccentFocus
 	Background    = Surface
 	Highlight     = SurfaceAlt
 	QuickReplyBg  = SurfaceMuted
@@ -56,7 +58,7 @@ var App = lipgloss.NewStyle().Padding(1, 2)
 
 // ===== Title Styles =====
 
-// Title is the main title style (e.g., "🎩 Peaky Panes")
+// Title is the main title style (e.g., "Peaky Panes")
 var Title = lipgloss.NewStyle().
 	Foreground(TextPrimary).
 	Background(Accent).
@@ -100,6 +102,9 @@ var Dialog = lipgloss.NewStyle().
 	Foreground(TextPrimary).
 	Padding(1, 2)
 
+// DialogCompact is a tighter dialog container for dense pickers (e.g. command palette).
+var DialogCompact = Dialog.Padding(0, 1)
+
 // DialogTitle for dialog headings
 var DialogTitle = lipgloss.NewStyle().
 	Bold(true).
@@ -125,6 +130,10 @@ var DialogChoiceKey = lipgloss.NewStyle().
 // DialogChoiceSep for separators in choices
 var DialogChoiceSep = lipgloss.NewStyle().
 	Foreground(DialogLabelColor)
+
+// TerminalFocusHint highlights terminal focus status in the footer.
+var TerminalFocusHint = lipgloss.NewStyle().
+	Foreground(AccentFocus)
 
 // ===== List Delegate Styles =====
 

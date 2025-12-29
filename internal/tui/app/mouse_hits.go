@@ -76,8 +76,8 @@ func (m *Model) headerHitRects() []headerHitRect {
 			}
 			hits = append(hits, headerHitRect{
 				Hit: mouse.HeaderHit{
-					Kind:        kind,
-					ProjectName: part.ProjectName,
+					Kind:      kind,
+					ProjectID: part.ProjectID,
 				},
 				Rect: mouse.Rect{
 					X: start,
@@ -166,9 +166,9 @@ func projectPaneLayoutHits(project *ProjectGroup, session *SessionItem, panes []
 		hits = append(hits, mouse.PaneHit{
 			PaneID: pane.ID,
 			Selection: mouse.Selection{
-				Project: project.Name,
-				Session: session.Name,
-				Pane:    pane.Index,
+				ProjectID: project.ID,
+				Session:   session.Name,
+				Pane:      pane.Index,
 			},
 			Outer:   outer,
 			Content: mouse.Rect{},
@@ -238,9 +238,9 @@ func projectPaneTileHits(project *ProjectGroup, session *SessionItem, panes []Pa
 			hits = append(hits, mouse.PaneHit{
 				PaneID: pane.ID,
 				Selection: mouse.Selection{
-					Project: project.Name,
-					Session: session.Name,
-					Pane:    pane.Index,
+					ProjectID: project.ID,
+					Session:   session.Name,
+					Pane:      pane.Index,
 				},
 				Outer:   outer,
 				Content: content,

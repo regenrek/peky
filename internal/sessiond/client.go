@@ -2,10 +2,10 @@ package sessiond
 
 import (
 	"context"
-	"encoding/gob"
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -16,8 +16,6 @@ import (
 // Client is a daemon connection used by the UI.
 type Client struct {
 	conn       net.Conn
-	enc        *gob.Encoder
-	dec        *gob.Decoder
 	socketPath string
 	version    string
 
@@ -39,8 +37,6 @@ func Dial(ctx context.Context, socketPath, version string) (*Client, error) {
 	}
 	client := &Client{
 		conn:       conn,
-		enc:        gob.NewEncoder(conn),
-		dec:        gob.NewDecoder(conn),
 		socketPath: socketPath,
 		version:    version,
 		pending:    make(map[uint64]chan Envelope),
@@ -82,6 +78,30 @@ func (c *Client) Events() <-chan Event {
 	return c.events
 }
 
+// Version returns the daemon version used by this client.
+func (c *Client) Version() string {
+	if c == nil {
+		return ""
+	}
+	return c.version
+}
+
+// Clone opens a new client connection to the same daemon.
+func (c *Client) Clone(ctx context.Context) (*Client, error) {
+	if c == nil {
+		return nil, errors.New("sessiond: client is nil")
+	}
+	socketPath := strings.TrimSpace(c.socketPath)
+	if socketPath == "" {
+		return nil, errors.New("sessiond: socket path unavailable")
+	}
+	version := strings.TrimSpace(c.version)
+	if version == "" {
+		return nil, errors.New("sessiond: version unavailable")
+	}
+	return Dial(ctx, socketPath, version)
+}
+
 func (c *Client) hello(ctx context.Context) error {
 	_, err := c.call(ctx, OpHello, HelloRequest{Version: c.version}, &HelloResponse{})
 	if err != nil {
@@ -100,8 +120,15 @@ func (c *Client) readLoop() {
 		if c.conn == nil {
 			return
 		}
-		var env Envelope
-		if err := c.dec.Decode(&env); err != nil {
+		if err := c.conn.SetReadDeadline(time.Now().Add(defaultReadTimeout)); err != nil {
+			_ = c.Close()
+			return
+		}
+		env, err := readEnvelope(c.conn)
+		if err != nil {
+			if isTimeout(err) {
+				continue
+			}
 			_ = c.Close()
 			return
 		}
@@ -132,6 +159,9 @@ func (c *Client) call(ctx context.Context, op Op, req any, out any) (Envelope, e
 	if c == nil {
 		return Envelope{}, errors.New("sessiond: client is nil")
 	}
+	if c.closed.Load() {
+		return Envelope{}, errors.New("sessiond: client closed")
+	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -142,9 +172,13 @@ func (c *Client) call(ctx context.Context, op Op, req any, out any) (Envelope, e
 	}
 	respCh := make(chan Envelope, 1)
 	c.pendingMu.Lock()
+	if c.pending == nil {
+		c.pendingMu.Unlock()
+		return Envelope{}, errors.New("sessiond: client closed")
+	}
 	c.pending[id] = respCh
 	c.pendingMu.Unlock()
-	if err := c.send(Envelope{Kind: EnvelopeRequest, Op: op, ID: id, Payload: payload}); err != nil {
+	if err := c.send(ctx, Envelope{Kind: EnvelopeRequest, Op: op, ID: id, Payload: payload}); err != nil {
 		c.pendingMu.Lock()
 		delete(c.pending, id)
 		c.pendingMu.Unlock()
@@ -172,16 +206,33 @@ func (c *Client) call(ctx context.Context, op Op, req any, out any) (Envelope, e
 	}
 }
 
-func (c *Client) send(env Envelope) error {
+func (c *Client) send(ctx context.Context, env Envelope) error {
 	if c.conn == nil {
 		return errors.New("sessiond: connection unavailable")
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if c.closed.Load() {
+		return errors.New("sessiond: client closed")
+	}
 	c.sendMu.Lock()
 	defer c.sendMu.Unlock()
-	if err := c.conn.SetWriteDeadline(time.Now().Add(defaultWriteTimeout)); err != nil {
+	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := c.enc.Encode(env); err != nil {
+
+	deadline := time.Now().Add(defaultWriteTimeout)
+	if dl, ok := ctx.Deadline(); ok && dl.Before(deadline) {
+		deadline = dl
+	}
+	if err := c.conn.SetWriteDeadline(deadline); err != nil {
+		return err
+	}
+	if err := writeEnvelope(c.conn, env); err != nil {
+		if ctx.Err() != nil && isTimeout(err) {
+			return ctx.Err()
+		}
 		return err
 	}
 	return nil
@@ -198,8 +249,9 @@ func (c *Client) SessionNames(ctx context.Context) ([]string, error) {
 
 // Snapshot fetches session snapshots.
 func (c *Client) Snapshot(ctx context.Context, previewLines int) ([]native.SessionSnapshot, uint64, error) {
+	req := SnapshotRequest{PreviewLines: previewLines}
 	var resp SnapshotResponse
-	if _, err := c.call(ctx, OpSnapshot, SnapshotRequest{PreviewLines: previewLines}, &resp); err != nil {
+	if _, err := c.call(ctx, OpSnapshot, req, &resp); err != nil {
 		return nil, 0, err
 	}
 	return resp.Sessions, resp.Version, nil
@@ -316,6 +368,9 @@ func dialSocket(ctx context.Context, socketPath string) (net.Conn, error) {
 func probeDaemon(ctx context.Context, socketPath, version string) error {
 	client, err := Dial(ctx, socketPath, version)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || isTimeout(err) {
+			return fmt.Errorf("%w: %v", ErrDaemonProbeTimeout, err)
+		}
 		return err
 	}
 	return client.Close()

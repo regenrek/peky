@@ -60,6 +60,7 @@ func TestStylesNotNil(t *testing.T) {
 		"StatusError":       StatusError,
 		"StatusWarning":     StatusWarning,
 		"Dialog":            Dialog,
+		"DialogCompact":     DialogCompact,
 		"DialogTitle":       DialogTitle,
 		"DialogLabel":       DialogLabel,
 		"DialogValue":       DialogValue,
@@ -92,6 +93,7 @@ func TestColorsAreDefined(t *testing.T) {
 		"Accent":        Accent,
 		"AccentSoft":    AccentSoft,
 		"AccentAlt":     AccentAlt,
+		"AccentFocus":   AccentFocus,
 		"TextPrimary":   TextPrimary,
 		"TextSecondary": TextSecondary,
 		"TextMuted":     TextMuted,
@@ -101,6 +103,8 @@ func TestColorsAreDefined(t *testing.T) {
 		"SurfaceMuted":  SurfaceMuted,
 		"Border":        Border,
 		"BorderFocused": BorderFocused,
+		"BorderTarget":  BorderTarget,
+		"BorderFocus":   BorderFocus,
 		"Logo":          Logo,
 	}
 

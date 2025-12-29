@@ -14,11 +14,10 @@ import (
 )
 
 const (
-	defaultRefreshMS      = 2000
-	defaultPreviewLines   = 12
-	defaultThumbnailLines = 1
-	defaultIdleSeconds    = 20
-	minDashboardPreview   = 10
+	defaultRefreshMS    = 2000
+	defaultPreviewLines = 12
+	defaultIdleSeconds  = 20
+	minDashboardPreview = 10
 )
 
 var (
@@ -69,17 +68,9 @@ func defaultDashboardConfig(cfg layout.DashboardConfig) (DashboardConfig, error)
 	if previewLines <= 0 {
 		previewLines = defaultPreviewLines
 	}
-	thumbnailLines := cfg.ThumbnailLines
-	if thumbnailLines <= 0 {
-		thumbnailLines = defaultThumbnailLines
-	}
 	idleSeconds := cfg.IdleSeconds
 	if idleSeconds <= 0 {
 		idleSeconds = defaultIdleSeconds
-	}
-	showThumbnails := true
-	if cfg.ShowThumbnails != nil {
-		showThumbnails = *cfg.ShowThumbnails
 	}
 	previewCompact := true
 	if cfg.PreviewCompact != nil {
@@ -116,9 +107,7 @@ func defaultDashboardConfig(cfg layout.DashboardConfig) (DashboardConfig, error)
 		RefreshInterval: time.Duration(refreshMS) * time.Millisecond,
 		PreviewLines:    previewLines,
 		PreviewCompact:  previewCompact,
-		ThumbnailLines:  thumbnailLines,
 		IdleThreshold:   time.Duration(idleSeconds) * time.Second,
-		ShowThumbnails:  showThumbnails,
 		StatusMatcher:   matcher,
 		PreviewMode:     previewMode,
 		ProjectRoots:    projectRoots,
@@ -158,7 +147,14 @@ func normalizeProjectPath(path string) string {
 	}
 	path = userpath.ExpandUser(path)
 	path = filepath.Clean(path)
-	return path
+	if filepath.IsAbs(path) {
+		return path
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return path
+	}
+	return abs
 }
 
 func normalizeProjectRoots(roots []string) []string {
@@ -172,7 +168,7 @@ func normalizeProjectRoots(roots []string) []string {
 		if root == "" {
 			continue
 		}
-		root = filepath.Clean(userpath.ExpandUser(root))
+		root = normalizeProjectPath(root)
 		if _, ok := seen[root]; ok {
 			continue
 		}

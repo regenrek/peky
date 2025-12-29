@@ -27,11 +27,12 @@ func TestOpenLayoutAndCommandPalette(t *testing.T) {
 	m := newTestModel(t)
 	root := t.TempDir()
 	m.data = DashboardData{Projects: []ProjectGroup{{
+		ID:       projectKey(root, "Proj"),
 		Name:     "Proj",
 		Path:     root,
 		Sessions: []SessionItem{{Name: "sess", Status: StatusRunning, Path: root}},
 	}}}
-	m.selection = selectionState{Project: "Proj", Session: "sess"}
+	m.selection = selectionState{ProjectID: projectKey(root, "Proj"), Session: "sess"}
 
 	m.openLayoutPicker()
 	if m.state != StateLayoutPicker {
@@ -51,6 +52,7 @@ func TestAttachOrStart(t *testing.T) {
 	m := newTestModel(t)
 	root := t.TempDir()
 	m.data = DashboardData{Projects: []ProjectGroup{{
+		ID:   projectKey(root, "Proj"),
 		Name: "Proj",
 		Sessions: []SessionItem{{
 			Name:   "sess",
@@ -58,7 +60,7 @@ func TestAttachOrStart(t *testing.T) {
 			Path:   root,
 		}},
 	}}}
-	m.selection = selectionState{Project: "Proj", Session: "sess"}
+	m.selection = selectionState{ProjectID: projectKey(root, "Proj"), Session: "sess"}
 	if cmd := m.attachOrStart(); cmd == nil {
 		t.Fatalf("attachOrStart() returned nil for stopped session")
 	}

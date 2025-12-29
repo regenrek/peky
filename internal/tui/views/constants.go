@@ -9,12 +9,16 @@ const (
 	viewPaneSwapPicker
 	viewConfirmKill
 	viewConfirmCloseProject
+	viewConfirmCloseAllProjects
 	viewConfirmClosePane
+	viewConfirmRestart
 	viewHelp
 	viewCommandPalette
 	viewRenameSession
 	viewRenamePane
 	viewProjectRootSetup
+	viewSettingsMenu
+	viewDebugMenu
 )
 
 // Tab ordering must match app.DashboardTab.

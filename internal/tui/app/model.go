@@ -1,13 +1,17 @@
 package app
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"os"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/sessiond"
@@ -18,8 +22,9 @@ import (
 
 // Styles - using centralized theme for consistency
 var (
-	appStyle    = theme.App
-	dialogStyle = theme.Dialog
+	appStyle           = theme.App
+	dialogStyle        = theme.Dialog
+	dialogStyleCompact = theme.DialogCompact
 )
 
 // Key bindings
@@ -52,11 +57,12 @@ type dashboardKeyMap struct {
 
 // Model implements tea.Model for peakypanes TUI.
 type Model struct {
-	client *sessiond.Client
-	state  ViewState
-	tab    DashboardTab
-	width  int
-	height int
+	client         *sessiond.Client
+	paneViewClient *sessiond.Client
+	state          ViewState
+	tab            DashboardTab
+	width          int
+	height         int
 
 	configPath string
 
@@ -82,11 +88,14 @@ type Model struct {
 	layoutPicker   list.Model
 	paneSwapPicker list.Model
 	commandPalette list.Model
+	settingsMenu   list.Model
+	debugMenu      list.Model
 	gitProjects    []picker.ProjectItem
 
 	confirmSession     string
 	confirmProject     string
 	confirmClose       string
+	confirmCloseID     string
 	confirmPaneSession string
 	confirmPaneIndex   string
 	confirmPaneID      string
@@ -109,6 +118,7 @@ type Model struct {
 
 	selectionVersion uint64
 	refreshInFlight  int
+	refreshQueued    bool
 	refreshSeq       uint64
 	lastAppliedSeq   uint64
 
@@ -116,8 +126,15 @@ type Model struct {
 
 	autoStart *AutoStartSpec
 
-	paneViews       map[paneViewKey]string
-	paneMouseMotion map[string]bool
+	paneViewProfile   termenv.Profile
+	paneViews         map[paneViewKey]string
+	paneMouseMotion   map[string]bool
+	paneInputDisabled map[string]struct{}
+	paneViewLastReq   map[string]time.Time
+
+	paneViewInFlight  bool
+	paneViewQueued    bool
+	paneViewQueuedIDs map[string]struct{}
 }
 
 // NewModel creates a new peakypanes TUI model.
@@ -129,9 +146,16 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 	if client == nil {
 		return nil, errors.New("session client is required")
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	paneViewClient, err := client.Clone(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("pane view connection: %w", err)
+	}
 
 	m := &Model{
 		client:             client,
+		paneViewClient:     paneViewClient,
 		state:              StateDashboard,
 		tab:                TabDashboard,
 		configPath:         configPath,
@@ -139,6 +163,9 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 		selectionByProject: make(map[string]selectionState),
 		paneViews:          make(map[paneViewKey]string),
 		paneMouseMotion:    make(map[string]bool),
+		paneViewProfile:    detectPaneViewProfile(),
+		paneInputDisabled:  make(map[string]struct{}),
+		paneViewLastReq:    make(map[string]time.Time),
 	}
 
 	m.filterInput = textinput.New()
@@ -165,6 +192,8 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 	m.setupLayoutPicker()
 	m.setupPaneSwapPicker()
 	m.setupCommandPalette()
+	m.setupSettingsMenu()
+	m.setupDebugMenu()
 
 	configExists := true
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
@@ -173,16 +202,19 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 
 	cfg, err := loadConfig(configPath)
 	if err != nil {
+		_ = paneViewClient.Close()
 		return nil, err
 	}
 	m.config = cfg
 	settings, err := defaultDashboardConfig(cfg.Dashboard)
 	if err != nil {
+		_ = paneViewClient.Close()
 		return nil, err
 	}
 	m.settings = settings
 	keys, err := buildDashboardKeyMap(cfg.Dashboard.Keymap)
 	if err != nil {
+		_ = paneViewClient.Close()
 		return nil, err
 	}
 	m.keys = keys

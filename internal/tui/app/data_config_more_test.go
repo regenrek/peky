@@ -35,6 +35,17 @@ func TestNormalizeProjectConfigAndHidden(t *testing.T) {
 	}
 }
 
+func TestNormalizeProjectPathRelative(t *testing.T) {
+	want, err := filepath.Abs(filepath.Join("relative", "proj"))
+	if err != nil {
+		t.Fatalf("Abs: %v", err)
+	}
+	got := normalizeProjectPath(filepath.Join("relative", "proj"))
+	if got != want {
+		t.Fatalf("normalizeProjectPath() = %q, want %q", got, want)
+	}
+}
+
 func TestLoadConfigMissing(t *testing.T) {
 	cfg, err := loadConfig(filepath.Join(t.TempDir(), "missing.yml"))
 	if err != nil || cfg == nil {

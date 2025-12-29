@@ -2,7 +2,6 @@ package sessiond
 
 import (
 	"context"
-	"encoding/gob"
 	"errors"
 	"fmt"
 	"log"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	"github.com/regenrek/peakypanes/internal/native"
+	"github.com/regenrek/peakypanes/internal/sessiond/state"
 )
 
 const (
@@ -23,22 +23,34 @@ const (
 	defaultOpTimeout    = 5 * time.Second
 )
 
+// DefaultStateDebounce controls the default persistence debounce interval.
+const DefaultStateDebounce = 250 * time.Millisecond
+
 // DaemonConfig configures a session daemon instance.
 type DaemonConfig struct {
 	Version       string
 	SocketPath    string
 	PidPath       string
+	StatePath     string
+	StateDebounce time.Duration
 	HandleSignals bool
 }
 
 // Daemon owns persistent sessions and serves clients over a local socket.
 type Daemon struct {
-	manager    sessionManager
-	listener   net.Listener
-	listenerMu sync.RWMutex
-	socketPath string
-	pidPath    string
-	version    string
+	manager     sessionManager
+	listener    net.Listener
+	listenerMu  sync.RWMutex
+	socketPath  string
+	pidPath     string
+	statePath   string
+	stateWriter *state.Writer
+	version     string
+	startMu     sync.Mutex
+	spawnMu     sync.Mutex
+	shutdownMu  sync.Mutex
+	shutdownErr error
+	shutdownOne sync.Once
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -49,15 +61,6 @@ type Daemon struct {
 
 	closing atomic.Bool
 	wg      sync.WaitGroup
-}
-
-type clientConn struct {
-	id     uint64
-	conn   net.Conn
-	enc    *gob.Encoder
-	dec    *gob.Decoder
-	sendCh chan Envelope
-	done   chan struct{}
 }
 
 // NewDaemon creates a daemon instance.
@@ -78,15 +81,29 @@ func NewDaemon(cfg DaemonConfig) (*Daemon, error) {
 		}
 		pidPath = path
 	}
+	statePath := cfg.StatePath
+	if statePath == "" {
+		statePath = filepath.Join(filepath.Dir(socketPath), "state.json")
+	}
+	debounce := cfg.StateDebounce
+	if debounce < 0 {
+		debounce = DefaultStateDebounce
+	}
+	stateWriter := state.NewWriter(statePath, state.WriterOptions{
+		Debounce: debounce,
+		FileMode: 0o600,
+	})
 	ctx, cancel := context.WithCancel(context.Background())
 	d := &Daemon{
-		manager:    wrapManager(native.NewManager()),
-		socketPath: socketPath,
-		pidPath:    pidPath,
-		version:    cfg.Version,
-		ctx:        ctx,
-		cancel:     cancel,
-		clients:    make(map[uint64]*clientConn),
+		manager:     wrapManager(native.NewManager()),
+		socketPath:  socketPath,
+		pidPath:     pidPath,
+		statePath:   statePath,
+		stateWriter: stateWriter,
+		version:     cfg.Version,
+		ctx:         ctx,
+		cancel:      cancel,
+		clients:     make(map[uint64]*clientConn),
 	}
 	if cfg.HandleSignals {
 		d.handleSignals()
@@ -98,6 +115,14 @@ func NewDaemon(cfg DaemonConfig) (*Daemon, error) {
 func (d *Daemon) Start() error {
 	if d == nil {
 		return errors.New("sessiond: daemon is nil")
+	}
+	d.startMu.Lock()
+	defer d.startMu.Unlock()
+	if d.closing.Load() {
+		return errors.New("sessiond: daemon is shutting down")
+	}
+	if d.listenerValue() != nil {
+		return errors.New("sessiond: daemon already started")
 	}
 	if err := ensureSocketDir(d.socketPath); err != nil {
 		return err
@@ -118,6 +143,9 @@ func (d *Daemon) Start() error {
 		_ = listener.Close()
 		return err
 	}
+	if err := d.restorePersistedState(); err != nil {
+		log.Printf("sessiond: restore state: %v", err)
+	}
 
 	d.wg.Add(2)
 	go d.acceptLoop()
@@ -133,7 +161,7 @@ func (d *Daemon) Run() error {
 		return err
 	}
 	<-d.ctx.Done()
-	return d.shutdown()
+	return d.shutdownOnce()
 }
 
 // Stop signals the daemon to shut down.
@@ -145,13 +173,21 @@ func (d *Daemon) Stop() error {
 		return nil
 	}
 	d.cancel()
-	return d.shutdown()
+	d.startMu.Lock()
+	_ = d.listenerValue()
+	d.startMu.Unlock()
+	return d.shutdownOnce()
 }
 
 func (d *Daemon) shutdown() error {
+	d.closing.Store(true)
 	if listener := d.clearListener(); listener != nil {
 		_ = listener.Close()
 	}
+
+	d.spawnMu.Lock()
+	_ = d.closing.Load()
+	d.spawnMu.Unlock()
 
 	d.clientsMu.Lock()
 	for _, client := range d.clients {
@@ -159,6 +195,15 @@ func (d *Daemon) shutdown() error {
 	}
 	d.clients = make(map[uint64]*clientConn)
 	d.clientsMu.Unlock()
+
+	d.queuePersistState()
+	if d.stateWriter != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
+		if err := d.stateWriter.Close(ctx); err != nil {
+			log.Printf("sessiond: flush state: %v", err)
+		}
+		cancel()
+	}
 
 	if d.manager != nil {
 		d.manager.Close()
@@ -171,27 +216,20 @@ func (d *Daemon) shutdown() error {
 	return nil
 }
 
-func (d *Daemon) acceptLoop() {
-	defer d.wg.Done()
-	listener := d.listenerValue()
-	if listener == nil {
-		return
+func (d *Daemon) shutdownOnce() error {
+	if d == nil {
+		return nil
 	}
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			if d.closing.Load() {
-				return
-			}
-			continue
-		}
-		client := d.newClient(conn)
-		d.registerClient(client)
-		d.wg.Add(1)
-		go d.readLoop(client)
-		d.wg.Add(1)
-		go d.writeLoop(client)
-	}
+	d.shutdownOne.Do(func() {
+		err := d.shutdown()
+		d.shutdownMu.Lock()
+		d.shutdownErr = err
+		d.shutdownMu.Unlock()
+	})
+	d.shutdownMu.Lock()
+	err := d.shutdownErr
+	d.shutdownMu.Unlock()
+	return err
 }
 
 func (d *Daemon) setListener(listener net.Listener) {
@@ -215,135 +253,15 @@ func (d *Daemon) clearListener() net.Listener {
 	return listener
 }
 
-func (d *Daemon) eventLoop() {
-	defer d.wg.Done()
-	if d.manager == nil {
+func (d *Daemon) queuePersistState() {
+	if d == nil || d.stateWriter == nil || d.manager == nil {
 		return
 	}
-	for event := range d.manager.Events() {
-		d.broadcast(Event{Type: EventPaneUpdated, PaneID: event.PaneID})
-	}
-}
-
-func (d *Daemon) newClient(conn net.Conn) *clientConn {
-	id := d.clientSeq.Add(1)
-	return &clientConn{
-		id:     id,
-		conn:   conn,
-		enc:    gob.NewEncoder(conn),
-		dec:    gob.NewDecoder(conn),
-		sendCh: make(chan Envelope, 64),
-		done:   make(chan struct{}),
-	}
-}
-
-func (d *Daemon) registerClient(client *clientConn) {
-	d.clientsMu.Lock()
-	d.clients[client.id] = client
-	d.clientsMu.Unlock()
-}
-
-func (d *Daemon) removeClient(client *clientConn) {
-	d.clientsMu.Lock()
-	delete(d.clients, client.id)
-	d.clientsMu.Unlock()
-}
-
-func (d *Daemon) readLoop(client *clientConn) {
-	defer d.wg.Done()
-	defer func() {
-		d.removeClient(client)
-		closeClient(client)
-	}()
-	for {
-		if err := client.conn.SetReadDeadline(time.Now().Add(defaultReadTimeout)); err != nil {
-			return
-		}
-		var env Envelope
-		if err := client.dec.Decode(&env); err != nil {
-			if isTimeout(err) {
-				continue
-			}
-			return
-		}
-		if env.Kind != EnvelopeRequest {
-			continue
-		}
-		resp := d.handleRequest(env)
-		if err := sendEnvelope(client, resp); err != nil {
-			return
-		}
-	}
-}
-
-func (d *Daemon) writeLoop(client *clientConn) {
-	defer d.wg.Done()
-	for {
-		select {
-		case env, ok := <-client.sendCh:
-			if !ok {
-				return
-			}
-			if err := client.conn.SetWriteDeadline(time.Now().Add(defaultWriteTimeout)); err != nil {
-				return
-			}
-			if err := client.enc.Encode(env); err != nil {
-				return
-			}
-		case <-client.done:
-			return
-		case <-d.ctx.Done():
-			return
-		}
-	}
-}
-
-func sendEnvelope(client *clientConn, env Envelope) error {
-	select {
-	case <-client.done:
-		return errors.New("sessiond: client closed")
-	default:
-	}
-	select {
-	case client.sendCh <- env:
-		return nil
-	case <-client.done:
-		return errors.New("sessiond: client closed")
-	case <-time.After(defaultWriteTimeout):
-		return errors.New("sessiond: client send timeout")
-	}
-}
-
-func closeClient(client *clientConn) {
-	select {
-	case <-client.done:
-		return
-	default:
-		close(client.done)
-	}
-	if client.conn != nil {
-		_ = client.conn.Close()
-	}
-	close(client.sendCh)
-}
-
-func (d *Daemon) broadcast(event Event) {
-	d.clientsMu.RLock()
-	defer d.clientsMu.RUnlock()
-	if len(d.clients) == 0 {
-		return
-	}
-	payload, err := encodePayload(event)
-	if err != nil {
-		return
-	}
-	env := Envelope{Kind: EnvelopeEvent, Event: event.Type, Payload: payload}
-	for _, client := range d.clients {
-		select {
-		case client.sendCh <- env:
-		default:
-		}
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
+	defer cancel()
+	sessions := d.manager.Snapshot(ctx, 0)
+	st := state.FromSnapshots(d.version, sessions)
+	d.stateWriter.Persist(st)
 }
 
 func (d *Daemon) writePidFile() error {
@@ -371,6 +289,8 @@ func (d *Daemon) removeStaleSocket() error {
 	defer cancel()
 	if err := probeDaemon(ctx, d.socketPath, d.version); err == nil {
 		return fmt.Errorf("sessiond: daemon already running on %s", d.socketPath)
+	} else if errors.Is(err, ErrDaemonProbeTimeout) {
+		return err
 	}
 	if err := os.Remove(d.socketPath); err != nil {
 		return fmt.Errorf("sessiond: remove stale socket: %w", err)

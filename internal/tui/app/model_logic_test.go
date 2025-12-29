@@ -20,6 +20,7 @@ func TestSendQuickReplyNative(t *testing.T) {
 	paneSnap := snap.Panes[0]
 
 	m.data = DashboardData{Projects: []ProjectGroup{{
+		ID:   projectKey("", "Proj"),
 		Name: "Proj",
 		Sessions: []SessionItem{{
 			Name:       snap.Name,
@@ -33,7 +34,7 @@ func TestSendQuickReplyNative(t *testing.T) {
 			}},
 		}},
 	}}}
-	m.selection = selectionState{Project: "Proj", Session: snap.Name, Pane: paneSnap.Index}
+	m.selection = selectionState{ProjectID: projectKey("", "Proj"), Session: snap.Name, Pane: paneSnap.Index}
 
 	m.quickReplyInput.SetValue("hello")
 	cmd := m.sendQuickReply()
@@ -56,7 +57,7 @@ func TestRenameSession(t *testing.T) {
 	m := newTestModel(t)
 	startNativeSession(t, m, "old")
 
-	m.selection = selectionState{Project: "Proj", Session: "old"}
+	m.selection = selectionState{ProjectID: projectKey("", "Proj"), Session: "old"}
 	m.expandedSessions["old"] = true
 	m.renameSession = "old"
 	m.state = StateRenameSession
@@ -128,12 +129,14 @@ func TestUpdateConfirmCloseProject(t *testing.T) {
 	}
 	m.config = cfg
 	m.data = DashboardData{Projects: []ProjectGroup{{
+		ID:         projectKey(projectPath, "Proj"),
 		Name:       "Proj",
 		Path:       projectPath,
 		FromConfig: true,
 		Sessions:   []SessionItem{{Name: "sess", Status: StatusRunning}},
 	}}}
 	m.confirmClose = "Proj"
+	m.confirmCloseID = projectKey(projectPath, "Proj")
 	m.state = StateConfirmCloseProject
 
 	_, _ = m.updateConfirmCloseProject(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
@@ -160,6 +163,7 @@ func TestUpdateConfirmCloseProjectKillsSessions(t *testing.T) {
 	m := newTestModel(t)
 	snap := startNativeSession(t, m, "sess")
 	m.data = DashboardData{Projects: []ProjectGroup{{
+		ID:   projectKey("", "Proj"),
 		Name: "Proj",
 		Sessions: []SessionItem{{
 			Name:   snap.Name,
@@ -167,6 +171,7 @@ func TestUpdateConfirmCloseProjectKillsSessions(t *testing.T) {
 		}},
 	}}}
 	m.confirmClose = "Proj"
+	m.confirmCloseID = projectKey("", "Proj")
 	m.state = StateConfirmCloseProject
 
 	_, _ = m.updateConfirmCloseProject(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
@@ -186,6 +191,7 @@ func TestAddPaneSplit(t *testing.T) {
 	}
 	paneSnap := snap.Panes[0]
 	m.data = DashboardData{Projects: []ProjectGroup{{
+		ID:   projectKey(snap.Path, "Proj"),
 		Name: "Proj",
 		Path: snap.Path,
 		Sessions: []SessionItem{{
@@ -201,7 +207,7 @@ func TestAddPaneSplit(t *testing.T) {
 			}},
 		}},
 	}}}
-	m.selection = selectionState{Project: "Proj", Session: snap.Name, Pane: paneSnap.Index}
+	m.selection = selectionState{ProjectID: projectKey(snap.Path, "Proj"), Session: snap.Name, Pane: paneSnap.Index}
 
 	_ = m.addPaneSplit(false)
 

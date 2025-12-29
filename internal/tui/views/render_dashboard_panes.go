@@ -15,12 +15,13 @@ type paneIconContext struct {
 	size icons.Size
 }
 
-type dashboardPaneRenderer func(pane DashboardPane, width, height, previewLines int, selected bool, iconCtx paneIconContext) string
+type dashboardPaneRenderer func(pane DashboardPane, width, height, previewLines int, selected bool, focused bool, iconCtx paneIconContext) string
 
 type dashboardRenderContext struct {
 	selectionSession string
 	selectionPane    string
 	previewLines     int
+	terminalFocus    bool
 	icons            paneIconContext
 	renderer         dashboardPaneRenderer
 }
@@ -108,7 +109,7 @@ func buildDashboardColumnsLayout(columns []DashboardColumn, width int, selectedP
 
 func dashboardColumnIndex(columns []DashboardColumn, selectedProject string) int {
 	for i, column := range columns {
-		if column.ProjectName == selectedProject {
+		if column.ProjectID == selectedProject {
 			return i
 		}
 	}
@@ -195,7 +196,8 @@ func renderDashboardPaneBlocks(column DashboardColumn, layout dashboardColumnLay
 	blocks := make([]string, 0, layout.visibleBlocks)
 	for i := layout.start; i < layout.end; i++ {
 		selectedPane := selected && i == layout.selectedIndex
-		blocks = append(blocks, ctx.renderer(column.Panes[i], width, layout.blockHeight, ctx.previewLines, selectedPane, ctx.icons))
+		focused := selectedPane && ctx.terminalFocus
+		blocks = append(blocks, ctx.renderer(column.Panes[i], width, layout.blockHeight, ctx.previewLines, selectedPane, focused, ctx.icons))
 	}
 	return blocks
 }
@@ -221,21 +223,21 @@ func dashboardPaneRange(selected bool, selectedIndex, visibleBlocks, total int) 
 	return start, end
 }
 
-func renderDashboardPaneTile(pane DashboardPane, width, height, previewLines int, selected bool, iconCtx paneIconContext) string {
+func renderDashboardPaneTile(pane DashboardPane, width, height, previewLines int, selected bool, focused bool, iconCtx paneIconContext) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
-	layout := buildPaneTileLayout(width, height, previewLines, selected)
+	layout := buildPaneTileLayout(width, height, previewLines, selected, focused)
 	lines := paneTileBaseLines(pane, selected, iconCtx, layout.contentWidth)
 	lines = append(lines, panePreviewLinesWithWidth(pane, layout.availablePreview, layout.contentWidth, false)...)
 	return layout.style.Render(strings.Join(trimLines(lines, layout.contentHeight), "\n"))
 }
 
-func (m Model) renderDashboardPaneTileLive(pane DashboardPane, width, height, previewLines int, selected bool, iconCtx paneIconContext) string {
+func (m Model) renderDashboardPaneTileLive(pane DashboardPane, width, height, previewLines int, selected bool, focused bool, iconCtx paneIconContext) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
-	layout := buildPaneTileLayout(width, height, previewLines, selected)
+	layout := buildPaneTileLayout(width, height, previewLines, selected, focused)
 	lines := paneTileBaseLines(pane, selected, iconCtx, layout.contentWidth)
 	lines = append(lines, paneLivePreviewLines(m, pane, layout, selected)...)
 	return layout.style.Render(strings.Join(trimLines(lines, layout.contentHeight), "\n"))
@@ -248,7 +250,7 @@ type paneTileLayout struct {
 	availablePreview int
 }
 
-func buildPaneTileLayout(width, height, previewLines int, selected bool) paneTileLayout {
+func buildPaneTileLayout(width, height, previewLines int, selected bool, focused bool) paneTileLayout {
 	if previewLines < 0 {
 		previewLines = 0
 	}
@@ -256,14 +258,17 @@ func buildPaneTileLayout(width, height, previewLines int, selected bool) paneTil
 	if selected {
 		borderColor = theme.BorderTarget
 	}
+	if focused {
+		borderColor = theme.BorderFocus
+	}
 	style := lipgloss.NewStyle().
-		Width(width).
-		Height(height).
-		BorderStyle(lipgloss.NormalBorder()).
+		Border(lipgloss.NormalBorder()).
 		BorderForeground(borderColor).
 		Padding(0, 1)
 
 	frameW, frameH := style.GetFrameSize()
+	borderW := style.GetHorizontalBorderSize()
+	borderH := style.GetVerticalBorderSize()
 	contentWidth := width - frameW
 	if contentWidth < 1 {
 		contentWidth = 1
@@ -272,6 +277,15 @@ func buildPaneTileLayout(width, height, previewLines int, selected bool) paneTil
 	if contentHeight < 1 {
 		contentHeight = 1
 	}
+	blockWidth := width - borderW
+	if blockWidth < 1 {
+		blockWidth = 1
+	}
+	blockHeight := height - borderH
+	if blockHeight < 1 {
+		blockHeight = 1
+	}
+	style = style.Width(blockWidth).Height(blockHeight)
 	availablePreview := previewLines
 	if contentHeight-2 < availablePreview {
 		availablePreview = contentHeight - 2

@@ -13,31 +13,69 @@ import (
 
 func TestCommandPaletteItemsAndRun(t *testing.T) {
 	m := newTestModelLite()
-	m.config = &layout.Config{
-		Dashboard: layout.DashboardConfig{
-			HiddenProjects: []layout.HiddenProjectConfig{{Name: "Hidden", Path: "/hidden"}},
-		},
-	}
 
 	items := m.commandPaletteItems()
 	if len(items) == 0 {
 		t.Fatalf("expected command palette items")
 	}
-	foundHidden := false
+	foundSettings := false
+	foundDebug := false
+	foundPane := false
+	foundSession := false
+	foundProject := false
+	paneIndex := -1
+	sessionIndex := -1
+	projectIndex := -1
 	for _, item := range items {
 		cmdItem, ok := item.(picker.CommandItem)
 		if !ok {
 			continue
 		}
 		if strings.Contains(cmdItem.Label, "Reopen") {
-			foundHidden = true
+			t.Fatalf("unexpected reopen entry in command palette")
+		}
+		if strings.Contains(cmdItem.Label, "Quick reply") {
+			t.Fatalf("unexpected quick reply entry in command palette")
+		}
+		if strings.Contains(cmdItem.Label, "Attach / start") {
+			t.Fatalf("unexpected attach/start entry in command palette")
+		}
+		if cmdItem.Label == "Settings" {
+			foundSettings = true
+		}
+		if cmdItem.Label == "Debug" {
+			foundDebug = true
 		}
 		if cmdItem.Run != nil {
 			_ = cmdItem.Run()
 		}
 	}
-	if !foundHidden {
-		t.Fatalf("expected reopen hidden project entry")
+	for i, item := range items {
+		cmdItem, ok := item.(picker.CommandItem)
+		if !ok {
+			continue
+		}
+		if strings.HasPrefix(cmdItem.Label, "Pane:") && paneIndex == -1 {
+			paneIndex = i
+			foundPane = true
+		}
+		if strings.HasPrefix(cmdItem.Label, "Session:") && sessionIndex == -1 {
+			sessionIndex = i
+			foundSession = true
+		}
+		if strings.HasPrefix(cmdItem.Label, "Project:") && projectIndex == -1 {
+			projectIndex = i
+			foundProject = true
+		}
+	}
+	if !foundSettings || !foundDebug {
+		t.Fatalf("expected settings and debug entries")
+	}
+	if !foundPane || !foundSession || !foundProject {
+		t.Fatalf("expected pane, session, and project groups")
+	}
+	if paneIndex >= sessionIndex || sessionIndex >= projectIndex {
+		t.Fatalf("expected pane items before session and project items")
 	}
 }
 
@@ -92,6 +130,69 @@ func TestUpdateCommandPaletteFilteringAndQuit(t *testing.T) {
 	m.updateCommandPalette(tea.KeyMsg{Type: tea.KeyEnter})
 	if m.state != StateDashboard {
 		t.Fatalf("expected dashboard state after enter with nil run")
+	}
+}
+
+func TestCommandPaletteNavigationWhileFiltering(t *testing.T) {
+	m := newTestModelLite()
+	m.setCommandPaletteSize()
+	items := []list.Item{
+		picker.CommandItem{Label: "Alpha"},
+		picker.CommandItem{Label: "Beta"},
+	}
+	m.commandPalette.SetFilterState(list.Filtering)
+	cmd := m.commandPalette.SetItems(items)
+	if cmd != nil {
+		msg := cmd()
+		m.commandPalette, _ = m.commandPalette.Update(msg)
+	}
+	m.setState(StateCommandPalette)
+
+	m.updateCommandPalette(tea.KeyMsg{Type: tea.KeyDown})
+	if m.commandPalette.FilterState() != list.Filtering {
+		t.Fatalf("expected filtering state to remain active")
+	}
+	if got := m.commandPalette.Index(); got != 1 {
+		t.Fatalf("expected selection to move while filtering, got index %d", got)
+	}
+}
+
+func TestCommandPaletteEnterWhileFilteringRuns(t *testing.T) {
+	m := newTestModelLite()
+	called := false
+	item := picker.CommandItem{
+		Label: "Run",
+		Run: func() tea.Cmd {
+			called = true
+			return nil
+		},
+	}
+	m.commandPalette.SetFilterState(list.Filtering)
+	cmd := m.commandPalette.SetItems([]list.Item{item})
+	if cmd != nil {
+		msg := cmd()
+		m.commandPalette, _ = m.commandPalette.Update(msg)
+	}
+	m.commandPalette.Select(0)
+	m.setState(StateCommandPalette)
+
+	m.updateCommandPalette(tea.KeyMsg{Type: tea.KeyEnter})
+	if !called {
+		t.Fatalf("expected enter to run selection while filtering")
+	}
+	if m.state != StateDashboard {
+		t.Fatalf("expected dashboard state after enter while filtering")
+	}
+}
+
+func TestCommandPaletteEscWhileFilteringCloses(t *testing.T) {
+	m := newTestModelLite()
+	m.commandPalette.SetFilterState(list.Filtering)
+	m.setState(StateCommandPalette)
+
+	m.updateCommandPalette(tea.KeyMsg{Type: tea.KeyEsc})
+	if m.state != StateDashboard {
+		t.Fatalf("expected dashboard state after esc while filtering")
 	}
 }
 

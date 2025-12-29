@@ -24,7 +24,6 @@ func buildDashboardData(input dashboardSnapshotInput) dashboardSnapshotResult {
 	groups := index.groups
 	sortProjectGroups(groups, input.Config)
 	resolved := resolveSelectionForTab(input.Tab, groups, input.Selection)
-	applySessionThumbnails(groups, input.Settings)
 	resolved = resolveProjectPaneSelection(input.Tab, groups, resolved)
 
 	result.Data = DashboardData{Projects: groups, RefreshedAt: time.Now()}
@@ -36,7 +35,6 @@ type dashboardGroupIndex struct {
 	groups    []ProjectGroup
 	byKey     map[string]int
 	bySession map[string]int
-	byPath    map[string]int
 }
 
 func newDashboardGroupIndex(capacity int) *dashboardGroupIndex {
@@ -47,11 +45,13 @@ func newDashboardGroupIndex(capacity int) *dashboardGroupIndex {
 		groups:    make([]ProjectGroup, 0, capacity),
 		byKey:     make(map[string]int),
 		bySession: make(map[string]int),
-		byPath:    make(map[string]int),
 	}
 }
 
 func (idx *dashboardGroupIndex) addGroup(key string, group ProjectGroup) int {
+	if group.ID == "" {
+		group.ID = key
+	}
 	idx.groups = append(idx.groups, group)
 	pos := len(idx.groups) - 1
 	idx.byKey[key] = pos
@@ -66,12 +66,23 @@ func (idx *dashboardGroupIndex) addConfigProjects(cfg *layout.Config, settings D
 			continue
 		}
 		groupKey := projectKey(path, name)
-		pos := idx.addGroup(groupKey, ProjectGroup{
-			Name:       name,
-			Path:       path,
-			FromConfig: true,
-		})
+		pos, ok := idx.byKey[groupKey]
+		if !ok {
+			pos = idx.addGroup(groupKey, ProjectGroup{
+				ID:         groupKey,
+				Name:       name,
+				Path:       path,
+				FromConfig: true,
+			})
+		}
 		group := &idx.groups[pos]
+		group.FromConfig = true
+		if group.Name == "" {
+			group.Name = name
+		}
+		if group.Path == "" {
+			group.Path = path
+		}
 		group.Sessions = append(group.Sessions, SessionItem{
 			Name:       session,
 			Path:       path,
@@ -80,9 +91,6 @@ func (idx *dashboardGroupIndex) addConfigProjects(cfg *layout.Config, settings D
 			Config:     pc,
 		})
 		idx.bySession[session] = pos
-		if path != "" {
-			idx.byPath[path] = pos
-		}
 	}
 }
 
@@ -96,15 +104,14 @@ func (idx *dashboardGroupIndex) mergeNativeSessions(nativeSessions []native.Sess
 		}
 		group := idx.groupForSession(s.Name, path)
 		if group == nil {
-			pos := idx.addGroup(projectKey(path, name), ProjectGroup{
+			key := projectKey(path, name)
+			pos := idx.addGroup(key, ProjectGroup{
+				ID:         key,
 				Name:       name,
 				Path:       path,
 				FromConfig: false,
 			})
 			group = &idx.groups[pos]
-			if path != "" {
-				idx.byPath[path] = pos
-			}
 		}
 		idx.mergeSession(group, s, settings, now)
 	}
@@ -114,10 +121,12 @@ func (idx *dashboardGroupIndex) groupForSession(name, path string) *ProjectGroup
 	if pos, ok := idx.bySession[name]; ok {
 		return &idx.groups[pos]
 	}
-	if path != "" {
-		if pos, ok := idx.byPath[path]; ok {
-			return &idx.groups[pos]
-		}
+	key := projectKey(path, name)
+	if key == "" {
+		return nil
+	}
+	if pos, ok := idx.byKey[key]; ok {
+		return &idx.groups[pos]
 	}
 	return nil
 }
@@ -153,21 +162,6 @@ func resolveSelectionForTab(tab DashboardTab, groups []ProjectGroup, desired sel
 		return resolveDashboardSelection(groups, desired)
 	}
 	return resolveSelection(groups, desired)
-}
-
-func applySessionThumbnails(groups []ProjectGroup, settings DashboardConfig) {
-	if !settings.ShowThumbnails {
-		return
-	}
-	for gi := range groups {
-		for si := range groups[gi].Sessions {
-			session := &groups[gi].Sessions[si]
-			if session.Status == StatusStopped {
-				continue
-			}
-			session.Thumbnail = sessionThumbnailFromData(session, settings)
-		}
-	}
 }
 
 func resolveProjectPaneSelection(tab DashboardTab, groups []ProjectGroup, resolved selectionState) selectionState {
@@ -215,7 +209,10 @@ type projectGroupSortMeta struct {
 }
 
 func buildProjectGroupSortMeta(group ProjectGroup, order map[string]int) projectGroupSortMeta {
-	key := projectKey(group.Path, group.Name)
+	key := group.ID
+	if key == "" {
+		key = projectKey(group.Path, group.Name)
+	}
 	meta := projectGroupSortMeta{
 		key:  key,
 		name: strings.ToLower(strings.TrimSpace(group.Name)),
@@ -258,21 +255,23 @@ func panesFromNative(panes []native.PaneSnapshot, settings DashboardConfig, now 
 	items := make([]PaneItem, len(panes))
 	for i, p := range panes {
 		item := PaneItem{
-			ID:           p.ID,
-			Index:        p.Index,
-			Title:        p.Title,
-			Command:      p.Command,
-			StartCommand: p.StartCommand,
-			PID:          p.PID,
-			Active:       p.Active,
-			Left:         p.Left,
-			Top:          p.Top,
-			Width:        p.Width,
-			Height:       p.Height,
-			Dead:         p.Dead,
-			DeadStatus:   p.DeadStatus,
-			LastActive:   p.LastActive,
-			Preview:      p.Preview,
+			ID:            p.ID,
+			Index:         p.Index,
+			Title:         p.Title,
+			Command:       p.Command,
+			StartCommand:  p.StartCommand,
+			PID:           p.PID,
+			Active:        p.Active,
+			Left:          p.Left,
+			Top:           p.Top,
+			Width:         p.Width,
+			Height:        p.Height,
+			Dead:          p.Dead,
+			DeadStatus:    p.DeadStatus,
+			RestoreFailed: p.RestoreFailed,
+			RestoreError:  p.RestoreError,
+			LastActive:    p.LastActive,
+			Preview:       p.Preview,
 		}
 		item.Status = classifyPane(item, item.Preview, settings, now)
 		items[i] = item
@@ -310,24 +309,4 @@ func dashboardPreviewLines(settings DashboardConfig) int {
 		lines = minDashboardPreview
 	}
 	return lines
-}
-
-func sessionThumbnailFromData(session *SessionItem, settings DashboardConfig) PaneSummary {
-	if session == nil {
-		return PaneSummary{}
-	}
-	if len(session.Panes) == 0 {
-		return PaneSummary{}
-	}
-	var active *PaneItem
-	for i := range session.Panes {
-		if session.Panes[i].Active {
-			active = &session.Panes[i]
-			break
-		}
-	}
-	if active == nil {
-		active = &session.Panes[0]
-	}
-	return PaneSummary{Line: paneSummaryLine(*active, settings.ThumbnailLines), Status: active.Status}
 }

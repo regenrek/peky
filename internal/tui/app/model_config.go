@@ -57,6 +57,69 @@ func (m *Model) hideProjectInConfig(project ProjectGroup) (bool, error) {
 	return true, nil
 }
 
+func (m *Model) hideAllProjectsInConfig(projects []ProjectGroup) (int, error) {
+	if len(projects) == 0 {
+		return 0, nil
+	}
+	cfg, err := loadConfig(m.configPath)
+	if err != nil {
+		return 0, fmt.Errorf("load config: %w", err)
+	}
+	existing := hiddenProjectKeySet(cfg.Dashboard.HiddenProjects)
+	if existing == nil {
+		existing = make(map[string]struct{})
+	}
+	added := 0
+	for _, project := range projects {
+		key := normalizeProjectKey(project.Path, project.Name)
+		if key == "" {
+			continue
+		}
+		if _, ok := existing[key]; ok {
+			continue
+		}
+		name := strings.TrimSpace(project.Name)
+		nameKey := strings.ToLower(name)
+		if nameKey != "" {
+			if _, ok := existing[nameKey]; ok {
+				continue
+			}
+		}
+		path := normalizeProjectPath(project.Path)
+		pathKey := strings.ToLower(path)
+		if pathKey != "" {
+			if _, ok := existing[pathKey]; ok {
+				continue
+			}
+		}
+		entry := layout.HiddenProjectConfig{
+			Name: name,
+			Path: path,
+		}
+		cfg.Dashboard.HiddenProjects = append(cfg.Dashboard.HiddenProjects, entry)
+		if nameKey != "" {
+			existing[nameKey] = struct{}{}
+		}
+		if pathKey != "" {
+			existing[pathKey] = struct{}{}
+		}
+		added++
+	}
+	if added == 0 {
+		return 0, nil
+	}
+	cfg.Dashboard.HiddenProjects = normalizeHiddenProjects(cfg.Dashboard.HiddenProjects)
+	if err := os.MkdirAll(filepath.Dir(m.configPath), 0o755); err != nil {
+		return 0, fmt.Errorf("create config dir: %w", err)
+	}
+	if err := layout.SaveConfig(m.configPath, cfg); err != nil {
+		return 0, err
+	}
+	m.config = cfg
+	m.settings.HiddenProjects = hiddenProjectKeySet(cfg.Dashboard.HiddenProjects)
+	return added, nil
+}
+
 func (m *Model) unhideProjectInConfig(entry layout.HiddenProjectConfig) (bool, error) {
 	target := hiddenProjectKeysFrom(entry)
 	if target.empty() {
@@ -164,5 +227,5 @@ func (m *Model) reopenHiddenProject(entry layout.HiddenProjectConfig) tea.Cmd {
 		return nil
 	}
 	m.setToast("Reopened project "+label, toastSuccess)
-	return m.startRefreshCmd()
+	return m.requestRefreshCmd()
 }

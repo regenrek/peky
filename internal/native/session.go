@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/terminal"
 )
 
 // SessionSpec describes a session to start.
@@ -28,6 +29,7 @@ type Session struct {
 	LayoutName string
 	Panes      []*Pane
 	CreatedAt  time.Time
+	Env        []string
 }
 
 // Session returns a snapshot pointer for a session name.
@@ -89,6 +91,7 @@ func (m *Manager) KillSession(name string) error {
 	}
 	m.mu.Unlock()
 
+	m.dropPreviewCache(paneIDs...)
 	for _, pane := range session.Panes {
 		if pane.window != nil {
 			_ = pane.window.Close()
@@ -157,6 +160,9 @@ func (m *Manager) StartSession(ctx context.Context, spec SessionSpec) (*Session,
 	if session.LayoutName == "" && spec.Layout != nil {
 		session.LayoutName = spec.Layout.Name
 	}
+	if len(spec.Env) > 0 {
+		session.Env = append([]string(nil), spec.Env...)
+	}
 
 	panes, err := m.buildPanes(ctx, spec)
 	if err != nil {
@@ -191,12 +197,18 @@ func (m *Manager) StartSession(ctx context.Context, spec SessionSpec) (*Session,
 }
 
 // Snapshot returns a copy of sessions with preview lines computed.
-func (m *Manager) Snapshot(previewLines int) []SessionSnapshot {
+func (m *Manager) Snapshot(ctx context.Context, previewLines int) []SessionSnapshot {
 	if m == nil {
 		return nil
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if previewLines < 0 {
+		previewLines = 0
+	}
+
 	m.mu.RLock()
-	defer m.mu.RUnlock()
 	sessions := make([]*Session, 0, len(m.sessions))
 	for _, session := range m.sessions {
 		sessions = append(sessions, session)
@@ -208,19 +220,30 @@ func (m *Manager) Snapshot(previewLines int) []SessionSnapshot {
 		return sessions[i].CreatedAt.Before(sessions[j].CreatedAt)
 	})
 
-	out := make([]SessionSnapshot, 0, len(m.sessions))
-	for _, session := range sessions {
-		snap := SessionSnapshot{
+	type panePreviewRef struct {
+		id         string
+		window     *terminal.Window
+		lastActive time.Time
+		sessionIdx int
+		paneIdx    int
+	}
+
+	out := make([]SessionSnapshot, len(sessions))
+	paneRefs := make([]panePreviewRef, 0, len(sessions)*2)
+	paneIDs := make([]string, 0, len(sessions)*2)
+	for si, session := range sessions {
+		out[si] = SessionSnapshot{
 			Name:       session.Name,
 			Path:       session.Path,
 			LayoutName: session.LayoutName,
 			CreatedAt:  session.CreatedAt,
+			Env:        append([]string(nil), session.Env...),
 		}
 		panes := append([]*Pane(nil), session.Panes...)
 		sortPanesByIndex(panes)
 		paneTitles := resolveSessionPaneTitles(session)
-		for _, pane := range panes {
-			lines := renderPreviewLines(pane.window, previewLines)
+		out[si].Panes = make([]PaneSnapshot, len(panes))
+		for pi, pane := range panes {
 			title := strings.TrimSpace(paneTitles[pane])
 			if title == "" {
 				title = strings.TrimSpace(pane.Title)
@@ -228,27 +251,106 @@ func (m *Manager) Snapshot(previewLines int) []SessionSnapshot {
 			if title == "" && pane.window != nil {
 				title = strings.TrimSpace(pane.window.Title())
 			}
-			paneSnap := PaneSnapshot{
-				ID:           pane.ID,
-				Index:        pane.Index,
-				Title:        title,
-				Command:      pane.Command,
-				StartCommand: pane.StartCommand,
-				PID:          pane.PID,
-				Active:       pane.Active,
-				Left:         pane.Left,
-				Top:          pane.Top,
-				Width:        pane.Width,
-				Height:       pane.Height,
-				Dead:         pane.window != nil && pane.window.Exited(),
-				DeadStatus:   pane.windowExitStatus(),
-				LastActive:   pane.LastActive,
-				Preview:      lines,
+			out[si].Panes[pi] = PaneSnapshot{
+				ID:            pane.ID,
+				Index:         pane.Index,
+				Title:         title,
+				Command:       pane.Command,
+				StartCommand:  pane.StartCommand,
+				PID:           pane.PID,
+				Active:        pane.Active,
+				Left:          pane.Left,
+				Top:           pane.Top,
+				Width:         pane.Width,
+				Height:        pane.Height,
+				Dead:          pane.window != nil && pane.window.Dead(),
+				DeadStatus:    pane.windowExitStatus(),
+				LastActive:    pane.LastActive,
+				RestoreFailed: pane.RestoreFailed,
+				RestoreError:  pane.RestoreError,
 			}
-			snap.Panes = append(snap.Panes, paneSnap)
+			paneRefs = append(paneRefs, panePreviewRef{
+				id:         pane.ID,
+				window:     pane.window,
+				lastActive: pane.LastActive,
+				sessionIdx: si,
+				paneIdx:    pi,
+			})
+			paneIDs = append(paneIDs, pane.ID)
 		}
-		out = append(out, snap)
 	}
+	m.mu.RUnlock()
+
+	if previewLines <= 0 || len(paneRefs) == 0 {
+		return out
+	}
+
+	states, cursor := m.snapshotPreviewStates(paneIDs)
+	needsUpdate := make([]bool, len(paneRefs))
+	for i, ref := range paneRefs {
+		if ref.window == nil {
+			continue
+		}
+		state, ok := states[ref.id]
+		if !ok || len(state.lines) < previewLines || state.sourceAt.Before(ref.lastActive) {
+			needsUpdate[i] = true
+		}
+	}
+
+	start := cursor
+	if start < 0 || start >= len(paneRefs) {
+		start = 0
+	}
+	updates := make(map[string]previewState)
+	lastProcessed := -1
+	deadline, hasDeadline := ctx.Deadline()
+	for i := 0; i < len(paneRefs); i++ {
+		idx := (start + i) % len(paneRefs)
+		if !needsUpdate[idx] {
+			continue
+		}
+		if ctx.Err() != nil {
+			break
+		}
+		if hasDeadline && time.Now().After(deadline) {
+			break
+		}
+		ref := paneRefs[idx]
+		if ref.window == nil {
+			continue
+		}
+		lines, ready := renderPreviewLines(ref.window, previewLines)
+		if !ready {
+			lastProcessed = idx
+			continue
+		}
+		state := previewState{lines: append([]string(nil), lines...), sourceAt: ref.lastActive}
+		states[ref.id] = state
+		updates[ref.id] = state
+		lastProcessed = idx
+	}
+
+	nextCursor := -1
+	if lastProcessed >= 0 {
+		nextCursor = lastProcessed + 1
+		if nextCursor >= len(paneRefs) {
+			nextCursor = 0
+		}
+	}
+	m.applyPreviewUpdates(updates, nextCursor)
+
+	for _, ref := range paneRefs {
+		state, ok := states[ref.id]
+		if !ok || len(state.lines) == 0 {
+			continue
+		}
+		lines := state.lines
+		if len(lines) > previewLines {
+			lines = lines[len(lines)-previewLines:]
+		}
+		out[ref.sessionIdx].Panes[ref.paneIdx].Preview = append([]string(nil), lines...)
+	}
+
 	return out
 }
 
@@ -259,23 +361,26 @@ type SessionSnapshot struct {
 	LayoutName string
 	Panes      []PaneSnapshot
 	CreatedAt  time.Time
+	Env        []string
 }
 
 // PaneSnapshot describes a pane snapshot.
 type PaneSnapshot struct {
-	ID           string
-	Index        string
-	Title        string
-	Command      string
-	StartCommand string
-	PID          int
-	Active       bool
-	Left         int
-	Top          int
-	Width        int
-	Height       int
-	Dead         bool
-	DeadStatus   int
-	LastActive   time.Time
-	Preview      []string
+	ID            string
+	Index         string
+	Title         string
+	Command       string
+	StartCommand  string
+	PID           int
+	Active        bool
+	Left          int
+	Top           int
+	Width         int
+	Height        int
+	Dead          bool
+	DeadStatus    int
+	LastActive    time.Time
+	Preview       []string
+	RestoreFailed bool
+	RestoreError  string
 }

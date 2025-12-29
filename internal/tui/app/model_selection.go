@@ -27,26 +27,26 @@ func (m *Model) syncExpandedSessions() {
 }
 
 func (m *Model) rememberSelection(sel selectionState) {
-	if sel.Project == "" {
+	if sel.ProjectID == "" {
 		return
 	}
 	if m.selectionByProject == nil {
 		m.selectionByProject = make(map[string]selectionState)
 	}
-	m.selectionByProject[sel.Project] = sel
+	m.selectionByProject[sel.ProjectID] = sel
 }
 
-func (m *Model) selectionForProject(project string) selectionState {
-	if project == "" {
+func (m *Model) selectionForProjectID(projectID string) selectionState {
+	if projectID == "" {
 		return selectionState{}
 	}
 	if m.selectionByProject != nil {
-		if sel, ok := m.selectionByProject[project]; ok {
-			sel.Project = project
+		if sel, ok := m.selectionByProject[projectID]; ok {
+			sel.ProjectID = projectID
 			return sel
 		}
 	}
-	return selectionState{Project: project}
+	return selectionState{ProjectID: projectID}
 }
 
 func (m *Model) applySelection(sel selectionState) {
@@ -76,18 +76,18 @@ func (m *Model) refreshSelectionForProjectConfig() bool {
 		return false
 	}
 
-	delete(m.selectionByProject, project.Name)
-	desired := selectionState{Project: project.Name}
+	delete(m.selectionByProject, project.ID)
+	desired := selectionState{ProjectID: project.ID}
 	var resolved selectionState
 	if m.tab == TabDashboard {
 		resolved = resolveDashboardSelection(m.data.Projects, desired)
-		if resolved.Project == "" {
+		if resolved.ProjectID == "" {
 			resolved = resolveSelection(m.data.Projects, desired)
 		}
 	} else {
 		resolved = resolveSelection(m.data.Projects, desired)
 	}
-	if resolved.Project == "" {
+	if resolved.ProjectID == "" {
 		return false
 	}
 	m.applySelection(resolved)
@@ -104,17 +104,17 @@ func (m *Model) selectTab(delta int) {
 
 	if m.tab == TabDashboard {
 		m.tab = TabProject
-		projectName := m.data.Projects[0].Name
+		projectID := m.data.Projects[0].ID
 		if delta < 0 {
-			projectName = m.data.Projects[len(m.data.Projects)-1].Name
+			projectID = m.data.Projects[len(m.data.Projects)-1].ID
 		}
-		resolved := resolveSelection(m.data.Projects, m.selectionForProject(projectName))
+		resolved := resolveSelection(m.data.Projects, m.selectionForProjectID(projectID))
 		m.applySelection(resolved)
 		m.selectionVersion++
 		return
 	}
 
-	idx, ok := m.projectIndexFor(m.selection.Project)
+	idx, ok := m.projectIndexForID(m.selection.ProjectID)
 	if !ok {
 		idx = 0
 	}
@@ -125,8 +125,8 @@ func (m *Model) selectTab(delta int) {
 		m.selectionVersion++
 		return
 	}
-	projectName := m.data.Projects[next-1].Name
-	resolved := resolveSelection(m.data.Projects, m.selectionForProject(projectName))
+	projectID := m.data.Projects[next-1].ID
+	resolved := resolveSelection(m.data.Projects, m.selectionForProjectID(projectID))
 	m.applySelection(resolved)
 	m.selectionVersion++
 }
@@ -140,15 +140,15 @@ func (m *Model) selectDashboardTab() bool {
 	return true
 }
 
-func (m *Model) selectProjectTab(projectName string) bool {
-	if strings.TrimSpace(projectName) == "" {
+func (m *Model) selectProjectTab(projectID string) bool {
+	if strings.TrimSpace(projectID) == "" {
 		return false
 	}
-	project := findProject(m.data.Projects, projectName)
+	project := findProjectByID(m.data.Projects, projectID)
 	if project == nil {
 		return false
 	}
-	resolved := resolveSelection(m.data.Projects, m.selectionForProject(project.Name))
+	resolved := resolveSelection(m.data.Projects, m.selectionForProjectID(project.ID))
 	changed := m.tab != TabProject || m.selection != resolved
 	m.tab = TabProject
 	m.applySelection(resolved)
@@ -262,7 +262,7 @@ func (m *Model) selectDashboardPane(delta int) {
 	}
 	idx = wrapIndex(idx+delta, len(column.Panes))
 	pane := column.Panes[idx]
-	m.selection.Project = column.ProjectName
+	m.selection.ProjectID = column.ProjectID
 	m.selection.Session = pane.SessionName
 	m.selection.Pane = pane.Pane.Index
 	m.selectionVersion++
@@ -284,10 +284,10 @@ func (m *Model) selectDashboardProject(delta int) {
 	}
 	idx = wrapIndex(idx+delta, len(filtered))
 	target := filtered[idx]
-	desired := m.selectionForProject(target.ProjectName)
+	desired := m.selectionForProjectID(target.ProjectID)
 	resolved := resolveDashboardSelectionFromColumns(filtered, desired)
-	if resolved.Project == "" {
-		resolved.Project = target.ProjectName
+	if resolved.ProjectID == "" {
+		resolved.ProjectID = target.ProjectID
 	}
 	m.applySelection(resolved)
 	m.selectionVersion++
@@ -354,7 +354,7 @@ func (m *Model) selectedProject() *ProjectGroup {
 		}
 	}
 	for i := range m.data.Projects {
-		if m.data.Projects[i].Name == m.selection.Project {
+		if m.data.Projects[i].ID == m.selection.ProjectID {
 			return &m.data.Projects[i]
 		}
 	}

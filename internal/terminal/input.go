@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"syscall"
 )
 
 // SendInput writes bytes to the underlying PTY.
@@ -17,20 +19,29 @@ func (w *Window) SendInput(input []byte) error {
 		return nil
 	}
 	if w.closed.Load() {
-		return errors.New("terminal: window closed")
+		return &PaneClosedError{Reason: PaneClosedWindowClosed}
+	}
+	if w.exited.Load() {
+		return &PaneClosedError{Reason: PaneClosedProcessExited}
+	}
+	if w.inputClosed.Load() {
+		return &PaneClosedError{Reason: w.inputClosedReasonValue()}
 	}
 	w.ptyMu.Lock()
 	pty := w.pty
 	w.ptyMu.Unlock()
 	if pty == nil {
-		return errors.New("terminal: no pty")
+		return &PaneClosedError{Reason: PaneClosedPTYClosed}
 	}
 
 	w.writeMu.Lock()
-	defer w.writeMu.Unlock()
-
 	n, err := pty.Write(input)
+	w.writeMu.Unlock()
 	if err != nil {
+		if isPTYClosedWriteError(err) {
+			w.markInputClosed(PaneClosedPTYClosed)
+			return &PaneClosedError{Reason: PaneClosedPTYClosed, Cause: err}
+		}
 		return fmt.Errorf("terminal: pty write: %w", err)
 	}
 	if n != len(input) {
@@ -40,6 +51,26 @@ func (w *Window) SendInput(input []byte) error {
 	// Input often changes the screen (echo, app updates).
 	w.markDirty()
 	return nil
+}
+
+func isPTYClosedWriteError(err error) bool {
+	if err == nil {
+		return false
+	}
+	switch {
+	case errors.Is(err, syscall.EIO):
+		return true
+	case errors.Is(err, syscall.EPIPE):
+		return true
+	case errors.Is(err, syscall.EBADF):
+		return true
+	case errors.Is(err, os.ErrClosed):
+		return true
+	case errors.Is(err, io.ErrClosedPipe):
+		return true
+	default:
+		return false
+	}
 }
 
 func (w *Window) startIO(ctx context.Context) {

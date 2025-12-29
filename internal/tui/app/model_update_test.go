@@ -41,7 +41,7 @@ func TestUpdateHandlesMessages(t *testing.T) {
 	_, _ = m.Update(refreshTickMsg{})
 	_, _ = m.Update(selectionRefreshMsg{Version: m.selectionVersion})
 
-	result := dashboardSnapshotResult{Data: DashboardData{Projects: []ProjectGroup{{Name: "Proj"}}}, Settings: m.settings, Version: m.selectionVersion}
+	result := dashboardSnapshotResult{Data: DashboardData{Projects: []ProjectGroup{{ID: projectKey("", "Proj"), Name: "Proj"}}}, Settings: m.settings, Version: m.selectionVersion}
 	_, _ = m.Update(dashboardSnapshotMsg{Result: result})
 	_, _ = m.Update(SuccessMsg{Message: "ok"})
 	_, _ = m.Update(WarningMsg{Message: "warn"})
@@ -56,6 +56,7 @@ func (e errTest) Error() string { return string(e) }
 func TestUpdateDashboardKeys(t *testing.T) {
 	m := newTestModel(t)
 	m.data = DashboardData{Projects: []ProjectGroup{{
+		ID:   projectKey("", "Proj"),
 		Name: "Proj",
 		Sessions: []SessionItem{{
 			Name:       "sess",
@@ -65,7 +66,7 @@ func TestUpdateDashboardKeys(t *testing.T) {
 			Panes:      []PaneItem{{Index: "0", Active: true}},
 		}},
 	}}}
-	m.selection = selectionState{Project: "Proj", Session: "sess", Pane: "0"}
+	m.selection = selectionState{ProjectID: projectKey("", "Proj"), Session: "sess", Pane: "0"}
 
 	m.filterActive = true
 	_, _ = m.updateDashboard(tea.KeyMsg{Type: tea.KeyEsc})
@@ -83,6 +84,7 @@ func TestUpdateDashboardKeys(t *testing.T) {
 func TestPickersAndRenamePaths(t *testing.T) {
 	m := newTestModel(t)
 	m.data = DashboardData{Projects: []ProjectGroup{{
+		ID:   projectKey("", "Proj"),
 		Name: "Proj",
 		Sessions: []SessionItem{{
 			Name:       "sess",
@@ -92,7 +94,7 @@ func TestPickersAndRenamePaths(t *testing.T) {
 			Panes:      []PaneItem{{Index: "0", Title: "pane"}},
 		}},
 	}}}
-	m.selection = selectionState{Project: "Proj", Session: "sess", Pane: "0"}
+	m.selection = selectionState{ProjectID: projectKey("", "Proj"), Session: "sess", Pane: "0"}
 
 	m.openRenameSession()
 	m.openRenamePane()
@@ -127,8 +129,8 @@ func TestOpenProjectSelectsProjectAndSession(t *testing.T) {
 	m.projectPicker.SetItems([]list.Item{picker.ProjectItem{Name: "nested/repo", Path: projectPath}})
 	_, _ = m.updateProjectPicker(tea.KeyMsg{Type: tea.KeyEnter})
 
-	if m.selection.Project != "Configured" {
-		t.Fatalf("selection.Project = %q, want %q", m.selection.Project, "Configured")
+	if m.selection.ProjectID != projectKey(projectPath, "Configured") {
+		t.Fatalf("selection.ProjectID = %q, want %q", m.selection.ProjectID, projectKey(projectPath, "Configured"))
 	}
 	if m.selection.Session != "My Session" {
 		t.Fatalf("selection.Session = %q, want %q", m.selection.Session, "My Session")
@@ -158,6 +160,7 @@ func TestStartNewSessionWithLayout(t *testing.T) {
 	m := newTestModel(t)
 	root := t.TempDir()
 	m.data = DashboardData{Projects: []ProjectGroup{{
+		ID:   projectKey(root, "Proj"),
 		Name: "Proj",
 		Path: root,
 		Sessions: []SessionItem{{
@@ -166,7 +169,7 @@ func TestStartNewSessionWithLayout(t *testing.T) {
 			Path:   root,
 		}},
 	}}}
-	m.selection = selectionState{Project: "Proj", Session: "sess"}
+	m.selection = selectionState{ProjectID: projectKey(root, "Proj"), Session: "sess"}
 	cmd := m.startNewSessionWithLayout("dev-3")
 	if cmd == nil {
 		t.Fatalf("startNewSessionWithLayout() returned nil")

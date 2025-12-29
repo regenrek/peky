@@ -3,6 +3,8 @@ package app
 import (
 	"testing"
 
+	"github.com/muesli/termenv"
+
 	"github.com/regenrek/peakypanes/internal/sessiond"
 )
 
@@ -10,13 +12,13 @@ func TestDashboardPaneHits(t *testing.T) {
 	m := newTestModelLite()
 	m.state = StateDashboard
 	m.tab = TabDashboard
-	m.selection = selectionState{Project: "Alpha", Session: "alpha-1", Pane: "1"}
+	m.selection = selectionState{ProjectID: projectKey("/alpha", "Alpha"), Session: "alpha-1", Pane: "1"}
 
 	hits := m.dashboardPaneHits()
 	if len(hits) == 0 {
 		t.Fatalf("expected dashboard hits")
 	}
-	if hits[0].Selection.Project == "" || hits[0].Selection.Session == "" {
+	if hits[0].Selection.ProjectID == "" || hits[0].Selection.Session == "" {
 		t.Fatalf("unexpected hit selection: %#v", hits[0].Selection)
 	}
 
@@ -40,7 +42,7 @@ func TestProjectPaneHitsLayoutAndGrid(t *testing.T) {
 	m := newTestModelLite()
 	m.state = StateDashboard
 	m.tab = TabProject
-	m.selection = selectionState{Project: "Alpha", Session: "alpha-1", Pane: "1"}
+	m.selection = selectionState{ProjectID: projectKey("/alpha", "Alpha"), Session: "alpha-1", Pane: "1"}
 
 	m.settings.PreviewMode = "layout"
 	layoutHits := m.projectPaneHits()
@@ -62,7 +64,7 @@ func TestPaneViewRequestsAndLookup(t *testing.T) {
 	m := newTestModelLite()
 	m.state = StateDashboard
 	m.tab = TabProject
-	m.selection = selectionState{Project: "Alpha", Session: "alpha-1", Pane: "1"}
+	m.selection = selectionState{ProjectID: projectKey("/alpha", "Alpha"), Session: "alpha-1", Pane: "1"}
 
 	reqs := m.paneViewRequests()
 	if len(reqs) == 0 {
@@ -77,9 +79,16 @@ func TestPaneViewRequestsAndLookup(t *testing.T) {
 		t.Fatalf("expected pane view request, got %#v", req)
 	}
 
-	key := paneViewKey{PaneID: "p1", Cols: req.Cols, Rows: req.Rows, Mode: sessiond.PaneViewANSI, ShowCursor: false}
+	key := paneViewKey{
+		PaneID:       "p1",
+		Cols:         req.Cols,
+		Rows:         req.Rows,
+		Mode:         sessiond.PaneViewANSI,
+		ShowCursor:   false,
+		ColorProfile: termenv.TrueColor,
+	}
 	m.paneViews[key] = "view"
-	if got := m.paneView("p1", req.Cols, req.Rows, sessiond.PaneViewANSI, false); got != "view" {
+	if got := m.paneView("p1", req.Cols, req.Rows, sessiond.PaneViewANSI, false, termenv.TrueColor); got != "view" {
 		t.Fatalf("expected pane view lookup, got %q", got)
 	}
 }

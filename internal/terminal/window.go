@@ -20,6 +20,11 @@ import (
 	"github.com/regenrek/peakypanes/internal/vt"
 )
 
+const (
+	ansiRenderDebounce    = 50 * time.Millisecond
+	ansiRenderMaxInterval = 250 * time.Millisecond
+)
+
 // vtEmulator is the subset of the VT emulator API Window depends on.
 // This makes scrollback + copy mode testable without a real PTY.
 type vtEmulator interface {
@@ -78,8 +83,10 @@ type Window struct {
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 
-	closed atomic.Bool
-	exited atomic.Bool
+	closed            atomic.Bool
+	exited            atomic.Bool
+	inputClosed       atomic.Bool
+	inputClosedReason atomic.Int32
 
 	exitStatus    atomic.Int64
 	cursorVisible atomic.Bool
@@ -92,6 +99,7 @@ type Window struct {
 	cacheMu    sync.Mutex
 	cacheDirty bool
 	cacheANSI  string
+	renderCh   chan struct{}
 
 	stateMu sync.Mutex
 	// ScrollbackMode enables scrollback navigation (no PTY input).
@@ -180,6 +188,7 @@ func NewWindow(opts Options) (*Window, error) {
 		cols:       cols,
 		rows:       rows,
 		updates:    make(chan struct{}, 1),
+		renderCh:   make(chan struct{}, 1),
 		cancel:     cancel,
 		cacheDirty: true,
 	}
@@ -208,10 +217,85 @@ func NewWindow(opts Options) (*Window, error) {
 	})
 
 	w.startIO(ctx)
+	w.startANSIRenderer(ctx)
 	w.wg.Add(1)
 	go w.waitExit(ctx)
 
 	return w, nil
+}
+
+func (w *Window) startANSIRenderer(ctx context.Context) {
+	w.wg.Add(1)
+	go func() {
+		defer w.wg.Done()
+
+		var timer *time.Timer
+		pending := false
+		var lastRender time.Time
+
+		stopTimer := func() {
+			if timer == nil {
+				return
+			}
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			timer = nil
+		}
+
+		for {
+			var timerCh <-chan time.Time
+			if timer != nil {
+				timerCh = timer.C
+			}
+			select {
+			case <-ctx.Done():
+				stopTimer()
+				return
+			case <-w.renderCh:
+				pending = true
+				if !lastRender.IsZero() && time.Since(lastRender) >= ansiRenderMaxInterval {
+					w.refreshANSICache()
+					lastRender = time.Now()
+					pending = false
+					stopTimer()
+					continue
+				}
+				if timer == nil {
+					timer = time.NewTimer(ansiRenderDebounce)
+				} else {
+					if !timer.Stop() {
+						select {
+						case <-timer.C:
+						default:
+						}
+					}
+					timer.Reset(ansiRenderDebounce)
+				}
+			case <-timerCh:
+				if pending {
+					w.refreshANSICache()
+					lastRender = time.Now()
+					pending = false
+				}
+				stopTimer()
+			}
+		}
+	}()
+}
+
+// RequestANSIRender schedules a background ANSI render for cached previews.
+func (w *Window) RequestANSIRender() {
+	if w == nil || w.closed.Load() {
+		return
+	}
+	select {
+	case w.renderCh <- struct{}{}:
+	default:
+	}
 }
 
 func (w *Window) ID() string { return w.id }
@@ -230,6 +314,14 @@ func (w *Window) SetTitle(title string) { w.title.Store(title) }
 func (w *Window) Exited() bool { return w.exited.Load() }
 
 func (w *Window) ExitStatus() int { return int(w.exitStatus.Load()) }
+
+// Dead reports whether the pane can no longer accept input.
+func (w *Window) Dead() bool {
+	if w == nil {
+		return true
+	}
+	return w.closed.Load() || w.exited.Load() || w.inputClosed.Load()
+}
 
 func (w *Window) PID() int {
 	if w == nil || w.cmd == nil || w.cmd.Process == nil {
@@ -294,7 +386,45 @@ func (w *Window) waitExit(ctx context.Context) {
 		w.exitStatus.Store(int64(w.cmd.ProcessState.ExitCode()))
 	}
 	w.exited.Store(true)
+	w.markInputClosed(PaneClosedProcessExited)
 	w.markDirty()
+}
+
+func (w *Window) markInputClosed(reason PaneClosedReason) {
+	if w == nil {
+		return
+	}
+	if reason != PaneClosedUnknown {
+		w.inputClosedReason.Store(int32(reason))
+	}
+	if w.inputClosed.Swap(true) {
+		return
+	}
+	w.detachPTY()
+}
+
+func (w *Window) inputClosedReasonValue() PaneClosedReason {
+	if w == nil || !w.inputClosed.Load() {
+		return PaneClosedUnknown
+	}
+	if reason := w.inputClosedReason.Load(); reason != 0 {
+		return PaneClosedReason(reason)
+	}
+	return PaneClosedUnknown
+}
+
+func (w *Window) detachPTY() {
+	var pty xpty.Pty
+	w.ptyMu.Lock()
+	pty = w.pty
+	w.pty = nil
+	w.ptyMu.Unlock()
+	if pty == nil {
+		return
+	}
+	w.writeMu.Lock()
+	_ = pty.Close()
+	w.writeMu.Unlock()
 }
 
 func (w *Window) markDirty() {
@@ -303,6 +433,7 @@ func (w *Window) markDirty() {
 	w.cacheMu.Lock()
 	w.cacheDirty = true
 	w.cacheMu.Unlock()
+	w.RequestANSIRender()
 
 	// Coalesce signals.
 	select {

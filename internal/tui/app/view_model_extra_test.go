@@ -1,8 +1,12 @@
 package app
 
-import "testing"
+import (
+	"testing"
 
-import "github.com/regenrek/peakypanes/internal/sessiond"
+	"github.com/muesli/termenv"
+
+	"github.com/regenrek/peakypanes/internal/sessiond"
+)
 
 func TestPaneViewProvider(t *testing.T) {
 	m := newTestModelLite()
@@ -15,7 +19,14 @@ func TestPaneViewProvider(t *testing.T) {
 	if provider == nil {
 		t.Fatalf("expected pane view provider with client")
 	}
-	key := paneViewKey{PaneID: "p1", Cols: 10, Rows: 5, Mode: sessiond.PaneViewANSI, ShowCursor: false}
+	key := paneViewKey{
+		PaneID:       "p1",
+		Cols:         10,
+		Rows:         5,
+		Mode:         sessiond.PaneViewANSI,
+		ShowCursor:   false,
+		ColorProfile: termenv.TrueColor,
+	}
 	m.paneViews[key] = "view"
 	if got := provider("p1", 10, 5, false); got != "view" {
 		t.Fatalf("expected pane view lookup, got %q", got)

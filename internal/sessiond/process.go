@@ -2,9 +2,12 @@ package sessiond
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -50,6 +53,50 @@ func ConnectDefault(ctx context.Context, version string) (*Client, error) {
 	})
 }
 
+// StopDaemon attempts to stop a running daemon instance.
+func StopDaemon(ctx context.Context, version string) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	socketPath, err := DefaultSocketPath()
+	if err != nil {
+		return err
+	}
+	pidPath, err := DefaultPidPath()
+	if err != nil {
+		return err
+	}
+	if err := probeDaemon(ctx, socketPath, version); err != nil {
+		if errors.Is(err, ErrDaemonProbeTimeout) {
+			return err
+		}
+		return nil
+	}
+	pid, err := readPidFile(pidPath)
+	if err != nil {
+		return err
+	}
+	if err := signalDaemon(pid); err != nil {
+		return err
+	}
+	return waitForDaemonStop(ctx, socketPath, version)
+}
+
+// RestartDaemon stops the daemon (if running) and starts a new instance.
+func RestartDaemon(ctx context.Context, version string) error {
+	if err := StopDaemon(ctx, version); err != nil {
+		return err
+	}
+	socketPath, err := DefaultSocketPath()
+	if err != nil {
+		return err
+	}
+	if err := startDaemonProcess(socketPath); err != nil {
+		return err
+	}
+	return waitForDaemon(ctx, socketPath, version)
+}
+
 func ensureDaemonRunning(ctx context.Context, version string, ops daemonOps) error {
 	defaultSocketPath := ops.defaultSocketPath
 	if defaultSocketPath == nil {
@@ -74,6 +121,8 @@ func ensureDaemonRunning(ctx context.Context, version string, ops daemonOps) err
 	}
 	if err := probe(ctx, socketPath, version); err == nil {
 		return nil
+	} else if errors.Is(err, ErrDaemonProbeTimeout) {
+		return err
 	}
 	if err := start(socketPath); err != nil {
 		return err
@@ -152,6 +201,7 @@ func startDaemonProcessWith(socketPath string, deps daemonProcessDeps) error {
 		return fmt.Errorf("sessiond: resolve executable: %w", err)
 	}
 	cmd := execCommand(exe, "daemon")
+	configureDaemonCommand(cmd)
 	cmd.Env = append(environ(), socketEnv+"="+socketPath)
 
 	logPath, err := defaultLog()
@@ -192,4 +242,46 @@ func waitForDaemon(ctx context.Context, socketPath, version string) error {
 			}
 		}
 	}
+}
+
+func waitForDaemonStop(ctx context.Context, socketPath, version string) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ticker := time.NewTicker(150 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			if _, err := os.Stat(socketPath); err != nil {
+				if os.IsNotExist(err) {
+					return nil
+				}
+			}
+			if err := probeDaemon(ctx, socketPath, version); err != nil {
+				if errors.Is(err, ErrDaemonProbeTimeout) {
+					return err
+				}
+				return nil
+			}
+		}
+	}
+}
+
+func readPidFile(path string) (int, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0, fmt.Errorf("sessiond: read pid file: %w", err)
+	}
+	value := strings.TrimSpace(string(data))
+	if value == "" {
+		return 0, fmt.Errorf("sessiond: pid file empty")
+	}
+	pid, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, fmt.Errorf("sessiond: parse pid: %w", err)
+	}
+	return pid, nil
 }

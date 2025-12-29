@@ -16,7 +16,7 @@ func TestSplitPaneWithStubWindow(t *testing.T) {
 
 	m := NewManager()
 	session := &Session{Name: "sess", Path: t.TempDir()}
-	pane := &Pane{ID: "p-1", Index: "0", Width: layoutBaseSize, Height: layoutBaseSize}
+	pane := &Pane{ID: "p-1", Index: "0", Width: LayoutBaseSize, Height: LayoutBaseSize}
 	session.Panes = []*Pane{pane}
 	m.sessions[session.Name] = session
 	m.panes[pane.ID] = pane

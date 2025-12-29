@@ -4,12 +4,15 @@ import (
 	"context"
 
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/muesli/termenv"
 
 	"github.com/regenrek/peakypanes/internal/native"
 )
 
 type paneViewWindow interface {
-	ViewLipgloss(showCursor bool) string
+	ViewLipglossCtx(ctx context.Context, showCursor bool, profile termenv.Profile) (string, error)
+	ViewANSICtx(ctx context.Context) (string, error)
+	ViewLipgloss(showCursor bool, profile termenv.Profile) string
 	ViewANSI() string
 }
 
@@ -43,9 +46,10 @@ type paneWindow interface {
 
 type sessionManager interface {
 	SessionNames() []string
-	Snapshot(previewLines int) []native.SessionSnapshot
+	Snapshot(ctx context.Context, previewLines int) []native.SessionSnapshot
 	Version() uint64
 	StartSession(ctx context.Context, spec native.SessionSpec) (*native.Session, error)
+	RestoreSession(ctx context.Context, spec native.SessionRestoreSpec) (*native.Session, error)
 	KillSession(name string) error
 	RenameSession(oldName, newName string) error
 	RenamePane(sessionName, paneIndex, newTitle string) error

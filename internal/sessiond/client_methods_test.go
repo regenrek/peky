@@ -2,7 +2,6 @@ package sessiond
 
 import (
 	"context"
-	"encoding/gob"
 	"fmt"
 	"net"
 	"path/filepath"
@@ -25,10 +24,8 @@ func runClientCase(t *testing.T, tc clientCase) {
 	errCh := make(chan error, 1)
 
 	go func() {
-		dec := gob.NewDecoder(server)
-		enc := gob.NewEncoder(server)
-		var env Envelope
-		if err := dec.Decode(&env); err != nil {
+		env, err := readEnvelope(server)
+		if err != nil {
 			errCh <- err
 			return
 		}
@@ -48,7 +45,7 @@ func runClientCase(t *testing.T, tc clientCase) {
 			return
 		}
 		resp := Envelope{Kind: EnvelopeResponse, Op: env.Op, ID: env.ID, Payload: payload}
-		if err := enc.Encode(resp); err != nil {
+		if err := writeEnvelope(server, resp); err != nil {
 			errCh <- err
 			return
 		}
@@ -413,10 +410,8 @@ func serveHello(t *testing.T, ln net.Listener, expectedVersion string) <-chan er
 		}
 		defer func() { _ = conn.Close() }()
 
-		dec := gob.NewDecoder(conn)
-		enc := gob.NewEncoder(conn)
-		var env Envelope
-		if err := dec.Decode(&env); err != nil {
+		env, err := readEnvelope(conn)
+		if err != nil {
 			errCh <- err
 			return
 		}
@@ -439,7 +434,7 @@ func serveHello(t *testing.T, ln net.Listener, expectedVersion string) <-chan er
 			return
 		}
 		resp := Envelope{Kind: EnvelopeResponse, Op: env.Op, ID: env.ID, Payload: payload}
-		if err := enc.Encode(resp); err != nil {
+		if err := writeEnvelope(conn, resp); err != nil {
 			errCh <- err
 			return
 		}
@@ -480,5 +475,81 @@ func TestDialAndProbeDaemon(t *testing.T) {
 	}
 	if err := <-errCh; err != nil {
 		t.Fatalf("probe server error: %v", err)
+	}
+}
+
+func TestClientClone(t *testing.T) {
+	dir := t.TempDir()
+	socketPath := filepath.Join(dir, "sessiond.sock")
+	ln, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	errCh := make(chan error, 1)
+	go func() {
+		for i := 0; i < 2; i++ {
+			conn, err := ln.Accept()
+			if err != nil {
+				errCh <- err
+				return
+			}
+			env, err := readEnvelope(conn)
+			if err != nil {
+				_ = conn.Close()
+				errCh <- err
+				return
+			}
+			if env.Op != OpHello {
+				_ = conn.Close()
+				errCh <- fmt.Errorf("expected hello op, got %q", env.Op)
+				return
+			}
+			var req HelloRequest
+			if err := decodePayload(env.Payload, &req); err != nil {
+				_ = conn.Close()
+				errCh <- err
+				return
+			}
+			if req.Version != "v1" {
+				_ = conn.Close()
+				errCh <- fmt.Errorf("expected version %q, got %q", "v1", req.Version)
+				return
+			}
+			payload, err := encodePayload(HelloResponse{Version: "v1", PID: 1})
+			if err != nil {
+				_ = conn.Close()
+				errCh <- err
+				return
+			}
+			resp := Envelope{Kind: EnvelopeResponse, Op: env.Op, ID: env.ID, Payload: payload}
+			if err := writeEnvelope(conn, resp); err != nil {
+				_ = conn.Close()
+				errCh <- err
+				return
+			}
+			_ = conn.Close()
+		}
+		errCh <- nil
+	}()
+
+	client, err := Dial(context.Background(), socketPath, "v1")
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	clone, err := client.Clone(context.Background())
+	if err != nil {
+		_ = client.Close()
+		t.Fatalf("Clone: %v", err)
+	}
+	if err := clone.Close(); err != nil {
+		t.Fatalf("clone.Close: %v", err)
+	}
+	if err := client.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if err := <-errCh; err != nil {
+		t.Fatalf("server error: %v", err)
 	}
 }

@@ -20,12 +20,16 @@ const (
 	StatePaneSwapPicker
 	StateConfirmKill
 	StateConfirmCloseProject
+	StateConfirmCloseAllProjects
 	StateConfirmClosePane
+	StateConfirmRestart
 	StateHelp
 	StateCommandPalette
 	StateRenameSession
 	StateRenamePane
 	StateProjectRootSetup
+	StateSettingsMenu
+	StateDebugMenu
 )
 
 // DashboardTab represents the active tab within the dashboard view.
@@ -68,6 +72,7 @@ type DashboardData struct {
 
 // ProjectGroup represents a project grouping with sessions.
 type ProjectGroup struct {
+	ID         string
 	Name       string
 	Path       string
 	FromConfig bool
@@ -83,12 +88,12 @@ type SessionItem struct {
 	PaneCount  int
 	ActivePane string
 	Panes      []PaneItem
-	Thumbnail  PaneSummary
 	Config     *layout.ProjectConfig
 }
 
 // DashboardPane represents a pane with project metadata for the dashboard.
 type DashboardPane struct {
+	ProjectID   string
 	ProjectName string
 	ProjectPath string
 	SessionName string
@@ -97,6 +102,7 @@ type DashboardPane struct {
 
 // DashboardProjectColumn represents a dashboard column for a project.
 type DashboardProjectColumn struct {
+	ProjectID   string
 	ProjectName string
 	ProjectPath string
 	Panes       []DashboardPane
@@ -104,28 +110,24 @@ type DashboardProjectColumn struct {
 
 // PaneItem represents a pane with preview content.
 type PaneItem struct {
-	ID           string
-	Index        string
-	Title        string
-	Command      string
-	StartCommand string
-	PID          int
-	Active       bool
-	Left         int
-	Top          int
-	Width        int
-	Height       int
-	Dead         bool
-	DeadStatus   int
-	LastActive   time.Time
-	Preview      []string
-	Status       PaneStatus
-}
-
-// PaneSummary holds lightweight preview info for thumbnails.
-type PaneSummary struct {
-	Line   string
-	Status PaneStatus
+	ID            string
+	Index         string
+	Title         string
+	Command       string
+	StartCommand  string
+	PID           int
+	Active        bool
+	Left          int
+	Top           int
+	Width         int
+	Height        int
+	Dead          bool
+	DeadStatus    int
+	RestoreFailed bool
+	RestoreError  string
+	LastActive    time.Time
+	Preview       []string
+	Status        PaneStatus
 }
 
 // AgentDetectionConfig enables agent-specific status detection.
@@ -139,9 +141,7 @@ type DashboardConfig struct {
 	RefreshInterval time.Duration
 	PreviewLines    int
 	PreviewCompact  bool
-	ThumbnailLines  int
 	IdleThreshold   time.Duration
-	ShowThumbnails  bool
 	StatusMatcher   statusMatcher
 	PreviewMode     string
 	ProjectRoots    []string
@@ -150,11 +150,11 @@ type DashboardConfig struct {
 	HiddenProjects  map[string]struct{}
 }
 
-// selectionState tracks the current selection by name/index.
+// selectionState tracks the current selection by stable project ID.
 type selectionState struct {
-	Project string
-	Session string
-	Pane    string
+	ProjectID string
+	Session   string
+	Pane      string
 }
 
 // dashboardSnapshotInput carries the state needed for refresh.
@@ -203,6 +203,18 @@ type daemonEventMsg struct {
 type paneViewsMsg struct {
 	Views []sessiond.PaneViewResponse
 	Err   error
+}
+
+type daemonRestartMsg struct {
+	Client         *sessiond.Client
+	PaneViewClient *sessiond.Client
+	Err            error
+}
+
+// PaneClosedMsg signals the selected pane can no longer accept input.
+type PaneClosedMsg struct {
+	PaneID  string
+	Message string
 }
 
 // sessionStartedMsg signals a session creation result.

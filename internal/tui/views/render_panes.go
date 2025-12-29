@@ -12,26 +12,28 @@ import (
 
 type paneTileRenderer func(pane Pane, width, height int, compact bool, target bool, borders tileBorders) string
 
-func renderPanePreview(panes []Pane, width, height int, mode string, compact bool, targetPane string) string {
+func renderPanePreview(panes []Pane, width, height int, mode string, compact bool, targetPane string, terminalFocus bool) string {
 	return renderPanePreviewWithRenderer(panes, width, height, panePreviewContext{
-		mode:       mode,
-		compact:    compact,
-		targetPane: targetPane,
+		mode:          mode,
+		compact:       compact,
+		targetPane:    targetPane,
+		terminalFocus: terminalFocus,
 	})
 }
 
 type panePreviewContext struct {
-	mode       string
-	compact    bool
-	targetPane string
-	renderer   paneTileRenderer
+	mode          string
+	compact       bool
+	targetPane    string
+	terminalFocus bool
+	renderer      paneTileRenderer
 }
 
 func renderPanePreviewWithRenderer(panes []Pane, width, height int, ctx panePreviewContext) string {
 	if ctx.mode == "layout" {
 		return renderPaneLayout(panes, width, height, ctx.targetPane)
 	}
-	return renderPaneTilesWithRenderer(panes, width, height, ctx.compact, ctx.targetPane, ctx.renderer)
+	return renderPaneTilesWithRenderer(panes, width, height, ctx.compact, ctx.targetPane, ctx.terminalFocus, ctx.renderer)
 }
 
 func renderPaneLayout(panes []Pane, width, height int, targetPane string) string {
@@ -77,10 +79,14 @@ const (
 	borderLevelDefault = iota
 	borderLevelActive
 	borderLevelTarget
+	borderLevelFocus
 )
 
-func borderLevelForPane(pane Pane, targetPane string) int {
+func borderLevelForPane(pane Pane, targetPane string, terminalFocus bool) int {
 	if pane.Index == targetPane {
+		if terminalFocus {
+			return borderLevelFocus
+		}
 		return borderLevelTarget
 	}
 	if pane.Active {
@@ -93,6 +99,8 @@ func borderColorFor(level int) lipgloss.TerminalColor {
 	switch level {
 	case borderLevelTarget:
 		return theme.BorderTarget
+	case borderLevelFocus:
+		return theme.BorderFocus
 	case borderLevelActive:
 		return theme.BorderFocused
 	default:
@@ -107,7 +115,7 @@ func maxBorderLevel(a, b int) int {
 	return b
 }
 
-func renderPaneTilesWithRenderer(panes []Pane, width, height int, compact bool, targetPane string, renderer paneTileRenderer) string {
+func renderPaneTilesWithRenderer(panes []Pane, width, height int, compact bool, targetPane string, terminalFocus bool, renderer paneTileRenderer) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
@@ -119,7 +127,7 @@ func renderPaneTilesWithRenderer(panes []Pane, width, height int, compact bool, 
 	}
 
 	layout := computePaneGridLayout(len(panes), width, height)
-	paneLevels := paneBorderLevels(panes, targetPane)
+	paneLevels := paneBorderLevels(panes, targetPane, terminalFocus)
 	ctx := paneTileContext{
 		panes:      panes,
 		layout:     layout,
@@ -187,10 +195,10 @@ func computePaneGridLayout(paneCount, width, height int) paneGridLayout {
 	}
 }
 
-func paneBorderLevels(panes []Pane, targetPane string) []int {
+func paneBorderLevels(panes []Pane, targetPane string, terminalFocus bool) []int {
 	levels := make([]int, len(panes))
 	for i, pane := range panes {
-		levels[i] = borderLevelForPane(pane, targetPane)
+		levels[i] = borderLevelForPane(pane, targetPane, terminalFocus)
 	}
 	return levels
 }
@@ -281,8 +289,6 @@ func renderPaneTile(pane Pane, width, height int, compact bool, target bool, bor
 	}
 
 	style := lipgloss.NewStyle().
-		Width(width).
-		Height(height).
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderTop(borders.top).
 		BorderRight(borders.right).
@@ -296,6 +302,8 @@ func renderPaneTile(pane Pane, width, height int, compact bool, target bool, bor
 		Padding(0, 1)
 
 	frameW, frameH := style.GetFrameSize()
+	borderW := style.GetHorizontalBorderSize()
+	borderH := style.GetVerticalBorderSize()
 	contentWidth := width - frameW
 	if contentWidth < 1 {
 		contentWidth = 1
@@ -304,6 +312,15 @@ func renderPaneTile(pane Pane, width, height int, compact bool, target bool, bor
 	if innerHeight < 1 {
 		innerHeight = 1
 	}
+	blockWidth := width - borderW
+	if blockWidth < 1 {
+		blockWidth = 1
+	}
+	blockHeight := height - borderH
+	if blockHeight < 1 {
+		blockHeight = 1
+	}
+	style = style.Width(blockWidth).Height(blockHeight)
 
 	header := fmt.Sprintf("%s %s", renderBadge(pane.Status), title)
 	lines := []string{truncateTileLine(header, contentWidth)}
@@ -338,8 +355,6 @@ func (m Model) renderPaneTileLive(pane Pane, width, height int, compact bool, ta
 	}
 
 	style := lipgloss.NewStyle().
-		Width(width).
-		Height(height).
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderTop(borders.top).
 		BorderRight(borders.right).
@@ -353,6 +368,8 @@ func (m Model) renderPaneTileLive(pane Pane, width, height int, compact bool, ta
 		Padding(0, 1)
 
 	frameW, frameH := style.GetFrameSize()
+	borderW := style.GetHorizontalBorderSize()
+	borderH := style.GetVerticalBorderSize()
 	contentWidth := width - frameW
 	if contentWidth < 1 {
 		contentWidth = 1
@@ -361,6 +378,15 @@ func (m Model) renderPaneTileLive(pane Pane, width, height int, compact bool, ta
 	if innerHeight < 1 {
 		innerHeight = 1
 	}
+	blockWidth := width - borderW
+	if blockWidth < 1 {
+		blockWidth = 1
+	}
+	blockHeight := height - borderH
+	if blockHeight < 1 {
+		blockHeight = 1
+	}
+	style = style.Width(blockWidth).Height(blockHeight)
 
 	header := fmt.Sprintf("%s %s", renderBadge(pane.Status), title)
 	lines := []string{truncateTileLine(header, contentWidth)}

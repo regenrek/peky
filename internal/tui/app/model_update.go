@@ -1,6 +1,9 @@
 package app
 
 import (
+	"context"
+	"errors"
+
 	"github.com/regenrek/peakypanes/internal/sessiond"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -31,8 +34,11 @@ func (m *Model) handleUpdateMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case daemonEventMsg:
 		return m, m.handleDaemonEvent(msg), true
 	case paneViewsMsg:
-		m.handlePaneViews(msg)
-		return m, nil, true
+		return m, m.handlePaneViews(msg), true
+	case daemonRestartMsg:
+		return m, m.handleDaemonRestart(msg), true
+	case PaneClosedMsg:
+		return m, m.handlePaneClosed(msg), true
 	case sessionStartedMsg:
 		return m, m.handleSessionStarted(msg), true
 	case SuccessMsg:
@@ -87,14 +93,26 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	case StateConfirmCloseProject:
 		model, cmd := m.updateConfirmCloseProject(msg)
 		return model, cmd, true
+	case StateConfirmCloseAllProjects:
+		model, cmd := m.updateConfirmCloseAllProjects(msg)
+		return model, cmd, true
 	case StateConfirmClosePane:
 		model, cmd := m.updateConfirmClosePane(msg)
+		return model, cmd, true
+	case StateConfirmRestart:
+		model, cmd := m.updateConfirmRestart(msg)
 		return model, cmd, true
 	case StateHelp:
 		model, cmd := m.updateHelp(msg)
 		return model, cmd, true
 	case StateCommandPalette:
 		model, cmd := m.updateCommandPalette(msg)
+		return model, cmd, true
+	case StateSettingsMenu:
+		model, cmd := m.updateSettingsMenu(msg)
+		return model, cmd, true
+	case StateDebugMenu:
+		model, cmd := m.updateDebugMenu(msg)
 		return model, cmd, true
 	case StateRenameSession, StateRenamePane:
 		model, cmd := m.updateRename(msg)
@@ -137,6 +155,14 @@ func (m *Model) handlePickerUpdate(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		var cmd tea.Cmd
 		m.commandPalette, cmd = m.commandPalette.Update(msg)
 		return m, cmd, true
+	case StateSettingsMenu:
+		var cmd tea.Cmd
+		m.settingsMenu, cmd = m.settingsMenu.Update(msg)
+		return m, cmd, true
+	case StateDebugMenu:
+		var cmd tea.Cmd
+		m.debugMenu, cmd = m.debugMenu.Update(msg)
+		return m, cmd, true
 	default:
 		return nil, nil, false
 	}
@@ -149,6 +175,8 @@ func (m *Model) applyWindowSize(msg tea.WindowSizeMsg) {
 	m.setLayoutPickerSize()
 	m.setPaneSwapPickerSize()
 	m.setCommandPaletteSize()
+	m.setSettingsMenuSize()
+	m.setDebugMenuSize()
 	m.setQuickReplySize()
 }
 
@@ -163,19 +191,31 @@ func (m *Model) handleSelectionRefresh(msg selectionRefreshMsg) tea.Cmd {
 	if msg.Version != m.selectionVersion {
 		return nil
 	}
-	return m.startRefreshCmd()
+	return m.requestRefreshCmd()
 }
 
 func (m *Model) handleDashboardSnapshot(msg dashboardSnapshotMsg) tea.Cmd {
 	m.endRefresh()
 	if msg.Result.RefreshSeq > 0 && msg.Result.RefreshSeq < m.refreshSeq {
+		if m.refreshQueued {
+			m.refreshQueued = false
+			return m.startRefreshCmd()
+		}
 		return nil
 	}
 	if msg.Result.RefreshSeq < m.lastAppliedSeq {
+		if m.refreshQueued {
+			m.refreshQueued = false
+			return m.startRefreshCmd()
+		}
 		return nil
 	}
 	if msg.Result.Err != nil {
 		m.setToast("Refresh failed: "+msg.Result.Err.Error(), toastError)
+		if m.refreshQueued {
+			m.refreshQueued = false
+			return m.startRefreshCmd()
+		}
 		return nil
 	}
 	m.lastAppliedSeq = msg.Result.RefreshSeq
@@ -183,6 +223,7 @@ func (m *Model) handleDashboardSnapshot(msg dashboardSnapshotMsg) tea.Cmd {
 		m.setToast("Dashboard config: "+msg.Result.Warning, toastWarning)
 	}
 	m.data = msg.Result.Data
+	m.reconcilePaneInputDisabled()
 	m.settings = msg.Result.Settings
 	m.config = msg.Result.RawConfig
 	if msg.Result.Keymap != nil {
@@ -191,13 +232,33 @@ func (m *Model) handleDashboardSnapshot(msg dashboardSnapshotMsg) tea.Cmd {
 	if msg.Result.Version == m.selectionVersion {
 		m.applySelection(msg.Result.Resolved)
 	} else {
-		m.applySelection(resolveSelection(m.data.Projects, m.selection))
+		m.applySelection(resolveSelectionForTab(m.tab, m.data.Projects, m.selection))
 	}
 	m.syncExpandedSessions()
 	if m.refreshSelectionForProjectConfig() {
 		m.setToast("Project config changed: selection refreshed", toastInfo)
 	}
-	return m.refreshPaneViewsCmd()
+	cmd := m.refreshPaneViewsCmd()
+	if m.refreshQueued {
+		m.refreshQueued = false
+		cmd = tea.Batch(cmd, m.startRefreshCmd())
+	}
+	return cmd
+}
+
+func (m *Model) handlePaneClosed(msg PaneClosedMsg) tea.Cmd {
+	if msg.PaneID != "" {
+		if m.isPaneInputDisabled(msg.PaneID) {
+			return nil
+		}
+		m.markPaneInputDisabled(msg.PaneID)
+	}
+	if msg.Message != "" {
+		m.setToast(msg.Message, toastWarning)
+	} else {
+		m.setToast("Pane closed", toastWarning)
+	}
+	return m.requestRefreshCmd()
 }
 
 func (m *Model) handleDaemonEvent(msg daemonEventMsg) tea.Cmd {
@@ -208,16 +269,23 @@ func (m *Model) handleDaemonEvent(msg daemonEventMsg) tea.Cmd {
 			cmds = append(cmds, cmd)
 		}
 	case sessiond.EventSessionChanged:
-		if m.refreshInFlight == 0 {
-			cmds = append(cmds, m.startRefreshCmd())
+		if cmd := m.requestRefreshCmd(); cmd != nil {
+			cmds = append(cmds, cmd)
 		}
 	}
 	return tea.Batch(cmds...)
 }
 
-func (m *Model) handlePaneViews(msg paneViewsMsg) {
-	if msg.Err != nil {
+func (m *Model) handlePaneViews(msg paneViewsMsg) tea.Cmd {
+	var cmd tea.Cmd
+	if msg.Err != nil && len(msg.Views) == 0 && !errors.Is(msg.Err, context.DeadlineExceeded) && !errors.Is(msg.Err, context.Canceled) {
 		m.setToast("Pane view failed: "+msg.Err.Error(), toastWarning)
+	}
+	if m.paneViews == nil {
+		m.paneViews = make(map[paneViewKey]string)
+	}
+	if m.paneMouseMotion == nil {
+		m.paneMouseMotion = make(map[string]bool)
 	}
 	for _, view := range msg.Views {
 		key := paneViewKeyFrom(view)
@@ -226,6 +294,17 @@ func (m *Model) handlePaneViews(msg paneViewsMsg) {
 			m.paneMouseMotion[view.PaneID] = view.AllowMotion
 		}
 	}
+	m.paneViewInFlight = false
+	if m.paneViewQueued {
+		m.paneViewQueued = false
+		m.paneViewQueuedIDs = nil
+		cmd = m.refreshPaneViewsCmd()
+	} else if len(m.paneViewQueuedIDs) > 0 {
+		queued := m.paneViewQueuedIDs
+		m.paneViewQueuedIDs = nil
+		cmd = m.startPaneViewFetch(m.paneViewRequestsForIDs(queued))
+	}
+	return cmd
 }
 
 func (m *Model) handleSessionStarted(msg sessionStartedMsg) tea.Cmd {
@@ -236,8 +315,9 @@ func (m *Model) handleSessionStarted(msg sessionStartedMsg) tea.Cmd {
 	if msg.Name != "" {
 		m.setToast("Session started: "+msg.Name, toastSuccess)
 		projectName := m.projectNameForPath(msg.Path)
-		if projectName != "" {
-			m.selection.Project = projectName
+		projectID := projectKey(msg.Path, projectName)
+		if projectID != "" {
+			m.selection.ProjectID = projectID
 		}
 		m.selection.Session = msg.Name
 		m.selection.Pane = ""
@@ -247,5 +327,5 @@ func (m *Model) handleSessionStarted(msg sessionStartedMsg) tea.Cmd {
 		m.setToast("Session started", toastSuccess)
 	}
 	m.setTerminalFocus(msg.Focus)
-	return m.startRefreshCmd()
+	return m.requestRefreshCmd()
 }

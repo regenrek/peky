@@ -27,6 +27,11 @@ func newTestModel(t *testing.T) *Model {
 	if err != nil {
 		t.Fatalf("NewModel() error: %v", err)
 	}
+	t.Cleanup(func() {
+		if model.paneViewClient != nil {
+			_ = model.paneViewClient.Close()
+		}
+	})
 	model.width = 80
 	model.height = 24
 	model.state = StateDashboard

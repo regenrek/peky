@@ -5,11 +5,11 @@ func resolveSelection(groups []ProjectGroup, desired selectionState) selectionSt
 	if len(groups) == 0 {
 		return resolved
 	}
-	project := findProject(groups, desired.Project)
+	project := findProjectByID(groups, desired.ProjectID)
 	if project == nil {
 		project = &groups[0]
 	}
-	resolved.Project = project.Name
+	resolved.ProjectID = project.ID
 	if len(project.Sessions) == 0 {
 		return resolved
 	}
@@ -27,7 +27,7 @@ func resolveDashboardSelection(groups []ProjectGroup, desired selectionState) se
 	if len(columns) == 0 {
 		return selectionState{}
 	}
-	if selected := resolveDashboardSelectionFromColumns(columns, desired); selected.Project != "" {
+	if selected := resolveDashboardSelectionFromColumns(columns, desired); selected.ProjectID != "" {
 		return selected
 	}
 	return selectionState{}
@@ -45,20 +45,20 @@ func resolveDashboardSelectionFromColumns(columns []DashboardProjectColumn, desi
 			if idx := dashboardPaneIndex(column.Panes, desired); idx >= 0 {
 				pane := column.Panes[idx]
 				return selectionState{
-					Project: column.ProjectName,
-					Session: pane.SessionName,
-					Pane:    pane.Pane.Index,
+					ProjectID: column.ProjectID,
+					Session:   pane.SessionName,
+					Pane:      pane.Pane.Index,
 				}
 			}
 		}
 	}
-	if desired.Project != "" {
+	if desired.ProjectID != "" {
 		for _, column := range columns {
-			if column.ProjectName != desired.Project {
+			if column.ProjectID != desired.ProjectID {
 				continue
 			}
 			if len(column.Panes) == 0 {
-				return selectionState{Project: column.ProjectName}
+				return selectionState{ProjectID: column.ProjectID}
 			}
 			idx := dashboardPaneIndex(column.Panes, desired)
 			if idx < 0 {
@@ -66,9 +66,9 @@ func resolveDashboardSelectionFromColumns(columns []DashboardProjectColumn, desi
 			}
 			pane := column.Panes[idx]
 			return selectionState{
-				Project: column.ProjectName,
-				Session: pane.SessionName,
-				Pane:    pane.Pane.Index,
+				ProjectID: column.ProjectID,
+				Session:   pane.SessionName,
+				Pane:      pane.Pane.Index,
 			}
 		}
 	}
@@ -78,13 +78,13 @@ func resolveDashboardSelectionFromColumns(columns []DashboardProjectColumn, desi
 		}
 		pane := column.Panes[0]
 		return selectionState{
-			Project: column.ProjectName,
-			Session: pane.SessionName,
-			Pane:    pane.Pane.Index,
+			ProjectID: column.ProjectID,
+			Session:   pane.SessionName,
+			Pane:      pane.Pane.Index,
 		}
 	}
 	if len(columns) > 0 {
-		return selectionState{Project: columns[0].ProjectName}
+		return selectionState{ProjectID: columns[0].ProjectID}
 	}
 	return selectionState{}
 }
@@ -102,9 +102,9 @@ func resolvePaneSelection(desired string, panes []PaneItem) string {
 	return ""
 }
 
-func findProject(groups []ProjectGroup, name string) *ProjectGroup {
+func findProjectByID(groups []ProjectGroup, id string) *ProjectGroup {
 	for i := range groups {
-		if groups[i].Name == name {
+		if groups[i].ID == id {
 			return &groups[i]
 		}
 	}

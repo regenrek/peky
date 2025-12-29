@@ -63,7 +63,7 @@ func TestDashboardActionKeys(t *testing.T) {
 	m.setState(StateDashboard)
 	m.setTerminalFocus(true)
 	m.updateDashboard(tea.KeyMsg{Type: tea.KeyEsc})
-	if m.terminalFocus {
-		t.Fatalf("expected terminal focus cleared")
+	if !m.terminalFocus {
+		t.Fatalf("expected terminal focus to remain enabled")
 	}
 }

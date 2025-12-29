@@ -52,7 +52,7 @@ func countDashboardPanes(columns []DashboardProjectColumn) int {
 
 func dashboardColumnIndex(columns []DashboardProjectColumn, selectedProject string) int {
 	for i, column := range columns {
-		if column.ProjectName == selectedProject {
+		if column.ProjectID == selectedProject {
 			return i
 		}
 	}
@@ -160,9 +160,9 @@ func dashboardColumnHits(body mouse.Rect, layout dashboardHitLayout, column Dash
 		hits = append(hits, mouse.PaneHit{
 			PaneID: pane.Pane.ID,
 			Selection: mouse.Selection{
-				Project: column.ProjectName,
-				Session: pane.SessionName,
-				Pane:    pane.Pane.Index,
+				ProjectID: column.ProjectID,
+				Session:   pane.SessionName,
+				Pane:      pane.Pane.Index,
 			},
 			Outer:   outer,
 			Content: content,

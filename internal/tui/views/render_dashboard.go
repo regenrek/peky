@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/regenrek/peakypanes/internal/tui/icons"
+	"github.com/regenrek/peakypanes/internal/tui/logo"
 	"github.com/regenrek/peakypanes/internal/tui/theme"
 )
 
@@ -26,12 +27,6 @@ func (m Model) viewDashboardContent() string {
 		return "Terminal too small"
 	}
 
-	showThumbs := m.ShowThumbnails
-	thumbHeight := 0
-	if showThumbs {
-		thumbHeight = 3
-	}
-
 	header := m.viewHeader(contentWidth)
 	footer := m.viewFooter(contentWidth)
 	quickReply := m.viewQuickReply(contentWidth)
@@ -41,12 +36,8 @@ func (m Model) viewDashboardContent() string {
 	footerHeight := lipgloss.Height(footer)
 	headerGap := 1
 	extraLines := headerHeight + headerGap + footerHeight + quickReplyHeight
-	if showThumbs {
-		extraLines += thumbHeight
-	}
 	bodyHeight := contentHeight - extraLines
 	if bodyHeight < 4 {
-		showThumbs = false
 		headerGap = 0
 		extraLines = headerHeight + headerGap + footerHeight + quickReplyHeight
 		bodyHeight = contentHeight - extraLines
@@ -58,16 +49,32 @@ func (m Model) viewDashboardContent() string {
 		sections = append(sections, fitLine("", contentWidth))
 	}
 	sections = append(sections, body, quickReply)
-	if showThumbs {
-		sections = append(sections, m.viewThumbnails(contentWidth))
-	}
 	sections = append(sections, footer)
 
 	return lipgloss.JoinVertical(lipgloss.Top, sections...)
 }
 
 func (m Model) viewHeader(width int) string {
-	return fitLine(m.HeaderLine, width)
+	left := m.HeaderLine
+	if width <= 0 {
+		return left
+	}
+	leftWidth := lipgloss.Width(left)
+	available := width - leftWidth - 1
+	if available < 1 {
+		return fitLine(left, width)
+	}
+	rightPlain := logo.SmallRender(available)
+	if strings.TrimSpace(rightPlain) == "" {
+		return fitLine(left, width)
+	}
+	right := theme.LogoStyle.Render(rightPlain)
+	rightWidth := lipgloss.Width(right)
+	spaces := width - leftWidth - rightWidth
+	if spaces < 1 {
+		return fitLine(left, width)
+	}
+	return left + strings.Repeat(" ", spaces) + right
 }
 
 func (m Model) viewBody(width, height int) string {
@@ -102,7 +109,10 @@ func (m Model) viewDashboardGrid(width, height int) string {
 	}
 	columns := m.DashboardColumns
 	if len(columns) == 0 {
-		return padLines(m.EmptyStateMessage, width, height)
+		if strings.TrimSpace(m.FilterInput.Value()) != "" {
+			return padLines("No panes match the current filter.", width, height)
+		}
+		return m.viewSplash(width, height)
 	}
 	totalPanes := 0
 	for _, column := range columns {
@@ -112,15 +122,69 @@ func (m Model) viewDashboardGrid(width, height int) string {
 		if strings.TrimSpace(m.FilterInput.Value()) != "" {
 			return padLines("No panes match the current filter.", width, height)
 		}
-		return padLines(m.EmptyStateMessage, width, height)
+		return m.viewSplash(width, height)
 	}
 	ctx := dashboardRenderContext{
 		selectionSession: m.SelectionSession,
 		selectionPane:    m.SelectionPane,
 		previewLines:     m.DashboardPreviewLines,
+		terminalFocus:    m.TerminalFocus,
 		renderer:         m.renderDashboardPaneTileLive,
 	}
 	return renderDashboardColumnsWithRenderer(columns, width, height, m.DashboardSelectedProject, ctx)
+}
+
+func (m Model) viewSplash(width, height int) string {
+	if width <= 0 || height <= 0 {
+		return ""
+	}
+	if strings.TrimSpace(m.SplashInfo) == "" && width < 4 {
+		return padLines(m.EmptyStateMessage, width, height)
+	}
+	logoText := logo.Render(width, false)
+	if width < logo.FullWidth() || height < logo.FullHeight()+2 {
+		logoText = logo.SmallRender(width)
+	}
+	logoLines := strings.Split(logoText, "\n")
+	blockWidth := 0
+	for _, line := range logoLines {
+		if lineWidth := lipgloss.Width(line); lineWidth > blockWidth {
+			blockWidth = lineWidth
+		}
+	}
+	lines := make([]string, 0, len(logoLines)+2)
+	for _, line := range logoLines {
+		padded := padRight(line, blockWidth)
+		lines = append(lines, centerLine(theme.LogoStyle.Render(padded), width))
+	}
+	info := strings.TrimSpace(m.SplashInfo)
+	if info != "" {
+		lines = append(lines, "")
+		lines = append(lines, centerLine(theme.DialogNote.Render(info), width))
+	}
+	if len(lines) == 0 {
+		return padLines(m.EmptyStateMessage, width, height)
+	}
+	contentHeight := len(lines)
+	if contentHeight >= height {
+		return padLines(strings.Join(lines, "\n"), width, height)
+	}
+	padTop := (height - contentHeight) / 2
+	if padTop < 1 {
+		padTop = 1
+	}
+	blank := padRight("", width)
+	out := make([]string, 0, height)
+	for i := 0; i < padTop; i++ {
+		out = append(out, blank)
+	}
+	for _, line := range lines {
+		out = append(out, padRight(line, width))
+	}
+	for len(out) < height {
+		out = append(out, blank)
+	}
+	return strings.Join(out, "\n")
 }
 
 func (m Model) viewSidebar(width, height int) string {
@@ -269,52 +333,15 @@ func (m Model) viewPreview(width, height int) string {
 	}
 	gridWidth := width
 	grid := renderPanePreviewWithRenderer(panes, gridWidth, gridHeight, panePreviewContext{
-		mode:       m.PreviewMode,
-		compact:    m.PreviewCompact,
-		targetPane: m.SelectionPane,
-		renderer:   m.renderPaneTileLive,
+		mode:          m.PreviewMode,
+		compact:       m.PreviewCompact,
+		targetPane:    m.SelectionPane,
+		terminalFocus: m.TerminalFocus,
+		renderer:      m.renderPaneTileLive,
 	})
 	lines = append(lines, grid)
 
 	return padLines(strings.Join(lines, "\n"), width, height)
-}
-
-func (m Model) viewThumbnails(width int) string {
-	sessions := collectRunningSessions(m.Projects)
-	if len(sessions) == 0 {
-		return padLines("No running sessions", width, 3)
-	}
-
-	boxes := []string{}
-	boxWidth := 16
-	maxBoxes := width / (boxWidth + 1)
-	if maxBoxes < 1 {
-		maxBoxes = 1
-	}
-	if len(sessions) > maxBoxes {
-		sessions = sessions[:maxBoxes]
-	}
-
-	boxStyle := lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder()).
-		BorderForeground(theme.Border).
-		Width(boxWidth).
-		Height(2).
-		Padding(0, 1)
-
-	for _, s := range sessions {
-		badge := renderBadge(sessionBadgeStatus(s))
-		name := fitLine(fmt.Sprintf("%s %s", badge, s.Name), boxWidth-2)
-		line := s.ThumbnailLine
-		if line == "" {
-			line = "idle"
-		}
-		content := fmt.Sprintf("%s\n%s", name, truncateLine(line, boxWidth-2))
-		boxes = append(boxes, boxStyle.Render(content))
-	}
-
-	row := lipgloss.JoinHorizontal(lipgloss.Top, boxes...)
-	return padLines(row, width, 3)
 }
 
 func (m Model) viewFooter(width int) string {
@@ -328,15 +355,21 @@ func (m Model) viewFooter(width int) string {
 		paneLabel = "project"
 	}
 	modeHint := ""
+	modeHintRendered := ""
 	if m.SupportsTerminalFocus {
 		label := "terminal"
 		if m.TerminalFocus {
 			label = "terminal on"
 		}
-		modeHint = fmt.Sprintf(" · %s %s", m.Keys.TerminalFocus, label)
+		modeHint = fmt.Sprintf(" · %s %s", strings.ToLower(m.Keys.TerminalFocus), label)
+		if m.TerminalFocus {
+			modeHintRendered = theme.TerminalFocusHint.Render(modeHint)
+		} else {
+			modeHintRendered = theme.ListDimmed.Render(modeHint)
+		}
 	}
 	base := fmt.Sprintf(
-		"%s ←/→ project · %s ↑/↓ %s · %s %s · %s commands · %s help · %s quit%s",
+		"%s ←/→ project · %s ↑/↓ %s · %s %s · %s commands · %s help · %s quit",
 		projectKeys,
 		sessionKeys,
 		sessionLabel,
@@ -345,9 +378,8 @@ func (m Model) viewFooter(width int) string {
 		m.Keys.CommandPalette,
 		m.Keys.Help,
 		m.Keys.Quit,
-		modeHint,
 	)
-	base = theme.ListDimmed.Render(base)
+	base = theme.ListDimmed.Render(base) + modeHintRendered
 	toast := m.Toast
 	if toast == "" {
 		return fitLine(base, width)

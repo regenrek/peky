@@ -51,14 +51,14 @@ func TestMouseDoubleClickEntersFocus(t *testing.T) {
 	}
 }
 
-func TestEscExitsTerminalFocus(t *testing.T) {
+func TestEscKeepsTerminalFocus(t *testing.T) {
 	m := newTestModel(t)
 	seedMouseTestData(m)
 	m.setTerminalFocus(true)
 
 	_, _ = m.updateDashboard(tea.KeyMsg{Type: tea.KeyEsc})
-	if m.terminalFocus {
-		t.Fatalf("terminalFocus should be false after esc")
+	if !m.terminalFocus {
+		t.Fatalf("terminalFocus should remain true after esc")
 	}
 }
 
@@ -66,7 +66,7 @@ func TestMouseHeaderClickSwitchesToProjectTab(t *testing.T) {
 	m := newTestModel(t)
 	seedHeaderTestData(m)
 
-	rect, ok := findHeaderRect(t, m, headerPartProject, "Beta")
+	rect, ok := findHeaderRect(t, m, headerPartProject, projectKey("/tmp/beta", "Beta"))
 	if !ok {
 		t.Fatalf("project header rect not found")
 	}
@@ -77,8 +77,8 @@ func TestMouseHeaderClickSwitchesToProjectTab(t *testing.T) {
 	if m.tab != TabProject {
 		t.Fatalf("tab=%v want %v", m.tab, TabProject)
 	}
-	if m.selection.Project != "Beta" {
-		t.Fatalf("selection project=%q want %q", m.selection.Project, "Beta")
+	if m.selection.ProjectID != projectKey("/tmp/beta", "Beta") {
+		t.Fatalf("selection project=%q want %q", m.selection.ProjectID, projectKey("/tmp/beta", "Beta"))
 	}
 }
 
@@ -86,7 +86,7 @@ func TestMouseHeaderClickSwitchesToDashboardTab(t *testing.T) {
 	m := newTestModel(t)
 	seedHeaderTestData(m)
 	m.tab = TabProject
-	m.selection.Project = "Beta"
+	m.selection.ProjectID = projectKey("/tmp/beta", "Beta")
 
 	rect, ok := findHeaderRect(t, m, headerPartDashboard, "")
 	if !ok {
@@ -122,6 +122,7 @@ func TestMouseHeaderClickNewOpensProjectPicker(t *testing.T) {
 func seedMouseTestData(m *Model) {
 	m.tab = TabDashboard
 	m.data = DashboardData{Projects: []ProjectGroup{{
+		ID:   projectKey(m.configPath, "Proj"),
 		Name: "Proj",
 		Path: m.configPath,
 		Sessions: []SessionItem{{
@@ -142,6 +143,7 @@ func seedHeaderTestData(m *Model) {
 	m.tab = TabDashboard
 	m.data = DashboardData{Projects: []ProjectGroup{
 		{
+			ID:   projectKey("/tmp/alpha", "Alpha"),
 			Name: "Alpha",
 			Path: "/tmp/alpha",
 			Sessions: []SessionItem{{
@@ -155,6 +157,7 @@ func seedHeaderTestData(m *Model) {
 			}},
 		},
 		{
+			ID:   projectKey("/tmp/beta", "Beta"),
 			Name: "Beta",
 			Path: "/tmp/beta",
 			Sessions: []SessionItem{{
@@ -168,10 +171,10 @@ func seedHeaderTestData(m *Model) {
 			}},
 		},
 	}}
-	m.selection = selectionState{Project: "Alpha", Session: "alpha", Pane: "1"}
+	m.selection = selectionState{ProjectID: projectKey("/tmp/alpha", "Alpha"), Session: "alpha", Pane: "1"}
 }
 
-func findHeaderRect(t *testing.T, m *Model, kind headerPartKind, project string) (mouse.Rect, bool) {
+func findHeaderRect(t *testing.T, m *Model, kind headerPartKind, projectID string) (mouse.Rect, bool) {
 	t.Helper()
 	wantKind, ok := headerHitKind(kind)
 	if !ok {
@@ -181,7 +184,7 @@ func findHeaderRect(t *testing.T, m *Model, kind headerPartKind, project string)
 		if hit.Hit.Kind != wantKind {
 			continue
 		}
-		if wantKind == mouse.HeaderProject && hit.Hit.ProjectName != project {
+		if wantKind == mouse.HeaderProject && hit.Hit.ProjectID != projectID {
 			continue
 		}
 		return hit.Rect, true

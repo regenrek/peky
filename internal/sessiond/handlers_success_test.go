@@ -5,33 +5,46 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/muesli/termenv"
 
 	"github.com/regenrek/peakypanes/internal/native"
 )
 
 type fakeManager struct {
-	windowID   string
-	window     paneWindow
-	sessions   []string
-	snapshot   []native.SessionSnapshot
-	version    uint64
-	events     chan native.PaneEvent
-	lastInput  []byte
-	lastMouse  uv.MouseEvent
-	lastKilled string
-	lastRename [2]string
-	lastSwap   [3]string
+	windowID             string
+	window               paneWindow
+	sessions             []string
+	snapshot             []native.SessionSnapshot
+	version              uint64
+	events               chan native.PaneEvent
+	lastSnapshotPreview  int
+	lastSnapshotDeadline time.Time
+	lastInput            []byte
+	lastMouse            uv.MouseEvent
+	lastKilled           string
+	lastRename           [2]string
+	lastSwap             [3]string
 }
 
 func (m *fakeManager) SessionNames() []string { return m.sessions }
-func (m *fakeManager) Snapshot(int) []native.SessionSnapshot {
+func (m *fakeManager) Snapshot(ctx context.Context, previewLines int) []native.SessionSnapshot {
+	m.lastSnapshotPreview = previewLines
+	if ctx != nil {
+		if deadline, ok := ctx.Deadline(); ok {
+			m.lastSnapshotDeadline = deadline
+		}
+	}
 	return m.snapshot
 }
 func (m *fakeManager) Version() uint64 { return m.version }
 func (m *fakeManager) StartSession(context.Context, native.SessionSpec) (*native.Session, error) {
 	return &native.Session{Name: "demo"}, nil
+}
+func (m *fakeManager) RestoreSession(context.Context, native.SessionRestoreSpec) (*native.Session, error) {
+	return &native.Session{Name: "restored"}, nil
 }
 func (m *fakeManager) KillSession(name string) error {
 	m.lastKilled = name
@@ -87,7 +100,14 @@ func TestHandlePaneViewSuccess(t *testing.T) {
 	manager := &fakeManager{windowID: "pane-1", window: win}
 	d := &Daemon{manager: manager}
 
-	payload, err := encodePayload(PaneViewRequest{PaneID: "pane-1", Cols: 0, Rows: 0, Mode: PaneViewLipgloss, ShowCursor: true})
+	payload, err := encodePayload(PaneViewRequest{
+		PaneID:       "pane-1",
+		Cols:         0,
+		Rows:         0,
+		Mode:         PaneViewLipgloss,
+		ShowCursor:   true,
+		ColorProfile: termenv.ANSI256,
+	})
 	if err != nil {
 		t.Fatalf("encodePayload: %v", err)
 	}
@@ -101,6 +121,9 @@ func TestHandlePaneViewSuccess(t *testing.T) {
 	}
 	if resp.View != "lip" || resp.PaneID != "pane-1" {
 		t.Fatalf("unexpected pane view response: %#v", resp)
+	}
+	if resp.ColorProfile != termenv.ANSI256 {
+		t.Fatalf("expected color profile echoed, got %v", resp.ColorProfile)
 	}
 	if win.resizeCols != 1 || win.resizeRows != 1 {
 		t.Fatalf("expected resize to 1x1, got %dx%d", win.resizeCols, win.resizeRows)
@@ -163,6 +186,12 @@ func TestHandleSessionNamesSnapshotAndRename(t *testing.T) {
 	}
 	if snapResp.Version != 7 || len(snapResp.Sessions) != 1 {
 		t.Fatalf("unexpected snapshot response: %#v", snapResp)
+	}
+	if manager.lastSnapshotPreview != 2 {
+		t.Fatalf("snapshot preview=%d want 2", manager.lastSnapshotPreview)
+	}
+	if manager.lastSnapshotDeadline.IsZero() {
+		t.Fatalf("expected snapshot deadline to be set")
 	}
 
 	payload, err = encodePayload(RenameSessionRequest{OldName: "alpha", NewName: "gamma"})

@@ -12,7 +12,7 @@ import (
 
 func TestRenameDialogs(t *testing.T) {
 	m := newTestModelLite()
-	m.selection = selectionState{Project: "Alpha", Session: "alpha-1", Pane: "1"}
+	m.selection = selectionState{ProjectID: projectKey("/alpha", "Alpha"), Session: "alpha-1", Pane: "1"}
 
 	m.openRenameSession()
 	if m.state != StateRenameSession || m.renameSession == "" {
@@ -123,7 +123,7 @@ func TestHiddenProjectLabelsAndReopen(t *testing.T) {
 
 func TestQuickReplyFlow(t *testing.T) {
 	m := newTestModelLite()
-	m.selection = selectionState{Project: "Alpha", Session: "alpha-1", Pane: "1"}
+	m.selection = selectionState{ProjectID: projectKey("/alpha", "Alpha"), Session: "alpha-1", Pane: "1"}
 	m.setQuickReplySize()
 	_ = m.openQuickReply()
 	if m.quickReplyInput.Value() != "" {

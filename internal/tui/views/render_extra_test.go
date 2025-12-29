@@ -14,12 +14,11 @@ func TestViewDashboardContentRenders(t *testing.T) {
 	m := Model{
 		Width:                    80,
 		Height:                   24,
-		HeaderLine:               "🎩 Peaky Panes",
+		HeaderLine:               "Peaky Panes",
 		EmptyStateMessage:        "empty",
-		ShowThumbnails:           true,
 		QuickReplyInput:          input,
-		DashboardColumns:         []DashboardColumn{{ProjectName: "Proj", ProjectPath: "", Panes: []DashboardPane{{ProjectName: "Proj", SessionName: "sess", Pane: Pane{Index: "0"}}}}},
-		DashboardSelectedProject: "Proj",
+		DashboardColumns:         []DashboardColumn{{ProjectID: "proj", ProjectName: "Proj", ProjectPath: "", Panes: []DashboardPane{{ProjectID: "proj", ProjectName: "Proj", SessionName: "sess", Pane: Pane{Index: "0"}}}}},
+		DashboardSelectedProject: "proj",
 		Projects: []Project{{
 			Name: "Proj",
 			Sessions: []Session{{
@@ -54,15 +53,15 @@ func TestRenderPanePreviewModes(t *testing.T) {
 		{Index: "0", Title: "main", Left: 0, Top: 0, Width: 50, Height: 20, Active: true, Status: paneStatusRunning},
 		{Index: "1", Title: "side", Left: 50, Top: 0, Width: 50, Height: 20, Active: false, Status: paneStatusIdle},
 	}
-	grid := renderPanePreview(panes, 40, 10, "grid", true, "0")
+	grid := renderPanePreview(panes, 40, 10, "grid", true, "0", false)
 	if strings.TrimSpace(grid) == "" {
 		t.Fatalf("renderPanePreview(grid) empty")
 	}
-	layout := renderPanePreview(panes, 40, 10, "layout", false, "1")
+	layout := renderPanePreview(panes, 40, 10, "layout", false, "1", false)
 	if strings.TrimSpace(layout) == "" {
 		t.Fatalf("renderPanePreview(layout) empty")
 	}
-	tiles := renderPanePreview(panes, 40, 10, "tiles", false, "")
+	tiles := renderPanePreview(panes, 40, 10, "tiles", false, "", false)
 	if strings.TrimSpace(tiles) == "" {
 		t.Fatalf("renderPanePreview(tiles) empty")
 	}
@@ -101,8 +100,8 @@ func TestViewStates(t *testing.T) {
 		Height:                   24,
 		HeaderLine:               "Peaky Panes",
 		EmptyStateMessage:        "empty",
-		DashboardColumns:         []DashboardColumn{{ProjectName: "Proj", ProjectPath: "", Panes: []DashboardPane{{ProjectName: "Proj", SessionName: "sess", Pane: Pane{Index: "0"}}}}},
-		DashboardSelectedProject: "Proj",
+		DashboardColumns:         []DashboardColumn{{ProjectID: "proj", ProjectName: "Proj", ProjectPath: "", Panes: []DashboardPane{{ProjectID: "proj", ProjectName: "Proj", SessionName: "sess", Pane: Pane{Index: "0"}}}}},
+		DashboardSelectedProject: "proj",
 		Projects:                 []Project{{Name: "Proj"}},
 		SidebarProject:           &Project{Name: "Proj"},
 		SidebarSessions:          []Session{{Name: "sess", Status: sessionRunning}},
@@ -120,6 +119,8 @@ func TestViewStates(t *testing.T) {
 		viewHelp,
 		viewConfirmKill,
 		viewConfirmCloseProject,
+		viewConfirmCloseAllProjects,
+		viewConfirmRestart,
 		viewRenameSession,
 		viewRenamePane,
 		viewProjectRootSetup,
@@ -134,20 +135,5 @@ func TestViewStates(t *testing.T) {
 		if strings.TrimSpace(out) == "" {
 			t.Fatalf("Render(view=%d) empty", view)
 		}
-	}
-}
-
-func TestSessionBadgeStatus(t *testing.T) {
-	session := Session{Status: sessionRunning}
-	if status := sessionBadgeStatus(session); status != paneStatusRunning {
-		t.Fatalf("sessionBadgeStatus(running) = %v", status)
-	}
-	session = Session{Status: sessionStopped}
-	if status := sessionBadgeStatus(session); status != paneStatusIdle {
-		t.Fatalf("sessionBadgeStatus(stopped) = %v", status)
-	}
-	session = Session{ThumbnailLine: "done", ThumbnailStatus: paneStatusDone}
-	if status := sessionBadgeStatus(session); status != paneStatusDone {
-		t.Fatalf("sessionBadgeStatus(thumbnail) = %v", status)
 	}
 }

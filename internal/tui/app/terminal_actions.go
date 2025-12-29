@@ -41,6 +41,9 @@ func (m *Model) handleTerminalKeyCmd(msg tea.KeyMsg) tea.Cmd {
 			CopyToggle:       copyToggle,
 		})
 		if err != nil {
+			if isPaneClosedError(err) {
+				return newPaneClosedMsg(paneID, err)
+			}
 			return ErrorMsg{Err: err, Context: "terminal key"}
 		}
 		return m.handleTerminalKeyResponse(ctx, paneID, payload, resp)
@@ -56,10 +59,27 @@ func (m *Model) sendPaneInputCmd(payload []byte, contextLabel string) tea.Cmd {
 		return NewWarningCmd("No pane selected")
 	}
 	paneID := pane.ID
+	if m.isPaneInputDisabled(paneID) {
+		return nil
+	}
+	if pane.Dead {
+		return func() tea.Msg {
+			return newPaneClosedMsg(paneID, nil)
+		}
+	}
 	return func() tea.Msg {
+		if m.isPaneInputDisabled(paneID) {
+			return nil
+		}
+		if pane := m.paneByID(paneID); pane != nil && pane.Dead {
+			return newPaneClosedMsg(paneID, nil)
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), terminalActionTimeout)
 		defer cancel()
 		if err := m.client.SendInput(ctx, paneID, payload); err != nil {
+			if isPaneClosedError(err) {
+				return newPaneClosedMsg(paneID, err)
+			}
 			return ErrorMsg{Err: err, Context: contextLabel}
 		}
 		return nil
@@ -90,7 +110,19 @@ func (m *Model) handleTerminalKeyResponse(ctx context.Context, paneID string, pa
 	if len(payload) == 0 {
 		return nil
 	}
+	if m == nil || m.client == nil {
+		return ErrorMsg{Err: errors.New("session client unavailable"), Context: "send to pane"}
+	}
+	if m.isPaneInputDisabled(paneID) {
+		return nil
+	}
+	if pane := m.paneByID(paneID); pane == nil || pane.Dead {
+		return newPaneClosedMsg(paneID, nil)
+	}
 	if err := m.client.SendInput(ctx, paneID, payload); err != nil {
+		if isPaneClosedError(err) {
+			return newPaneClosedMsg(paneID, err)
+		}
 		return ErrorMsg{Err: err, Context: "send to pane"}
 	}
 	return nil

@@ -2,7 +2,6 @@ package sessiond
 
 import (
 	"context"
-	"encoding/gob"
 	"net"
 	"os"
 	"path/filepath"
@@ -43,14 +42,13 @@ func TestReadLoopHandlesHello(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encodePayload: %v", err)
 	}
-	enc := gob.NewEncoder(c2)
-	if err := enc.Encode(Envelope{Kind: EnvelopeRequest, Op: OpHello, ID: 1, Payload: payload}); err != nil {
+	if err := writeEnvelope(c2, Envelope{Kind: EnvelopeRequest, Op: OpHello, ID: 1, Payload: payload}); err != nil {
 		t.Fatalf("encode request: %v", err)
 	}
 
-	resp := <-client.sendCh
-	if resp.Kind != EnvelopeResponse || resp.Op != OpHello {
-		t.Fatalf("unexpected response: %#v", resp)
+	resp := <-client.respCh
+	if resp.env.Kind != EnvelopeResponse || resp.env.Op != OpHello {
+		t.Fatalf("unexpected response: %#v", resp.env)
 	}
 
 	_ = c2.Close()
@@ -76,11 +74,10 @@ func TestWriteLoopSendsEnvelope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encodePayload: %v", err)
 	}
-	client.sendCh <- Envelope{Kind: EnvelopeResponse, Op: OpHello, ID: 1, Payload: payload}
+	client.respCh <- outboundEnvelope{env: Envelope{Kind: EnvelopeResponse, Op: OpHello, ID: 1, Payload: payload}, timeout: defaultWriteTimeout}
 
-	dec := gob.NewDecoder(c2)
-	var got Envelope
-	if err := dec.Decode(&got); err != nil {
+	got, err := readEnvelope(c2)
+	if err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
 	if got.Op != OpHello || got.ID != 1 {

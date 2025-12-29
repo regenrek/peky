@@ -85,32 +85,6 @@ func compactPreviewLines(lines []string) []string {
 	return compact
 }
 
-func collectRunningSessions(projects []Project) []Session {
-	var sessions []Session
-	for _, p := range projects {
-		for _, s := range p.Sessions {
-			if s.Status == sessionStopped {
-				continue
-			}
-			sessions = append(sessions, s)
-		}
-	}
-	return sessions
-}
-
-func sessionBadgeStatus(session Session) int {
-	if session.ThumbnailLine != "" {
-		return session.ThumbnailStatus
-	}
-	if session.Status == sessionRunning || session.Status == sessionCurrent {
-		return paneStatusRunning
-	}
-	if session.Status == sessionStopped {
-		return paneStatusIdle
-	}
-	return session.ThumbnailStatus
-}
-
 func truncateLine(text string, width int) string {
 	if width <= 0 {
 		return ""
@@ -129,12 +103,33 @@ func fitLine(text string, width int) string {
 	if width <= 0 {
 		return ""
 	}
+	lineWidth := lipgloss.Width(text)
+	if lineWidth == width {
+		return text
+	}
+	if lineWidth < width {
+		return text + strings.Repeat(" ", width-lineWidth)
+	}
+
 	truncated := ansi.Truncate(text, width, "")
 	padding := width - lipgloss.Width(truncated)
-	if padding < 0 {
-		padding = 0
+	if padding <= 0 {
+		return truncated
 	}
 	return truncated + strings.Repeat(" ", padding)
+}
+
+func centerLine(text string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	lineWidth := lipgloss.Width(text)
+	if lineWidth >= width {
+		return ansi.Truncate(text, width, "")
+	}
+	leftPad := (width - lineWidth) / 2
+	rightPad := width - lineWidth - leftPad
+	return strings.Repeat(" ", leftPad) + text + strings.Repeat(" ", rightPad)
 }
 
 func truncateRunes(text string, width int) string {

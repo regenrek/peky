@@ -17,12 +17,20 @@ func Render(m Model) string {
 		return m.viewConfirmKill()
 	case viewConfirmCloseProject:
 		return m.viewConfirmCloseProject()
+	case viewConfirmCloseAllProjects:
+		return m.viewConfirmCloseAllProjects()
 	case viewConfirmClosePane:
 		return m.viewConfirmClosePane()
+	case viewConfirmRestart:
+		return m.viewConfirmRestart()
 	case viewHelp:
 		return m.viewHelp()
 	case viewCommandPalette:
 		return m.viewCommandPalette()
+	case viewSettingsMenu:
+		return m.viewSettingsMenu()
+	case viewDebugMenu:
+		return m.viewDebugMenu()
 	case viewRenameSession, viewRenamePane:
 		return m.viewRename()
 	case viewProjectRootSetup:

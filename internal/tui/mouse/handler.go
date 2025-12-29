@@ -22,7 +22,7 @@ type DashboardCallbacks struct {
 	HitIsSelected         func(hit PaneHit) bool
 	ApplySelection        func(selection Selection) bool
 	SelectDashboardTab    func() bool
-	SelectProjectTab      func(project string) bool
+	SelectProjectTab      func(projectID string) bool
 	OpenProjectPicker     func()
 	SetTerminalFocus      func(focus bool)
 	TerminalFocus         func() bool
@@ -69,7 +69,7 @@ func (h *Handler) handleHeaderClick(msg tea.MouseMsg, cb DashboardCallbacks) (te
 		}
 		return nil, true
 	case HeaderProject:
-		if cb.SelectProjectTab != nil && cb.SelectProjectTab(hit.ProjectName) {
+		if cb.SelectProjectTab != nil && cb.SelectProjectTab(hit.ProjectID) {
 			return cb.SelectionRefreshCmd(), true
 		}
 		return nil, true

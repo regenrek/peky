@@ -47,7 +47,9 @@ func (d *Daemon) handleSnapshot(payload []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	sessions := manager.Snapshot(req.PreviewLines)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
+	defer cancel()
+	sessions := manager.Snapshot(ctx, req.PreviewLines)
 	resp := SnapshotResponse{Version: manager.Version(), Sessions: sessions}
 	return encodePayload(resp)
 }
@@ -62,6 +64,7 @@ func (d *Daemon) handleStartSession(payload []byte) ([]byte, error) {
 		return nil, err
 	}
 	d.broadcast(Event{Type: EventSessionChanged, Session: resp.Name})
+	d.queuePersistState()
 	return encodePayload(resp)
 }
 
@@ -82,6 +85,7 @@ func (d *Daemon) handleKillSession(payload []byte) ([]byte, error) {
 		return nil, err
 	}
 	d.broadcast(Event{Type: EventSessionChanged, Session: name})
+	d.queuePersistState()
 	return nil, nil
 }
 
@@ -106,6 +110,7 @@ func (d *Daemon) handleRenameSession(payload []byte) ([]byte, error) {
 		return nil, err
 	}
 	d.broadcast(Event{Type: EventSessionChanged, Session: newName})
+	d.queuePersistState()
 	return encodePayload(RenameSessionResponse{NewName: newName})
 }
 
@@ -133,6 +138,7 @@ func (d *Daemon) handleRenamePane(payload []byte) ([]byte, error) {
 	if err := manager.RenamePane(sessionName, paneIndex, newTitle); err != nil {
 		return nil, err
 	}
+	d.queuePersistState()
 	return nil, nil
 }
 
@@ -159,6 +165,7 @@ func (d *Daemon) handleSplitPane(payload []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	d.queuePersistState()
 	return encodePayload(SplitPaneResponse{NewIndex: newIndex})
 }
 
@@ -184,6 +191,7 @@ func (d *Daemon) handleClosePane(payload []byte) ([]byte, error) {
 	if err := manager.ClosePane(ctx, sessionName, paneIndex); err != nil {
 		return nil, err
 	}
+	d.queuePersistState()
 	return nil, nil
 }
 
@@ -211,6 +219,7 @@ func (d *Daemon) handleSwapPanes(payload []byte) ([]byte, error) {
 	if err := manager.SwapPanes(sessionName, paneA, paneB); err != nil {
 		return nil, err
 	}
+	d.queuePersistState()
 	return nil, nil
 }
 
@@ -280,39 +289,6 @@ func (d *Daemon) handleResizePane(payload []byte) ([]byte, error) {
 	return nil, nil
 }
 
-func (d *Daemon) handlePaneView(payload []byte) ([]byte, error) {
-	var req PaneViewRequest
-	if err := decodePayload(payload, &req); err != nil {
-		return nil, err
-	}
-	paneID, err := requirePaneID(req.PaneID)
-	if err != nil {
-		return nil, err
-	}
-	manager, err := d.requireManager()
-	if err != nil {
-		return nil, err
-	}
-	win := manager.Window(paneID)
-	if win == nil {
-		return nil, fmt.Errorf("sessiond: pane %q not found", paneID)
-	}
-	cols, rows := normalizeDimensions(req.Cols, req.Rows)
-	_ = win.Resize(cols, rows)
-	view := paneViewString(win, req)
-	resp := PaneViewResponse{
-		PaneID:      paneID,
-		Cols:        cols,
-		Rows:        rows,
-		Mode:        req.Mode,
-		ShowCursor:  req.ShowCursor,
-		View:        view,
-		HasMouse:    win.HasMouseMode(),
-		AllowMotion: win.AllowsMouseMotion(),
-	}
-	return encodePayload(resp)
-}
-
 func (d *Daemon) handleTerminalActionPayload(payload []byte) ([]byte, error) {
 	var req TerminalActionRequest
 	if err := decodePayload(payload, &req); err != nil {
@@ -353,15 +329,6 @@ func normalizeDimensions(cols, rows int) (int, int) {
 		rows = 1
 	}
 	return cols, rows
-}
-
-func paneViewString(win paneViewWindow, req PaneViewRequest) string {
-	switch req.Mode {
-	case PaneViewLipgloss:
-		return win.ViewLipgloss(req.ShowCursor)
-	default:
-		return win.ViewANSI()
-	}
 }
 
 func (d *Daemon) startSession(req StartSessionRequest) (StartSessionResponse, error) {

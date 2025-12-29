@@ -14,6 +14,7 @@ type Model struct {
 	Tab                      int
 	HeaderLine               string
 	EmptyStateMessage        string
+	SplashInfo               string
 	Projects                 []Project
 	DashboardColumns         []DashboardColumn
 	DashboardSelectedProject string
@@ -33,14 +34,16 @@ type Model struct {
 	LayoutPicker             list.Model
 	PaneSwapPicker           list.Model
 	CommandPalette           list.Model
+	SettingsMenu             list.Model
+	DebugMenu                list.Model
 	ConfirmKill              ConfirmKill
 	ConfirmCloseProject      ConfirmCloseProject
+	ConfirmCloseAllProjects  ConfirmCloseAllProjects
 	ConfirmClosePane         ConfirmClosePane
 	Rename                   Rename
 	ProjectRootInput         textinput.Model
 	Keys                     KeyHints
 	Toast                    string
-	ShowThumbnails           bool
 	PreviewCompact           bool
 	PreviewMode              string
 	DashboardPreviewLines    int
@@ -54,13 +57,11 @@ type Project struct {
 }
 
 type Session struct {
-	Name            string
-	Status          int
-	PaneCount       int
-	ActivePane      string
-	Panes           []Pane
-	ThumbnailLine   string
-	ThumbnailStatus int
+	Name       string
+	Status     int
+	PaneCount  int
+	ActivePane string
+	Panes      []Pane
 }
 
 type Pane struct {
@@ -79,12 +80,14 @@ type Pane struct {
 }
 
 type DashboardColumn struct {
+	ProjectID   string
 	ProjectName string
 	ProjectPath string
 	Panes       []DashboardPane
 }
 
 type DashboardPane struct {
+	ProjectID   string
 	ProjectName string
 	ProjectPath string
 	SessionName string
@@ -119,6 +122,11 @@ type ConfirmKill struct {
 
 type ConfirmCloseProject struct {
 	Project         string
+	RunningSessions int
+}
+
+type ConfirmCloseAllProjects struct {
+	ProjectCount    int
 	RunningSessions int
 }
 

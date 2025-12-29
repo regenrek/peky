@@ -1,13 +1,16 @@
 package terminal
 
 import (
+	"context"
 	"fmt"
 	"image/color"
+	"io"
 	"reflect"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/muesli/termenv"
 )
 
 // ViewANSI returns the VT's own ANSI-rendered screen.
@@ -18,19 +21,56 @@ func (w *Window) ViewANSI() string {
 		return ""
 	}
 
+	s, _ := w.ViewANSICtx(context.Background())
+	return s
+}
+
+// ViewANSICtx returns the ANSI render with cancellation support.
+func (w *Window) ViewANSICtx(ctx context.Context) (string, error) {
+	if w == nil {
+		return "", nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	w.cacheMu.Lock()
-	if !w.cacheDirty && w.cacheANSI != "" {
+	if !w.cacheDirty {
 		s := w.cacheANSI
 		w.cacheMu.Unlock()
-		return s
+		return s, nil
 	}
 	w.cacheMu.Unlock()
 
+	w.refreshANSICache()
+	cached, _ := w.ViewANSICached()
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	return cached, nil
+}
+
+// ViewANSICached returns the cached ANSI render and whether it is up to date.
+func (w *Window) ViewANSICached() (string, bool) {
+	if w == nil {
+		return "", false
+	}
+	w.cacheMu.Lock()
+	defer w.cacheMu.Unlock()
+	return w.cacheANSI, !w.cacheDirty
+}
+
+func (w *Window) refreshANSICache() {
+	if w == nil {
+		return
+	}
 	w.termMu.Lock()
 	term := w.term
 	if term == nil {
 		w.termMu.Unlock()
-		return ""
+		return
 	}
 	s := term.Render()
 	w.termMu.Unlock()
@@ -39,15 +79,28 @@ func (w *Window) ViewANSI() string {
 	w.cacheANSI = s
 	w.cacheDirty = false
 	w.cacheMu.Unlock()
-
-	return s
 }
 
 // ViewLipgloss renders the VT screen by walking cells and applying lipgloss styles.
 // This is useful when you need to composite the pane inside other lipgloss layouts.
-func (w *Window) ViewLipgloss(showCursor bool) string {
+func (w *Window) ViewLipgloss(showCursor bool, profile termenv.Profile) string {
 	if w == nil {
 		return ""
+	}
+	out, _ := w.ViewLipglossCtx(context.Background(), showCursor, profile)
+	return out
+}
+
+// ViewLipglossCtx renders the VT screen with cancellation support.
+func (w *Window) ViewLipglossCtx(ctx context.Context, showCursor bool, profile termenv.Profile) (string, error) {
+	if w == nil {
+		return "", nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
 	}
 	snapshot := w.snapshotViewState()
 
@@ -55,7 +108,7 @@ func (w *Window) ViewLipgloss(showCursor bool) string {
 	defer w.termMu.Unlock()
 	term := w.term
 	if term == nil {
-		return ""
+		return "", nil
 	}
 
 	state := buildViewRenderState(w, term, snapshot, showCursor)
@@ -65,9 +118,10 @@ func (w *Window) ViewLipgloss(showCursor bool) string {
 		CursorX:    state.cursorX,
 		CursorY:    state.cursorY,
 		Highlight:  state.highlight,
+		Profile:    profile,
 	}
 
-	return renderCellsLipgloss(w.cols, w.rows, cellAt, opts)
+	return renderCellsLipglossCtx(ctx, w.cols, w.rows, cellAt, opts)
 }
 
 //
@@ -79,6 +133,8 @@ type RenderOptions struct {
 	ShowCursor bool
 	CursorX    int
 	CursorY    int
+
+	Profile termenv.Profile
 
 	// Optional: override cursor/selection highlights.
 	Highlight func(x, y int) (cursor bool, selection bool)
@@ -211,11 +267,34 @@ func cellContent(cell *uv.Cell) (string, int) {
 
 // renderCellsLipgloss renders a cols x rows viewport using a cellAt accessor.
 func renderCellsLipgloss(cols, rows int, cellAt func(x, y int) *uv.Cell, opts RenderOptions) string {
+	out, _ := renderCellsLipglossCtx(context.Background(), cols, rows, cellAt, opts)
+	return out
+}
+
+// renderCellsLipglossCtx renders a cols x rows viewport using a cellAt accessor with cancellation support.
+func renderCellsLipglossCtx(ctx context.Context, cols, rows int, cellAt func(x, y int) *uv.Cell, opts RenderOptions) (string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	if cols <= 0 || rows <= 0 || cellAt == nil {
-		return ""
+		return "", nil
 	}
 	renderer := newLipglossRenderer(cols, rows, cellAt, opts)
-	return renderer.render()
+	var b strings.Builder
+	b.Grow(cols * rows)
+	for y := 0; y < rows; y++ {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		if y > 0 {
+			b.WriteByte('\n')
+		}
+		renderer.renderRow(y, &b)
+	}
+	return b.String(), nil
 }
 
 type renderKey struct {
@@ -231,29 +310,30 @@ type lipglossRenderer struct {
 	rows       int
 	cellAt     func(x, y int) *uv.Cell
 	opts       RenderOptions
+	renderer   *lipgloss.Renderer
 	styleCache map[renderKey]lipgloss.Style
 }
 
 func newLipglossRenderer(cols, rows int, cellAt func(x, y int) *uv.Cell, opts RenderOptions) *lipglossRenderer {
+	renderer := lipgloss.NewRenderer(io.Discard)
+	renderer.SetColorProfile(normalizeProfile(opts.Profile))
 	return &lipglossRenderer{
 		cols:       cols,
 		rows:       rows,
 		cellAt:     cellAt,
 		opts:       opts,
+		renderer:   renderer,
 		styleCache: make(map[renderKey]lipgloss.Style, 128),
 	}
 }
 
-func (r *lipglossRenderer) render() string {
-	var b strings.Builder
-	b.Grow(r.cols * r.rows)
-	for y := 0; y < r.rows; y++ {
-		if y > 0 {
-			b.WriteByte('\n')
-		}
-		r.renderRow(y, &b)
+func normalizeProfile(profile termenv.Profile) termenv.Profile {
+	switch profile {
+	case termenv.TrueColor, termenv.ANSI256, termenv.ANSI, termenv.Ascii:
+		return profile
+	default:
+		return termenv.TrueColor
 	}
-	return b.String()
 }
 
 func (r *lipglossRenderer) renderRow(y int, b *strings.Builder) {
@@ -307,7 +387,7 @@ func (r *lipglossRenderer) styleForKey(k renderKey) lipgloss.Style {
 	if st, ok := r.styleCache[k]; ok {
 		return st
 	}
-	st := lipgloss.NewStyle()
+	st := r.renderer.NewStyle()
 	if k.fg != "" {
 		st = st.Foreground(lipgloss.Color(k.fg))
 	}
@@ -379,6 +459,7 @@ func RenderEmulatorLipgloss(term interface {
 		CursorX:    cursor.X,
 		CursorY:    cursor.Y,
 		Highlight:  opts.Highlight,
+		Profile:    opts.Profile,
 	})
 }
 

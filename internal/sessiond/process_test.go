@@ -45,6 +45,22 @@ func TestEnsureDaemonRunningStartAndWait(t *testing.T) {
 	}
 }
 
+func TestEnsureDaemonRunningProbeTimeout(t *testing.T) {
+	startCalled := false
+	err := ensureDaemonRunning(context.Background(), "v1", daemonOps{
+		defaultSocketPath: func() (string, error) { return "sock", nil },
+		probe:             func(context.Context, string, string) error { return ErrDaemonProbeTimeout },
+		start:             func(string) error { startCalled = true; return nil },
+		wait:              func(context.Context, string, string) error { return nil },
+	})
+	if !errors.Is(err, ErrDaemonProbeTimeout) {
+		t.Fatalf("expected ErrDaemonProbeTimeout, got %v", err)
+	}
+	if startCalled {
+		t.Fatalf("expected start to be skipped on probe timeout")
+	}
+}
+
 func TestEnsureDaemonRunningStartError(t *testing.T) {
 	want := errors.New("start failed")
 	err := ensureDaemonRunning(context.Background(), "v1", daemonOps{
@@ -116,6 +132,9 @@ func TestStartDaemonProcessWithDeps(t *testing.T) {
 			startCalled = true
 			if cmd.Stdout == nil || cmd.Stderr == nil {
 				t.Fatalf("expected stdout/stderr to be set")
+			}
+			if cmd.SysProcAttr == nil {
+				t.Fatalf("expected SysProcAttr to be set")
 			}
 			found := false
 			for _, kv := range cmd.Env {

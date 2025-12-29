@@ -8,7 +8,7 @@
 
 **Terminal dashboard with YAML-based layouts, native live previews, and persistent native sessions.**
 
-![Peaky Panes Preview](assets/peakypanes-preview.jpg)
+![Peaky Panes Preview](assets/preview-peakypanes-v2.jpg)
 
 
 Define your layouts in YAML, share them with your team via git, and get consistent development environments everywhere. Sessions are owned by a **native daemon** so they keep running after the UI exits.
@@ -25,6 +25,7 @@ Define your layouts in YAML, share them with your team via git, and get consiste
 - 🧭 **Persistent native daemon** - Sessions keep running after the UI exits
 - 📜 **Scrollback + copy mode** - Navigate output and yank from native panes
 - ⌘ **Command palette** - Quick actions, including renaming sessions/panes
+- 🖱️ **Mouse support** - Click to select panes, double-click to focus a pane
 
 ## Quick Start
 
@@ -54,6 +55,12 @@ Using Go
 
 ```bash
 go install github.com/regenrek/peakypanes/cmd/peakypanes@latest
+```
+
+**Hot reload (from repo)**
+
+```bash
+scripts/dev-watch -- --layout dev-3
 ```
 
 ### Usage
@@ -190,6 +197,28 @@ peakypanes clone user/repo     # Clone from GitHub and start session
 peakypanes version             # Show version
 ```
 
+## Troubleshooting: daemon stuck / restart
+
+The daemon owns sessions and PTYs. If it becomes unresponsive, the only recovery
+today is a manual restart, which **will terminate all running sessions**.
+
+**Manual restart (macOS default path):**
+```bash
+kill "$(cat "$HOME/Library/Application Support/peakypanes/daemon.pid")"
+```
+
+**Manual restart (Linux default path):**
+```bash
+kill "$(cat "$HOME/.config/peakypanes/daemon.pid")"
+```
+
+You can also set `PEAKYPANES_DAEMON_PID` to control the pid file location.
+
+### Proposed UX (future)
+If the app detects a hung daemon, it should show a dialog like:
+**“Restart daemon? This will stop all running sessions and close their PTYs.”**
+This makes the data-loss tradeoff explicit before taking action.
+
 ## Built-in Layouts
 
 Core (general) layouts:
@@ -224,7 +253,6 @@ The dashboard shows:
 - Projects on top (tabs)
 - Sessions on the left (with pane counts and expandable panes)
 - Live pane preview on the right (native panes are fully interactive)
-- Lightweight session thumbnails at the bottom (last activity per session)
 - Quick reply bar (always visible) and target pane highlight for follow-ups
 
 Navigation (always visible):
@@ -268,9 +296,7 @@ dashboard:
   refresh_ms: 2000
   preview_lines: 12
   preview_compact: true
-  thumbnail_lines: 1
   idle_seconds: 20
-  show_thumbnails: true
   preview_mode: grid  # grid | layout
   attach_behavior: current  # current | detached
   keymap:

@@ -1,6 +1,10 @@
 package sessiond
 
-import "testing"
+import (
+	"bytes"
+	"reflect"
+	"testing"
+)
 
 type protocolSample struct {
 	Name  string
@@ -42,5 +46,20 @@ func TestDecodePayloadError(t *testing.T) {
 	var out protocolSample
 	if err := decodePayload([]byte("not-gob"), &out); err == nil {
 		t.Fatalf("expected decode error")
+	}
+}
+
+func TestEnvelopeRoundTrip(t *testing.T) {
+	env := Envelope{Kind: EnvelopeResponse, Op: OpHello, ID: 7, Payload: []byte("ok")}
+	var buf bytes.Buffer
+	if err := writeEnvelope(&buf, env); err != nil {
+		t.Fatalf("writeEnvelope: %v", err)
+	}
+	got, err := readEnvelope(&buf)
+	if err != nil {
+		t.Fatalf("readEnvelope: %v", err)
+	}
+	if !reflect.DeepEqual(got, env) {
+		t.Fatalf("unexpected envelope: %#v", got)
 	}
 }

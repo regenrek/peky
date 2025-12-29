@@ -32,13 +32,14 @@ func (m *Model) viewModel() views.Model {
 		Tab:                      int(m.tab),
 		HeaderLine:               headerLine(m.headerParts()),
 		EmptyStateMessage:        m.emptyStateMessage(),
+		SplashInfo:               m.splashInfo(),
 		Projects:                 toViewProjects(m.data.Projects),
 		DashboardColumns:         toViewColumns(filteredColumns),
 		DashboardSelectedProject: selectedProject,
 		SidebarProject:           toViewProjectPtr(sidebarProject),
 		SidebarSessions:          toViewSessions(sidebarSessions),
 		PreviewSession:           toViewSessionPtr(previewSession),
-		SelectionProject:         m.selection.Project,
+		SelectionProject:         m.selection.ProjectID,
 		SelectionSession:         m.selection.Session,
 		SelectionPane:            m.selection.Pane,
 		ExpandedSessions:         m.expandedSessions,
@@ -51,13 +52,19 @@ func (m *Model) viewModel() views.Model {
 		LayoutPicker:             m.layoutPicker,
 		PaneSwapPicker:           m.paneSwapPicker,
 		CommandPalette:           m.commandPalette,
+		SettingsMenu:             m.settingsMenu,
+		DebugMenu:                m.debugMenu,
 		ConfirmKill: views.ConfirmKill{
 			Session: m.confirmSession,
 			Project: m.confirmProject,
 		},
 		ConfirmCloseProject: views.ConfirmCloseProject{
 			Project:         m.confirmClose,
-			RunningSessions: runningSessionsForProject(m.data.Projects, m.confirmClose),
+			RunningSessions: runningSessionsForProject(m.data.Projects, m.confirmCloseID),
+		},
+		ConfirmCloseAllProjects: views.ConfirmCloseAllProjects{
+			ProjectCount:    len(m.data.Projects),
+			RunningSessions: runningSessionsCount(m.data.Projects),
 		},
 		ConfirmClosePane: views.ConfirmClosePane{
 			Title:   m.confirmPaneTitle,
@@ -74,7 +81,6 @@ func (m *Model) viewModel() views.Model {
 		ProjectRootInput:      m.projectRootInput,
 		Keys:                  buildKeyHints(m.keys),
 		Toast:                 m.toastText(),
-		ShowThumbnails:        m.settings.ShowThumbnails,
 		PreviewCompact:        m.settings.PreviewCompact,
 		PreviewMode:           m.settings.PreviewMode,
 		DashboardPreviewLines: dashboardPreviewLines(m.settings),
@@ -96,15 +102,15 @@ func (m *Model) paneViewProvider() func(id string, width, height int, showCursor
 		if showCursor {
 			mode = sessiond.PaneViewLipgloss
 		}
-		return m.paneView(id, width, height, mode, showCursor)
+		return m.paneView(id, width, height, mode, showCursor, m.paneViewProfile)
 	}
 }
 
-func runningSessionsForProject(projects []ProjectGroup, name string) int {
-	if strings.TrimSpace(name) == "" {
+func runningSessionsForProject(projects []ProjectGroup, projectID string) int {
+	if strings.TrimSpace(projectID) == "" {
 		return 0
 	}
-	project := findProject(projects, name)
+	project := findProjectByID(projects, projectID)
 	if project == nil {
 		return 0
 	}
@@ -112,6 +118,18 @@ func runningSessionsForProject(projects []ProjectGroup, name string) int {
 	for _, s := range project.Sessions {
 		if s.Status != StatusStopped {
 			running++
+		}
+	}
+	return running
+}
+
+func runningSessionsCount(projects []ProjectGroup) int {
+	running := 0
+	for _, project := range projects {
+		for _, session := range project.Sessions {
+			if session.Status != StatusStopped {
+				running++
+			}
 		}
 	}
 	return running
@@ -189,13 +207,11 @@ func toViewSession(session SessionItem) views.Session {
 		activePane = activePaneIndex(session.Panes)
 	}
 	return views.Session{
-		Name:            session.Name,
-		Status:          int(session.Status),
-		PaneCount:       session.PaneCount,
-		ActivePane:      activePane,
-		Panes:           toViewPanes(session.Panes),
-		ThumbnailLine:   session.Thumbnail.Line,
-		ThumbnailStatus: int(session.Thumbnail.Status),
+		Name:       session.Name,
+		Status:     int(session.Status),
+		PaneCount:  session.PaneCount,
+		ActivePane: activePane,
+		Panes:      toViewPanes(session.Panes),
 	}
 }
 
@@ -228,12 +244,14 @@ func toViewColumns(columns []DashboardProjectColumn) []views.DashboardColumn {
 	out := make([]views.DashboardColumn, 0, len(columns))
 	for _, column := range columns {
 		viewColumn := views.DashboardColumn{
+			ProjectID:   column.ProjectID,
 			ProjectName: column.ProjectName,
 			ProjectPath: displayPath(column.ProjectPath),
 			Panes:       make([]views.DashboardPane, 0, len(column.Panes)),
 		}
 		for _, pane := range column.Panes {
 			viewColumn.Panes = append(viewColumn.Panes, views.DashboardPane{
+				ProjectID:   pane.ProjectID,
 				ProjectName: pane.ProjectName,
 				ProjectPath: displayPath(pane.ProjectPath),
 				SessionName: pane.SessionName,

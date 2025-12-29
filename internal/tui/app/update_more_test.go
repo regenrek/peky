@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/muesli/termenv"
 
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/sessiond"
@@ -48,8 +49,15 @@ func TestUpdateHandlers(t *testing.T) {
 		t.Fatalf("expected dashboard data applied")
 	}
 
-	view := sessiond.PaneViewResponse{PaneID: "p1", Cols: 1, Rows: 1, View: "view", AllowMotion: true}
-	m.handlePaneViews(paneViewsMsg{Views: []sessiond.PaneViewResponse{view}})
+	view := sessiond.PaneViewResponse{
+		PaneID:       "p1",
+		Cols:         1,
+		Rows:         1,
+		View:         "view",
+		AllowMotion:  true,
+		ColorProfile: termenv.TrueColor,
+	}
+	_ = m.handlePaneViews(paneViewsMsg{Views: []sessiond.PaneViewResponse{view}})
 	key := paneViewKeyFrom(view)
 	if m.paneViews[key] != "view" {
 		t.Fatalf("expected pane view stored")
@@ -61,14 +69,69 @@ func TestUpdateHandlers(t *testing.T) {
 	}
 }
 
+func TestPaneViewQueueing(t *testing.T) {
+	m := newTestModelLite()
+	m.client = &sessiond.Client{}
+	m.paneViewInFlight = true
+	if cmd := m.refreshPaneViewsCmd(); cmd != nil {
+		t.Fatalf("expected nil cmd while in flight")
+	}
+	if !m.paneViewQueued {
+		t.Fatalf("expected queued refresh")
+	}
+
+	m.paneViewQueued = false
+	m.paneViewQueuedIDs = nil
+	m.paneViewInFlight = true
+	if cmd := m.refreshPaneViewFor("p1"); cmd != nil {
+		t.Fatalf("expected nil cmd while in flight")
+	}
+	if len(m.paneViewQueuedIDs) == 0 {
+		t.Fatalf("expected queued pane id")
+	}
+
+	m.paneViewInFlight = true
+	cmd := m.handlePaneViews(paneViewsMsg{Views: []sessiond.PaneViewResponse{}})
+	if cmd == nil {
+		t.Fatalf("expected follow-up pane view cmd")
+	}
+	if !m.paneViewInFlight {
+		t.Fatalf("expected in flight set for queued refresh")
+	}
+}
+
+func TestRefreshQueueing(t *testing.T) {
+	m := newTestModelLite()
+	m.refreshInFlight = 1
+	if cmd := m.requestRefreshCmd(); cmd != nil {
+		t.Fatalf("expected nil cmd while refresh in flight")
+	}
+	if !m.refreshQueued {
+		t.Fatalf("expected refreshQueued set")
+	}
+
+	snapshot := dashboardSnapshotMsg{Result: dashboardSnapshotResult{
+		Data:     DashboardData{Projects: sampleProjects()},
+		Settings: m.settings,
+		Version:  m.selectionVersion,
+	}}
+	m.handleDashboardSnapshot(snapshot)
+	if m.refreshQueued {
+		t.Fatalf("expected refreshQueued cleared")
+	}
+	if m.refreshInFlight == 0 {
+		t.Fatalf("expected queued refresh started")
+	}
+}
+
 func TestHandleDashboardSnapshotRefreshSeq(t *testing.T) {
 	m := newTestModelLite()
-	m.data = DashboardData{Projects: []ProjectGroup{{Name: "Keep"}}}
+	m.data = DashboardData{Projects: []ProjectGroup{{ID: projectKey("", "Keep"), Name: "Keep"}}}
 	m.refreshSeq = 5
 	m.lastAppliedSeq = 4
 
 	stale := dashboardSnapshotMsg{Result: dashboardSnapshotResult{
-		Data:       DashboardData{Projects: []ProjectGroup{{Name: "Stale"}}},
+		Data:       DashboardData{Projects: []ProjectGroup{{ID: projectKey("", "Stale"), Name: "Stale"}}},
 		Settings:   m.settings,
 		Version:    m.selectionVersion,
 		RefreshSeq: 4,
@@ -79,7 +142,7 @@ func TestHandleDashboardSnapshotRefreshSeq(t *testing.T) {
 	}
 
 	fresh := dashboardSnapshotMsg{Result: dashboardSnapshotResult{
-		Data:       DashboardData{Projects: []ProjectGroup{{Name: "Fresh"}}},
+		Data:       DashboardData{Projects: []ProjectGroup{{ID: projectKey("", "Fresh"), Name: "Fresh"}}},
 		Settings:   m.settings,
 		Version:    m.selectionVersion,
 		RefreshSeq: 5,
@@ -134,6 +197,8 @@ func TestHandlePickerUpdateMoreStates(t *testing.T) {
 		StateLayoutPicker,
 		StatePaneSwapPicker,
 		StateCommandPalette,
+		StateSettingsMenu,
+		StateDebugMenu,
 	}
 	for _, state := range states {
 		m.state = state

@@ -32,8 +32,11 @@ func TestLayoutChoice(t *testing.T) {
 }
 
 func TestCommandItem(t *testing.T) {
-	item := CommandItem{Label: "Cmd", Desc: "desc"}
+	item := CommandItem{Label: "Cmd", Desc: "desc", Shortcut: "ctrl+n"}
 	if !strings.Contains(item.FilterValue(), "cmd") {
 		t.Fatalf("CommandItem.FilterValue() = %q", item.FilterValue())
+	}
+	if !strings.Contains(item.FilterValue(), "ctrl+n") {
+		t.Fatalf("CommandItem.FilterValue() missing shortcut: %q", item.FilterValue())
 	}
 }

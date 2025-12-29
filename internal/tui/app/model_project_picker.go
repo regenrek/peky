@@ -124,6 +124,7 @@ func (m *Model) updateProjectPicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if projectName == "" {
 				projectName = item.Name
 			}
+			projectID := projectKey(item.Path, projectName)
 			sessionName := m.projectSessionNameForPath(item.Path)
 			if _, err := m.unhideProjectInConfig(layout.HiddenProjectConfig{Name: projectName, Path: item.Path}); err != nil {
 				m.setToast("Unhide failed: "+err.Error(), toastError)
@@ -131,7 +132,7 @@ func (m *Model) updateProjectPicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.projectPicker.ResetFilter()
 			m.setState(StateDashboard)
 			m.rememberSelection(m.selection)
-			m.selection.Project = projectName
+			m.selection.ProjectID = projectID
 			m.selection.Session = sessionName
 			m.selection.Pane = ""
 			m.selectionVersion++

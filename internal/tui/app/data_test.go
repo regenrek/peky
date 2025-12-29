@@ -26,14 +26,11 @@ func TestDefaultDashboardConfigDefaults(t *testing.T) {
 	if cfg.PreviewLines != 12 {
 		t.Fatalf("PreviewLines = %d", cfg.PreviewLines)
 	}
-	if cfg.ThumbnailLines != 1 {
-		t.Fatalf("ThumbnailLines = %d", cfg.ThumbnailLines)
-	}
 	if cfg.IdleThreshold != 20*time.Second {
 		t.Fatalf("IdleThreshold = %v", cfg.IdleThreshold)
 	}
-	if !cfg.ShowThumbnails || !cfg.PreviewCompact {
-		t.Fatalf("ShowThumbnails=%v PreviewCompact=%v", cfg.ShowThumbnails, cfg.PreviewCompact)
+	if !cfg.PreviewCompact {
+		t.Fatalf("PreviewCompact=%v", cfg.PreviewCompact)
 	}
 	if cfg.PreviewMode != "grid" {
 		t.Fatalf("PreviewMode = %q", cfg.PreviewMode)
@@ -47,14 +44,11 @@ func TestDefaultDashboardConfigDefaults(t *testing.T) {
 }
 
 func TestDefaultDashboardConfigOverrides(t *testing.T) {
-	show := false
 	compact := false
 	cfg, err := defaultDashboardConfig(layout.DashboardConfig{
 		RefreshMS:      500,
 		PreviewLines:   5,
-		ThumbnailLines: 2,
 		IdleSeconds:    3,
-		ShowThumbnails: &show,
 		PreviewCompact: &compact,
 		PreviewMode:    "layout",
 		AttachBehavior: "detached",
@@ -66,14 +60,14 @@ func TestDefaultDashboardConfigOverrides(t *testing.T) {
 	if cfg.RefreshInterval != 500*time.Millisecond {
 		t.Fatalf("RefreshInterval = %v", cfg.RefreshInterval)
 	}
-	if cfg.PreviewLines != 5 || cfg.ThumbnailLines != 2 {
-		t.Fatalf("PreviewLines=%d ThumbnailLines=%d", cfg.PreviewLines, cfg.ThumbnailLines)
+	if cfg.PreviewLines != 5 {
+		t.Fatalf("PreviewLines=%d", cfg.PreviewLines)
 	}
 	if cfg.IdleThreshold != 3*time.Second {
 		t.Fatalf("IdleThreshold = %v", cfg.IdleThreshold)
 	}
-	if cfg.ShowThumbnails || cfg.PreviewCompact {
-		t.Fatalf("ShowThumbnails=%v PreviewCompact=%v", cfg.ShowThumbnails, cfg.PreviewCompact)
+	if cfg.PreviewCompact {
+		t.Fatalf("PreviewCompact=%v", cfg.PreviewCompact)
 	}
 	if cfg.PreviewMode != "layout" {
 		t.Fatalf("PreviewMode = %q", cfg.PreviewMode)
@@ -205,23 +199,25 @@ func TestProjectKeyAndGroupName(t *testing.T) {
 func TestResolveSelection(t *testing.T) {
 	groups := []ProjectGroup{
 		{
+			ID:   projectKey("", "A"),
 			Name: "A",
 			Sessions: []SessionItem{
 				{Name: "s1", ActivePane: "0", Panes: []PaneItem{{Index: "0"}, {Index: "1"}}},
 			},
 		},
 		{
+			ID:   projectKey("", "B"),
 			Name: "B",
 			Sessions: []SessionItem{
 				{Name: "s2", ActivePane: "2", Panes: []PaneItem{{Index: "2"}}},
 			},
 		},
 	}
-	resolved := resolveSelection(groups, selectionState{Project: "B", Session: "s2", Pane: "2"})
-	if resolved.Project != "B" || resolved.Session != "s2" || resolved.Pane != "2" {
+	resolved := resolveSelection(groups, selectionState{ProjectID: projectKey("", "B"), Session: "s2", Pane: "2"})
+	if resolved.ProjectID != projectKey("", "B") || resolved.Session != "s2" || resolved.Pane != "2" {
 		t.Fatalf("resolveSelection() = %#v", resolved)
 	}
-	resolved = resolveSelection(groups, selectionState{Project: "B", Session: "s2", Pane: "missing"})
+	resolved = resolveSelection(groups, selectionState{ProjectID: projectKey("", "B"), Session: "s2", Pane: "missing"})
 	if resolved.Pane != "missing" {
 		t.Fatalf("resolveSelection() pane passthrough = %#v", resolved)
 	}
@@ -230,6 +226,7 @@ func TestResolveSelection(t *testing.T) {
 func TestResolveDashboardSelection(t *testing.T) {
 	groups := []ProjectGroup{
 		{
+			ID:   projectKey("", "A"),
 			Name: "A",
 			Sessions: []SessionItem{
 				{
@@ -240,6 +237,7 @@ func TestResolveDashboardSelection(t *testing.T) {
 			},
 		},
 		{
+			ID:   projectKey("", "B"),
 			Name: "B",
 			Sessions: []SessionItem{
 				{
@@ -252,7 +250,7 @@ func TestResolveDashboardSelection(t *testing.T) {
 	}
 	desired := selectionState{Session: "s2", Pane: "2"}
 	resolved := resolveDashboardSelection(groups, desired)
-	if resolved.Project != "B" || resolved.Session != "s2" || resolved.Pane != "2" {
+	if resolved.ProjectID != projectKey("", "B") || resolved.Session != "s2" || resolved.Pane != "2" {
 		t.Fatalf("resolveDashboardSelection() = %#v", resolved)
 	}
 }

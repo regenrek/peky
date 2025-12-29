@@ -170,6 +170,8 @@ func openTUIInputWith(
 }
 
 func fatal(format string, args ...interface{}) {
-	fmt.Fprintf(stderr, "peakypanes: "+format+"\n", args...)
+	if _, err := fmt.Fprintf(stderr, "peakypanes: "+format+"\n", args...); err != nil {
+		exitFn(1)
+	}
 	exitFn(1)
 }
