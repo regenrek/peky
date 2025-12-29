@@ -37,14 +37,6 @@ func (k headerPartKind) clickable() bool {
 func (m Model) headerParts() []headerPart {
 	parts := make([]headerPart, 0, len(m.data.Projects)+3)
 
-	logo := "Peaky Panes"
-	parts = append(parts, headerPart{
-		Kind:     headerPartLogo,
-		Label:    logo,
-		Rendered: logo,
-		Width:    lipgloss.Width(logo),
-	})
-
 	dashboardLabel := "Dashboard"
 	dashboardStyle := theme.TabInactive
 	if m.tab == TabDashboard {
