@@ -16,7 +16,7 @@ func TestBuildDashboardDataOrderStable(t *testing.T) {
 			{Name: "Alpha", Session: "alpha-1", Path: "/alpha"},
 		},
 	}
-	settings := DashboardConfig{ShowThumbnails: false, PreviewLines: 1}
+	settings := DashboardConfig{PreviewLines: 1}
 	sessionsA := []native.SessionSnapshot{
 		{Name: "alpha-1", Path: "/alpha", Panes: []native.PaneSnapshot{{ID: "p1", Index: "1", Active: true}}},
 		{Name: "beta-1", Path: "/beta", Panes: []native.PaneSnapshot{{ID: "p2", Index: "1", Active: true}}},
@@ -86,7 +86,7 @@ func TestBuildDashboardDataCoalescesRelativeConfigPath(t *testing.T) {
 			{Name: "Proj", Session: "proj-1", Path: "proj"},
 		},
 	}
-	settings := DashboardConfig{ShowThumbnails: false, PreviewLines: 1}
+	settings := DashboardConfig{PreviewLines: 1}
 	sessions := []native.SessionSnapshot{
 		{Name: "proj-1", Path: absPath, Panes: []native.PaneSnapshot{{ID: "p1", Index: "1", Active: true}}},
 	}

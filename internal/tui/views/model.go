@@ -42,7 +42,6 @@ type Model struct {
 	ProjectRootInput         textinput.Model
 	Keys                     KeyHints
 	Toast                    string
-	ShowThumbnails           bool
 	PreviewCompact           bool
 	PreviewMode              string
 	DashboardPreviewLines    int
@@ -56,13 +55,11 @@ type Project struct {
 }
 
 type Session struct {
-	Name            string
-	Status          int
-	PaneCount       int
-	ActivePane      string
-	Panes           []Pane
-	ThumbnailLine   string
-	ThumbnailStatus int
+	Name       string
+	Status     int
+	PaneCount  int
+	ActivePane string
+	Panes      []Pane
 }
 
 type Pane struct {

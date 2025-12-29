@@ -18,10 +18,8 @@ func TestDashboardGroupIndexMerge(t *testing.T) {
 		}},
 	}
 	settings := DashboardConfig{
-		ShowThumbnails: true,
-		PreviewLines:   12,
-		ThumbnailLines: 1,
-		IdleThreshold:  time.Second,
+		PreviewLines:  12,
+		IdleThreshold: time.Second,
 	}
 	idx := newDashboardGroupIndex(-5)
 	idx.addConfigProjects(cfg, settings)
@@ -47,45 +45,6 @@ func TestDashboardGroupIndexMerge(t *testing.T) {
 	}
 }
 
-func TestApplySessionThumbnails(t *testing.T) {
-	groups := []ProjectGroup{{
-		Name: "Alpha",
-		Sessions: []SessionItem{{
-			Name:   "alpha-1",
-			Status: StatusRunning,
-			Panes: []PaneItem{{
-				Index:  "1",
-				Active: true,
-				Status: PaneStatusRunning,
-				Preview: []string{
-					"line1",
-				},
-			}},
-		}},
-	}}
-	settings := DashboardConfig{ShowThumbnails: true, ThumbnailLines: 1}
-	applySessionThumbnails(groups, settings)
-	if groups[0].Sessions[0].Thumbnail.Line == "" {
-		t.Fatalf("expected thumbnail line")
-	}
-
-	settings.ShowThumbnails = false
-	groups[0].Sessions[0].Thumbnail = PaneSummary{}
-	applySessionThumbnails(groups, settings)
-	if groups[0].Sessions[0].Thumbnail.Line != "" {
-		t.Fatalf("expected no thumbnail when disabled")
-	}
-}
-
-func TestSessionThumbnailFromDataEmpty(t *testing.T) {
-	if got := sessionThumbnailFromData(nil, DashboardConfig{}); got.Line != "" {
-		t.Fatalf("expected empty thumbnail")
-	}
-	if got := sessionThumbnailFromData(&SessionItem{}, DashboardConfig{}); got.Line != "" {
-		t.Fatalf("expected empty thumbnail for no panes")
-	}
-}
-
 func TestBuildDashboardDataOrdersProjects(t *testing.T) {
 	cfg := &layout.Config{
 		Projects: []layout.ProjectConfig{
@@ -93,7 +52,7 @@ func TestBuildDashboardDataOrdersProjects(t *testing.T) {
 			{Name: "Aidex", Session: "aidex-1", Path: "/aidex"},
 		},
 	}
-	settings := DashboardConfig{PreviewLines: 2, ThumbnailLines: 1}
+	settings := DashboardConfig{PreviewLines: 2}
 	sessions := []native.SessionSnapshot{
 		{Name: "beta-1", Path: "/beta", Panes: []native.PaneSnapshot{{ID: "p1", Index: "0", Active: true, Width: 10, Height: 5}}},
 		{Name: "aidex-1", Path: "/aidex", Panes: []native.PaneSnapshot{{ID: "p2", Index: "0", Active: true, Width: 10, Height: 5}}},

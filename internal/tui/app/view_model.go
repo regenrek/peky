@@ -79,7 +79,6 @@ func (m *Model) viewModel() views.Model {
 		ProjectRootInput:      m.projectRootInput,
 		Keys:                  buildKeyHints(m.keys),
 		Toast:                 m.toastText(),
-		ShowThumbnails:        m.settings.ShowThumbnails,
 		PreviewCompact:        m.settings.PreviewCompact,
 		PreviewMode:           m.settings.PreviewMode,
 		DashboardPreviewLines: dashboardPreviewLines(m.settings),
@@ -206,13 +205,11 @@ func toViewSession(session SessionItem) views.Session {
 		activePane = activePaneIndex(session.Panes)
 	}
 	return views.Session{
-		Name:            session.Name,
-		Status:          int(session.Status),
-		PaneCount:       session.PaneCount,
-		ActivePane:      activePane,
-		Panes:           toViewPanes(session.Panes),
-		ThumbnailLine:   session.Thumbnail.Line,
-		ThumbnailStatus: int(session.Thumbnail.Status),
+		Name:       session.Name,
+		Status:     int(session.Status),
+		PaneCount:  session.PaneCount,
+		ActivePane: activePane,
+		Panes:      toViewPanes(session.Panes),
 	}
 }
 

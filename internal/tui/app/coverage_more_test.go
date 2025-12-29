@@ -210,7 +210,7 @@ func TestPaneSwapChoiceMethods(t *testing.T) {
 
 func TestViewModelHelpers(t *testing.T) {
 	pane := PaneItem{ID: "id", Index: "1", Title: "bash", Command: "bash", Active: true, Width: 10, Height: 5}
-	session := SessionItem{Name: "sess", Status: StatusRunning, PaneCount: 1, ActivePane: "1", Panes: []PaneItem{pane}, Thumbnail: PaneSummary{Line: "sum", Status: PaneStatusRunning}}
+	session := SessionItem{Name: "sess", Status: StatusRunning, PaneCount: 1, ActivePane: "1", Panes: []PaneItem{pane}}
 	project := ProjectGroup{ID: projectKey("/tmp/proj", "proj"), Name: "proj", Path: "/tmp/proj", Sessions: []SessionItem{session}}
 
 	view := toViewProject(project)

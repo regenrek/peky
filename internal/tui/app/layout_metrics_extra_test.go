@@ -15,7 +15,6 @@ func TestLayoutMetricsRects(t *testing.T) {
 
 	m.width = 120
 	m.height = 40
-	m.settings.ShowThumbnails = true
 	body, ok := m.dashboardBodyRect()
 	if !ok || body.W <= 0 || body.H <= 0 {
 		t.Fatalf("expected body rect, got %#v ok=%v", body, ok)

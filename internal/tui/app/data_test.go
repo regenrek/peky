@@ -26,14 +26,11 @@ func TestDefaultDashboardConfigDefaults(t *testing.T) {
 	if cfg.PreviewLines != 12 {
 		t.Fatalf("PreviewLines = %d", cfg.PreviewLines)
 	}
-	if cfg.ThumbnailLines != 1 {
-		t.Fatalf("ThumbnailLines = %d", cfg.ThumbnailLines)
-	}
 	if cfg.IdleThreshold != 20*time.Second {
 		t.Fatalf("IdleThreshold = %v", cfg.IdleThreshold)
 	}
-	if !cfg.ShowThumbnails || !cfg.PreviewCompact {
-		t.Fatalf("ShowThumbnails=%v PreviewCompact=%v", cfg.ShowThumbnails, cfg.PreviewCompact)
+	if !cfg.PreviewCompact {
+		t.Fatalf("PreviewCompact=%v", cfg.PreviewCompact)
 	}
 	if cfg.PreviewMode != "grid" {
 		t.Fatalf("PreviewMode = %q", cfg.PreviewMode)
@@ -47,14 +44,11 @@ func TestDefaultDashboardConfigDefaults(t *testing.T) {
 }
 
 func TestDefaultDashboardConfigOverrides(t *testing.T) {
-	show := false
 	compact := false
 	cfg, err := defaultDashboardConfig(layout.DashboardConfig{
 		RefreshMS:      500,
 		PreviewLines:   5,
-		ThumbnailLines: 2,
 		IdleSeconds:    3,
-		ShowThumbnails: &show,
 		PreviewCompact: &compact,
 		PreviewMode:    "layout",
 		AttachBehavior: "detached",
@@ -66,14 +60,14 @@ func TestDefaultDashboardConfigOverrides(t *testing.T) {
 	if cfg.RefreshInterval != 500*time.Millisecond {
 		t.Fatalf("RefreshInterval = %v", cfg.RefreshInterval)
 	}
-	if cfg.PreviewLines != 5 || cfg.ThumbnailLines != 2 {
-		t.Fatalf("PreviewLines=%d ThumbnailLines=%d", cfg.PreviewLines, cfg.ThumbnailLines)
+	if cfg.PreviewLines != 5 {
+		t.Fatalf("PreviewLines=%d", cfg.PreviewLines)
 	}
 	if cfg.IdleThreshold != 3*time.Second {
 		t.Fatalf("IdleThreshold = %v", cfg.IdleThreshold)
 	}
-	if cfg.ShowThumbnails || cfg.PreviewCompact {
-		t.Fatalf("ShowThumbnails=%v PreviewCompact=%v", cfg.ShowThumbnails, cfg.PreviewCompact)
+	if cfg.PreviewCompact {
+		t.Fatalf("PreviewCompact=%v", cfg.PreviewCompact)
 	}
 	if cfg.PreviewMode != "layout" {
 		t.Fatalf("PreviewMode = %q", cfg.PreviewMode)

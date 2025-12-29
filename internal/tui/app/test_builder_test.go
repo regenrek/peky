@@ -19,10 +19,8 @@ func newTestModelLite() *Model {
 		paneViewProfile:    termenv.TrueColor,
 		paneInputDisabled:  make(map[string]struct{}),
 		settings: DashboardConfig{
-			PreviewMode:    "grid",
-			PreviewLines:   12,
-			ThumbnailLines: 1,
-			ShowThumbnails: true,
+			PreviewMode:  "grid",
+			PreviewLines: 12,
 		},
 		width:  120,
 		height: 40,

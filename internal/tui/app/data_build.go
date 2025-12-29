@@ -24,7 +24,6 @@ func buildDashboardData(input dashboardSnapshotInput) dashboardSnapshotResult {
 	groups := index.groups
 	sortProjectGroups(groups, input.Config)
 	resolved := resolveSelectionForTab(input.Tab, groups, input.Selection)
-	applySessionThumbnails(groups, input.Settings)
 	resolved = resolveProjectPaneSelection(input.Tab, groups, resolved)
 
 	result.Data = DashboardData{Projects: groups, RefreshedAt: time.Now()}
@@ -163,21 +162,6 @@ func resolveSelectionForTab(tab DashboardTab, groups []ProjectGroup, desired sel
 		return resolveDashboardSelection(groups, desired)
 	}
 	return resolveSelection(groups, desired)
-}
-
-func applySessionThumbnails(groups []ProjectGroup, settings DashboardConfig) {
-	if !settings.ShowThumbnails {
-		return
-	}
-	for gi := range groups {
-		for si := range groups[gi].Sessions {
-			session := &groups[gi].Sessions[si]
-			if session.Status == StatusStopped {
-				continue
-			}
-			session.Thumbnail = sessionThumbnailFromData(session, settings)
-		}
-	}
 }
 
 func resolveProjectPaneSelection(tab DashboardTab, groups []ProjectGroup, resolved selectionState) selectionState {
@@ -325,24 +309,4 @@ func dashboardPreviewLines(settings DashboardConfig) int {
 		lines = minDashboardPreview
 	}
 	return lines
-}
-
-func sessionThumbnailFromData(session *SessionItem, settings DashboardConfig) PaneSummary {
-	if session == nil {
-		return PaneSummary{}
-	}
-	if len(session.Panes) == 0 {
-		return PaneSummary{}
-	}
-	var active *PaneItem
-	for i := range session.Panes {
-		if session.Panes[i].Active {
-			active = &session.Panes[i]
-			break
-		}
-	}
-	if active == nil {
-		active = &session.Panes[0]
-	}
-	return PaneSummary{Line: paneSummaryLine(*active, settings.ThumbnailLines), Status: active.Status}
 }

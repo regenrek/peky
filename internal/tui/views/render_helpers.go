@@ -85,32 +85,6 @@ func compactPreviewLines(lines []string) []string {
 	return compact
 }
 
-func collectRunningSessions(projects []Project) []Session {
-	var sessions []Session
-	for _, p := range projects {
-		for _, s := range p.Sessions {
-			if s.Status == sessionStopped {
-				continue
-			}
-			sessions = append(sessions, s)
-		}
-	}
-	return sessions
-}
-
-func sessionBadgeStatus(session Session) int {
-	if session.ThumbnailLine != "" {
-		return session.ThumbnailStatus
-	}
-	if session.Status == sessionRunning || session.Status == sessionCurrent {
-		return paneStatusRunning
-	}
-	if session.Status == sessionStopped {
-		return paneStatusIdle
-	}
-	return session.ThumbnailStatus
-}
-
 func truncateLine(text string, width int) string {
 	if width <= 0 {
 		return ""

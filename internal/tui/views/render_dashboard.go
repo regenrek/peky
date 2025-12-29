@@ -27,12 +27,6 @@ func (m Model) viewDashboardContent() string {
 		return "Terminal too small"
 	}
 
-	showThumbs := m.ShowThumbnails
-	thumbHeight := 0
-	if showThumbs {
-		thumbHeight = 3
-	}
-
 	header := m.viewHeader(contentWidth)
 	footer := m.viewFooter(contentWidth)
 	quickReply := m.viewQuickReply(contentWidth)
@@ -42,12 +36,8 @@ func (m Model) viewDashboardContent() string {
 	footerHeight := lipgloss.Height(footer)
 	headerGap := 1
 	extraLines := headerHeight + headerGap + footerHeight + quickReplyHeight
-	if showThumbs {
-		extraLines += thumbHeight
-	}
 	bodyHeight := contentHeight - extraLines
 	if bodyHeight < 4 {
-		showThumbs = false
 		headerGap = 0
 		extraLines = headerHeight + headerGap + footerHeight + quickReplyHeight
 		bodyHeight = contentHeight - extraLines
@@ -59,9 +49,6 @@ func (m Model) viewDashboardContent() string {
 		sections = append(sections, fitLine("", contentWidth))
 	}
 	sections = append(sections, body, quickReply)
-	if showThumbs {
-		sections = append(sections, m.viewThumbnails(contentWidth))
-	}
 	sections = append(sections, footer)
 
 	return lipgloss.JoinVertical(lipgloss.Top, sections...)
@@ -355,44 +342,6 @@ func (m Model) viewPreview(width, height int) string {
 	lines = append(lines, grid)
 
 	return padLines(strings.Join(lines, "\n"), width, height)
-}
-
-func (m Model) viewThumbnails(width int) string {
-	sessions := collectRunningSessions(m.Projects)
-	if len(sessions) == 0 {
-		return padLines("No running sessions", width, 3)
-	}
-
-	boxes := []string{}
-	boxWidth := 16
-	maxBoxes := width / (boxWidth + 1)
-	if maxBoxes < 1 {
-		maxBoxes = 1
-	}
-	if len(sessions) > maxBoxes {
-		sessions = sessions[:maxBoxes]
-	}
-
-	boxStyle := lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder()).
-		BorderForeground(theme.Border).
-		Width(boxWidth).
-		Height(2).
-		Padding(0, 1)
-
-	for _, s := range sessions {
-		badge := renderBadge(sessionBadgeStatus(s))
-		name := fitLine(fmt.Sprintf("%s %s", badge, s.Name), boxWidth-2)
-		line := s.ThumbnailLine
-		if line == "" {
-			line = "idle"
-		}
-		content := fmt.Sprintf("%s\n%s", name, truncateLine(line, boxWidth-2))
-		boxes = append(boxes, boxStyle.Render(content))
-	}
-
-	row := lipgloss.JoinHorizontal(lipgloss.Top, boxes...)
-	return padLines(row, width, 3)
 }
 
 func (m Model) viewFooter(width int) string {

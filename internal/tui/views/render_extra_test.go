@@ -16,7 +16,6 @@ func TestViewDashboardContentRenders(t *testing.T) {
 		Height:                   24,
 		HeaderLine:               "Peaky Panes",
 		EmptyStateMessage:        "empty",
-		ShowThumbnails:           true,
 		QuickReplyInput:          input,
 		DashboardColumns:         []DashboardColumn{{ProjectID: "proj", ProjectName: "Proj", ProjectPath: "", Panes: []DashboardPane{{ProjectID: "proj", ProjectName: "Proj", SessionName: "sess", Pane: Pane{Index: "0"}}}}},
 		DashboardSelectedProject: "proj",
@@ -136,20 +135,5 @@ func TestViewStates(t *testing.T) {
 		if strings.TrimSpace(out) == "" {
 			t.Fatalf("Render(view=%d) empty", view)
 		}
-	}
-}
-
-func TestSessionBadgeStatus(t *testing.T) {
-	session := Session{Status: sessionRunning}
-	if status := sessionBadgeStatus(session); status != paneStatusRunning {
-		t.Fatalf("sessionBadgeStatus(running) = %v", status)
-	}
-	session = Session{Status: sessionStopped}
-	if status := sessionBadgeStatus(session); status != paneStatusIdle {
-		t.Fatalf("sessionBadgeStatus(stopped) = %v", status)
-	}
-	session = Session{ThumbnailLine: "done", ThumbnailStatus: paneStatusDone}
-	if status := sessionBadgeStatus(session); status != paneStatusDone {
-		t.Fatalf("sessionBadgeStatus(thumbnail) = %v", status)
 	}
 }

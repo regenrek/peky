@@ -37,6 +37,9 @@ This format is based on Keep a Changelog.
 - Terminal-focus tiles use a distinct border accent while focused.
 - Header now uses a right-aligned logo and removes the left brand label.
 
+### Removed
+- Dashboard thumbnails row and related config options.
+
 ### Fixed
 - Space key now passes correctly in native terminal focus.
 - Command palette and project picker filters now reset on open/selection.

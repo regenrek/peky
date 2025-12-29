@@ -246,7 +246,6 @@ The dashboard shows:
 - Projects on top (tabs)
 - Sessions on the left (with pane counts and expandable panes)
 - Live pane preview on the right (native panes are fully interactive)
-- Lightweight session thumbnails at the bottom (last activity per session)
 - Quick reply bar (always visible) and target pane highlight for follow-ups
 
 Navigation (always visible):
@@ -290,9 +289,7 @@ dashboard:
   refresh_ms: 2000
   preview_lines: 12
   preview_compact: true
-  thumbnail_lines: 1
   idle_seconds: 20
-  show_thumbnails: true
   preview_mode: grid  # grid | layout
   attach_behavior: current  # current | detached
   keymap:

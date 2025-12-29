@@ -13,20 +13,11 @@ func (m *Model) dashboardBodyRect() (mouse.Rect, bool) {
 		return mouse.Rect{}, false
 	}
 
-	showThumbs := m.settings.ShowThumbnails
-	thumbHeight := 0
-	if showThumbs {
-		thumbHeight = 3
-	}
-
 	headerHeight := 1
 	footerHeight := 1
 	quickReplyHeight := 3
 	headerGap := 1
 	extraLines := headerHeight + headerGap + footerHeight + quickReplyHeight
-	if showThumbs {
-		extraLines += thumbHeight
-	}
 	bodyHeight := contentHeight - extraLines
 	if bodyHeight < 4 {
 		headerGap = 0

@@ -86,7 +86,6 @@ type SessionItem struct {
 	PaneCount  int
 	ActivePane string
 	Panes      []PaneItem
-	Thumbnail  PaneSummary
 	Config     *layout.ProjectConfig
 }
 
@@ -129,12 +128,6 @@ type PaneItem struct {
 	Status        PaneStatus
 }
 
-// PaneSummary holds lightweight preview info for thumbnails.
-type PaneSummary struct {
-	Line   string
-	Status PaneStatus
-}
-
 // AgentDetectionConfig enables agent-specific status detection.
 type AgentDetectionConfig struct {
 	Codex  bool
@@ -146,9 +139,7 @@ type DashboardConfig struct {
 	RefreshInterval time.Duration
 	PreviewLines    int
 	PreviewCompact  bool
-	ThumbnailLines  int
 	IdleThreshold   time.Duration
-	ShowThumbnails  bool
 	StatusMatcher   statusMatcher
 	PreviewMode     string
 	ProjectRoots    []string
