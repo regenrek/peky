@@ -213,7 +213,6 @@ func (m *Manager) Snapshot(ctx context.Context, previewLines int) []SessionSnaps
 	for _, session := range m.sessions {
 		sessions = append(sessions, session)
 	}
-	m.mu.RUnlock()
 	sort.Slice(sessions, func(i, j int) bool {
 		if sessions[i].CreatedAt.Equal(sessions[j].CreatedAt) {
 			return sessions[i].Name < sessions[j].Name
