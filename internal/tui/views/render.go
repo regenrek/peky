@@ -27,6 +27,10 @@ func Render(m Model) string {
 		return m.viewHelp()
 	case viewCommandPalette:
 		return m.viewCommandPalette()
+	case viewSettingsMenu:
+		return m.viewSettingsMenu()
+	case viewDebugMenu:
+		return m.viewDebugMenu()
 	case viewRenameSession, viewRenamePane:
 		return m.viewRename()
 	case viewProjectRootSetup:

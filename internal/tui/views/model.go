@@ -34,6 +34,8 @@ type Model struct {
 	LayoutPicker             list.Model
 	PaneSwapPicker           list.Model
 	CommandPalette           list.Model
+	SettingsMenu             list.Model
+	DebugMenu                list.Model
 	ConfirmKill              ConfirmKill
 	ConfirmCloseProject      ConfirmCloseProject
 	ConfirmCloseAllProjects  ConfirmCloseAllProjects

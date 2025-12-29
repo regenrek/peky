@@ -60,6 +60,7 @@ func TestStylesNotNil(t *testing.T) {
 		"StatusError":       StatusError,
 		"StatusWarning":     StatusWarning,
 		"Dialog":            Dialog,
+		"DialogCompact":     DialogCompact,
 		"DialogTitle":       DialogTitle,
 		"DialogLabel":       DialogLabel,
 		"DialogValue":       DialogValue,

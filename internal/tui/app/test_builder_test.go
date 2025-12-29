@@ -31,6 +31,8 @@ func newTestModelLite() *Model {
 	m.setupLayoutPicker()
 	m.setupPaneSwapPicker()
 	m.setupCommandPalette()
+	m.setupSettingsMenu()
+	m.setupDebugMenu()
 	m.keys = testKeyMap()
 	return m
 }

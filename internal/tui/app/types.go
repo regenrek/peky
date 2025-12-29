@@ -28,6 +28,8 @@ const (
 	StateRenameSession
 	StateRenamePane
 	StateProjectRootSetup
+	StateSettingsMenu
+	StateDebugMenu
 )
 
 // DashboardTab represents the active tab within the dashboard view.

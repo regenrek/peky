@@ -7,11 +7,6 @@ import (
 	"github.com/regenrek/peakypanes/internal/tui/theme"
 )
 
-type dialogChoice struct {
-	Key   string
-	Label string
-}
-
 func (m Model) viewConfirmKill() string {
 	var body strings.Builder
 	if m.ConfirmKill.Session != "" {
@@ -101,74 +96,40 @@ func (m Model) viewConfirmRestart() string {
 }
 
 func (m Model) renderConfirmDialog(title, body string, choices []dialogChoice) string {
-	var dialogContent strings.Builder
-	dialogContent.WriteString(dialogTitleStyle.Render(title))
-	body = strings.TrimRight(body, "\n")
-	if body != "" {
-		dialogContent.WriteString("\n\n")
-		dialogContent.WriteString(body)
-	}
-	if choicesLine := renderDialogChoices(choices); choicesLine != "" {
-		dialogContent.WriteString("\n\n")
-		dialogContent.WriteString(choicesLine)
-	}
-	dialog := dialogStyle.Render(dialogContent.String())
-	return m.overlayDialog(dialog)
-}
-
-func renderDialogChoices(choices []dialogChoice) string {
-	if len(choices) == 0 {
-		return ""
-	}
-	var builder strings.Builder
-	for i, choice := range choices {
-		if key := strings.TrimSpace(choice.Key); key != "" {
-			builder.WriteString(theme.DialogChoiceKey.Render(key))
-		}
-		if label := strings.TrimSpace(choice.Label); label != "" {
-			prefix := " "
-			if strings.TrimSpace(choice.Key) == "" {
-				prefix = ""
-			}
-			builder.WriteString(theme.DialogChoiceSep.Render(prefix + label))
-		}
-		if i < len(choices)-1 {
-			builder.WriteString(theme.DialogChoiceSep.Render(" • "))
-		}
-	}
-	return builder.String()
+	content := dialogContent(
+		dialogTitleStyle.Render(title),
+		body,
+		renderDialogChoices(choices),
+	)
+	return m.renderDialog(dialogSpec{Content: content})
 }
 
 func (m Model) viewRename() string {
-	var dialogContent strings.Builder
-
 	title := "Rename Session"
 	if m.Rename.IsPane {
 		title = "Rename Pane"
 	}
-	dialogContent.WriteString(dialogTitleStyle.Render(title))
-	dialogContent.WriteString("\n\n")
 
+	var details strings.Builder
 	if m.Rename.IsPane {
 		if strings.TrimSpace(m.Rename.Session) != "" {
-			dialogContent.WriteString(theme.DialogLabel.Render("Session: "))
-			dialogContent.WriteString(theme.DialogValue.Render(m.Rename.Session))
-			dialogContent.WriteString("\n")
+			details.WriteString(theme.DialogLabel.Render("Session: "))
+			details.WriteString(theme.DialogValue.Render(m.Rename.Session))
+			details.WriteString("\n")
 		}
 		paneLabel := strings.TrimSpace(m.Rename.Pane)
 		if paneLabel == "" && strings.TrimSpace(m.Rename.PaneIndex) != "" {
 			paneLabel = fmt.Sprintf("pane %s", strings.TrimSpace(m.Rename.PaneIndex))
 		}
 		if paneLabel != "" {
-			dialogContent.WriteString(theme.DialogLabel.Render("Pane: "))
-			dialogContent.WriteString(theme.DialogValue.Render(paneLabel))
-			dialogContent.WriteString("\n")
+			details.WriteString(theme.DialogLabel.Render("Pane: "))
+			details.WriteString(theme.DialogValue.Render(paneLabel))
+			details.WriteString("\n")
 		}
-		dialogContent.WriteString("\n")
 	} else if strings.TrimSpace(m.Rename.Session) != "" {
-		dialogContent.WriteString(theme.DialogLabel.Render("Session: "))
-		dialogContent.WriteString(theme.DialogValue.Render(m.Rename.Session))
-		dialogContent.WriteString("\n\n")
+		details.WriteString(theme.DialogLabel.Render("Session: "))
+		details.WriteString(theme.DialogValue.Render(m.Rename.Session))
+		details.WriteString("\n")
 	}
 
 	inputWidth := 40
@@ -176,49 +137,39 @@ func (m Model) viewRename() string {
 		inputWidth = clamp(m.Width-30, 20, 60)
 	}
 	m.Rename.Input.Width = inputWidth
-	dialogContent.WriteString(theme.DialogLabel.Render("New name: "))
-	dialogContent.WriteString(m.Rename.Input.View())
-	dialogContent.WriteString("\n\n")
+	inputLine := theme.DialogLabel.Render("New name: ") + m.Rename.Input.View()
+	choices := renderDialogChoices([]dialogChoice{
+		{Key: "enter", Label: "confirm"},
+		{Key: "esc", Label: "cancel"},
+	})
 
-	dialogContent.WriteString(theme.DialogChoiceKey.Render("enter"))
-	dialogContent.WriteString(theme.DialogChoiceSep.Render(" confirm • "))
-	dialogContent.WriteString(theme.DialogChoiceKey.Render("esc"))
-	dialogContent.WriteString(theme.DialogChoiceSep.Render(" cancel"))
-
-	dialog := dialogStyle.Render(dialogContent.String())
-	return m.overlayDialog(dialog)
+	content := dialogContent(
+		dialogTitleStyle.Render(title),
+		strings.TrimRight(details.String(), "\n"),
+		inputLine,
+		choices,
+	)
+	return m.renderDialog(dialogSpec{Content: content})
 }
 
 func (m Model) viewProjectRootSetup() string {
-	var dialogContent strings.Builder
-
-	dialogContent.WriteString(dialogTitleStyle.Render("Project Roots"))
-	dialogContent.WriteString("\n\n")
-	dialogContent.WriteString(theme.DialogNote.Render("Comma-separated list of folders to scan for git projects."))
-	dialogContent.WriteString("\n\n")
-
 	inputWidth := 60
 	if m.Width > 0 {
 		inputWidth = clamp(m.Width-30, 24, 80)
 	}
 	m.ProjectRootInput.Width = inputWidth
-	dialogContent.WriteString(theme.DialogLabel.Render("Roots: "))
-	dialogContent.WriteString(m.ProjectRootInput.View())
-	dialogContent.WriteString("\n\n")
+	note := theme.DialogNote.Render("Comma-separated list of folders to scan for git projects.")
+	inputLine := theme.DialogLabel.Render("Roots: ") + m.ProjectRootInput.View()
+	choices := renderDialogChoices([]dialogChoice{
+		{Key: "enter", Label: "save"},
+		{Key: "esc", Label: "cancel"},
+	})
 
-	dialogContent.WriteString(theme.DialogChoiceKey.Render("enter"))
-	dialogContent.WriteString(theme.DialogChoiceSep.Render(" save • "))
-	dialogContent.WriteString(theme.DialogChoiceKey.Render("esc"))
-	dialogContent.WriteString(theme.DialogChoiceSep.Render(" cancel"))
-
-	dialog := dialogStyle.Render(dialogContent.String())
-	return m.overlayDialog(dialog)
-}
-
-func (m Model) overlayDialog(dialog string) string {
-	if m.Width == 0 || m.Height == 0 {
-		return appStyle.Render(dialog)
-	}
-	base := appStyle.Render(theme.ListDimmed.Render(m.viewDashboardContent()))
-	return overlayCentered(base, dialog, m.Width, m.Height)
+	content := dialogContent(
+		dialogTitleStyle.Render("Project Roots"),
+		note,
+		inputLine,
+		choices,
+	)
+	return m.renderDialog(dialogSpec{Content: content})
 }

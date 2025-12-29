@@ -65,4 +65,14 @@ func TestHandleKeyMsgAdditionalStates(t *testing.T) {
 	if _, _, handled := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEsc}); !handled {
 		t.Fatalf("expected command palette handled")
 	}
+
+	m.state = StateSettingsMenu
+	if _, _, handled := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEsc}); !handled {
+		t.Fatalf("expected settings menu handled")
+	}
+
+	m.state = StateDebugMenu
+	if _, _, handled := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEsc}); !handled {
+		t.Fatalf("expected debug menu handled")
+	}
 }

@@ -17,6 +17,8 @@ const (
 	viewRenameSession
 	viewRenamePane
 	viewProjectRootSetup
+	viewSettingsMenu
+	viewDebugMenu
 )
 
 // Tab ordering must match app.DashboardTab.

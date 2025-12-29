@@ -102,6 +102,9 @@ var Dialog = lipgloss.NewStyle().
 	Foreground(TextPrimary).
 	Padding(1, 2)
 
+// DialogCompact is a tighter dialog container for dense pickers (e.g. command palette).
+var DialogCompact = Dialog.Padding(0, 1)
+
 // DialogTitle for dialog headings
 var DialogTitle = lipgloss.NewStyle().
 	Bold(true).

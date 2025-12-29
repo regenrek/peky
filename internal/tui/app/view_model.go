@@ -52,6 +52,8 @@ func (m *Model) viewModel() views.Model {
 		LayoutPicker:             m.layoutPicker,
 		PaneSwapPicker:           m.paneSwapPicker,
 		CommandPalette:           m.commandPalette,
+		SettingsMenu:             m.settingsMenu,
+		DebugMenu:                m.debugMenu,
 		ConfirmKill: views.ConfirmKill{
 			Session: m.confirmSession,
 			Project: m.confirmProject,

@@ -197,6 +197,8 @@ func TestHandlePickerUpdateMoreStates(t *testing.T) {
 		StateLayoutPicker,
 		StatePaneSwapPicker,
 		StateCommandPalette,
+		StateSettingsMenu,
+		StateDebugMenu,
 	}
 	for _, state := range states {
 		m.state = state

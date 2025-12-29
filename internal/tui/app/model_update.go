@@ -105,6 +105,12 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	case StateCommandPalette:
 		model, cmd := m.updateCommandPalette(msg)
 		return model, cmd, true
+	case StateSettingsMenu:
+		model, cmd := m.updateSettingsMenu(msg)
+		return model, cmd, true
+	case StateDebugMenu:
+		model, cmd := m.updateDebugMenu(msg)
+		return model, cmd, true
 	case StateRenameSession, StateRenamePane:
 		model, cmd := m.updateRename(msg)
 		return model, cmd, true
@@ -146,6 +152,14 @@ func (m *Model) handlePickerUpdate(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		var cmd tea.Cmd
 		m.commandPalette, cmd = m.commandPalette.Update(msg)
 		return m, cmd, true
+	case StateSettingsMenu:
+		var cmd tea.Cmd
+		m.settingsMenu, cmd = m.settingsMenu.Update(msg)
+		return m, cmd, true
+	case StateDebugMenu:
+		var cmd tea.Cmd
+		m.debugMenu, cmd = m.debugMenu.Update(msg)
+		return m, cmd, true
 	default:
 		return nil, nil, false
 	}
@@ -158,6 +172,8 @@ func (m *Model) applyWindowSize(msg tea.WindowSizeMsg) {
 	m.setLayoutPickerSize()
 	m.setPaneSwapPickerSize()
 	m.setCommandPaletteSize()
+	m.setSettingsMenuSize()
+	m.setDebugMenuSize()
 	m.setQuickReplySize()
 }
 

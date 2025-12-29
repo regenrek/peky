@@ -22,8 +22,9 @@ import (
 
 // Styles - using centralized theme for consistency
 var (
-	appStyle    = theme.App
-	dialogStyle = theme.Dialog
+	appStyle           = theme.App
+	dialogStyle        = theme.Dialog
+	dialogStyleCompact = theme.DialogCompact
 )
 
 // Key bindings
@@ -87,6 +88,8 @@ type Model struct {
 	layoutPicker   list.Model
 	paneSwapPicker list.Model
 	commandPalette list.Model
+	settingsMenu   list.Model
+	debugMenu      list.Model
 	gitProjects    []picker.ProjectItem
 
 	confirmSession     string
@@ -187,6 +190,8 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 	m.setupLayoutPicker()
 	m.setupPaneSwapPicker()
 	m.setupCommandPalette()
+	m.setupSettingsMenu()
+	m.setupDebugMenu()
 
 	configExists := true
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {

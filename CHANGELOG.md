@@ -28,7 +28,7 @@ This format is based on Keep a Changelog.
 - Layouts now use native split/grid definitions only (no tmux layout options or bind keys).
 - Removed the `peakypanes pipe` streaming helper and tmux streaming layer.
 - Project view navigation: `ctrl+w` / `ctrl+s` now cycles sessions and windows in a single vertical list.
-- Add pane now uses a lightweight direction prompt instead of a list picker.
+- Add pane now auto-places into the grid without a direction prompt.
 - Window rendering now supports scrollback viewports and copy-mode highlights for native panes.
 - Alternate screen panes no longer record scrollback history.
 - Default pane titles now compress path-like window names to readable repo-relative labels and de-duplicate duplicates.

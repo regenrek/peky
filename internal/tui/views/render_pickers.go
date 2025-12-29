@@ -10,69 +10,79 @@ import (
 )
 
 func (m Model) viewLayoutPicker() string {
-	if m.Width == 0 || m.Height == 0 {
-		return ""
-	}
-	base := appStyle.Render(theme.ListDimmed.Render(m.viewDashboardContent()))
 	listW := m.LayoutPicker.Width()
 	listH := m.LayoutPicker.Height()
-	frameW, frameH := dialogStyle.GetFrameSize()
-	overlayW := listW + frameW
-	overlayH := listH + frameH
 	content := lipgloss.NewStyle().Width(listW).Height(listH).Render(m.LayoutPicker.View())
-	dialog := dialogStyle.Width(overlayW).Height(overlayH).Render(content)
-	return overlayCenteredSized(base, dialog, m.Width, m.Height, overlayW, overlayH)
+	return m.renderDialog(dialogSpec{
+		Content:         content,
+		Size:            dialogSizeForContent(listW, listH),
+		RequireViewport: true,
+	})
 }
 
 func (m Model) viewPaneSplitPicker() string {
-	if m.Width == 0 || m.Height == 0 {
-		return ""
-	}
-	base := appStyle.Render(theme.ListDimmed.Render(m.viewDashboardContent()))
-	var dialogContent strings.Builder
-	dialogContent.WriteString(dialogTitleStyle.Render("➕ Add Pane"))
-	dialogContent.WriteString("\n\n")
-	dialogContent.WriteString(theme.DialogNote.Render("Choose split direction"))
-	dialogContent.WriteString("\n\n")
-	dialogContent.WriteString(theme.DialogChoiceKey.Render("r"))
-	dialogContent.WriteString(theme.DialogChoiceSep.Render(" split right • "))
-	dialogContent.WriteString(theme.DialogChoiceKey.Render("d"))
-	dialogContent.WriteString(theme.DialogChoiceSep.Render(" split down • "))
-	dialogContent.WriteString(theme.DialogChoiceKey.Render("esc"))
-	dialogContent.WriteString(theme.DialogChoiceSep.Render(" cancel"))
-
-	dialog := dialogStyle.Render(dialogContent.String())
-	return overlayCentered(base, dialog, m.Width, m.Height)
+	choices := renderDialogChoices([]dialogChoice{
+		{Key: "r", Label: "split right"},
+		{Key: "d", Label: "split down"},
+		{Key: "esc", Label: "cancel"},
+	})
+	content := dialogContent(
+		dialogTitleStyle.Render("➕ Add Pane"),
+		theme.DialogNote.Render("Choose split direction"),
+		choices,
+	)
+	return m.renderDialog(dialogSpec{Content: content, RequireViewport: true})
 }
 
 func (m Model) viewPaneSwapPicker() string {
-	if m.Width == 0 || m.Height == 0 {
-		return ""
-	}
-	base := appStyle.Render(theme.ListDimmed.Render(m.viewDashboardContent()))
 	listW := m.PaneSwapPicker.Width()
 	listH := m.PaneSwapPicker.Height()
-	frameW, frameH := dialogStyle.GetFrameSize()
-	overlayW := listW + frameW
-	overlayH := listH + frameH
 	content := lipgloss.NewStyle().Width(listW).Height(listH).Render(m.PaneSwapPicker.View())
-	dialog := dialogStyle.Width(overlayW).Height(overlayH).Render(content)
-	return overlayCenteredSized(base, dialog, m.Width, m.Height, overlayW, overlayH)
+	return m.renderDialog(dialogSpec{
+		Content:         content,
+		Size:            dialogSizeForContent(listW, listH),
+		RequireViewport: true,
+	})
 }
 
+const commandPaletteHeading = "⌘ Command Palette"
+const settingsMenuHeading = "Settings"
+const debugMenuHeading = "Debug"
+
 func (m Model) viewCommandPalette() string {
-	if m.Width == 0 || m.Height == 0 {
-		return ""
+	return m.renderDialogList(m.CommandPalette.View(), m.CommandPalette.Width(), m.CommandPalette.Height(), commandPaletteHeading)
+}
+
+func (m Model) viewSettingsMenu() string {
+	return m.renderDialogList(m.SettingsMenu.View(), m.SettingsMenu.Width(), m.SettingsMenu.Height(), settingsMenuHeading)
+}
+
+func (m Model) viewDebugMenu() string {
+	return m.renderDialogList(m.DebugMenu.View(), m.DebugMenu.Width(), m.DebugMenu.Height(), debugMenuHeading)
+}
+
+func (m Model) renderDialogList(listView string, listW, listH int, heading string) string {
+	header := theme.HelpTitle.Render(heading)
+	headerW := lipgloss.Width(header)
+	headerH := lipgloss.Height(header)
+	body := lipgloss.NewStyle().
+		Width(listW).
+		Height(listH).
+		Background(theme.Background).
+		Render(listView)
+	content := lipgloss.JoinVertical(lipgloss.Left, header, body)
+	contentW := listW
+	if headerW > contentW {
+		contentW = headerW
 	}
-	base := appStyle.Render(theme.ListDimmed.Render(m.viewDashboardContent()))
-	listW := m.CommandPalette.Width()
-	listH := m.CommandPalette.Height()
-	frameW, frameH := dialogStyle.GetFrameSize()
-	overlayW := listW + frameW
-	overlayH := listH + frameH
-	content := lipgloss.NewStyle().Width(listW).Height(listH).Render(m.CommandPalette.View())
-	dialog := dialogStyle.Width(overlayW).Height(overlayH).Render(content)
-	return overlayCenteredSized(base, dialog, m.Width, m.Height, overlayW, overlayH)
+	contentH := listH + headerH
+	return m.renderDialog(dialogSpec{
+		Content:         content,
+		Size:            dialogSizeForContentWithStyle(dialogStyleCompact, contentW, contentH),
+		RequireViewport: true,
+		Style:           dialogStyleCompact,
+		UseStyle:        true,
+	})
 }
 
 func (m Model) viewHelp() string {
@@ -130,6 +140,5 @@ func (m Model) viewHelp() string {
 	content.WriteString("\n")
 	content.WriteString(columns)
 
-	dialog := dialogStyle.Render(content.String())
-	return m.overlayDialog(dialog)
+	return m.renderDialog(dialogSpec{Content: content.String()})
 }
