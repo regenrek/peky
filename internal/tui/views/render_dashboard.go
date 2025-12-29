@@ -139,10 +139,17 @@ func (m Model) viewSplash(width, height int) string {
 	if width < logo.FullWidth() || height < logo.FullHeight()+2 {
 		logoText = logo.SmallRender(width)
 	}
-	lines := make([]string, 0, logo.FullHeight()+2)
-	for _, line := range strings.Split(logoText, "\n") {
-		trimmed := strings.TrimRight(line, " ")
-		lines = append(lines, centerLine(theme.LogoStyle.Render(trimmed), width))
+	logoLines := strings.Split(logoText, "\n")
+	blockWidth := 0
+	for _, line := range logoLines {
+		if lineWidth := lipgloss.Width(line); lineWidth > blockWidth {
+			blockWidth = lineWidth
+		}
+	}
+	lines := make([]string, 0, len(logoLines)+2)
+	for _, line := range logoLines {
+		padded := padRight(line, blockWidth)
+		lines = append(lines, centerLine(theme.LogoStyle.Render(padded), width))
 	}
 	info := strings.TrimSpace(m.SplashInfo)
 	if info != "" {
