@@ -13,6 +13,8 @@ type Handler struct {
 	lastClickAt     time.Time
 	lastClickPaneID string
 	lastClickButton tea.MouseButton
+	dragActive      bool
+	dragHit         PaneHit
 }
 
 // DashboardCallbacks wires mouse handling into the app model.
@@ -36,6 +38,12 @@ type DashboardCallbacks struct {
 
 // UpdateDashboard handles mouse input while on the dashboard view.
 func (h *Handler) UpdateDashboard(msg tea.MouseMsg, cb DashboardCallbacks) tea.Cmd {
+	if cb.TerminalFocus != nil && !cb.TerminalFocus() {
+		h.dragActive = false
+	}
+	if cmd, handled := h.handleTerminalDrag(msg, cb); handled {
+		return cmd
+	}
 	if cmd, handled := h.handleHeaderClick(msg, cb); handled {
 		return cmd
 	}
@@ -44,6 +52,7 @@ func (h *Handler) UpdateDashboard(msg tea.MouseMsg, cb DashboardCallbacks) tea.C
 	if cb.TerminalFocus != nil && cb.TerminalFocus() {
 		return h.handleTerminalFocusMouse(msg, cb, hit, ok)
 	}
+	h.dragActive = false
 
 	if !isPrimaryClick(msg) || !ok {
 		return nil
@@ -85,6 +94,10 @@ func (h *Handler) handleHeaderClick(msg tea.MouseMsg, cb DashboardCallbacks) (te
 
 func (h *Handler) handleTerminalFocusMouse(msg tea.MouseMsg, cb DashboardCallbacks, hit PaneHit, ok bool) tea.Cmd {
 	if ok && cb.HitIsSelected(hit) && hit.Content.Contains(msg.X, msg.Y) {
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			h.dragActive = true
+			h.dragHit = hit
+		}
 		return cb.ForwardMouseEvent(hit, msg)
 	}
 	if isPrimaryClick(msg) && ok && !cb.HitIsSelected(hit) {
@@ -97,6 +110,23 @@ func (h *Handler) handleTerminalFocusMouse(msg tea.MouseMsg, cb DashboardCallbac
 		return cb.RefreshPaneViewsCmd()
 	}
 	return nil
+}
+
+func (h *Handler) handleTerminalDrag(msg tea.MouseMsg, cb DashboardCallbacks) (tea.Cmd, bool) {
+	if !h.dragActive {
+		return nil, false
+	}
+	switch msg.Action {
+	case tea.MouseActionMotion, tea.MouseActionRelease:
+		clamped := clampMouseMsg(msg, h.dragHit.Content)
+		cmd := cb.ForwardMouseEvent(h.dragHit, clamped)
+		if msg.Action == tea.MouseActionRelease && msg.Button == tea.MouseButtonLeft {
+			h.dragActive = false
+		}
+		return cmd, true
+	default:
+		return nil, false
+	}
 }
 
 func (h *Handler) handlePaneClick(msg tea.MouseMsg, cb DashboardCallbacks, hit PaneHit) tea.Cmd {
@@ -156,4 +186,28 @@ func (h *Handler) isDoubleClick(hit PaneHit, msg tea.MouseMsg) bool {
 		return false
 	}
 	return true
+}
+
+func clampMouseMsg(msg tea.MouseMsg, rect Rect) tea.MouseMsg {
+	if rect.Empty() {
+		return msg
+	}
+	maxX := rect.X + rect.W - 1
+	maxY := rect.Y + rect.H - 1
+	if maxX < rect.X || maxY < rect.Y {
+		return msg
+	}
+	msg.X = clampInt(msg.X, rect.X, maxX)
+	msg.Y = clampInt(msg.Y, rect.Y, maxY)
+	return msg
+}
+
+func clampInt(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
 }

@@ -109,6 +109,11 @@ type Window struct {
 	// ScrollbackOffset is how many lines "up" from live view we are (0 == live).
 	ScrollbackOffset int
 
+	// Mouse selection drag state (guarded by stateMu).
+	mouseSelectActive      bool
+	mouseSelectStartedCopy bool
+	mouseSelectMoved       bool
+
 	lastUpdate atomic.Int64 // unix nanos
 }
 

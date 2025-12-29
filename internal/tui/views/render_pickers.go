@@ -108,6 +108,8 @@ func (m Model) viewHelp() string {
 	left.WriteString(fmt.Sprintf("  %s Toggle terminal focus (Peaky Panes sessions)\n", m.Keys.TerminalFocus))
 	left.WriteString(fmt.Sprintf("  %s Scrollback mode (Peaky Panes sessions)\n", m.Keys.Scrollback))
 	left.WriteString(fmt.Sprintf("  %s Copy mode (Peaky Panes sessions)\n", m.Keys.CopyMode))
+	left.WriteString("  mouse Wheel scrollback (shift=1, ctrl=page)\n")
+	left.WriteString("  mouse Drag select (terminal focus)\n")
 	left.WriteString("  type  Send input to focused pane\n")
 
 	var right strings.Builder

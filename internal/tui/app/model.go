@@ -123,6 +123,8 @@ type Model struct {
 	lastAppliedSeq   uint64
 
 	terminalFocus bool
+	// terminalMouseDrag tracks an in-progress drag selection in terminal focus.
+	terminalMouseDrag bool
 
 	autoStart *AutoStartSpec
 
