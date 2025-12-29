@@ -21,7 +21,7 @@ This format is based on Keep a Changelog.
 - Per-pane restore failure tracking surfaced in snapshots.
 - Command palette action to close all projects with a bulk close/kill confirmation.
 - Dashboard empty-state splash with centered logo and quick open/help hint.
-- Procedural Peaky Panes logo renderer with compact fallback for narrow terminals.
+- ANSI Regular logo wordmark for the splash screen with block centering.
 
 ### Changed
 - Native-only sessions; tmux UI integration and commands are removed.
@@ -35,6 +35,7 @@ This format is based on Keep a Changelog.
 - Session env overrides are persisted and reapplied on restore; splits inherit session env.
 - State persistence is debounced and flushed on shutdown to reduce write amplification.
 - Terminal-focus tiles use a distinct border accent while focused.
+- Header now uses a right-aligned logo and removes the left brand label.
 
 ### Fixed
 - Space key now passes correctly in native terminal focus.
@@ -50,6 +51,7 @@ This format is based on Keep a Changelog.
 - Refresh snapshots no longer time out behind pane view rendering thanks to a dedicated pane view connection.
 - Daemon transport now shuts down dead client links and client writes honor request deadlines to prevent refresh timeouts.
 - Client calls now guard against closed connections during daemon restarts.
+- Terminal focus footer hint now highlights only when active.
 
 ## 0.0.4 - 2025-12-25
 
