@@ -32,7 +32,6 @@ func (m *Model) viewModel() views.Model {
 		Tab:                      int(m.tab),
 		HeaderLine:               headerLine(m.headerParts()),
 		EmptyStateMessage:        m.emptyStateMessage(),
-		SplashLogo:               Logo,
 		SplashInfo:               m.splashInfo(),
 		Projects:                 toViewProjects(m.data.Projects),
 		DashboardColumns:         toViewColumns(filteredColumns),

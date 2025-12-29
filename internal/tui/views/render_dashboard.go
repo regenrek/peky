@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/regenrek/peakypanes/internal/tui/icons"
+	"github.com/regenrek/peakypanes/internal/tui/logo"
 	"github.com/regenrek/peakypanes/internal/tui/theme"
 )
 
@@ -131,11 +132,15 @@ func (m Model) viewSplash(width, height int) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
-	if len(m.SplashLogo) == 0 && strings.TrimSpace(m.SplashInfo) == "" {
+	if strings.TrimSpace(m.SplashInfo) == "" && width < 4 {
 		return padLines(m.EmptyStateMessage, width, height)
 	}
-	lines := make([]string, 0, len(m.SplashLogo)+2)
-	for _, line := range m.SplashLogo {
+	logoText := logo.Render(width, false)
+	if width < logo.FullWidth() || height < logo.FullHeight()+2 {
+		logoText = logo.SmallRender(width)
+	}
+	lines := make([]string, 0, logo.FullHeight()+2)
+	for _, line := range strings.Split(logoText, "\n") {
 		trimmed := strings.TrimRight(line, " ")
 		lines = append(lines, centerLine(theme.LogoStyle.Render(trimmed), width))
 	}

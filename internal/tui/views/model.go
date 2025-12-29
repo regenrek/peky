@@ -14,7 +14,6 @@ type Model struct {
 	Tab                      int
 	HeaderLine               string
 	EmptyStateMessage        string
-	SplashLogo               []string
 	SplashInfo               string
 	Projects                 []Project
 	DashboardColumns         []DashboardColumn

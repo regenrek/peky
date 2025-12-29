@@ -21,6 +21,7 @@ This format is based on Keep a Changelog.
 - Per-pane restore failure tracking surfaced in snapshots.
 - Command palette action to close all projects with a bulk close/kill confirmation.
 - Dashboard empty-state splash with centered logo and quick open/help hint.
+- Procedural Peaky Panes logo renderer with compact fallback for narrow terminals.
 
 ### Changed
 - Native-only sessions; tmux UI integration and commands are removed.
