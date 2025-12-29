@@ -68,7 +68,26 @@ func (m Model) viewDashboardContent() string {
 }
 
 func (m Model) viewHeader(width int) string {
-	return fitLine(m.HeaderLine, width)
+	left := m.HeaderLine
+	if width <= 0 {
+		return left
+	}
+	leftWidth := lipgloss.Width(left)
+	available := width - leftWidth - 1
+	if available < 1 {
+		return fitLine(left, width)
+	}
+	rightPlain := logo.SmallRender(available)
+	if strings.TrimSpace(rightPlain) == "" {
+		return fitLine(left, width)
+	}
+	right := theme.LogoStyle.Render(rightPlain)
+	rightWidth := lipgloss.Width(right)
+	spaces := width - leftWidth - rightWidth
+	if spaces < 1 {
+		return fitLine(left, width)
+	}
+	return left + strings.Repeat(" ", spaces) + right
 }
 
 func (m Model) viewBody(width, height int) string {

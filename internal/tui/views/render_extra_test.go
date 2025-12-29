@@ -14,7 +14,7 @@ func TestViewDashboardContentRenders(t *testing.T) {
 	m := Model{
 		Width:                    80,
 		Height:                   24,
-		HeaderLine:               "🎩 Peaky Panes",
+		HeaderLine:               "Peaky Panes",
 		EmptyStateMessage:        "empty",
 		ShowThumbnails:           true,
 		QuickReplyInput:          input,

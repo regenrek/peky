@@ -58,7 +58,7 @@ var App = lipgloss.NewStyle().Padding(1, 2)
 
 // ===== Title Styles =====
 
-// Title is the main title style (e.g., "🎩 Peaky Panes")
+// Title is the main title style (e.g., "Peaky Panes")
 var Title = lipgloss.NewStyle().
 	Foreground(TextPrimary).
 	Background(Accent).

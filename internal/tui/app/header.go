@@ -37,7 +37,7 @@ func (k headerPartKind) clickable() bool {
 func (m Model) headerParts() []headerPart {
 	parts := make([]headerPart, 0, len(m.data.Projects)+3)
 
-	logo := "🎩 Peaky Panes"
+	logo := "Peaky Panes"
 	parts = append(parts, headerPart{
 		Kind:     headerPartLogo,
 		Label:    logo,
