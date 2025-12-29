@@ -52,7 +52,6 @@ func (m *Manager) SessionNames() []string {
 	for _, session := range m.sessions {
 		sessions = append(sessions, session)
 	}
-	m.mu.RUnlock()
 
 	sort.Slice(sessions, func(i, j int) bool {
 		if sessions[i].CreatedAt.Equal(sessions[j].CreatedAt) {
@@ -280,6 +279,7 @@ func (m *Manager) Snapshot(ctx context.Context, previewLines int) []SessionSnaps
 			paneIDs = append(paneIDs, pane.ID)
 		}
 	}
+	m.mu.RUnlock()
 
 	if previewLines <= 0 || len(paneRefs) == 0 {
 		return out
