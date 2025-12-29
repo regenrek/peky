@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+bin=${BIN:-./peakypanes}
+
+if [[ ${1:-} == "-h" || ${1:-} == "--help" ]]; then
+  cat <<'USAGE'
+Usage: scripts/dev-run [args...]
+
+Builds peakypanes locally and runs it with the provided args.
+
+Examples:
+  scripts/dev-run
+  scripts/dev-run start --layout dev-3
+USAGE
+  exit 0
+fi
+
+go build -o "$bin" ./cmd/peakypanes
+exec "$bin" "$@"

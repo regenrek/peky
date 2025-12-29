@@ -2,8 +2,6 @@ module github.com/regenrek/peakypanes
 
 go 1.25.5
 
-toolchain go1.25.5
-
 require (
 	github.com/atotto/clipboard v0.1.4
 	github.com/charmbracelet/bubbles v0.21.1-0.20250623103423-23b8fd6302d7

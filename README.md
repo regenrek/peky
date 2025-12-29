@@ -8,7 +8,7 @@
 
 **Terminal dashboard with YAML-based layouts, native live previews, and persistent native sessions.**
 
-![Peaky Panes Preview](assets/peakypanes-preview.jpg)
+![Peaky Panes Preview](assets/preview-peakypanes-v2.jpg)
 
 
 Define your layouts in YAML, share them with your team via git, and get consistent development environments everywhere. Sessions are owned by a **native daemon** so they keep running after the UI exits.
@@ -25,6 +25,7 @@ Define your layouts in YAML, share them with your team via git, and get consiste
 - 🧭 **Persistent native daemon** - Sessions keep running after the UI exits
 - 📜 **Scrollback + copy mode** - Navigate output and yank from native panes
 - ⌘ **Command palette** - Quick actions, including renaming sessions/panes
+- 🖱️ **Mouse support** - Click to select panes, double-click to focus a pane
 
 ## Quick Start
 
@@ -54,6 +55,12 @@ Using Go
 
 ```bash
 go install github.com/regenrek/peakypanes/cmd/peakypanes@latest
+```
+
+**Hot reload (from repo)**
+
+```bash
+scripts/dev-watch -- --layout dev-3
 ```
 
 ### Usage

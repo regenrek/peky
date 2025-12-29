@@ -58,15 +58,12 @@ func (d commandPaletteDelegate) Render(w io.Writer, m list.Model, index int, ite
 	}
 
 	var titleStyle lipgloss.Style
-	emptyFilter := m.FilterState() == list.Filtering && m.FilterValue() == ""
 	isSelected := index == m.Index()
 	isFiltered := m.FilterState() == list.Filtering || m.FilterState() == list.FilterApplied
 
 	switch {
 	case isSelected:
 		titleStyle = s.SelectedTitle
-	case emptyFilter:
-		titleStyle = s.DimmedTitle
 	default:
 		titleStyle = s.NormalTitle
 	}
@@ -100,9 +97,6 @@ func (d commandPaletteDelegate) Render(w io.Writer, m list.Model, index int, ite
 		}
 		title = titleStyle.Render(title)
 		desc = s.SelectedDesc.Render(desc)
-	} else if emptyFilter {
-		title = titleStyle.Render(title)
-		desc = s.DimmedDesc.Render(desc)
 	} else {
 		if isFiltered {
 			unmatched := titleStyle.Inline(true)

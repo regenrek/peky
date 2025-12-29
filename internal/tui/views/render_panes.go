@@ -289,8 +289,6 @@ func renderPaneTile(pane Pane, width, height int, compact bool, target bool, bor
 	}
 
 	style := lipgloss.NewStyle().
-		Width(width).
-		Height(height).
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderTop(borders.top).
 		BorderRight(borders.right).
@@ -304,6 +302,8 @@ func renderPaneTile(pane Pane, width, height int, compact bool, target bool, bor
 		Padding(0, 1)
 
 	frameW, frameH := style.GetFrameSize()
+	borderW := style.GetHorizontalBorderSize()
+	borderH := style.GetVerticalBorderSize()
 	contentWidth := width - frameW
 	if contentWidth < 1 {
 		contentWidth = 1
@@ -312,6 +312,15 @@ func renderPaneTile(pane Pane, width, height int, compact bool, target bool, bor
 	if innerHeight < 1 {
 		innerHeight = 1
 	}
+	blockWidth := width - borderW
+	if blockWidth < 1 {
+		blockWidth = 1
+	}
+	blockHeight := height - borderH
+	if blockHeight < 1 {
+		blockHeight = 1
+	}
+	style = style.Width(blockWidth).Height(blockHeight)
 
 	header := fmt.Sprintf("%s %s", renderBadge(pane.Status), title)
 	lines := []string{truncateTileLine(header, contentWidth)}
@@ -346,8 +355,6 @@ func (m Model) renderPaneTileLive(pane Pane, width, height int, compact bool, ta
 	}
 
 	style := lipgloss.NewStyle().
-		Width(width).
-		Height(height).
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderTop(borders.top).
 		BorderRight(borders.right).
@@ -361,6 +368,8 @@ func (m Model) renderPaneTileLive(pane Pane, width, height int, compact bool, ta
 		Padding(0, 1)
 
 	frameW, frameH := style.GetFrameSize()
+	borderW := style.GetHorizontalBorderSize()
+	borderH := style.GetVerticalBorderSize()
 	contentWidth := width - frameW
 	if contentWidth < 1 {
 		contentWidth = 1
@@ -369,6 +378,15 @@ func (m Model) renderPaneTileLive(pane Pane, width, height int, compact bool, ta
 	if innerHeight < 1 {
 		innerHeight = 1
 	}
+	blockWidth := width - borderW
+	if blockWidth < 1 {
+		blockWidth = 1
+	}
+	blockHeight := height - borderH
+	if blockHeight < 1 {
+		blockHeight = 1
+	}
+	style = style.Width(blockWidth).Height(blockHeight)
 
 	header := fmt.Sprintf("%s %s", renderBadge(pane.Status), title)
 	lines := []string{truncateTileLine(header, contentWidth)}

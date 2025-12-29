@@ -40,10 +40,10 @@ func TestCommandPaletteItemsAndRun(t *testing.T) {
 		if strings.Contains(cmdItem.Label, "Attach / start") {
 			t.Fatalf("unexpected attach/start entry in command palette")
 		}
-		if cmdItem.Label == "Settings..." {
+		if cmdItem.Label == "Settings" {
 			foundSettings = true
 		}
-		if cmdItem.Label == "Debug..." {
+		if cmdItem.Label == "Debug" {
 			foundDebug = true
 		}
 		if cmdItem.Run != nil {

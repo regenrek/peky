@@ -262,13 +262,13 @@ func buildPaneTileLayout(width, height, previewLines int, selected bool, focused
 		borderColor = theme.BorderFocus
 	}
 	style := lipgloss.NewStyle().
-		Width(width).
-		Height(height).
-		BorderStyle(lipgloss.NormalBorder()).
+		Border(lipgloss.NormalBorder()).
 		BorderForeground(borderColor).
 		Padding(0, 1)
 
 	frameW, frameH := style.GetFrameSize()
+	borderW := style.GetHorizontalBorderSize()
+	borderH := style.GetVerticalBorderSize()
 	contentWidth := width - frameW
 	if contentWidth < 1 {
 		contentWidth = 1
@@ -277,6 +277,15 @@ func buildPaneTileLayout(width, height, previewLines int, selected bool, focused
 	if contentHeight < 1 {
 		contentHeight = 1
 	}
+	blockWidth := width - borderW
+	if blockWidth < 1 {
+		blockWidth = 1
+	}
+	blockHeight := height - borderH
+	if blockHeight < 1 {
+		blockHeight = 1
+	}
+	style = style.Width(blockWidth).Height(blockHeight)
 	availablePreview := previewLines
 	if contentHeight-2 < availablePreview {
 		availablePreview = contentHeight - 2

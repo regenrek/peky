@@ -121,10 +121,7 @@ func (m *Model) paneCommandItems(shortcuts commandShortcuts) []picker.CommandIte
 			m.openRenamePane()
 			return nil
 		}},
-		{Label: "Pane: Toggle pane list", Desc: "Expand/collapse pane list", Shortcut: shortcuts.togglePanes, Run: func() tea.Cmd {
-			m.togglePanes()
-			return nil
-		}},
+		// NOTE: Toggle pane list functionality exists via shortcuts.togglePanes but hidden from menu for now
 	}
 }
 
@@ -140,6 +137,12 @@ func (m *Model) sessionCommandItems(shortcuts commandShortcuts) []picker.Command
 		}},
 		{Label: "Session: Rename session", Desc: "Rename the selected session", Run: func() tea.Cmd {
 			m.openRenameSession()
+			return nil
+		}},
+		{Label: "Session: Filter", Desc: "Filter session list", Shortcut: shortcuts.filterSessions, Run: func() tea.Cmd {
+			m.filterActive = true
+			m.filterInput.Focus()
+			m.quickReplyInput.Blur()
 			return nil
 		}},
 	}
@@ -164,10 +167,10 @@ func (m *Model) projectCommandItems(shortcuts commandShortcuts) []picker.Command
 
 func (m *Model) menuCommandItems() []picker.CommandItem {
 	return []picker.CommandItem{
-		{Label: "Settings...", Desc: "Project roots and config", Run: func() tea.Cmd {
+		{Label: "Settings", Desc: "Project roots and config", Run: func() tea.Cmd {
 			return m.openSettingsMenu()
 		}},
-		{Label: "Debug...", Desc: "Refresh and restart server", Run: func() tea.Cmd {
+		{Label: "Debug", Desc: "Refresh and restart server", Run: func() tea.Cmd {
 			return m.openDebugMenu()
 		}},
 	}
@@ -175,12 +178,6 @@ func (m *Model) menuCommandItems() []picker.CommandItem {
 
 func (m *Model) otherCommandItems(shortcuts commandShortcuts) []picker.CommandItem {
 	return []picker.CommandItem{
-		{Label: "Other: Filter sessions", Desc: "Filter session list", Shortcut: shortcuts.filterSessions, Run: func() tea.Cmd {
-			m.filterActive = true
-			m.filterInput.Focus()
-			m.quickReplyInput.Blur()
-			return nil
-		}},
 		{Label: "Other: Help", Desc: "Show help", Shortcut: shortcuts.help, Run: func() tea.Cmd {
 			m.setState(StateHelp)
 			return nil

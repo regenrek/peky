@@ -103,10 +103,18 @@ func fitLine(text string, width int) string {
 	if width <= 0 {
 		return ""
 	}
+	lineWidth := lipgloss.Width(text)
+	if lineWidth == width {
+		return text
+	}
+	if lineWidth < width {
+		return text + strings.Repeat(" ", width-lineWidth)
+	}
+
 	truncated := ansi.Truncate(text, width, "")
 	padding := width - lipgloss.Width(truncated)
-	if padding < 0 {
-		padding = 0
+	if padding <= 0 {
+		return truncated
 	}
 	return truncated + strings.Repeat(" ", padding)
 }
