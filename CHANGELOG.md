@@ -5,6 +5,8 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.0.6 - 2025-12-30
+
 ### Added
 - Pane view update sequencing with NotModified responses to skip unchanged renders.
 - Pane view priority scheduling to keep focused panes responsive under load.

@@ -391,7 +391,7 @@ Manual npm smoke run (fresh HOME/XDG config):
 
 ```bash
 scripts/fresh-run
-scripts/fresh-run 0.0.5 --with-project
+scripts/fresh-run 0.0.6 --with-project
 ```
 
 GitHub Actions runs gofmt checks, go vet, go test with coverage, and race on Linux.
