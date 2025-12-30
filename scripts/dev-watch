@@ -1,6 +1,38 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+bin=${DEVWATCH_BIN:-./devwatch}
+debug_events=""
+daemon_log=""
+
+args=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --debug-events)
+      debug_events="1"
+      shift
+      ;;
+    --daemon-log)
+      if [[ -z ${2:-} ]]; then
+        echo "error: --daemon-log requires a path" >&2
+        exit 1
+      fi
+      daemon_log="$2"
+      shift 2
+      ;;
+    --)
+      shift
+      args+=("$@")
+      break
+      ;;
+    *)
+      args+=("$1")
+      shift
+      ;;
+  esac
+done
+set -- "${args[@]}"
+
 if [[ ${1:-} == "-h" || ${1:-} == "--help" ]]; then
   cat <<'USAGE'
 Usage: scripts/dev-watch [flags] [-- args...]
@@ -12,10 +44,25 @@ Examples:
   scripts/dev-watch
   scripts/dev-watch -- --layout dev-3
   scripts/dev-watch --watch cmd,internal -- --layout dev-3
+  scripts/dev-watch --debug-events
+  scripts/dev-watch --debug-events --daemon-log /tmp/peakypanes-daemon.log
+
+Flags:
+  --debug-events    Enable debug event logs (PEAKYPANES_DEBUG_EVENTS=1)
+  --daemon-log PATH Override daemon log path used by auto-started daemon
 USAGE
   exit 0
 fi
 
-bin=${DEVWATCH_BIN:-./devwatch}
+if [[ -n "$debug_events" ]]; then
+  export PEAKYPANES_DEBUG_EVENTS=1
+  if [[ -z "$daemon_log" ]]; then
+    daemon_log="/tmp/peakypanes-daemon.log"
+  fi
+fi
+if [[ -n "$daemon_log" ]]; then
+  export PEAKYPANES_DAEMON_LOG="$daemon_log"
+fi
+
 go build -o "$bin" ./cmd/devwatch
 exec "$bin" "$@"
