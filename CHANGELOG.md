@@ -5,6 +5,8 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.0.7 - 2025-12-30
+
 ### Added
 - Configurable quit behavior (`dashboard.quit_behavior`) with prompt/keep/stop options for handling running sessions on exit.
 - Quit confirmation dialog (shown only when panes are running) with an option to stop the daemon and kill all panes.
