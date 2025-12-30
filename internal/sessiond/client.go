@@ -32,6 +32,7 @@ type Client struct {
 	eventNotify chan struct{}
 	eventOnce   sync.Once
 
+	doneOnce sync.Once
 	done      chan struct{}
 	closeOnce sync.Once
 
@@ -77,9 +78,7 @@ func (c *Client) Close() error {
 	c.pending = nil
 	c.pendingMu.Unlock()
 	c.closeOnce.Do(func() {
-		if c.done != nil {
-			close(c.done)
-		}
+		close(c.doneCh())
 	})
 	return nil
 }
@@ -185,9 +184,6 @@ func (c *Client) initEvents() {
 		if c.eventNotify == nil {
 			c.eventNotify = make(chan struct{}, 1)
 		}
-		if c.done == nil {
-			c.done = make(chan struct{})
-		}
 		go c.eventLoop()
 	})
 }
@@ -230,6 +226,7 @@ func (c *Client) popEvent() (Event, bool) {
 }
 
 func (c *Client) eventLoop() {
+	done := c.doneCh()
 	defer func() {
 		if c.events != nil {
 			close(c.events)
@@ -239,7 +236,7 @@ func (c *Client) eventLoop() {
 		if evt, ok := c.popEvent(); ok {
 			select {
 			case c.events <- evt:
-			case <-c.done:
+			case <-done:
 				return
 			}
 			continue
@@ -247,10 +244,20 @@ func (c *Client) eventLoop() {
 		select {
 		case <-c.eventNotify:
 			continue
-		case <-c.done:
+		case <-done:
 			return
 		}
 	}
+}
+
+func (c *Client) doneCh() chan struct{} {
+	if c == nil {
+		return nil
+	}
+	c.doneOnce.Do(func() {
+		c.done = make(chan struct{})
+	})
+	return c.done
 }
 
 func (c *Client) call(ctx context.Context, op Op, req any, out any) (Envelope, error) {
