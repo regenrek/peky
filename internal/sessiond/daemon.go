@@ -46,6 +46,7 @@ type Daemon struct {
 	statePath   string
 	stateWriter *state.Writer
 	version     string
+	profileStop func()
 	startMu     sync.Mutex
 	spawnMu     sync.Mutex
 	shutdownMu  sync.Mutex
@@ -146,6 +147,7 @@ func (d *Daemon) Start() error {
 	if err := d.restorePersistedState(); err != nil {
 		log.Printf("sessiond: restore state: %v", err)
 	}
+	d.startProfiler()
 
 	d.wg.Add(2)
 	go d.acceptLoop()
@@ -213,6 +215,7 @@ func (d *Daemon) shutdown() error {
 
 	_ = os.Remove(d.socketPath)
 	_ = os.Remove(d.pidPath)
+	d.stopProfiler()
 	return nil
 }
 

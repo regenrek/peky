@@ -9,9 +9,10 @@ This format is based on Keep a Changelog.
 - Pane view update sequencing with NotModified responses to skip unchanged renders.
 - Pane view priority scheduling to keep focused panes responsive under load.
 - VT damage tracking primitives for future incremental rendering work.
-- Performance tooling: `scripts/perf-bench`, `scripts/perf-40pane`, and `docs/perf.md`.
+- Performance tooling: `scripts/perf-bench` and `scripts/perf-12pane`.
 - Snapshot integration coverage for dirty ANSI cache previews.
 - Pane view scheduler tests for starvation and timestamp preservation.
+- Daemon profiling hooks for CPU/heap captures via `PEAKYPANES_CPU_PROFILE` and `PEAKYPANES_MEM_PROFILE`.
 
 ### Changed
 - Pane view rendering now respects client deadlines and can fall back to cached views under pressure.
@@ -22,8 +23,10 @@ This format is based on Keep a Changelog.
 - Snapshot previews now accept dirty ANSI frames and track dirty state for follow-up refreshes.
 - Pane view NotModified gating uses ANSI cache sequence to avoid stalling live previews.
 - TUI batches daemon events to refresh pane views without starving updates under load.
+- Perf load script now defaults to 12 panes and lives at `scripts/perf-12pane`.
 
 ### Removed
+- Retired perf and investigation docs (`docs/perf.md`, `docs/investigation-live-preview.md`).
 
 ### Fixed
 - Pane swaps no longer notify while holding the manager lock, preventing deadlocks.

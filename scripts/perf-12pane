@@ -2,11 +2,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT="$ROOT/.bench/perf-40"
+OUT="$ROOT/.bench/perf-12"
 mkdir -p "$OUT"
 
-GRID_ROWS="${GRID_ROWS:-5}"
-GRID_COLS="${GRID_COLS:-8}"
+GRID_ROWS="${GRID_ROWS:-3}"
+GRID_COLS="${GRID_COLS:-4}"
 RATE_MS="${RATE_MS:-50}"
 
 if ! [[ "$GRID_ROWS" =~ ^[0-9]+$ ]] || ! [[ "$GRID_COLS" =~ ^[0-9]+$ ]] || ! [[ "$RATE_MS" =~ ^[0-9]+$ ]]; then
@@ -37,7 +37,7 @@ cmd = os.environ["PERF_CMD"]
 config = os.environ["PERF_CONFIG"]
 escaped = json.dumps(cmd)[1:-1]
 with open(config, "w", encoding="utf-8") as f:
-    f.write("session: perf-40\\n")
+    f.write("session: perf-12\\n")
     f.write("layout:\\n")
     f.write(f"  grid: {grid}\\n")
     f.write(f"  command: \"{escaped}\"\\n")
