@@ -105,6 +105,8 @@ func (m Model) viewHelp() string {
 	left.WriteString("  type  Quick reply (terminal focus off)\n")
 	left.WriteString("  enter Send quick reply\n")
 	left.WriteString("  esc   Clear quick reply\n")
+	left.WriteString("  up/down Quick reply history\n")
+	left.WriteString("  /     Slash commands\n")
 	left.WriteString(fmt.Sprintf("  %s Toggle terminal focus (Peaky Panes sessions)\n", m.Keys.TerminalFocus))
 	left.WriteString(fmt.Sprintf("  %s Scrollback mode (Peaky Panes sessions)\n", m.Keys.Scrollback))
 	left.WriteString(fmt.Sprintf("  %s Copy mode (Peaky Panes sessions)\n", m.Keys.CopyMode))

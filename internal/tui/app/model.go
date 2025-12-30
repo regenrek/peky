@@ -80,7 +80,10 @@ type Model struct {
 	filterInput  textinput.Model
 	filterActive bool
 
-	quickReplyInput textinput.Model
+	quickReplyInput        textinput.Model
+	quickReplyHistory      []string
+	quickReplyHistoryIndex int
+	quickReplyHistoryDraft string
 
 	mouse mouse.Handler
 
@@ -191,6 +194,7 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 	m.quickReplyInput.PromptStyle = qrStyle
 	m.quickReplyInput.Cursor.Style = qrStyle.Reverse(true)
 	m.quickReplyInput.Focus()
+	m.quickReplyHistoryIndex = -1
 
 	m.setupProjectPicker()
 	m.setupLayoutPicker()

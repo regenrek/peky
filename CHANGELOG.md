@@ -10,6 +10,10 @@ This format is based on Keep a Changelog.
 - Pane view priority scheduling to keep focused panes responsive under load.
 - VT damage tracking primitives for future incremental rendering work.
 - Performance tooling: `scripts/perf-bench`, `scripts/perf-40pane`, and `docs/perf.md`.
+- Quick reply slash commands that mirror command palette actions.
+- Quick reply broadcast support with `/all` and optional scope targets.
+- Quick reply history navigation with up/down cycling.
+- Command registry to keep palette and slash actions in sync.
 
 ### Changed
 - Pane view rendering now respects client deadlines and can fall back to cached views under pressure.
@@ -17,6 +21,8 @@ This format is based on Keep a Changelog.
 - ANSI view rendering is cached-first with background refresh to avoid sync render spikes.
 - TUI pane view cache stores update sequences to avoid re-requesting unchanged panes.
 - Preview cache now keys on pane update sequence for deterministic refresh behavior.
+- Command palette actions now render from the shared registry.
+- Quick reply help/hints now surface slash commands and history.
 
 ### Removed
 

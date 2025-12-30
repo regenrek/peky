@@ -340,6 +340,7 @@ func (m *Model) openQuickReply() tea.Cmd {
 	m.setTerminalFocus(false)
 	m.quickReplyInput.SetValue("")
 	m.quickReplyInput.Focus()
+	m.resetQuickReplyHistory()
 	return m.refreshPaneViewsCmd()
 }
 
@@ -350,15 +351,44 @@ func (m *Model) updateQuickReply(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.panePrev):
 		return m, m.cyclePane(-1)
 	}
+	if m.quickReplyHistoryActive() && shouldExitQuickReplyHistory(msg) {
+		m.resetQuickReplyHistory()
+	}
+	switch msg.String() {
+	case "up":
+		if m.moveQuickReplyHistory(-1) {
+			return m, nil
+		}
+	case "down":
+		if m.moveQuickReplyHistory(1) {
+			return m, nil
+		}
+	}
 	switch msg.String() {
 	case "enter":
-		if strings.TrimSpace(m.quickReplyInput.Value()) == "" {
+		text := strings.TrimSpace(m.quickReplyInput.Value())
+		if text == "" {
 			return m, m.attachOrStart()
 		}
+		outcome := m.handleQuickReplyCommand(text)
+		if outcome.Handled {
+			if outcome.RecordPrompt {
+				m.rememberQuickReply(text)
+			}
+			if outcome.ClearInput {
+				m.quickReplyInput.SetValue("")
+				m.quickReplyInput.CursorEnd()
+				m.resetQuickReplyHistory()
+			}
+			return m, outcome.Cmd
+		}
+		m.rememberQuickReply(text)
+		m.resetQuickReplyHistory()
 		return m, m.sendQuickReply()
 	case "esc":
 		m.quickReplyInput.SetValue("")
 		m.quickReplyInput.CursorEnd()
+		m.resetQuickReplyHistory()
 		return m, nil
 	}
 	var cmd tea.Cmd

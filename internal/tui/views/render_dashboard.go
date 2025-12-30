@@ -408,7 +408,7 @@ func (m Model) viewQuickReply(width int) string {
 	inputWidth := clamp(contentWidth-18, minWidth, maxWidth)
 	m.QuickReplyInput.Width = inputWidth
 
-	hintText := "enter send • esc clear"
+	hintText := "enter send • esc clear • up/down history • / commands"
 	if m.SupportsTerminalFocus {
 		toggle := m.Keys.TerminalFocus
 		if m.TerminalFocus {
