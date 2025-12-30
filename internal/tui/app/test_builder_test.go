@@ -23,6 +23,7 @@ func newTestModelLite() *Model {
 		paneViewSeq:            make(map[paneViewKey]uint64),
 		paneViewLastReq:        make(map[paneViewKey]time.Time),
 		quickReplyHistoryIndex: -1,
+		quickReplySlashIndex:   -1,
 		settings: DashboardConfig{
 			PreviewMode:  "grid",
 			PreviewLines: 12,

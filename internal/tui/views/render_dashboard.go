@@ -50,8 +50,8 @@ func (m Model) viewDashboardContent() string {
 	}
 	sections = append(sections, body, quickReply)
 	sections = append(sections, footer)
-
-	return lipgloss.JoinVertical(lipgloss.Top, sections...)
+	view := lipgloss.JoinVertical(lipgloss.Top, sections...)
+	return m.overlaySlashMenu(view, contentWidth, contentHeight, headerHeight, headerGap, bodyHeight)
 }
 
 func (m Model) viewHeader(width int) string {
@@ -398,7 +398,7 @@ func (m Model) viewQuickReply(width int) string {
 		contentWidth = 10
 	}
 
-	hintText := "enter send • esc clear • up/down history • / palette"
+	hintText := "enter send • esc clear • up/down history/select • / commands • tab complete"
 	if m.SupportsTerminalFocus {
 		toggle := m.Keys.TerminalFocus
 		if m.TerminalFocus {
@@ -434,7 +434,161 @@ func (m Model) viewQuickReply(width int) string {
 	lines := []string{
 		pad + blank + pad,
 		pad + line + pad,
-		pad + blank + pad,
+	}
+	lines = append(lines, pad+blank+pad)
+	return strings.Join(lines, "\n")
+}
+
+func (m Model) overlaySlashMenu(base string, width, height, headerHeight, headerGap, bodyHeight int) string {
+	if len(m.SlashSuggestions) == 0 || width <= 0 || height <= 0 {
+		return base
+	}
+	menuX := 2
+	menuWidth := width - 4
+	if menuWidth < 10 {
+		menuWidth = width
+		menuX = 0
+	}
+	availableHeight := headerHeight + headerGap + bodyHeight
+	menu := renderSlashMenu(m.SlashSuggestions, m.SlashSelected, menuWidth, availableHeight)
+	if strings.TrimSpace(menu) == "" {
+		return base
+	}
+	menuHeight := lipgloss.Height(menu)
+	if menuHeight <= 0 {
+		return base
+	}
+	menuY := availableHeight - menuHeight
+	if menuY < 0 {
+		menuY = 0
+	}
+	return overlayAt(base, menu, width, height, menuX, menuY)
+}
+
+func renderSlashMenu(suggestions []SlashSuggestion, selectedIdx, width, maxHeight int) string {
+	if len(suggestions) == 0 || width <= 0 || maxHeight <= 0 {
+		return ""
+	}
+	maxSuggestions := 10
+	if maxSuggestions > len(suggestions) {
+		maxSuggestions = len(suggestions)
+	}
+	if maxSuggestions > maxHeight-2 {
+		maxSuggestions = maxHeight - 2
+	}
+	if maxSuggestions <= 0 {
+		return ""
+	}
+
+	base := lipgloss.NewStyle().
+		Background(theme.Highlight).
+		Foreground(theme.TextPrimary)
+	normal := base.Foreground(theme.TextSecondary)
+	highlight := base.Foreground(theme.TextPrimary)
+	descStyle := base.Foreground(theme.TextDim)
+
+	selectedBase := lipgloss.NewStyle().
+		Background(theme.Accent).
+		Foreground(theme.TextPrimary)
+	selectedNormal := selectedBase.Foreground(theme.TextPrimary)
+	selectedHighlight := selectedBase.Foreground(theme.TextPrimary).Bold(true)
+	selectedDesc := selectedBase.Foreground(theme.TextPrimary)
+
+	if selectedIdx < 0 || selectedIdx >= len(suggestions) {
+		selectedIdx = 0
+	}
+	start := 0
+	if selectedIdx >= maxSuggestions {
+		start = selectedIdx - (maxSuggestions - 1)
+	}
+	if start < 0 {
+		start = 0
+	}
+	if start+maxSuggestions > len(suggestions) {
+		start = len(suggestions) - maxSuggestions
+		if start < 0 {
+			start = 0
+		}
+	}
+	end := start + maxSuggestions
+	visible := suggestions[start:end]
+	selectedVisible := selectedIdx - start
+
+	commandWidth := 0
+	for i := 0; i < len(visible); i++ {
+		length := lipgloss.Width(visible[i].Text)
+		if length > commandWidth {
+			commandWidth = length
+		}
+	}
+	if commandWidth == 0 {
+		return ""
+	}
+
+	contentWidth := width - 2
+	if contentWidth < 1 {
+		contentWidth = width
+	}
+	lines := make([]string, 0, maxSuggestions+2)
+	if width > 0 {
+		lines = append(lines, base.Render(strings.Repeat(" ", width)))
+	}
+	for i := 0; i < len(visible); i++ {
+		suggestion := visible[i]
+		lineBase := base
+		lineNormal := normal
+		lineHighlight := highlight
+		lineDesc := descStyle
+		if i == selectedVisible {
+			lineBase = selectedBase
+			lineNormal = selectedNormal
+			lineHighlight = selectedHighlight
+			lineDesc = selectedDesc
+		}
+		rendered := renderSlashSuggestion(suggestion, lineNormal, lineHighlight)
+		cmdPad := commandWidth - lipgloss.Width(suggestion.Text)
+		if cmdPad < 0 {
+			cmdPad = 0
+		}
+		if cmdPad > 0 {
+			rendered += lineBase.Render(strings.Repeat(" ", cmdPad))
+		}
+		desc := strings.TrimSpace(suggestion.Desc)
+		if desc != "" {
+			rendered += lineBase.Render("  ") + lineDesc.Render(desc)
+		}
+		rendered = ansi.Truncate(rendered, contentWidth, "")
+		visible := lipgloss.Width(rendered)
+		if visible < contentWidth {
+			rendered += lineBase.Render(strings.Repeat(" ", contentWidth-visible))
+		}
+		if contentWidth < width {
+			rendered = lineBase.Render(" ") + rendered + lineBase.Render(" ")
+		}
+		lines = append(lines, rendered)
+	}
+	if width > 0 {
+		lines = append(lines, base.Render(strings.Repeat(" ", width)))
 	}
 	return strings.Join(lines, "\n")
+}
+
+func renderSlashSuggestion(suggestion SlashSuggestion, normal, highlight lipgloss.Style) string {
+	text := suggestion.Text
+	if text == "" {
+		return ""
+	}
+	matchLen := suggestion.MatchLen
+	if matchLen < 0 {
+		matchLen = 0
+	}
+	if matchLen > len(text) {
+		matchLen = len(text)
+	}
+	if matchLen == 0 {
+		return normal.Render(text)
+	}
+	prefix := text[:matchLen]
+	rest := text[matchLen:]
+	return highlight.Render(prefix) + normal.Render(rest)
 }

@@ -23,6 +23,7 @@ func TestCommandPaletteItemsAndRun(t *testing.T) {
 	foundPane := false
 	foundSession := false
 	foundProject := false
+	foundBroadcast := false
 	paneIndex := -1
 	sessionIndex := -1
 	projectIndex := -1
@@ -45,6 +46,9 @@ func TestCommandPaletteItemsAndRun(t *testing.T) {
 		}
 		if cmdItem.Label == "Debug" {
 			foundDebug = true
+		}
+		if cmdItem.Label == "Broadcast: /all" {
+			foundBroadcast = true
 		}
 		if cmdItem.Run != nil {
 			_ = cmdItem.Run()
@@ -70,6 +74,9 @@ func TestCommandPaletteItemsAndRun(t *testing.T) {
 	}
 	if !foundSettings || !foundDebug {
 		t.Fatalf("expected settings and debug entries")
+	}
+	if !foundBroadcast {
+		t.Fatalf("expected broadcast entry")
 	}
 	if !foundPane || !foundSession || !foundProject {
 		t.Fatalf("expected pane, session, and project groups")

@@ -67,14 +67,14 @@ func buildDashboardKeyMap(cfg layout.DashboardKeymapConfig) (*dashboardKeyMap, e
 		{
 			name:     "pane_next",
 			desc:     "pane",
-			defaults: []string{"tab", "ctrl+d"},
+			defaults: []string{"ctrl+d"},
 			override: cfg.PaneNext,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.paneNext = b },
 		},
 		{
 			name:     "pane_prev",
 			desc:     "pane",
-			defaults: []string{"shift+tab", "ctrl+a"},
+			defaults: []string{"ctrl+a"},
 			override: cfg.PanePrev,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.panePrev = b },
 		},

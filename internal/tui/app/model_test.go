@@ -120,14 +120,8 @@ func TestKeyBindings(t *testing.T) {
 	if !key.Matches(tea.KeyMsg{Type: tea.KeyEnter}, km.attach) {
 		t.Error("attach binding should match Enter key")
 	}
-	if !key.Matches(tea.KeyMsg{Type: tea.KeyTab}, km.paneNext) {
-		t.Error("paneNext binding should match Tab key")
-	}
 	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlD}, km.paneNext) {
 		t.Error("paneNext binding should match ctrl+d")
-	}
-	if !key.Matches(tea.KeyMsg{Type: tea.KeyShiftTab}, km.panePrev) {
-		t.Error("panePrev binding should match Shift+Tab key")
 	}
 	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlA}, km.panePrev) {
 		t.Error("panePrev binding should match ctrl+a")

@@ -85,6 +85,47 @@ func TestViewQuickReplyRenders(t *testing.T) {
 	}
 }
 
+func TestViewQuickReplyKeepsHeightWithSlashSuggestions(t *testing.T) {
+	input := textinput.New()
+	input.SetValue("/")
+	m := Model{
+		QuickReplyInput: input,
+		SlashSuggestions: []SlashSuggestion{
+			{Text: "/kill", MatchLen: 2},
+			{Text: "/rename", MatchLen: 2},
+		},
+	}
+	out := m.viewQuickReply(40)
+	lines := strings.Split(out, "\n")
+	if len(lines) != 3 {
+		t.Fatalf("expected quick reply height 3, got %d", len(lines))
+	}
+}
+
+func TestViewDashboardSlashMenuOverlay(t *testing.T) {
+	input := textinput.New()
+	input.SetValue("/")
+	m := Model{
+		Width:           60,
+		Height:          16,
+		QuickReplyInput: input,
+		SlashSuggestions: []SlashSuggestion{
+			{Text: "/kill", MatchLen: 2, Desc: "Close pane"},
+			{Text: "/rename", MatchLen: 2, Desc: "Rename pane"},
+		},
+	}
+	out := m.viewDashboardContent()
+	if !strings.Contains(out, "/kill") {
+		t.Fatalf("expected slash suggestion output, got %q", out)
+	}
+	lines := strings.Split(out, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "/kill") && strings.Contains(line, "/rename") {
+			t.Fatalf("expected slash suggestions on separate lines, got %q", line)
+		}
+	}
+}
+
 func TestViewPreviewFitsSmallHeight(t *testing.T) {
 	m := Model{
 		PreviewMode: "grid",

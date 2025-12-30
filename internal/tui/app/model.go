@@ -84,8 +84,8 @@ type Model struct {
 	quickReplyHistory      []string
 	quickReplyHistoryIndex int
 	quickReplyHistoryDraft string
-	quickReplySlashPending bool
-	quickReplySlashPalette bool
+	quickReplySlashIndex   int
+	quickReplySlashPrefix  string
 
 	mouse mouse.Handler
 
@@ -197,6 +197,7 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 	m.quickReplyInput.Cursor.Style = qrStyle.Reverse(true)
 	m.quickReplyInput.Focus()
 	m.quickReplyHistoryIndex = -1
+	m.quickReplySlashIndex = -1
 
 	m.setupProjectPicker()
 	m.setupLayoutPicker()

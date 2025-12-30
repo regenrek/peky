@@ -67,26 +67,55 @@ func TestQuickReplyBroadcastParsesAll(t *testing.T) {
 	}
 }
 
-func TestQuickReplySlashPaletteOpensAfterDelay(t *testing.T) {
+func TestQuickReplySlashSuggestionsRequirePrefix(t *testing.T) {
+	m := newTestModelLite()
+	m.quickReplyInput.SetValue("hello /")
+
+	if got := m.slashSuggestions(); len(got) != 0 {
+		t.Fatalf("expected no suggestions for mid-input slash, got %#v", got)
+	}
+}
+
+func TestQuickReplySlashSuggestionsOnSlash(t *testing.T) {
 	m := newTestModelLite()
 	m.quickReplyInput.SetValue("")
+	m.quickReplyInput.Focus()
 
-	_, cmd := m.updateQuickReply(keyRune('/'))
-	if cmd == nil {
-		t.Fatalf("expected slash palette cmd")
-	}
-	if !m.quickReplySlashPending {
-		t.Fatalf("expected slash palette pending")
-	}
+	m.updateQuickReply(keyRune('/'))
 	if got := m.quickReplyInput.Value(); got != "/" {
-		t.Fatalf("expected input set to '/', got %q", got)
+		t.Fatalf("expected input '/', got %q", got)
 	}
+	suggestions := m.slashSuggestions()
+	if len(suggestions) == 0 {
+		t.Fatalf("expected slash suggestions")
+	}
+	for _, suggestion := range suggestions {
+		if suggestion.Text == "" || suggestion.Text[0] != '/' {
+			t.Fatalf("unexpected suggestion %#v", suggestion)
+		}
+	}
+}
 
-	cmd = m.handleSlashPaletteMsg()
-	if cmd == nil {
-		t.Fatalf("expected palette open cmd")
+func TestQuickReplySlashCompletionExactMatch(t *testing.T) {
+	m := newTestModelLite()
+	m.quickReplyInput.SetValue("/kill")
+
+	if !m.applySlashCompletion() {
+		t.Fatalf("expected slash completion")
 	}
-	if m.state != StateCommandPalette {
-		t.Fatalf("expected command palette state, got %v", m.state)
+	if got := m.quickReplyInput.Value(); got != "/kill " {
+		t.Fatalf("expected /kill completion, got %q", got)
+	}
+}
+
+func TestQuickReplySlashCompletionLongestPrefix(t *testing.T) {
+	m := newTestModelLite()
+	m.quickReplyInput.SetValue("/ki")
+
+	if !m.applySlashCompletion() {
+		t.Fatalf("expected slash completion")
+	}
+	if got := m.quickReplyInput.Value(); got != "/kill" {
+		t.Fatalf("expected /kill prefix completion, got %q", got)
 	}
 }

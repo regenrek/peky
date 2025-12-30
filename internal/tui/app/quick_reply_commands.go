@@ -53,3 +53,25 @@ func (m *Model) applySessionFilter(value string) tea.Cmd {
 	m.quickReplyInput.Focus()
 	return nil
 }
+
+func (m *Model) prepareQuickReplyInput() tea.Cmd {
+	var cmd tea.Cmd
+	if m.terminalFocus {
+		m.setTerminalFocus(false)
+		cmd = m.refreshPaneViewsCmd()
+	}
+	if m.filterActive {
+		m.filterActive = false
+		m.filterInput.Blur()
+	}
+	m.quickReplyInput.Focus()
+	return cmd
+}
+
+func (m *Model) prefillQuickReplyInput(value string) tea.Cmd {
+	cmd := m.prepareQuickReplyInput()
+	m.quickReplyInput.SetValue(value)
+	m.quickReplyInput.CursorEnd()
+	m.updateSlashSelection()
+	return cmd
+}

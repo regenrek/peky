@@ -106,7 +106,7 @@ func (m Model) viewHelp() string {
 	left.WriteString("  enter Send input\n")
 	left.WriteString("  esc   Clear input\n")
 	left.WriteString("  up/down Input history\n")
-	left.WriteString("  /     Command palette / slash commands\n")
+	left.WriteString("  /     Slash commands (↑/↓ select, tab complete)\n")
 	left.WriteString(fmt.Sprintf("  %s Toggle terminal focus (Peaky Panes sessions)\n", m.Keys.TerminalFocus))
 	left.WriteString(fmt.Sprintf("  %s Scrollback mode (Peaky Panes sessions)\n", m.Keys.Scrollback))
 	left.WriteString(fmt.Sprintf("  %s Copy mode (Peaky Panes sessions)\n", m.Keys.CopyMode))

@@ -28,6 +28,8 @@ type Model struct {
 	FilterActive             bool
 	FilterInput              textinput.Model
 	QuickReplyInput          textinput.Model
+	SlashSuggestions         []SlashSuggestion
+	SlashSelected            int
 	TerminalFocus            bool
 	SupportsTerminalFocus    bool
 	ProjectPicker            list.Model
@@ -113,6 +115,12 @@ type KeyHints struct {
 	Filter          string
 	Help            string
 	Quit            string
+}
+
+type SlashSuggestion struct {
+	Text     string
+	MatchLen int
+	Desc     string
 }
 
 type ConfirmKill struct {

@@ -15,6 +15,7 @@ This format is based on Keep a Changelog.
 - Quick reply history navigation with up/down cycling.
 - Command registry to keep palette and slash actions in sync.
 - Dashboard `pane_navigation_mode` config to choose spatial or memory selection behavior.
+- Command palette entry for the `/all` broadcast quick reply.
 
 ### Changed
 - Pane view rendering now respects client deadlines and can fall back to cached views under pressure.
@@ -24,7 +25,7 @@ This format is based on Keep a Changelog.
 - Preview cache now keys on pane update sequence for deterministic refresh behavior.
 - Command palette actions now render from the shared registry.
 - Quick reply help/hints now surface slash commands and history.
-- Quick reply bar now opens the command palette on `/`, with a cleaner input-only label and updated placeholder copy.
+- Quick reply slash commands now show a padded dropdown overlay above the input with arrow-key selection and tab completion.
 - Dashboard keymap defaults now use `ctrl+q/ctrl+e` for project nav, `ctrl+a/ctrl+d` for pane nav, and `ctrl+,` for edit config.
 - Project and dashboard left/right navigation now defaults to spatial row selection (set `pane_navigation_mode: memory` to restore per-project memory).
 

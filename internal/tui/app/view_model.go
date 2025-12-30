@@ -46,6 +46,8 @@ func (m *Model) viewModel() views.Model {
 		FilterActive:             m.filterActive,
 		FilterInput:              m.filterInput,
 		QuickReplyInput:          m.quickReplyInput,
+		SlashSuggestions:         toViewSlashSuggestions(m.slashSuggestions()),
+		SlashSelected:            m.quickReplySlashIndex,
 		TerminalFocus:            m.terminalFocus,
 		SupportsTerminalFocus:    m.supportsTerminalFocus(),
 		ProjectPicker:            m.projectPicker,
@@ -88,6 +90,21 @@ func (m *Model) viewModel() views.Model {
 	}
 
 	return vm
+}
+
+func toViewSlashSuggestions(entries []slashSuggestion) []views.SlashSuggestion {
+	if len(entries) == 0 {
+		return nil
+	}
+	out := make([]views.SlashSuggestion, len(entries))
+	for i, entry := range entries {
+		out[i] = views.SlashSuggestion{
+			Text:     entry.Text,
+			MatchLen: entry.MatchLen,
+			Desc:     entry.Desc,
+		}
+	}
+	return out
 }
 
 func (m *Model) paneViewProvider() func(id string, width, height int, showCursor bool) string {

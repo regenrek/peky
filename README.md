@@ -256,7 +256,7 @@ The dashboard shows:
 - Input bar (always visible) and target pane highlight for follow-ups
 
 Navigation (always visible):
-- `ctrl+q/ctrl+e` project, `ctrl+w/ctrl+s` session/panes, `alt+w/alt+s` session only, `tab/⇧tab` or `ctrl+a/ctrl+d` pane, `ctrl+g` help
+- `ctrl+q/ctrl+e` project, `ctrl+w/ctrl+s` session/panes, `alt+w/alt+s` session only, `ctrl+a/ctrl+d` pane, `ctrl+g` help
 
 Key bindings (also shown in the help view):
 Keymap overrides are available in the global config (`~/.config/peakypanes/config.yml`).
@@ -287,7 +287,7 @@ Other
 - `ctrl+p` command palette
 - `ctrl+r` refresh, `ctrl+,` edit config, `ctrl+f` filter, `ctrl+c` quit
 
-Input details: the input is always active—type and press `enter` to send to the highlighted pane. Use `esc` to clear. Toggle terminal focus to send raw keystrokes into the pane. Use scrollback (`f7`) to navigate output and copy mode (`f8`) to select/yank (`v` select, `y` yank, `esc/q` exit).
+Input details: the input is always active—type and press `enter` to send to the highlighted pane. Use `esc` to clear. Type `/` to see slash commands and press `tab` to autocomplete. Toggle terminal focus to send raw keystrokes into the pane. Use scrollback (`f7`) to navigate output and copy mode (`f8`) to select/yank (`v` select, `y` yank, `esc/q` exit).
 
 ### Dashboard Config (optional)
 
@@ -307,8 +307,8 @@ dashboard:
     session_down: ["ctrl+s"]
     session_only_up: ["alt+w"]
     session_only_down: ["alt+s"]
-    pane_next: ["tab", "ctrl+d"]
-    pane_prev: ["shift+tab", "ctrl+a"]
+    pane_next: ["ctrl+d"]
+    pane_prev: ["ctrl+a"]
     terminal_focus: ["ctrl+\\"]
     scrollback: ["f7"]
     copy_mode: ["f8"]

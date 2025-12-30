@@ -80,7 +80,7 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 					ID:      "pane_close",
 					Label:   "Pane: Close pane",
 					Desc:    "Close the selected pane",
-					Aliases: []string{"close", "close-pane", "pane close", "kill", "pane kill"},
+					Aliases: []string{"kill", "close", "close-pane", "pane close", "pane kill"},
 					Run: func(m *Model, _ commandArgs) tea.Cmd {
 						return m.openClosePaneConfirm()
 					},
@@ -188,6 +188,19 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 			},
 		},
 		{
+			Name: "broadcast",
+			Commands: []commandSpec{
+				{
+					ID:    "broadcast_all",
+					Label: "Broadcast: /all",
+					Desc:  "Send to session/project/all panes",
+					Run: func(m *Model, _ commandArgs) tea.Cmd {
+						return m.prefillQuickReplyInput("/all ")
+					},
+				},
+			},
+		},
+		{
 			Name: "menu",
 			Commands: []commandSpec{
 				{
@@ -215,7 +228,7 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 			Commands: []commandSpec{
 				{
 					ID:       "other_help",
-					Label:    "Other: Help",
+					Label:    "Help",
 					Desc:     "Show help",
 					Aliases:  []string{"help"},
 					Shortcut: shortcutHelp,
@@ -226,7 +239,7 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 				},
 				{
 					ID:       "other_quit",
-					Label:    "Other: Quit",
+					Label:    "Quit",
 					Desc:     "Exit PeakyPanes",
 					Aliases:  []string{"quit"},
 					Shortcut: shortcutQuit,
