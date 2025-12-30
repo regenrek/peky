@@ -102,7 +102,13 @@ type Window struct {
 	cacheMu    sync.Mutex
 	cacheDirty bool
 	cacheANSI  string
-	renderCh   chan struct{}
+	cacheSeq   uint64
+
+	cacheCols      int
+	cacheRows      int
+	cacheAltScreen bool
+
+	renderCh chan struct{}
 
 	stateMu sync.Mutex
 	// ScrollbackMode enables scrollback navigation (no PTY input).
@@ -121,6 +127,8 @@ type Window struct {
 	toastFn func(string)
 
 	lastUpdate atomic.Int64 // unix nanos
+
+	updateSeq atomic.Uint64
 }
 
 // NewWindow starts a new process attached to a PTY and backed by a VT emulator.
@@ -210,6 +218,11 @@ func NewWindow(opts Options) (*Window, error) {
 	term.SetCallbacks(vt.Callbacks{
 		CursorVisibility: func(visible bool) {
 			w.cursorVisible.Store(visible)
+			w.markDirty()
+		},
+		CursorPosition: func(old, new uv.Position) {
+			_ = old
+			_ = new
 			w.markDirty()
 		},
 		Title: func(title string) {
@@ -311,6 +324,25 @@ func (w *Window) RequestANSIRender() {
 }
 
 func (w *Window) ID() string { return w.id }
+
+func (w *Window) UpdateSeq() uint64 {
+	if w == nil {
+		return 0
+	}
+	return w.updateSeq.Load()
+}
+
+// ANSICacheSeq returns the UpdateSeq value that produced the cached ANSI frame.
+// It can lag behind UpdateSeq while the cache is dirty.
+func (w *Window) ANSICacheSeq() uint64 {
+	if w == nil {
+		return 0
+	}
+	w.cacheMu.Lock()
+	seq := w.cacheSeq
+	w.cacheMu.Unlock()
+	return seq
+}
 
 func (w *Window) Title() string {
 	if v := w.title.Load(); v != nil {
@@ -440,6 +472,8 @@ func (w *Window) detachPTY() {
 }
 
 func (w *Window) markDirty() {
+	w.updateSeq.Add(1)
+
 	w.lastUpdate.Store(time.Now().UnixNano())
 
 	w.cacheMu.Lock()

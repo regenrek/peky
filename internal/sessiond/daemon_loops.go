@@ -67,7 +67,7 @@ func (d *Daemon) eventLoop() {
 			}
 			d.broadcast(Event{Type: EventToast, PaneID: event.PaneID, Toast: event.Toast, ToastKind: ToastSuccess})
 		default:
-			d.broadcast(Event{Type: EventPaneUpdated, PaneID: event.PaneID})
+			d.broadcast(Event{Type: EventPaneUpdated, PaneID: event.PaneID, PaneUpdateSeq: event.Seq})
 		}
 	}
 }
@@ -131,17 +131,22 @@ func (d *Daemon) writeLoop(client *clientConn) {
 		default:
 		}
 
+		if out, ok := client.popEvent(); ok {
+			if err := d.writeEnvelopeWithTimeout(client, out.env, out.timeout); err != nil {
+				d.shutdownClientConn(client)
+				return
+			}
+			continue
+		}
+
 		select {
 		case out := <-client.respCh:
 			if err := d.writeEnvelopeWithTimeout(client, out.env, out.timeout); err != nil {
 				d.shutdownClientConn(client)
 				return
 			}
-		case out := <-client.eventCh:
-			if err := d.writeEnvelopeWithTimeout(client, out.env, out.timeout); err != nil {
-				d.shutdownClientConn(client)
-				return
-			}
+		case <-client.eventNotify:
+			continue
 		case <-client.done:
 			return
 		case <-d.ctx.Done():
@@ -167,9 +172,6 @@ func (d *Daemon) broadcast(event Event) {
 			continue
 		default:
 		}
-		select {
-		case client.eventCh <- outboundEnvelope{env: env, timeout: defaultWriteTimeout}:
-		default:
-		}
+		client.enqueueEvent(eventKeyFor(event), outboundEnvelope{env: env, timeout: defaultWriteTimeout})
 	}
 }

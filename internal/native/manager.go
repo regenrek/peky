@@ -6,6 +6,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/regenrek/peakypanes/internal/diag"
 )
 
 // LayoutBaseSize is the normalized coordinate space for pane layouts.
@@ -23,6 +25,7 @@ const (
 type PaneEvent struct {
 	Type   PaneEventType
 	PaneID string
+	Seq    uint64
 	Toast  string
 }
 
@@ -121,21 +124,25 @@ func (m *Manager) markActive(id string) {
 	if m == nil || m.closed.Load() {
 		return
 	}
+	var seq uint64
 	m.mu.Lock()
 	pane := m.panes[id]
 	if pane != nil {
 		pane.LastActive = time.Now()
+		if pane.window != nil {
+			seq = pane.window.UpdateSeq()
+		}
 	}
 	m.mu.Unlock()
-	m.notify(id)
+	m.notify(id, seq)
 }
 
-func (m *Manager) notify(id string) {
+func (m *Manager) notify(id string, seq uint64) {
 	if m == nil || m.closed.Load() {
 		return
 	}
 	m.version.Add(1)
-	m.emitEvent(PaneEvent{Type: PaneEventUpdated, PaneID: id})
+	m.emitEvent(PaneEvent{Type: PaneEventUpdated, PaneID: id, Seq: seq})
 }
 
 func (m *Manager) notifyToast(id, message string) {
@@ -161,7 +168,22 @@ func (m *Manager) emitEvent(event PaneEvent) {
 	select {
 	case m.events <- event:
 	default:
+		diag.LogEvery("native.events.drop", 2*time.Second, "native: drop pane event id=%s seq=%d type=%d", event.PaneID, event.Seq, event.Type)
 	}
+}
+
+func (m *Manager) notifyPane(id string) {
+	if m == nil || m.closed.Load() {
+		return
+	}
+	var seq uint64
+	m.mu.RLock()
+	pane := m.panes[id]
+	if pane != nil && pane.window != nil {
+		seq = pane.window.UpdateSeq()
+	}
+	m.mu.RUnlock()
+	m.notify(id, seq)
 }
 
 func (m *Manager) closePanes(panes []*Pane) {

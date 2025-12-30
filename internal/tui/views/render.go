@@ -2,40 +2,28 @@ package views
 
 // Render is the entry point for rendering the active TUI view.
 func Render(m Model) string {
-	switch m.ActiveView {
-	case viewDashboard:
-		return m.viewDashboard()
-	case viewProjectPicker:
-		return appStyle.Render(m.ProjectPicker.View())
-	case viewLayoutPicker:
-		return m.viewLayoutPicker()
-	case viewPaneSplitPicker:
-		return m.viewPaneSplitPicker()
-	case viewPaneSwapPicker:
-		return m.viewPaneSwapPicker()
-	case viewConfirmKill:
-		return m.viewConfirmKill()
-	case viewConfirmCloseProject:
-		return m.viewConfirmCloseProject()
-	case viewConfirmCloseAllProjects:
-		return m.viewConfirmCloseAllProjects()
-	case viewConfirmClosePane:
-		return m.viewConfirmClosePane()
-	case viewConfirmRestart:
-		return m.viewConfirmRestart()
-	case viewHelp:
-		return m.viewHelp()
-	case viewCommandPalette:
-		return m.viewCommandPalette()
-	case viewSettingsMenu:
-		return m.viewSettingsMenu()
-	case viewDebugMenu:
-		return m.viewDebugMenu()
-	case viewRenameSession, viewRenamePane:
-		return m.viewRename()
-	case viewProjectRootSetup:
-		return m.viewProjectRootSetup()
-	default:
-		return m.viewDashboard()
+	if render := viewRenderers[m.ActiveView]; render != nil {
+		return render(m)
 	}
+	return m.viewDashboard()
+}
+
+var viewRenderers = map[int]func(Model) string{
+	viewDashboard:               func(m Model) string { return m.viewDashboard() },
+	viewProjectPicker:           func(m Model) string { return appStyle.Render(m.ProjectPicker.View()) },
+	viewLayoutPicker:            func(m Model) string { return m.viewLayoutPicker() },
+	viewPaneSplitPicker:         func(m Model) string { return m.viewPaneSplitPicker() },
+	viewPaneSwapPicker:          func(m Model) string { return m.viewPaneSwapPicker() },
+	viewConfirmKill:             func(m Model) string { return m.viewConfirmKill() },
+	viewConfirmCloseProject:     func(m Model) string { return m.viewConfirmCloseProject() },
+	viewConfirmCloseAllProjects: func(m Model) string { return m.viewConfirmCloseAllProjects() },
+	viewConfirmClosePane:        func(m Model) string { return m.viewConfirmClosePane() },
+	viewConfirmRestart:          func(m Model) string { return m.viewConfirmRestart() },
+	viewHelp:                    func(m Model) string { return m.viewHelp() },
+	viewCommandPalette:          func(m Model) string { return m.viewCommandPalette() },
+	viewSettingsMenu:            func(m Model) string { return m.viewSettingsMenu() },
+	viewDebugMenu:               func(m Model) string { return m.viewDebugMenu() },
+	viewRenameSession:           func(m Model) string { return m.viewRename() },
+	viewRenamePane:              func(m Model) string { return m.viewRename() },
+	viewProjectRootSetup:        func(m Model) string { return m.viewProjectRootSetup() },
 }

@@ -20,7 +20,8 @@ func newTestModelLite() *Model {
 		paneMouseMotion:    make(map[string]bool),
 		paneViewProfile:    termenv.TrueColor,
 		paneInputDisabled:  make(map[string]struct{}),
-		paneViewLastReq:    make(map[string]time.Time),
+		paneViewSeq:        make(map[paneViewKey]uint64),
+		paneViewLastReq:    make(map[paneViewKey]time.Time),
 		settings: DashboardConfig{
 			PreviewMode:  "grid",
 			PreviewLines: 12,

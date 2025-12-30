@@ -17,6 +17,8 @@ type Screen struct {
 	scroll uv.Rectangle
 	// scrollback is the scrollback buffer for lines that have scrolled off the top.
 	scrollback *Scrollback
+	// damage is the damage tracker for incremental rendering.
+	damage DamageTracker
 }
 
 // NewScreen creates a new screen.
@@ -35,6 +37,7 @@ func (s *Screen) Reset() {
 	s.cur = Cursor{}
 	s.saved = Cursor{}
 	s.scroll = s.buf.Bounds()
+	s.damage.MarkAll()
 }
 
 // Bounds returns the bounds of the screen.
@@ -47,6 +50,10 @@ func (s *Screen) Touched() []*uv.LineData {
 	return s.buf.Touched
 }
 
+func (s *Screen) ConsumeDamage() DamageState {
+	return s.damage.Consume()
+}
+
 // CellAt returns the cell at the given x, y position.
 func (s *Screen) CellAt(x int, y int) *uv.Cell {
 	return s.buf.CellAt(x, y)
@@ -55,6 +62,7 @@ func (s *Screen) CellAt(x int, y int) *uv.Cell {
 // SetCell sets the cell at the given x, y position.
 func (s *Screen) SetCell(x, y int, c *uv.Cell) {
 	s.buf.SetCell(x, y, c)
+	s.damage.MarkRow(y)
 }
 
 // Height returns the height of the screen.
@@ -66,6 +74,7 @@ func (s *Screen) Height() int {
 func (s *Screen) Resize(width int, height int) {
 	s.buf.Resize(width, height)
 	s.scroll = s.buf.Bounds()
+	s.damage.Resize(width, height)
 }
 
 // Width returns the width of the screen.
@@ -81,6 +90,7 @@ func (s *Screen) Clear() {
 // ClearArea clears the given area.
 func (s *Screen) ClearArea(area uv.Rectangle) {
 	s.buf.ClearArea(area)
+	s.damage.MarkRect(area)
 }
 
 // Fill fills the screen or part of it.
@@ -91,6 +101,7 @@ func (s *Screen) Fill(c *uv.Cell) {
 // FillArea fills the given area with the given cell.
 func (s *Screen) FillArea(c *uv.Cell, area uv.Rectangle) {
 	s.buf.FillArea(c, area)
+	s.damage.MarkRect(area)
 }
 
 // setHorizontalMargins sets the horizontal margins.
@@ -277,6 +288,7 @@ func (s *Screen) InsertCell(n int) {
 
 	x, y := s.cur.X, s.cur.Y
 	s.buf.InsertCellArea(x, y, n, s.blankCell(), s.scroll)
+	s.damage.MarkRow(y)
 }
 
 // DeleteCell deletes n cells at the cursor position moving cells to the left.
@@ -288,6 +300,7 @@ func (s *Screen) DeleteCell(n int) {
 
 	x, y := s.cur.X, s.cur.Y
 	s.buf.DeleteCellArea(x, y, n, s.blankCell(), s.scroll)
+	s.damage.MarkRow(y)
 }
 
 // ScrollUp scrolls the content up n lines within the given region. Lines
@@ -300,6 +313,10 @@ func (s *Screen) ScrollUp(n int) {
 
 	scroll := s.scroll
 	width := s.buf.Width()
+
+	if n > scroll.Dy() {
+		n = scroll.Dy()
+	}
 
 	if s.scrollback != nil && scroll.Min.Y == 0 && scroll.Min.X == 0 && scroll.Dx() == width {
 		s.scrollback.SetCaptureWidth(width)
@@ -317,6 +334,14 @@ func (s *Screen) ScrollUp(n int) {
 	s.setCursor(s.cur.X, 0, true)
 	s.DeleteLine(n)
 	s.setCursor(x, y, false)
+
+	if n > 0 {
+		if scroll == s.buf.Bounds() {
+			s.damage.MarkScroll(-n)
+		} else {
+			s.damage.MarkRect(scroll)
+		}
+	}
 }
 
 // ScrollDown scrolls the content down n lines within the given region. Lines
@@ -327,6 +352,20 @@ func (s *Screen) ScrollDown(n int) {
 	s.setCursor(s.cur.X, 0, true)
 	s.InsertLine(n)
 	s.setCursor(x, y, false)
+
+	if n > 0 {
+		scroll := s.scroll
+		if n > scroll.Dy() {
+			n = scroll.Dy()
+		}
+		if n > 0 {
+			if scroll == s.buf.Bounds() {
+				s.damage.MarkScroll(n)
+			} else {
+				s.damage.MarkRect(scroll)
+			}
+		}
+	}
 }
 
 // InsertLine inserts n blank lines at the cursor position Y coordinate.
@@ -347,6 +386,8 @@ func (s *Screen) InsertLine(n int) bool {
 	}
 
 	s.buf.InsertLineArea(y, n, s.blankCell(), s.scroll)
+
+	s.damage.MarkRect(s.scroll)
 
 	return true
 }
@@ -370,6 +411,8 @@ func (s *Screen) DeleteLine(n int) bool {
 	}
 
 	s.buf.DeleteLineArea(y, n, s.blankCell(), scroll)
+
+	s.damage.MarkRect(scroll)
 
 	return true
 }

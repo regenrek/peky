@@ -105,12 +105,12 @@ func (m *Manager) ClosePane(ctx context.Context, sessionName, paneIndex string) 
 	if paneWindow != nil {
 		_ = paneWindow.Close()
 	}
-	m.notify(paneID)
+	m.notifyPane(paneID)
 	if lastPane {
 		return nil
 	}
 	for _, id := range notifyIDs {
-		m.notify(id)
+		m.notifyPane(id)
 	}
 	m.version.Add(1)
 	return nil
@@ -234,7 +234,7 @@ func (m *Manager) SplitPane(ctx context.Context, sessionName, paneIndex string, 
 	m.mu.Unlock()
 
 	m.forwardUpdates(pane)
-	m.notify(pane.ID)
+	m.notifyPane(pane.ID)
 	m.version.Add(1)
 	return pane.Index, nil
 }
@@ -255,14 +255,15 @@ func (m *Manager) SwapPanes(sessionName, paneA, paneB string) error {
 	}
 
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	session, ok := m.sessions[sessionName]
 	if !ok {
+		m.mu.Unlock()
 		return fmt.Errorf("native: session %q not found", sessionName)
 	}
 	first := findPaneByIndex(session.Panes, paneA)
 	second := findPaneByIndex(session.Panes, paneB)
 	if first == nil || second == nil {
+		m.mu.Unlock()
 		return fmt.Errorf("native: panes %q and %q not found in %q", paneA, paneB, sessionName)
 	}
 
@@ -273,9 +274,19 @@ func (m *Manager) SwapPanes(sessionName, paneA, paneB string) error {
 	first.Index, second.Index = second.Index, first.Index
 
 	sortPanesByIndex(session.Panes)
-	m.notify(first.ID)
-	m.notify(second.ID)
+	firstSeq := uint64(0)
+	if first.window != nil {
+		firstSeq = first.window.UpdateSeq()
+	}
+	secondSeq := uint64(0)
+	if second.window != nil {
+		secondSeq = second.window.UpdateSeq()
+	}
 	m.version.Add(1)
+	m.mu.Unlock()
+
+	m.notify(first.ID, firstSeq)
+	m.notify(second.ID, secondSeq)
 	return nil
 }
 
@@ -292,7 +303,7 @@ func (m *Manager) SendInput(id string, input []byte) error {
 	}
 	if err := pane.window.SendInput(input); err != nil {
 		if errors.Is(err, terminal.ErrPaneClosed) {
-			m.notify(id)
+			m.notifyPane(id)
 		}
 		return err
 	}

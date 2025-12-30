@@ -73,10 +73,11 @@ func (m *Model) handleDaemonRestart(msg daemonRestartMsg) tea.Cmd {
 		m.client = nil
 		m.paneViewClient = nil
 		m.paneViews = nil
+		m.paneViewSeq = nil
 		m.paneViewQueuedIDs = nil
 		m.paneViewLastReq = nil
 		m.paneViewQueued = false
-		m.paneViewInFlight = false
+		m.paneViewInFlight = 0
 		m.setToast("Restart failed: "+msg.Err.Error(), toastError)
 		return nil
 	}
@@ -84,20 +85,22 @@ func (m *Model) handleDaemonRestart(msg daemonRestartMsg) tea.Cmd {
 		m.client = nil
 		m.paneViewClient = nil
 		m.paneViews = nil
+		m.paneViewSeq = nil
 		m.paneViewQueuedIDs = nil
 		m.paneViewLastReq = nil
 		m.paneViewQueued = false
-		m.paneViewInFlight = false
+		m.paneViewInFlight = 0
 		m.setToast("Restart failed: daemon client unavailable", toastError)
 		return nil
 	}
 	m.client = msg.Client
 	m.paneViewClient = msg.PaneViewClient
 	m.paneViews = nil
+	m.paneViewSeq = nil
 	m.paneViewQueuedIDs = nil
 	m.paneViewLastReq = nil
 	m.paneViewQueued = false
-	m.paneViewInFlight = false
+	m.paneViewInFlight = 0
 	if m.paneMouseMotion == nil {
 		m.paneMouseMotion = make(map[string]bool)
 	} else {

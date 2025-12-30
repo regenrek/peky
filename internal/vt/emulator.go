@@ -132,6 +132,13 @@ func (e *Emulator) Touched() []*uv.LineData {
 	return e.scr.Touched()
 }
 
+func (e *Emulator) ConsumeDamage() DamageState {
+	if e == nil || e.scr == nil {
+		return DamageState{}
+	}
+	return e.scr.ConsumeDamage()
+}
+
 // String returns a string representation of the underlying screen buffer.
 func (e *Emulator) String() string {
 	s := e.scr.buf.String()

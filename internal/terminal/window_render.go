@@ -36,16 +36,37 @@ func (w *Window) ViewANSICtx(ctx context.Context) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
+
+	// Only force sync render on first paint or after dimension changes.
+	cols := w.cols
+	rows := w.rows
+	alt := w.altScreen.Load()
+
 	w.cacheMu.Lock()
-	if !w.cacheDirty {
-		s := w.cacheANSI
-		w.cacheMu.Unlock()
-		return s, nil
-	}
+	cached := w.cacheANSI
+	dirty := w.cacheDirty
+	cacheCols := w.cacheCols
+	cacheRows := w.cacheRows
+	cacheAlt := w.cacheAltScreen
 	w.cacheMu.Unlock()
 
+	// Fast path: cache is clean and matches current dimensions.
+	if !dirty && cached != "" && cacheCols == cols && cacheRows == rows && cacheAlt == alt {
+		return cached, nil
+	}
+
+	// If we have a usable cached frame for current dims, return it and let the background renderer catch up.
+	if cached != "" && cacheCols == cols && cacheRows == rows && cacheAlt == alt {
+		w.RequestANSIRender()
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		return cached, nil
+	}
+
+	// Slow path: no usable cached frame (startup or resize). Render once synchronously.
 	w.refreshANSICache()
-	cached, _ := w.ViewANSICached()
+	cached, _ = w.ViewANSICached()
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
@@ -66,6 +87,9 @@ func (w *Window) refreshANSICache() {
 	if w == nil {
 		return
 	}
+
+	startSeq := w.UpdateSeq()
+
 	w.termMu.Lock()
 	term := w.term
 	if term == nil {
@@ -73,12 +97,30 @@ func (w *Window) refreshANSICache() {
 		return
 	}
 	s := term.Render()
+	cols := term.Width()
+	rows := term.Height()
+	if cols < 0 {
+		cols = 0
+	}
+	if rows < 0 {
+		rows = 0
+	}
+	alt := w.altScreen.Load()
 	w.termMu.Unlock()
+	endSeq := w.UpdateSeq()
 
 	w.cacheMu.Lock()
 	w.cacheANSI = s
-	w.cacheDirty = false
+	w.cacheSeq = startSeq
+	w.cacheCols = cols
+	w.cacheRows = rows
+	w.cacheAltScreen = alt
+	w.cacheDirty = endSeq != startSeq
 	w.cacheMu.Unlock()
+
+	if endSeq != startSeq {
+		w.RequestANSIRender()
+	}
 }
 
 // ViewLipgloss renders the VT screen by walking cells and applying lipgloss styles.
@@ -96,23 +138,16 @@ func (w *Window) ViewLipglossCtx(ctx context.Context, showCursor bool, profile t
 	if w == nil {
 		return "", nil
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = ensureContext(ctx)
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	snapshot := w.snapshotViewState()
-
-	w.termMu.Lock()
-	defer w.termMu.Unlock()
-	term := w.term
-	if term == nil {
-		return "", nil
+	cells, cols, rows, state, err := w.collectLipglossCells(ctx, showCursor)
+	if err != nil || cols <= 0 || rows <= 0 {
+		return "", err
 	}
+	snapCellAt := makeSnapshotCellAccessor(cells, cols, rows)
 
-	state := buildViewRenderState(w, term, snapshot, showCursor)
-	cellAt := makeCellAccessor(term, w.rows, state.topAbsY)
 	opts := RenderOptions{
 		ShowCursor: state.showCursor,
 		CursorX:    state.cursorX,
@@ -121,7 +156,67 @@ func (w *Window) ViewLipglossCtx(ctx context.Context, showCursor bool, profile t
 		Profile:    profile,
 	}
 
-	return renderCellsLipglossCtx(ctx, w.cols, w.rows, cellAt, opts)
+	return renderCellsLipglossCtx(ctx, cols, rows, snapCellAt, opts)
+}
+
+func ensureContext(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
+}
+
+func (w *Window) collectLipglossCells(ctx context.Context, showCursor bool) ([]uv.Cell, int, int, viewRenderState, error) {
+	snapshot := w.snapshotViewState()
+
+	w.termMu.Lock()
+	term := w.term
+	if term == nil {
+		w.termMu.Unlock()
+		return nil, 0, 0, viewRenderState{}, nil
+	}
+
+	state := buildViewRenderState(w, term, snapshot, showCursor)
+	rows := term.Height()
+	cols := term.Width()
+	if rows <= 0 || cols <= 0 {
+		w.termMu.Unlock()
+		return nil, 0, 0, viewRenderState{}, nil
+	}
+
+	cellAt := makeCellAccessor(term, rows, state.topAbsY)
+
+	blank := uv.EmptyCell
+	if blank.Width <= 0 {
+		blank.Width = 1
+	}
+
+	cells := make([]uv.Cell, cols*rows)
+	for y := 0; y < rows; y++ {
+		if err := ctx.Err(); err != nil {
+			w.termMu.Unlock()
+			return nil, 0, 0, viewRenderState{}, err
+		}
+		rowOff := y * cols
+		for x := 0; x < cols; x++ {
+			if c := cellAt(x, y); c != nil {
+				cells[rowOff+x] = *c
+			} else {
+				cells[rowOff+x] = blank
+			}
+		}
+	}
+	w.termMu.Unlock()
+	return cells, cols, rows, state, nil
+}
+
+func makeSnapshotCellAccessor(cells []uv.Cell, cols, rows int) func(int, int) *uv.Cell {
+	return func(x, y int) *uv.Cell {
+		if x < 0 || x >= cols || y < 0 || y >= rows {
+			return nil
+		}
+		return &cells[y*cols+x]
+	}
 }
 
 //

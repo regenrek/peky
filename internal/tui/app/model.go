@@ -135,9 +135,11 @@ type Model struct {
 	paneViews         map[paneViewKey]string
 	paneMouseMotion   map[string]bool
 	paneInputDisabled map[string]struct{}
-	paneViewLastReq   map[string]time.Time
 
-	paneViewInFlight  bool
+	paneViewSeq     map[paneViewKey]uint64
+	paneViewLastReq map[paneViewKey]time.Time
+
+	paneViewInFlight  int
 	paneViewQueued    bool
 	paneViewQueuedIDs map[string]struct{}
 }
@@ -170,7 +172,9 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 		paneMouseMotion:    make(map[string]bool),
 		paneViewProfile:    detectPaneViewProfile(),
 		paneInputDisabled:  make(map[string]struct{}),
-		paneViewLastReq:    make(map[string]time.Time),
+
+		paneViewSeq:     make(map[paneViewKey]uint64),
+		paneViewLastReq: make(map[paneViewKey]time.Time),
 	}
 
 	m.filterInput = textinput.New()

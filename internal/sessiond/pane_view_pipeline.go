@@ -11,9 +11,22 @@ import (
 )
 
 const (
-	paneViewMaxConcurrency = 4
-	paneViewDeadlineSlack  = 50 * time.Millisecond
+	paneViewMaxConcurrency   = 4
+	paneViewDeadlineSlack    = 50 * time.Millisecond
+	paneViewStarvationWindow = 750 * time.Millisecond
 )
+
+func paneViewEffectiveSeq(win paneViewWindow, renderMode PaneViewMode) uint64 {
+	if win == nil {
+		return 0
+	}
+	if renderMode == PaneViewANSI {
+		if seq := win.ANSICacheSeq(); seq != 0 {
+			return seq
+		}
+	}
+	return win.UpdateSeq()
+}
 
 type paneViewJob struct {
 	env      Envelope
@@ -49,9 +62,13 @@ func (s *paneViewScheduler) enqueue(paneID string, env Envelope, req PaneViewReq
 	}
 	var cancel context.CancelFunc
 	s.mu.Lock()
+	received := time.Now()
+	if existing, ok := s.pending[paneID]; ok && !s.inflight[paneID] {
+		received = existing.received
+	}
 	next := s.seq[paneID] + 1
 	s.seq[paneID] = next
-	s.pending[paneID] = paneViewJob{env: env, req: req, seq: next, received: time.Now()}
+	s.pending[paneID] = paneViewJob{env: env, req: req, seq: next, received: received}
 	cancel = s.cancel[paneID]
 	s.cond.Signal()
 	s.mu.Unlock()
@@ -81,13 +98,82 @@ func (s *paneViewScheduler) next() (string, paneViewJob, bool) {
 }
 
 func (s *paneViewScheduler) pickLocked() (string, paneViewJob, bool) {
+	var (
+		bestID  string
+		bestJob paneViewJob
+		hasBest bool
+	)
+
 	for paneID, job := range s.pending {
 		if s.inflight[paneID] {
 			continue
 		}
-		return paneID, job, true
+		if !hasBest {
+			bestID, bestJob, hasBest = paneID, job, true
+			continue
+		}
+		if paneViewJobBetter(job, bestJob) {
+			bestID, bestJob = paneID, job
+		}
 	}
-	return "", paneViewJob{}, false
+	if !hasBest {
+		return "", paneViewJob{}, false
+	}
+	return bestID, bestJob, true
+}
+
+func paneViewJobBetter(a, b paneViewJob) bool {
+	ap := paneViewJobPriority(a.req)
+	bp := paneViewJobPriority(b.req)
+	ap = paneViewJobBoost(ap, a.received)
+	bp = paneViewJobBoost(bp, b.received)
+	if ap != bp {
+		return ap > bp
+	}
+
+	// Earlier deadline first (0 means no deadline and should be treated as far future).
+	ad := a.req.DeadlineUnixNano
+	bd := b.req.DeadlineUnixNano
+	const maxI64 = int64(^uint64(0) >> 1)
+	if ad <= 0 {
+		ad = maxI64
+	}
+	if bd <= 0 {
+		bd = maxI64
+	}
+	if ad != bd {
+		return ad < bd
+	}
+
+	// Oldest received first.
+	return a.received.Before(b.received)
+}
+
+func paneViewJobPriority(req PaneViewRequest) int {
+	if req.Priority != PaneViewPriorityUnset {
+		return int(req.Priority)
+	}
+	// Back-compat: infer priority from mode.
+	if req.Mode == PaneViewLipgloss || req.ShowCursor {
+		return int(PaneViewPriorityFocused)
+	}
+	return int(PaneViewPriorityNormal)
+}
+
+func paneViewJobBoost(priority int, received time.Time) int {
+	if received.IsZero() {
+		return priority
+	}
+	age := time.Since(received)
+	if age < paneViewStarvationWindow {
+		return priority
+	}
+	boost := int(age / paneViewStarvationWindow)
+	out := priority + boost
+	if out > int(PaneViewPriorityFocused) {
+		return int(PaneViewPriorityFocused)
+	}
+	return out
 }
 
 func (s *paneViewScheduler) finish(paneID string) {
@@ -160,6 +246,7 @@ type paneViewCacheKey struct {
 type cachedPaneView struct {
 	resp       PaneViewResponse
 	renderedAt time.Time
+	updateSeq  uint64
 }
 
 func paneViewCacheKeyFor(paneID string, cols, rows int, req PaneViewRequest) paneViewCacheKey {
@@ -194,7 +281,7 @@ func (c *clientConn) paneViewCachePut(key paneViewCacheKey, resp PaneViewRespons
 	if c.paneViewCache == nil {
 		c.paneViewCache = make(map[paneViewCacheKey]cachedPaneView)
 	}
-	c.paneViewCache[key] = cachedPaneView{resp: resp, renderedAt: time.Now()}
+	c.paneViewCache[key] = cachedPaneView{resp: resp, renderedAt: time.Now(), updateSeq: resp.UpdateSeq}
 	c.paneViewCacheMu.Unlock()
 }
 
@@ -301,46 +388,158 @@ func (d *Daemon) paneViewResponse(ctx context.Context, client *clientConn, paneI
 	if win == nil {
 		return PaneViewResponse{}, fmt.Errorf("sessiond: pane %q not found", paneID)
 	}
-	cols, rows := normalizeDimensions(req.Cols, req.Rows)
-	key := paneViewCacheKeyFor(paneID, cols, rows, req)
+	info := buildPaneViewRenderInfo(win, paneID, req)
+
 	if err := ctx.Err(); err != nil {
 		return PaneViewResponse{}, err
 	}
-	if err := win.Resize(cols, rows); err != nil {
+	if err := win.Resize(info.cols, info.rows); err != nil {
 		return PaneViewResponse{}, err
 	}
-	if paneViewDeadlineSoon(ctx) {
-		if client != nil {
-			if cached, ok := client.paneViewCacheGet(key); ok {
-				return cached, nil
-			}
-		}
-		return PaneViewResponse{}, context.DeadlineExceeded
+
+	currentSeq, knownSeq := paneViewSeqs(win, info.renderMode, req)
+	if resp, ok := paneViewNotModified(win, paneID, info, currentSeq, knownSeq); ok {
+		return resp, nil
 	}
-	view, err := paneViewString(ctx, win, req)
+	if resp, ok := paneViewCachedHit(client, win, paneID, info, currentSeq); ok {
+		return resp, nil
+	}
+	if resp, err, ok := paneViewDeadlineFallback(ctx, client, info.key); ok {
+		return resp, err
+	}
+
+	view, err := paneViewString(ctx, win, info.renderReq)
 	if err != nil {
-		if client != nil && (errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)) {
-			if cached, ok := client.paneViewCacheGet(key); ok {
-				return cached, nil
-			}
-		}
-		return PaneViewResponse{}, err
+		return paneViewRenderError(err, client, info.key)
 	}
+
+	// Refresh seq after render. If output happened concurrently, the next request will pick it up.
+	currentSeq = paneViewEffectiveSeq(win, info.renderMode)
+
 	resp := PaneViewResponse{
 		PaneID:       paneID,
-		Cols:         cols,
-		Rows:         rows,
-		Mode:         req.Mode,
-		ShowCursor:   req.ShowCursor,
-		ColorProfile: req.ColorProfile,
+		Cols:         info.cols,
+		Rows:         info.rows,
+		Mode:         info.renderMode,
+		ShowCursor:   info.renderReq.ShowCursor,
+		ColorProfile: info.renderReq.ColorProfile,
+		UpdateSeq:    currentSeq,
+		NotModified:  false,
 		View:         view,
 		HasMouse:     win.HasMouseMode(),
 		AllowMotion:  win.AllowsMouseMotion(),
 	}
 	if client != nil {
-		client.paneViewCachePut(key, resp)
+		client.paneViewCachePut(info.key, resp)
 	}
 	return resp, nil
+}
+
+type paneViewRenderInfo struct {
+	cols       int
+	rows       int
+	renderMode PaneViewMode
+	renderReq  PaneViewRequest
+	key        paneViewCacheKey
+}
+
+func buildPaneViewRenderInfo(win paneViewWindow, paneID string, req PaneViewRequest) paneViewRenderInfo {
+	cols, rows := normalizeDimensions(req.Cols, req.Rows)
+	renderMode := paneViewRenderMode(win, req)
+	renderReq := req
+	renderReq.Mode = renderMode
+	return paneViewRenderInfo{
+		cols:       cols,
+		rows:       rows,
+		renderMode: renderMode,
+		renderReq:  renderReq,
+		key:        paneViewCacheKeyFor(paneID, cols, rows, renderReq),
+	}
+}
+
+func paneViewSeqs(win paneViewWindow, renderMode PaneViewMode, req PaneViewRequest) (uint64, uint64) {
+	currentSeq := paneViewEffectiveSeq(win, renderMode)
+	knownSeq := req.KnownSeq
+	if renderMode != req.Mode {
+		knownSeq = 0
+	}
+	return currentSeq, knownSeq
+}
+
+func paneViewNotModified(
+	win paneWindow,
+	paneID string,
+	info paneViewRenderInfo,
+	currentSeq uint64,
+	knownSeq uint64,
+) (PaneViewResponse, bool) {
+	if knownSeq == 0 || knownSeq != currentSeq {
+		return PaneViewResponse{}, false
+	}
+	return PaneViewResponse{
+		PaneID:       paneID,
+		Cols:         info.cols,
+		Rows:         info.rows,
+		Mode:         info.renderMode,
+		ShowCursor:   info.renderReq.ShowCursor,
+		ColorProfile: info.renderReq.ColorProfile,
+		UpdateSeq:    currentSeq,
+		NotModified:  true,
+		View:         "",
+		HasMouse:     win.HasMouseMode(),
+		AllowMotion:  win.AllowsMouseMotion(),
+	}, true
+}
+
+func paneViewCachedHit(
+	client *clientConn,
+	win paneWindow,
+	paneID string,
+	info paneViewRenderInfo,
+	currentSeq uint64,
+) (PaneViewResponse, bool) {
+	if client == nil {
+		return PaneViewResponse{}, false
+	}
+	client.paneViewCacheMu.Lock()
+	entry, ok := client.paneViewCache[info.key]
+	client.paneViewCacheMu.Unlock()
+	if !ok || entry.updateSeq != currentSeq {
+		return PaneViewResponse{}, false
+	}
+	cached := entry.resp
+	cached.PaneID = paneID
+	cached.Cols = info.cols
+	cached.Rows = info.rows
+	cached.Mode = info.renderMode
+	cached.ShowCursor = info.renderReq.ShowCursor
+	cached.ColorProfile = info.renderReq.ColorProfile
+	cached.UpdateSeq = currentSeq
+	cached.NotModified = false
+	cached.HasMouse = win.HasMouseMode()
+	cached.AllowMotion = win.AllowsMouseMotion()
+	return cached, true
+}
+
+func paneViewDeadlineFallback(ctx context.Context, client *clientConn, key paneViewCacheKey) (PaneViewResponse, error, bool) {
+	if !paneViewDeadlineSoon(ctx) {
+		return PaneViewResponse{}, nil, false
+	}
+	if client != nil {
+		if cached, ok := client.paneViewCacheGet(key); ok {
+			return cached, nil, true
+		}
+	}
+	return PaneViewResponse{}, context.DeadlineExceeded, true
+}
+
+func paneViewRenderError(err error, client *clientConn, key paneViewCacheKey) (PaneViewResponse, error) {
+	if client != nil && (errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)) {
+		if cached, ok := client.paneViewCacheGet(key); ok {
+			return cached, nil
+		}
+	}
+	return PaneViewResponse{}, err
 }
 
 func (d *Daemon) handlePaneView(payload []byte) ([]byte, error) {
@@ -381,11 +580,19 @@ func paneViewDeadlineSoon(ctx context.Context) bool {
 	return time.Until(deadline) <= paneViewDeadlineSlack
 }
 
-func paneViewString(ctx context.Context, win paneViewWindow, req PaneViewRequest) (string, error) {
-	switch req.Mode {
-	case PaneViewLipgloss:
-		return win.ViewLipglossCtx(ctx, req.ShowCursor, req.ColorProfile)
-	default:
-		return win.ViewANSICtx(ctx)
+func paneViewRenderMode(win paneViewWindow, req PaneViewRequest) PaneViewMode {
+	if req.ShowCursor {
+		return PaneViewLipgloss
 	}
+	if win != nil && win.CopyModeActive() {
+		return PaneViewLipgloss
+	}
+	return PaneViewANSI
+}
+
+func paneViewString(ctx context.Context, win paneViewWindow, req PaneViewRequest) (string, error) {
+	if req.Mode == PaneViewLipgloss {
+		return win.ViewLipglossCtx(ctx, req.ShowCursor, req.ColorProfile)
+	}
+	return win.ViewANSICtx(ctx)
 }
