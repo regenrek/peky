@@ -18,6 +18,12 @@ func (w *Window) SendInput(input []byte) error {
 	if len(input) == 0 {
 		return nil
 	}
+	if w.CopySelectionFromMouseActive() {
+		w.ExitCopyMode()
+		if w.ScrollbackModeActive() || w.GetScrollbackOffset() > 0 {
+			w.ExitScrollback()
+		}
+	}
 	if w.closed.Load() {
 		return &PaneClosedError{Reason: PaneClosedWindowClosed}
 	}

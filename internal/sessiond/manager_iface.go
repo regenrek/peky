@@ -20,6 +20,8 @@ type paneWindow interface {
 	paneViewWindow
 
 	CopyModeActive() bool
+	CopySelectionActive() bool
+	CopySelectionFromMouseActive() bool
 	CopyMove(dx, dy int)
 	CopyPageDown()
 	CopyPageUp()

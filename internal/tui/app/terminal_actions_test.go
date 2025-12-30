@@ -13,6 +13,15 @@ func TestTerminalControlHelpers(t *testing.T) {
 	if !isTerminalControlKey("esc") {
 		t.Fatalf("expected esc to be control key")
 	}
+	if !isTerminalControlKey("ctrl+c") {
+		t.Fatalf("expected ctrl+c to be control key")
+	}
+	if !isTerminalControlKey("ctrl+shift+c") {
+		t.Fatalf("expected ctrl+shift+c to be control key")
+	}
+	if !isTerminalControlKey("ctrl+insert") {
+		t.Fatalf("expected ctrl+insert to be control key")
+	}
 	if isTerminalControlKey("z") {
 		t.Fatalf("expected z to be non-control key")
 	}

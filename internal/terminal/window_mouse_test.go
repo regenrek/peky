@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"strings"
 	"testing"
 
 	uv "github.com/charmbracelet/ultraviolet"
@@ -331,6 +332,9 @@ func TestMouseDragSelectionEntersCopyMode(t *testing.T) {
 	if !w.CopyMode.Selecting {
 		t.Fatalf("expected selecting true after click")
 	}
+	if !w.CopySelectionFromMouseActive() {
+		t.Fatalf("expected mouse selection active after click")
+	}
 	// sbLen=5, offset=0 => topAbsY=5, y=0 => absY=5
 	if w.CopyMode.CursorX != 1 || w.CopyMode.CursorAbsY != 5 {
 		t.Fatalf("expected cursor at (1,5), got (%d,%d)", w.CopyMode.CursorX, w.CopyMode.CursorAbsY)
@@ -365,8 +369,59 @@ func TestMouseDragSelectionEntersCopyMode(t *testing.T) {
 	if !w.SendMouse(uv.MouseReleaseEvent{X: 3, Y: 2, Button: uv.MouseLeft}) {
 		t.Fatalf("expected release handled in copy mode")
 	}
+	if !w.CopySelectionFromMouseActive() {
+		t.Fatalf("expected mouse selection to remain active after release")
+	}
 	if emu.sentMouse != nil {
 		t.Fatalf("expected release not forwarded to app during host selection")
+	}
+}
+
+func TestMouseSelectionAutoCopiesOnRelease(t *testing.T) {
+	emu := &fakeEmu{
+		cols: 5,
+		rows: 1,
+		screen: [][]uv.Cell{
+			mkCellsLine("hello", 5),
+		},
+		cursor: uv.Pos(0, 0),
+	}
+	w := &Window{
+		term:    emu,
+		cols:    5,
+		rows:    1,
+		updates: make(chan struct{}, 2),
+	}
+
+	orig := writeClipboard
+	defer func() { writeClipboard = orig }()
+	var copied string
+	var toast string
+	writeClipboard = func(text string) error {
+		copied = text
+		return nil
+	}
+	w.toastFn = func(message string) {
+		toast = message
+	}
+
+	if !w.SendMouse(uv.MouseClickEvent{X: 0, Y: 0, Button: uv.MouseLeft}) {
+		t.Fatalf("expected click to start selection")
+	}
+	if !w.SendMouse(uv.MouseMotionEvent{X: 4, Y: 0, Button: uv.MouseNone}) {
+		t.Fatalf("expected motion to extend selection")
+	}
+	if !w.SendMouse(uv.MouseReleaseEvent{X: 4, Y: 0, Button: uv.MouseLeft}) {
+		t.Fatalf("expected release to finish selection")
+	}
+	if copied == "" {
+		t.Fatalf("expected copied text, got empty")
+	}
+	if !strings.Contains(copied, "hello") {
+		t.Fatalf("expected copied text to include hello, got %q", copied)
+	}
+	if toast != mouseSelectionCopiedToast {
+		t.Fatalf("expected toast %q, got %q", mouseSelectionCopiedToast, toast)
 	}
 }
 

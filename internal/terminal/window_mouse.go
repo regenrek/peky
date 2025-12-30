@@ -18,6 +18,8 @@ const (
 	mouseWheelLinesDefault = 3
 )
 
+const mouseSelectionCopiedToast = "Selection copied to clipboard"
+
 func (w *Window) mouseWheelStep(mod uv.KeyMod) int {
 	if w == nil {
 		return mouseWheelLinesDefault
@@ -190,6 +192,7 @@ func (w *Window) handleMouseSelectClick(event uv.MouseClickEvent) bool {
 	w.mouseSelectActive = true
 	w.mouseSelectStartedCopy = !wasCopyActive
 	w.mouseSelectMoved = false
+	w.mouseSelection = true
 
 	w.ensureCopyCursorVisibleLocked(sbLen)
 	w.stateMu.Unlock()
@@ -305,8 +308,25 @@ func (w *Window) handleMouseSelectRelease(event uv.MouseReleaseEvent) bool {
 	w.mouseSelectMoved = false
 	w.stateMu.Unlock()
 
+	if movedFinal && w.copyMouseSelectionToClipboard() {
+		w.notifyToast(mouseSelectionCopiedToast)
+	}
 	if startedCopy && !movedFinal {
 		w.ExitCopyMode()
+	}
+	return true
+}
+
+func (w *Window) copyMouseSelectionToClipboard() bool {
+	if w == nil || !w.CopySelectionFromMouseActive() {
+		return false
+	}
+	text := w.CopyYankText()
+	if text == "" {
+		return false
+	}
+	if err := writeClipboard(text); err != nil {
+		return false
 	}
 	return true
 }

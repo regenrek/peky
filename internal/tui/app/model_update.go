@@ -272,8 +272,25 @@ func (m *Model) handleDaemonEvent(msg daemonEventMsg) tea.Cmd {
 		if cmd := m.requestRefreshCmd(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
+	case sessiond.EventToast:
+		if msg.Event.Toast != "" {
+			m.setToast(msg.Event.Toast, toastLevelFromSessiond(msg.Event.ToastKind))
+		}
 	}
 	return tea.Batch(cmds...)
+}
+
+func toastLevelFromSessiond(level sessiond.ToastLevel) toastLevel {
+	switch level {
+	case sessiond.ToastSuccess:
+		return toastSuccess
+	case sessiond.ToastWarning:
+		return toastWarning
+	case sessiond.ToastInfo:
+		return toastInfo
+	default:
+		return toastInfo
+	}
 }
 
 func (m *Model) handlePaneViews(msg paneViewsMsg) tea.Cmd {

@@ -130,6 +130,9 @@ func (m *Manager) createPane(ctx context.Context, path, title, command string, e
 		Dir:   strings.TrimSpace(path),
 		Env:   env,
 	}
+	opts.OnToast = func(message string) {
+		m.notifyToast(id, message)
+	}
 	startCommand := strings.TrimSpace(command)
 	if startCommand == "" {
 		opts.Command = ""
