@@ -18,6 +18,9 @@ const (
 	paneViewMinIntervalFocused    = 33 * time.Millisecond
 	paneViewMinIntervalSelected   = 100 * time.Millisecond
 	paneViewMinIntervalBackground = 250 * time.Millisecond
+	paneViewTimeoutFocused        = 1500 * time.Millisecond
+	paneViewTimeoutSelected       = 1000 * time.Millisecond
+	paneViewTimeoutBackground     = 800 * time.Millisecond
 )
 
 type paneViewKey struct {
@@ -189,20 +192,27 @@ func (m *Model) paneViewRequestForHit(hit mouse.PaneHit) *sessiond.PaneViewReque
 		return nil
 	}
 
+	// Active-pane Lipgloss only:
+	// - Focused pane (selected + terminal focus) gets Lipgloss for cursor overlay.
+	// - Everything else uses ANSI for speed and fidelity.
 	mode := sessiond.PaneViewANSI
 	showCursor := false
 
+	selectedID := ""
+	if pane := m.selectedPane(); pane != nil {
+		selectedID = pane.ID
+	}
+	isSelected := selectedID != "" && selectedID == hit.PaneID
+
 	priority := sessiond.PaneViewPriorityBackground
-	if pane := m.selectedPane(); pane != nil && pane.ID == hit.PaneID {
+	if isSelected {
 		priority = sessiond.PaneViewPriorityNormal
 	}
 
-	if m.terminalFocus && m.supportsTerminalFocus() {
-		if pane := m.selectedPane(); pane != nil && pane.ID == hit.PaneID {
-			mode = sessiond.PaneViewLipgloss
-			showCursor = true
-			priority = sessiond.PaneViewPriorityFocused
-		}
+	if isSelected && m.terminalFocus && m.supportsTerminalFocus() {
+		mode = sessiond.PaneViewLipgloss
+		showCursor = true
+		priority = sessiond.PaneViewPriorityFocused
 	}
 
 	req := &sessiond.PaneViewRequest{
@@ -260,12 +270,12 @@ func paneViewMinIntervalFor(req sessiond.PaneViewRequest) time.Duration {
 
 func paneViewTimeoutFor(req sessiond.PaneViewRequest) time.Duration {
 	if req.Priority == sessiond.PaneViewPriorityFocused || req.Mode == sessiond.PaneViewLipgloss || req.ShowCursor {
-		return 750 * time.Millisecond
+		return paneViewTimeoutFocused
 	}
 	if req.Priority == sessiond.PaneViewPriorityNormal || req.Priority == sessiond.PaneViewPriorityUnset {
-		return 400 * time.Millisecond
+		return paneViewTimeoutSelected
 	}
-	return 200 * time.Millisecond
+	return paneViewTimeoutBackground
 }
 
 func (m *Model) fetchPaneViewsCmd(reqs []sessiond.PaneViewRequest) tea.Cmd {

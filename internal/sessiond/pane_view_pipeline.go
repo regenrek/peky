@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	paneViewMaxConcurrency = 4
-	paneViewDeadlineSlack  = 50 * time.Millisecond
+	paneViewMaxConcurrency   = 4
+	paneViewDeadlineSlack    = 50 * time.Millisecond
+	paneViewStarvationWindow = 750 * time.Millisecond
 )
 
 type paneViewJob struct {
@@ -108,6 +109,8 @@ func (s *paneViewScheduler) pickLocked() (string, paneViewJob, bool) {
 func paneViewJobBetter(a, b paneViewJob) bool {
 	ap := paneViewJobPriority(a.req)
 	bp := paneViewJobPriority(b.req)
+	ap = paneViewJobBoost(ap, a.received)
+	bp = paneViewJobBoost(bp, b.received)
 	if ap != bp {
 		return ap > bp
 	}
@@ -139,6 +142,22 @@ func paneViewJobPriority(req PaneViewRequest) int {
 		return int(PaneViewPriorityFocused)
 	}
 	return int(PaneViewPriorityNormal)
+}
+
+func paneViewJobBoost(priority int, received time.Time) int {
+	if received.IsZero() {
+		return priority
+	}
+	age := time.Since(received)
+	if age < paneViewStarvationWindow {
+		return priority
+	}
+	boost := int(age / paneViewStarvationWindow)
+	out := priority + boost
+	if out > int(PaneViewPriorityFocused) {
+		return int(PaneViewPriorityFocused)
+	}
+	return out
 }
 
 func (s *paneViewScheduler) finish(paneID string) {
@@ -354,7 +373,10 @@ func (d *Daemon) paneViewResponse(ctx context.Context, client *clientConn, paneI
 		return PaneViewResponse{}, fmt.Errorf("sessiond: pane %q not found", paneID)
 	}
 	cols, rows := normalizeDimensions(req.Cols, req.Rows)
-	key := paneViewCacheKeyFor(paneID, cols, rows, req)
+	renderMode := paneViewRenderMode(win, req)
+	renderReq := req
+	renderReq.Mode = renderMode
+	key := paneViewCacheKeyFor(paneID, cols, rows, renderReq)
 
 	if err := ctx.Err(); err != nil {
 		return PaneViewResponse{}, err
@@ -364,14 +386,18 @@ func (d *Daemon) paneViewResponse(ctx context.Context, client *clientConn, paneI
 	}
 
 	currentSeq := win.UpdateSeq()
-	if req.KnownSeq != 0 && req.KnownSeq == currentSeq {
+	knownSeq := req.KnownSeq
+	if renderMode != req.Mode {
+		knownSeq = 0
+	}
+	if knownSeq != 0 && knownSeq == currentSeq {
 		return PaneViewResponse{
 			PaneID:       paneID,
 			Cols:         cols,
 			Rows:         rows,
-			Mode:         req.Mode,
-			ShowCursor:   req.ShowCursor,
-			ColorProfile: req.ColorProfile,
+			Mode:         renderMode,
+			ShowCursor:   renderReq.ShowCursor,
+			ColorProfile: renderReq.ColorProfile,
 			UpdateSeq:    currentSeq,
 			NotModified:  true,
 			View:         "",
@@ -390,9 +416,9 @@ func (d *Daemon) paneViewResponse(ctx context.Context, client *clientConn, paneI
 			cached.PaneID = paneID
 			cached.Cols = cols
 			cached.Rows = rows
-			cached.Mode = req.Mode
-			cached.ShowCursor = req.ShowCursor
-			cached.ColorProfile = req.ColorProfile
+			cached.Mode = renderMode
+			cached.ShowCursor = renderReq.ShowCursor
+			cached.ColorProfile = renderReq.ColorProfile
 			cached.UpdateSeq = currentSeq
 			cached.NotModified = false
 			cached.HasMouse = win.HasMouseMode()
@@ -410,7 +436,7 @@ func (d *Daemon) paneViewResponse(ctx context.Context, client *clientConn, paneI
 		return PaneViewResponse{}, context.DeadlineExceeded
 	}
 
-	view, err := paneViewString(ctx, win, req)
+	view, err := paneViewString(ctx, win, renderReq)
 	if err != nil {
 		if client != nil && (errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)) {
 			if cached, ok := client.paneViewCacheGet(key); ok {
@@ -427,9 +453,9 @@ func (d *Daemon) paneViewResponse(ctx context.Context, client *clientConn, paneI
 		PaneID:       paneID,
 		Cols:         cols,
 		Rows:         rows,
-		Mode:         req.Mode,
-		ShowCursor:   req.ShowCursor,
-		ColorProfile: req.ColorProfile,
+		Mode:         renderMode,
+		ShowCursor:   renderReq.ShowCursor,
+		ColorProfile: renderReq.ColorProfile,
 		UpdateSeq:    currentSeq,
 		NotModified:  false,
 		View:         view,
@@ -480,11 +506,19 @@ func paneViewDeadlineSoon(ctx context.Context) bool {
 	return time.Until(deadline) <= paneViewDeadlineSlack
 }
 
-func paneViewString(ctx context.Context, win paneViewWindow, req PaneViewRequest) (string, error) {
-	switch req.Mode {
-	case PaneViewLipgloss:
-		return win.ViewLipglossCtx(ctx, req.ShowCursor, req.ColorProfile)
-	default:
-		return win.ViewANSICtx(ctx)
+func paneViewRenderMode(win paneViewWindow, req PaneViewRequest) PaneViewMode {
+	if req.ShowCursor {
+		return PaneViewLipgloss
 	}
+	if win != nil && win.CopyModeActive() {
+		return PaneViewLipgloss
+	}
+	return PaneViewANSI
+}
+
+func paneViewString(ctx context.Context, win paneViewWindow, req PaneViewRequest) (string, error) {
+	if req.Mode == PaneViewLipgloss {
+		return win.ViewLipglossCtx(ctx, req.ShowCursor, req.ColorProfile)
+	}
+	return win.ViewANSICtx(ctx)
 }

@@ -11,6 +11,7 @@ import (
 
 type paneViewWindow interface {
 	UpdateSeq() uint64
+	CopyModeActive() bool
 	ViewLipglossCtx(ctx context.Context, showCursor bool, profile termenv.Profile) (string, error)
 	ViewANSICtx(ctx context.Context) (string, error)
 	ViewLipgloss(showCursor bool, profile termenv.Profile) string
