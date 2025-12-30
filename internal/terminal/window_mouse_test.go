@@ -296,7 +296,7 @@ func TestMouseWheelNoScrollbackDoesNothing(t *testing.T) {
 func assertSendMouseHandled(t *testing.T, w *Window, event uv.MouseEvent, msg string) {
 	t.Helper()
 	if !w.SendMouse(event) {
-		t.Fatalf(msg)
+		t.Fatalf("%s", msg)
 	}
 }
 
