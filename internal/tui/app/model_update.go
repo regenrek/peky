@@ -290,6 +290,8 @@ func (m *Model) handleDaemonEvent(msg daemonEventMsg) tea.Cmd {
 	}
 	paneIDs := make(map[string]struct{})
 	refresh := false
+	toastMsg := ""
+	toastLevel := toastInfo
 	for _, event := range events {
 		switch event.Type {
 		case sessiond.EventPaneUpdated:
@@ -298,6 +300,11 @@ func (m *Model) handleDaemonEvent(msg daemonEventMsg) tea.Cmd {
 			}
 		case sessiond.EventSessionChanged:
 			refresh = true
+		case sessiond.EventToast:
+			if event.Toast != "" {
+				toastMsg = event.Toast
+				toastLevel = toastLevelFromSessiond(event.ToastKind)
+			}
 		}
 	}
 	diag.LogEvery("tui.event", 2*time.Second, "tui: events batch=%d panes=%d refresh=%v", len(events), len(paneIDs), refresh)
@@ -311,10 +318,9 @@ func (m *Model) handleDaemonEvent(msg daemonEventMsg) tea.Cmd {
 		if cmd := m.refreshPaneViewsForIDs(paneIDs); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
-	case sessiond.EventToast:
-		if msg.Event.Toast != "" {
-			m.setToast(msg.Event.Toast, toastLevelFromSessiond(msg.Event.ToastKind))
-		}
+	}
+	if toastMsg != "" {
+		m.setToast(toastMsg, toastLevel)
 	}
 	return tea.Batch(cmds...)
 }
