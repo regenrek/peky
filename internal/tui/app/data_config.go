@@ -90,6 +90,10 @@ func defaultDashboardConfig(cfg layout.DashboardConfig) (DashboardConfig, error)
 	if previewMode != "grid" && previewMode != "layout" {
 		return DashboardConfig{}, fmt.Errorf("invalid preview_mode %q (use grid or layout)", previewMode)
 	}
+	sidebarHidden := false
+	if cfg.Sidebar.Hidden != nil {
+		sidebarHidden = *cfg.Sidebar.Hidden
+	}
 	attachBehavior, ok := normalizeAttachBehavior(cfg.AttachBehavior)
 	if !ok {
 		return DashboardConfig{}, fmt.Errorf("invalid attach_behavior %q (use current or detached)", cfg.AttachBehavior)
@@ -110,6 +114,7 @@ func defaultDashboardConfig(cfg layout.DashboardConfig) (DashboardConfig, error)
 		IdleThreshold:   time.Duration(idleSeconds) * time.Second,
 		StatusMatcher:   matcher,
 		PreviewMode:     previewMode,
+		SidebarHidden:   sidebarHidden,
 		ProjectRoots:    projectRoots,
 		AgentDetection:  agentDetection,
 		AttachBehavior:  attachBehavior,

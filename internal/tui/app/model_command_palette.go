@@ -77,6 +77,7 @@ func (m *Model) commandPaletteItems() []list.Item {
 type commandShortcuts struct {
 	openProject    string
 	closeProject   string
+	toggleSidebar  string
 	newSession     string
 	killSession    string
 	togglePanes    string
@@ -94,6 +95,7 @@ func (m *Model) commandPaletteShortcuts() commandShortcuts {
 	}
 	shortcuts.openProject = keyLabel(m.keys.openProject)
 	shortcuts.closeProject = keyLabel(m.keys.closeProject)
+	shortcuts.toggleSidebar = keyLabel(m.keys.toggleSidebar)
 	shortcuts.newSession = keyLabel(m.keys.newSession)
 	shortcuts.killSession = keyLabel(m.keys.kill)
 	shortcuts.togglePanes = keyLabel(m.keys.togglePanes)
@@ -152,6 +154,10 @@ func (m *Model) projectCommandItems(shortcuts commandShortcuts) []picker.Command
 	return []picker.CommandItem{
 		{Label: "Project: Open project picker", Desc: "Scan project roots and create session", Shortcut: shortcuts.openProject, Run: func() tea.Cmd {
 			m.openProjectPicker()
+			return nil
+		}},
+		{Label: "Project: Toggle sidebar", Desc: "Show or hide the project sidebar", Shortcut: shortcuts.toggleSidebar, Run: func() tea.Cmd {
+			m.toggleSidebar()
 			return nil
 		}},
 		{Label: "Project: Close project", Desc: "Hide project from tabs (sessions stay running)", Shortcut: shortcuts.closeProject, Run: func() tea.Cmd {

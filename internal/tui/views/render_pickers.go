@@ -97,6 +97,7 @@ func (m Model) viewHelp() string {
 	left.WriteString("\nProject\n")
 	left.WriteString(fmt.Sprintf("  %s Open project picker\n", m.Keys.OpenProject))
 	left.WriteString(fmt.Sprintf("  %s Close project\n", m.Keys.CloseProject))
+	left.WriteString(fmt.Sprintf("  %s Toggle sidebar\n", m.Keys.ToggleSidebar))
 	left.WriteString("\nSession\n")
 	left.WriteString("  enter Attach/start session (when reply empty)\n")
 	left.WriteString(fmt.Sprintf("  %s New session (pick layout)\n", m.Keys.NewSession))
