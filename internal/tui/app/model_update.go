@@ -271,23 +271,49 @@ func (m *Model) handlePaneClosed(msg PaneClosedMsg) tea.Cmd {
 const daemonEventBatchMax = 64
 
 func (m *Model) handleDaemonEvent(msg daemonEventMsg) tea.Cmd {
-	events := []sessiond.Event{msg.Event}
-	if m != nil && m.client != nil {
-		ch := m.client.Events()
-		drain := true
-		for i := 0; i < daemonEventBatchMax && drain; i++ {
-			select {
-			case evt, ok := <-ch:
-				if !ok {
-					drain = false
-					break
-				}
-				events = append(events, evt)
-			default:
-				drain = false
-			}
+	events := collectDaemonEvents(m, msg.Event)
+	paneIDs, refresh, toastMsg, toastLevel := summarizeDaemonEvents(events)
+	diag.LogEvery("tui.event", 2*time.Second, "tui: events batch=%d panes=%d refresh=%v", len(events), len(paneIDs), refresh)
+	cmds := []tea.Cmd{waitDaemonEvent(m.client)}
+	if refresh {
+		if cmd := m.requestRefreshCmd(); cmd != nil {
+			cmds = append(cmds, cmd)
 		}
 	}
+	if len(paneIDs) > 0 {
+		if cmd := m.refreshPaneViewsForIDs(paneIDs); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
+	if toastMsg != "" {
+		m.setToast(toastMsg, toastLevel)
+	}
+	return tea.Batch(cmds...)
+}
+
+func collectDaemonEvents(m *Model, first sessiond.Event) []sessiond.Event {
+	events := []sessiond.Event{first}
+	if m == nil || m.client == nil {
+		return events
+	}
+	ch := m.client.Events()
+	drain := true
+	for i := 0; i < daemonEventBatchMax && drain; i++ {
+		select {
+		case evt, ok := <-ch:
+			if !ok {
+				drain = false
+				break
+			}
+			events = append(events, evt)
+		default:
+			drain = false
+		}
+	}
+	return events
+}
+
+func summarizeDaemonEvents(events []sessiond.Event) (map[string]struct{}, bool, string, toastLevel) {
 	paneIDs := make(map[string]struct{})
 	refresh := false
 	toastMsg := ""
@@ -307,22 +333,7 @@ func (m *Model) handleDaemonEvent(msg daemonEventMsg) tea.Cmd {
 			}
 		}
 	}
-	diag.LogEvery("tui.event", 2*time.Second, "tui: events batch=%d panes=%d refresh=%v", len(events), len(paneIDs), refresh)
-	cmds := []tea.Cmd{waitDaemonEvent(m.client)}
-	if refresh {
-		if cmd := m.requestRefreshCmd(); cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-	}
-	if len(paneIDs) > 0 {
-		if cmd := m.refreshPaneViewsForIDs(paneIDs); cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-	}
-	if toastMsg != "" {
-		m.setToast(toastMsg, toastLevel)
-	}
-	return tea.Batch(cmds...)
+	return paneIDs, refresh, toastMsg, toastLevel
 }
 
 func toastLevelFromSessiond(level sessiond.ToastLevel) toastLevel {
