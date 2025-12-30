@@ -9,6 +9,8 @@ import (
 )
 
 var enabled = strings.TrimSpace(os.Getenv("PEAKYPANES_DEBUG_EVENTS")) != ""
+var logPath = strings.TrimSpace(os.Getenv("PEAKYPANES_DEBUG_EVENTS_LOG"))
+var logger = newDiagLogger()
 
 var (
 	mu        sync.Mutex
@@ -25,7 +27,7 @@ func Logf(format string, args ...any) {
 	if !enabled {
 		return
 	}
-	log.Printf(format, args...)
+	logger.Printf(format, args...)
 }
 
 // LogEvery rate-limits a diagnostic log by key and interval.
@@ -34,7 +36,7 @@ func LogEvery(key string, interval time.Duration, format string, args ...any) {
 		return
 	}
 	if interval <= 0 {
-		log.Printf(format, args...)
+		logger.Printf(format, args...)
 		return
 	}
 	mu.Lock()
@@ -45,5 +47,14 @@ func LogEvery(key string, interval time.Duration, format string, args ...any) {
 	}
 	lastByKey[key] = time.Now()
 	mu.Unlock()
-	log.Printf(format, args...)
+	logger.Printf(format, args...)
+}
+
+func newDiagLogger() *log.Logger {
+	if logPath != "" {
+		if file, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600); err == nil {
+			return log.New(file, "", log.LstdFlags)
+		}
+	}
+	return log.New(os.Stderr, "", log.LstdFlags)
 }
