@@ -1,10 +1,8 @@
 package native
 
-import "time"
-
 type previewState struct {
-	lines    []string
-	sourceAt time.Time
+	lines     []string
+	sourceSeq uint64
 }
 
 func (m *Manager) snapshotPreviewStates(ids []string) (map[string]previewState, int) {

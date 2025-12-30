@@ -73,6 +73,7 @@ func (m *Model) handleDaemonRestart(msg daemonRestartMsg) tea.Cmd {
 		m.client = nil
 		m.paneViewClient = nil
 		m.paneViews = nil
+		m.paneViewSeq = nil
 		m.paneViewQueuedIDs = nil
 		m.paneViewLastReq = nil
 		m.paneViewQueued = false
@@ -84,6 +85,7 @@ func (m *Model) handleDaemonRestart(msg daemonRestartMsg) tea.Cmd {
 		m.client = nil
 		m.paneViewClient = nil
 		m.paneViews = nil
+		m.paneViewSeq = nil
 		m.paneViewQueuedIDs = nil
 		m.paneViewLastReq = nil
 		m.paneViewQueued = false
@@ -94,6 +96,7 @@ func (m *Model) handleDaemonRestart(msg daemonRestartMsg) tea.Cmd {
 	m.client = msg.Client
 	m.paneViewClient = msg.PaneViewClient
 	m.paneViews = nil
+	m.paneViewSeq = nil
 	m.paneViewQueuedIDs = nil
 	m.paneViewLastReq = nil
 	m.paneViewQueued = false

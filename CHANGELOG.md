@@ -6,12 +6,23 @@ This format is based on Keep a Changelog.
 ## Unreleased
 
 ### Added
+- Pane view update sequencing with NotModified responses to skip unchanged renders.
+- Pane view priority scheduling to keep focused panes responsive under load.
+- VT damage tracking primitives for future incremental rendering work.
+- Performance tooling: `scripts/perf-bench`, `scripts/perf-40pane`, and `docs/perf.md`.
 
 ### Changed
+- Pane view rendering now respects client deadlines and can fall back to cached views under pressure.
+- Lipgloss rendering snapshots VT cells outside the terminal lock to reduce input stalls.
+- ANSI view rendering is cached-first with background refresh to avoid sync render spikes.
+- TUI pane view cache stores update sequences to avoid re-requesting unchanged panes.
+- Preview cache now keys on pane update sequence for deterministic refresh behavior.
 
 ### Removed
 
 ### Fixed
+- Pane swaps no longer notify while holding the manager lock, preventing deadlocks.
+- Pane view cache state is cleared on daemon restart to avoid stale seq comparisons.
 
 ## 0.0.5 - 2025-12-29
 

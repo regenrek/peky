@@ -287,9 +287,21 @@ func (m *Model) handlePaneViews(msg paneViewsMsg) tea.Cmd {
 	if m.paneMouseMotion == nil {
 		m.paneMouseMotion = make(map[string]bool)
 	}
+	if m.paneViewSeq == nil {
+		m.paneViewSeq = make(map[paneViewKey]uint64)
+	}
 	for _, view := range msg.Views {
 		key := paneViewKeyFrom(view)
-		m.paneViews[key] = view.View
+
+		if view.UpdateSeq > 0 {
+			m.paneViewSeq[key] = view.UpdateSeq
+		}
+		if !view.NotModified {
+			if view.View != "" {
+				m.paneViews[key] = view.View
+			}
+		}
+
 		if view.PaneID != "" {
 			m.paneMouseMotion[view.PaneID] = view.AllowMotion
 		}

@@ -17,6 +17,7 @@ type fakeTerminalWindow struct {
 	viewLipgloss  string
 	hasMouse      bool
 	allowMotion   bool
+	updateSeq     uint64
 	resizeCols    int
 	resizeRows    int
 	calls         map[string]int
@@ -30,6 +31,8 @@ func (f *fakeTerminalWindow) record(name string) {
 	}
 	f.calls[name]++
 }
+
+func (f *fakeTerminalWindow) UpdateSeq() uint64 { return f.updateSeq }
 
 func (f *fakeTerminalWindow) CopyModeActive() bool { return f.copyMode }
 func (f *fakeTerminalWindow) Resize(cols, rows int) error {

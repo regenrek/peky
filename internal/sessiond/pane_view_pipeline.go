@@ -81,13 +81,64 @@ func (s *paneViewScheduler) next() (string, paneViewJob, bool) {
 }
 
 func (s *paneViewScheduler) pickLocked() (string, paneViewJob, bool) {
+	var (
+		bestID  string
+		bestJob paneViewJob
+		hasBest bool
+	)
+
 	for paneID, job := range s.pending {
 		if s.inflight[paneID] {
 			continue
 		}
-		return paneID, job, true
+		if !hasBest {
+			bestID, bestJob, hasBest = paneID, job, true
+			continue
+		}
+		if paneViewJobBetter(job, bestJob) {
+			bestID, bestJob = paneID, job
+		}
 	}
-	return "", paneViewJob{}, false
+	if !hasBest {
+		return "", paneViewJob{}, false
+	}
+	return bestID, bestJob, true
+}
+
+func paneViewJobBetter(a, b paneViewJob) bool {
+	ap := paneViewJobPriority(a.req)
+	bp := paneViewJobPriority(b.req)
+	if ap != bp {
+		return ap > bp
+	}
+
+	// Earlier deadline first (0 means no deadline and should be treated as far future).
+	ad := a.req.DeadlineUnixNano
+	bd := b.req.DeadlineUnixNano
+	const maxI64 = int64(^uint64(0) >> 1)
+	if ad <= 0 {
+		ad = maxI64
+	}
+	if bd <= 0 {
+		bd = maxI64
+	}
+	if ad != bd {
+		return ad < bd
+	}
+
+	// Oldest received first.
+	return a.received.Before(b.received)
+}
+
+func paneViewJobPriority(req PaneViewRequest) int {
+	if req.Priority != PaneViewPriorityUnset {
+		return int(req.Priority)
+	}
+	// Back-compat: infer priority from mode.
+	if req.Mode == PaneViewLipgloss || req.ShowCursor {
+		return int(PaneViewPriorityFocused)
+	}
+	return int(PaneViewPriorityNormal)
 }
 
 func (s *paneViewScheduler) finish(paneID string) {
@@ -160,6 +211,7 @@ type paneViewCacheKey struct {
 type cachedPaneView struct {
 	resp       PaneViewResponse
 	renderedAt time.Time
+	updateSeq  uint64
 }
 
 func paneViewCacheKeyFor(paneID string, cols, rows int, req PaneViewRequest) paneViewCacheKey {
@@ -194,7 +246,7 @@ func (c *clientConn) paneViewCachePut(key paneViewCacheKey, resp PaneViewRespons
 	if c.paneViewCache == nil {
 		c.paneViewCache = make(map[paneViewCacheKey]cachedPaneView)
 	}
-	c.paneViewCache[key] = cachedPaneView{resp: resp, renderedAt: time.Now()}
+	c.paneViewCache[key] = cachedPaneView{resp: resp, renderedAt: time.Now(), updateSeq: resp.UpdateSeq}
 	c.paneViewCacheMu.Unlock()
 }
 
@@ -303,12 +355,52 @@ func (d *Daemon) paneViewResponse(ctx context.Context, client *clientConn, paneI
 	}
 	cols, rows := normalizeDimensions(req.Cols, req.Rows)
 	key := paneViewCacheKeyFor(paneID, cols, rows, req)
+
 	if err := ctx.Err(); err != nil {
 		return PaneViewResponse{}, err
 	}
 	if err := win.Resize(cols, rows); err != nil {
 		return PaneViewResponse{}, err
 	}
+
+	currentSeq := win.UpdateSeq()
+	if req.KnownSeq != 0 && req.KnownSeq == currentSeq {
+		return PaneViewResponse{
+			PaneID:       paneID,
+			Cols:         cols,
+			Rows:         rows,
+			Mode:         req.Mode,
+			ShowCursor:   req.ShowCursor,
+			ColorProfile: req.ColorProfile,
+			UpdateSeq:    currentSeq,
+			NotModified:  true,
+			View:         "",
+			HasMouse:     win.HasMouseMode(),
+			AllowMotion:  win.AllowsMouseMotion(),
+		}, nil
+	}
+
+	if client != nil {
+		client.paneViewCacheMu.Lock()
+		entry, ok := client.paneViewCache[key]
+		client.paneViewCacheMu.Unlock()
+		if ok && entry.updateSeq == currentSeq {
+			cached := entry.resp
+			// Ensure metadata matches current request.
+			cached.PaneID = paneID
+			cached.Cols = cols
+			cached.Rows = rows
+			cached.Mode = req.Mode
+			cached.ShowCursor = req.ShowCursor
+			cached.ColorProfile = req.ColorProfile
+			cached.UpdateSeq = currentSeq
+			cached.NotModified = false
+			cached.HasMouse = win.HasMouseMode()
+			cached.AllowMotion = win.AllowsMouseMotion()
+			return cached, nil
+		}
+	}
+
 	if paneViewDeadlineSoon(ctx) {
 		if client != nil {
 			if cached, ok := client.paneViewCacheGet(key); ok {
@@ -317,6 +409,7 @@ func (d *Daemon) paneViewResponse(ctx context.Context, client *clientConn, paneI
 		}
 		return PaneViewResponse{}, context.DeadlineExceeded
 	}
+
 	view, err := paneViewString(ctx, win, req)
 	if err != nil {
 		if client != nil && (errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)) {
@@ -326,6 +419,10 @@ func (d *Daemon) paneViewResponse(ctx context.Context, client *clientConn, paneI
 		}
 		return PaneViewResponse{}, err
 	}
+
+	// Refresh seq after render. If output happened concurrently, the next request will pick it up.
+	currentSeq = win.UpdateSeq()
+
 	resp := PaneViewResponse{
 		PaneID:       paneID,
 		Cols:         cols,
@@ -333,6 +430,8 @@ func (d *Daemon) paneViewResponse(ctx context.Context, client *clientConn, paneI
 		Mode:         req.Mode,
 		ShowCursor:   req.ShowCursor,
 		ColorProfile: req.ColorProfile,
+		UpdateSeq:    currentSeq,
+		NotModified:  false,
 		View:         view,
 		HasMouse:     win.HasMouseMode(),
 		AllowMotion:  win.AllowsMouseMotion(),

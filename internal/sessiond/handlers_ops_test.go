@@ -19,6 +19,10 @@ type stubPaneView struct {
 	profile        termenv.Profile
 }
 
+func (s *stubPaneView) UpdateSeq() uint64 {
+	return 0
+}
+
 func (s *stubPaneView) ViewLipglossCtx(ctx context.Context, showCursor bool, profile termenv.Profile) (string, error) {
 	s.lipglossCalled = true
 	s.showCursor = showCursor

@@ -13,6 +13,7 @@ const LayoutBaseSize = 1000
 // PaneEvent signals that a pane updated.
 type PaneEvent struct {
 	PaneID string
+	Seq    uint64
 }
 
 // Manager owns native sessions and panes.
@@ -110,16 +111,20 @@ func (m *Manager) markActive(id string) {
 	if m == nil || m.closed.Load() {
 		return
 	}
+	var seq uint64
 	m.mu.Lock()
 	pane := m.panes[id]
 	if pane != nil {
 		pane.LastActive = time.Now()
+		if pane.window != nil {
+			seq = pane.window.UpdateSeq()
+		}
 	}
 	m.mu.Unlock()
-	m.notify(id)
+	m.notify(id, seq)
 }
 
-func (m *Manager) notify(id string) {
+func (m *Manager) notify(id string, seq uint64) {
 	if m == nil || m.closed.Load() {
 		return
 	}
@@ -130,9 +135,23 @@ func (m *Manager) notify(id string) {
 		return
 	}
 	select {
-	case m.events <- PaneEvent{PaneID: id}:
+	case m.events <- PaneEvent{PaneID: id, Seq: seq}:
 	default:
 	}
+}
+
+func (m *Manager) notifyPane(id string) {
+	if m == nil || m.closed.Load() {
+		return
+	}
+	var seq uint64
+	m.mu.RLock()
+	pane := m.panes[id]
+	if pane != nil && pane.window != nil {
+		seq = pane.window.UpdateSeq()
+	}
+	m.mu.RUnlock()
+	m.notify(id, seq)
 }
 
 func (m *Manager) closePanes(panes []*Pane) {

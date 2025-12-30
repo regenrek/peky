@@ -53,7 +53,11 @@ func (d *Daemon) eventLoop() {
 		return
 	}
 	for event := range d.manager.Events() {
-		d.broadcast(Event{Type: EventPaneUpdated, PaneID: event.PaneID})
+		d.broadcast(Event{
+			Type:          EventPaneUpdated,
+			PaneID:        event.PaneID,
+			PaneUpdateSeq: event.Seq,
+		})
 	}
 }
 

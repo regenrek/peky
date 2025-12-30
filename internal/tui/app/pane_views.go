@@ -13,9 +13,11 @@ import (
 )
 
 const (
-	paneViewTimeout        = 2 * time.Second
-	paneViewMaxConcurrency = 4
-	paneViewMinInterval    = 50 * time.Millisecond
+	paneViewTimeout               = 2 * time.Second
+	paneViewMaxConcurrency        = 4
+	paneViewMinIntervalFocused    = 33 * time.Millisecond
+	paneViewMinIntervalSelected   = 100 * time.Millisecond
+	paneViewMinIntervalBackground = 250 * time.Millisecond
 )
 
 type paneViewKey struct {
@@ -57,9 +59,6 @@ func (m *Model) refreshPaneViewFor(paneID string) tea.Cmd {
 		m.queuePaneViewID(paneID)
 		return nil
 	}
-	if !m.allowPaneViewRequest(paneID) {
-		return nil
-	}
 	hit, ok := m.paneHitFor(paneID)
 	if !ok {
 		return nil
@@ -68,6 +67,19 @@ func (m *Model) refreshPaneViewFor(paneID string) tea.Cmd {
 	if req == nil {
 		return nil
 	}
+
+	key := paneViewKey{
+		PaneID:       req.PaneID,
+		Cols:         req.Cols,
+		Rows:         req.Rows,
+		Mode:         req.Mode,
+		ShowCursor:   req.ShowCursor,
+		ColorProfile: req.ColorProfile,
+	}
+	if !m.allowPaneViewRequest(key, paneViewMinIntervalFor(*req)) {
+		return nil
+	}
+
 	return m.startPaneViewFetch([]sessiond.PaneViewRequest{*req})
 }
 
@@ -104,6 +116,11 @@ func (m *Model) paneViewRequests() []sessiond.PaneViewRequest {
 			continue
 		}
 		seen[key] = struct{}{}
+
+		if !m.allowPaneViewRequest(key, paneViewMinIntervalFor(*req)) {
+			continue
+		}
+
 		reqs = append(reqs, *req)
 	}
 	return reqs
@@ -171,39 +188,84 @@ func (m *Model) paneViewRequestForHit(hit mouse.PaneHit) *sessiond.PaneViewReque
 	if cols <= 0 || rows <= 0 {
 		return nil
 	}
+
 	mode := sessiond.PaneViewANSI
 	showCursor := false
+
+	priority := sessiond.PaneViewPriorityBackground
+	if pane := m.selectedPane(); pane != nil && pane.ID == hit.PaneID {
+		priority = sessiond.PaneViewPriorityNormal
+	}
+
 	if m.terminalFocus && m.supportsTerminalFocus() {
 		if pane := m.selectedPane(); pane != nil && pane.ID == hit.PaneID {
 			mode = sessiond.PaneViewLipgloss
 			showCursor = true
+			priority = sessiond.PaneViewPriorityFocused
 		}
 	}
-	return &sessiond.PaneViewRequest{
+
+	req := &sessiond.PaneViewRequest{
 		PaneID:       hit.PaneID,
 		Cols:         cols,
 		Rows:         rows,
 		Mode:         mode,
 		ShowCursor:   showCursor,
 		ColorProfile: m.paneViewProfile,
+
+		Priority: priority,
 	}
+
+	key := paneViewKey{
+		PaneID:       req.PaneID,
+		Cols:         req.Cols,
+		Rows:         req.Rows,
+		Mode:         req.Mode,
+		ShowCursor:   req.ShowCursor,
+		ColorProfile: req.ColorProfile,
+	}
+	if m.paneViewSeq != nil {
+		req.KnownSeq = m.paneViewSeq[key]
+	}
+
+	return req
 }
 
-func (m *Model) allowPaneViewRequest(paneID string) bool {
-	if m == nil || paneID == "" {
+func (m *Model) allowPaneViewRequest(key paneViewKey, minInterval time.Duration) bool {
+	if m == nil || key.PaneID == "" {
 		return false
 	}
 	if m.paneViewLastReq == nil {
-		m.paneViewLastReq = make(map[string]time.Time)
+		m.paneViewLastReq = make(map[paneViewKey]time.Time)
 	}
 	now := time.Now()
-	if last, ok := m.paneViewLastReq[paneID]; ok {
-		if now.Sub(last) < paneViewMinInterval {
+	if last, ok := m.paneViewLastReq[key]; ok {
+		if minInterval > 0 && now.Sub(last) < minInterval {
 			return false
 		}
 	}
-	m.paneViewLastReq[paneID] = now
+	m.paneViewLastReq[key] = now
 	return true
+}
+
+func paneViewMinIntervalFor(req sessiond.PaneViewRequest) time.Duration {
+	if req.Priority == sessiond.PaneViewPriorityFocused || req.Mode == sessiond.PaneViewLipgloss || req.ShowCursor {
+		return paneViewMinIntervalFocused
+	}
+	if req.Priority == sessiond.PaneViewPriorityNormal || req.Priority == sessiond.PaneViewPriorityUnset {
+		return paneViewMinIntervalSelected
+	}
+	return paneViewMinIntervalBackground
+}
+
+func paneViewTimeoutFor(req sessiond.PaneViewRequest) time.Duration {
+	if req.Priority == sessiond.PaneViewPriorityFocused || req.Mode == sessiond.PaneViewLipgloss || req.ShowCursor {
+		return 750 * time.Millisecond
+	}
+	if req.Priority == sessiond.PaneViewPriorityNormal || req.Priority == sessiond.PaneViewPriorityUnset {
+		return 400 * time.Millisecond
+	}
+	return 200 * time.Millisecond
 }
 
 func (m *Model) fetchPaneViewsCmd(reqs []sessiond.PaneViewRequest) tea.Cmd {
@@ -242,7 +304,11 @@ func (m *Model) fetchPaneViewsCmd(reqs []sessiond.PaneViewRequest) tea.Cmd {
 			go func() {
 				defer wg.Done()
 				for req := range jobs {
-					ctx, cancel := context.WithTimeout(context.Background(), paneViewTimeout)
+					timeout := paneViewTimeoutFor(req)
+					if timeout <= 0 {
+						timeout = paneViewTimeout
+					}
+					ctx, cancel := context.WithTimeout(context.Background(), timeout)
 					if deadline, ok := ctx.Deadline(); ok {
 						req.DeadlineUnixNano = deadline.UnixNano()
 					}

@@ -38,9 +38,10 @@ const (
 
 // Event is broadcast from daemon to clients.
 type Event struct {
-	Type    EventType
-	PaneID  string
-	Session string
+	Type          EventType
+	PaneID        string
+	PaneUpdateSeq uint64
+	Session       string
 }
 
 // HelloRequest begins a connection handshake.
@@ -183,6 +184,15 @@ const (
 	PaneViewLipgloss
 )
 
+type PaneViewPriority int
+
+const (
+	PaneViewPriorityUnset PaneViewPriority = iota
+	PaneViewPriorityBackground
+	PaneViewPriorityNormal
+	PaneViewPriorityFocused
+)
+
 // PaneViewRequest asks for a rendered pane view.
 type PaneViewRequest struct {
 	PaneID       string
@@ -191,6 +201,8 @@ type PaneViewRequest struct {
 	Mode         PaneViewMode
 	ShowCursor   bool
 	ColorProfile termenv.Profile
+	KnownSeq     uint64
+	Priority     PaneViewPriority
 	// DeadlineUnixNano carries the client-side deadline for this request.
 	// Zero means no deadline provided.
 	DeadlineUnixNano int64
@@ -204,6 +216,8 @@ type PaneViewResponse struct {
 	Mode         PaneViewMode
 	ShowCursor   bool
 	ColorProfile termenv.Profile
+	UpdateSeq    uint64
+	NotModified  bool
 	View         string
 	HasMouse     bool
 	AllowMotion  bool

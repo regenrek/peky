@@ -99,7 +99,12 @@ type Window struct {
 	cacheMu    sync.Mutex
 	cacheDirty bool
 	cacheANSI  string
-	renderCh   chan struct{}
+
+	cacheCols      int
+	cacheRows      int
+	cacheAltScreen bool
+
+	renderCh chan struct{}
 
 	stateMu sync.Mutex
 	// ScrollbackMode enables scrollback navigation (no PTY input).
@@ -110,6 +115,8 @@ type Window struct {
 	ScrollbackOffset int
 
 	lastUpdate atomic.Int64 // unix nanos
+
+	updateSeq atomic.Uint64
 }
 
 // NewWindow starts a new process attached to a PTY and backed by a VT emulator.
@@ -198,6 +205,11 @@ func NewWindow(opts Options) (*Window, error) {
 	term.SetCallbacks(vt.Callbacks{
 		CursorVisibility: func(visible bool) {
 			w.cursorVisible.Store(visible)
+			w.markDirty()
+		},
+		CursorPosition: func(old, new uv.Position) {
+			_ = old
+			_ = new
 			w.markDirty()
 		},
 		Title: func(title string) {
@@ -299,6 +311,13 @@ func (w *Window) RequestANSIRender() {
 }
 
 func (w *Window) ID() string { return w.id }
+
+func (w *Window) UpdateSeq() uint64 {
+	if w == nil {
+		return 0
+	}
+	return w.updateSeq.Load()
+}
 
 func (w *Window) Title() string {
 	if v := w.title.Load(); v != nil {
@@ -428,6 +447,8 @@ func (w *Window) detachPTY() {
 }
 
 func (w *Window) markDirty() {
+	w.updateSeq.Add(1)
+
 	w.lastUpdate.Store(time.Now().UnixNano())
 
 	w.cacheMu.Lock()

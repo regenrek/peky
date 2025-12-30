@@ -98,7 +98,7 @@ func (m *Manager) KillSession(name string) error {
 		}
 	}
 	for _, id := range paneIDs {
-		m.notify(id)
+		m.notifyPane(id)
 	}
 	m.version.Add(1)
 	return nil
@@ -189,7 +189,7 @@ func (m *Manager) StartSession(ctx context.Context, spec SessionSpec) (*Session,
 
 	// Seed an update to render initial output.
 	for _, pane := range panes {
-		m.notify(pane.ID)
+		m.notifyPane(pane.ID)
 	}
 	m.version.Add(1)
 
@@ -224,6 +224,7 @@ func (m *Manager) Snapshot(ctx context.Context, previewLines int) []SessionSnaps
 		id         string
 		window     *terminal.Window
 		lastActive time.Time
+		seq        uint64
 		sessionIdx int
 		paneIdx    int
 	}
@@ -269,10 +270,16 @@ func (m *Manager) Snapshot(ctx context.Context, previewLines int) []SessionSnaps
 				RestoreFailed: pane.RestoreFailed,
 				RestoreError:  pane.RestoreError,
 			}
+			seq := uint64(0)
+			if pane.window != nil {
+				seq = pane.window.UpdateSeq()
+			}
+
 			paneRefs = append(paneRefs, panePreviewRef{
 				id:         pane.ID,
 				window:     pane.window,
 				lastActive: pane.LastActive,
+				seq:        seq,
 				sessionIdx: si,
 				paneIdx:    pi,
 			})
@@ -292,7 +299,7 @@ func (m *Manager) Snapshot(ctx context.Context, previewLines int) []SessionSnaps
 			continue
 		}
 		state, ok := states[ref.id]
-		if !ok || len(state.lines) < previewLines || state.sourceAt.Before(ref.lastActive) {
+		if !ok || len(state.lines) < previewLines || state.sourceSeq < ref.seq {
 			needsUpdate[i] = true
 		}
 	}
@@ -324,7 +331,7 @@ func (m *Manager) Snapshot(ctx context.Context, previewLines int) []SessionSnaps
 			lastProcessed = idx
 			continue
 		}
-		state := previewState{lines: append([]string(nil), lines...), sourceAt: ref.lastActive}
+		state := previewState{lines: append([]string(nil), lines...), sourceSeq: ref.seq}
 		states[ref.id] = state
 		updates[ref.id] = state
 		lastProcessed = idx

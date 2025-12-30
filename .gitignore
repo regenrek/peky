@@ -75,3 +75,4 @@ docs/internal
 .ckignore
 
 docs/tasks
+.bench/

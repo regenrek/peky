@@ -269,8 +269,12 @@ func TestViewANSIAndRenderHelpers(t *testing.T) {
 	}
 	w.markDirty()
 	_ = w.ViewANSI()
+	if emu.renderCalls != 1 {
+		t.Fatalf("expected cached render after markDirty, got %d", emu.renderCalls)
+	}
+	w.refreshANSICache()
 	if emu.renderCalls != 2 {
-		t.Fatalf("expected render after markDirty")
+		t.Fatalf("expected refresh render after markDirty")
 	}
 
 	cm := &CopyMode{

@@ -112,7 +112,7 @@ func (m *Manager) RestoreSession(ctx context.Context, spec SessionRestoreSpec) (
 		m.forwardUpdates(pane)
 	}
 	for _, pane := range panes {
-		m.notify(pane.ID)
+		m.notifyPane(pane.ID)
 	}
 	m.version.Add(1)
 	return session, nil
