@@ -9,15 +9,19 @@ import (
 )
 
 type clientConn struct {
-	id      uint64
-	conn    net.Conn
-	respCh  chan outboundEnvelope
-	eventCh chan outboundEnvelope
-	done    chan struct{}
+	id     uint64
+	conn   net.Conn
+	respCh chan outboundEnvelope
+	done   chan struct{}
 
 	paneViews       *paneViewScheduler
 	paneViewCacheMu sync.Mutex
 	paneViewCache   map[paneViewCacheKey]cachedPaneView
+
+	eventMu     sync.Mutex
+	eventOrder  []eventKey
+	eventItems  map[eventKey]outboundEnvelope
+	eventNotify chan struct{}
 
 	closed atomic.Bool
 }
@@ -29,15 +33,62 @@ type outboundEnvelope struct {
 
 func (d *Daemon) newClient(conn net.Conn) *clientConn {
 	id := d.clientSeq.Add(1)
-	return &clientConn{
+	client := &clientConn{
 		id:            id,
 		conn:          conn,
 		respCh:        make(chan outboundEnvelope, 64),
-		eventCh:       make(chan outboundEnvelope, 128),
 		done:          make(chan struct{}),
 		paneViews:     newPaneViewScheduler(),
 		paneViewCache: make(map[paneViewCacheKey]cachedPaneView),
 	}
+	client.initEventQueue()
+	return client
+}
+
+func (c *clientConn) initEventQueue() {
+	if c == nil {
+		return
+	}
+	if c.eventNotify == nil {
+		c.eventNotify = make(chan struct{}, 1)
+	}
+	if c.eventItems == nil {
+		c.eventItems = make(map[eventKey]outboundEnvelope)
+	}
+}
+
+func (c *clientConn) enqueueEvent(key eventKey, env outboundEnvelope) {
+	if c == nil {
+		return
+	}
+	c.initEventQueue()
+	c.eventMu.Lock()
+	if _, ok := c.eventItems[key]; !ok {
+		c.eventOrder = append(c.eventOrder, key)
+	}
+	c.eventItems[key] = env
+	c.eventMu.Unlock()
+	select {
+	case c.eventNotify <- struct{}{}:
+	default:
+	}
+}
+
+func (c *clientConn) popEvent() (outboundEnvelope, bool) {
+	if c == nil {
+		return outboundEnvelope{}, false
+	}
+	c.eventMu.Lock()
+	if len(c.eventOrder) == 0 {
+		c.eventMu.Unlock()
+		return outboundEnvelope{}, false
+	}
+	key := c.eventOrder[0]
+	c.eventOrder = c.eventOrder[1:]
+	env := c.eventItems[key]
+	delete(c.eventItems, key)
+	c.eventMu.Unlock()
+	return env, true
 }
 
 func (d *Daemon) registerClient(client *clientConn) {

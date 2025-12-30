@@ -10,9 +10,8 @@ import (
 
 func TestSendEnvelopeAndCloseClient(t *testing.T) {
 	client := &clientConn{
-		respCh:  make(chan outboundEnvelope, 1),
-		eventCh: make(chan outboundEnvelope, 1),
-		done:    make(chan struct{}),
+		respCh: make(chan outboundEnvelope, 1),
+		done:   make(chan struct{}),
 	}
 	env := Envelope{Kind: EnvelopeResponse, Op: OpHello, ID: 1}
 	if err := sendEnvelope(client, env, 50*time.Millisecond); err != nil {
@@ -36,7 +35,6 @@ func TestSendEnvelopeAndCloseClient(t *testing.T) {
 	defer func() { _ = c2.Close() }()
 	client.conn = c1
 	client.respCh = make(chan outboundEnvelope, 1)
-	client.eventCh = make(chan outboundEnvelope, 1)
 	client.done = make(chan struct{})
 	closeClient(client)
 	select {
@@ -48,25 +46,26 @@ func TestSendEnvelopeAndCloseClient(t *testing.T) {
 
 func TestBroadcast(t *testing.T) {
 	d := &Daemon{clients: make(map[uint64]*clientConn)}
-	clientA := &clientConn{eventCh: make(chan outboundEnvelope, 1), done: make(chan struct{})}
-	clientB := &clientConn{eventCh: make(chan outboundEnvelope, 1), done: make(chan struct{})}
+	clientA := &clientConn{done: make(chan struct{})}
+	clientB := &clientConn{done: make(chan struct{})}
+	clientA.initEventQueue()
+	clientB.initEventQueue()
 	d.clients[1] = clientA
 	d.clients[2] = clientB
 
 	d.broadcast(Event{Type: EventSessionChanged, Session: "demo"})
 
 	for _, client := range []*clientConn{clientA, clientB} {
-		select {
-		case out := <-client.eventCh:
-			var evt Event
-			if err := decodePayload(out.env.Payload, &evt); err != nil {
-				t.Fatalf("decode payload: %v", err)
-			}
-			if evt.Type != EventSessionChanged || evt.Session != "demo" {
-				t.Fatalf("unexpected event payload: %#v", evt)
-			}
-		default:
+		out, ok := client.popEvent()
+		if !ok {
 			t.Fatalf("expected broadcast envelope")
+		}
+		var evt Event
+		if err := decodePayload(out.env.Payload, &evt); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		if evt.Type != EventSessionChanged || evt.Session != "demo" {
+			t.Fatalf("unexpected event payload: %#v", evt)
 		}
 	}
 }
