@@ -10,6 +10,7 @@ import (
 )
 
 type paneViewWindow interface {
+	ANSICacheSeq() uint64
 	UpdateSeq() uint64
 	CopyModeActive() bool
 	ViewLipglossCtx(ctx context.Context, showCursor bool, profile termenv.Profile) (string, error)
@@ -21,7 +22,6 @@ type paneViewWindow interface {
 type paneWindow interface {
 	paneViewWindow
 
-	CopyModeActive() bool
 	CopyMove(dx, dy int)
 	CopyPageDown()
 	CopyPageUp()

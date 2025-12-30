@@ -33,6 +33,9 @@ func (f *fakeTerminalWindow) record(name string) {
 }
 
 func (f *fakeTerminalWindow) UpdateSeq() uint64 { return f.updateSeq }
+func (f *fakeTerminalWindow) ANSICacheSeq() uint64 {
+	return f.updateSeq
+}
 
 func (f *fakeTerminalWindow) CopyModeActive() bool { return f.copyMode }
 func (f *fakeTerminalWindow) Resize(cols, rows int) error {

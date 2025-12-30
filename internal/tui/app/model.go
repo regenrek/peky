@@ -134,7 +134,7 @@ type Model struct {
 	paneViewSeq     map[paneViewKey]uint64
 	paneViewLastReq map[paneViewKey]time.Time
 
-	paneViewInFlight  bool
+	paneViewInFlight  int
 	paneViewQueued    bool
 	paneViewQueuedIDs map[string]struct{}
 }

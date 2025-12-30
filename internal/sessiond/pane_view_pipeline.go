@@ -16,6 +16,18 @@ const (
 	paneViewStarvationWindow = 750 * time.Millisecond
 )
 
+func paneViewEffectiveSeq(win paneViewWindow, renderMode PaneViewMode) uint64 {
+	if win == nil {
+		return 0
+	}
+	if renderMode == PaneViewANSI {
+		if seq := win.ANSICacheSeq(); seq != 0 {
+			return seq
+		}
+	}
+	return win.UpdateSeq()
+}
+
 type paneViewJob struct {
 	env      Envelope
 	req      PaneViewRequest
@@ -50,9 +62,13 @@ func (s *paneViewScheduler) enqueue(paneID string, env Envelope, req PaneViewReq
 	}
 	var cancel context.CancelFunc
 	s.mu.Lock()
+	received := time.Now()
+	if existing, ok := s.pending[paneID]; ok && !s.inflight[paneID] {
+		received = existing.received
+	}
 	next := s.seq[paneID] + 1
 	s.seq[paneID] = next
-	s.pending[paneID] = paneViewJob{env: env, req: req, seq: next, received: time.Now()}
+	s.pending[paneID] = paneViewJob{env: env, req: req, seq: next, received: received}
 	cancel = s.cancel[paneID]
 	s.cond.Signal()
 	s.mu.Unlock()
@@ -385,7 +401,7 @@ func (d *Daemon) paneViewResponse(ctx context.Context, client *clientConn, paneI
 		return PaneViewResponse{}, err
 	}
 
-	currentSeq := win.UpdateSeq()
+	currentSeq := paneViewEffectiveSeq(win, renderMode)
 	knownSeq := req.KnownSeq
 	if renderMode != req.Mode {
 		knownSeq = 0
@@ -447,7 +463,7 @@ func (d *Daemon) paneViewResponse(ctx context.Context, client *clientConn, paneI
 	}
 
 	// Refresh seq after render. If output happened concurrently, the next request will pick it up.
-	currentSeq = win.UpdateSeq()
+	currentSeq = paneViewEffectiveSeq(win, renderMode)
 
 	resp := PaneViewResponse{
 		PaneID:       paneID,

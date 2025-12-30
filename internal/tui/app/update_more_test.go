@@ -72,7 +72,7 @@ func TestUpdateHandlers(t *testing.T) {
 func TestPaneViewQueueing(t *testing.T) {
 	m := newTestModelLite()
 	m.client = &sessiond.Client{}
-	m.paneViewInFlight = true
+	m.paneViewInFlight = 1
 	if cmd := m.refreshPaneViewsCmd(); cmd != nil {
 		t.Fatalf("expected nil cmd while in flight")
 	}
@@ -82,7 +82,7 @@ func TestPaneViewQueueing(t *testing.T) {
 
 	m.paneViewQueued = false
 	m.paneViewQueuedIDs = nil
-	m.paneViewInFlight = true
+	m.paneViewInFlight = 1
 	if cmd := m.refreshPaneViewFor("p1"); cmd != nil {
 		t.Fatalf("expected nil cmd while in flight")
 	}
@@ -90,12 +90,13 @@ func TestPaneViewQueueing(t *testing.T) {
 		t.Fatalf("expected queued pane id")
 	}
 
-	m.paneViewInFlight = true
+	m.paneViewInFlight = 1
+	m.paneViewQueued = true
 	cmd := m.handlePaneViews(paneViewsMsg{Views: []sessiond.PaneViewResponse{}})
 	if cmd == nil {
 		t.Fatalf("expected follow-up pane view cmd")
 	}
-	if !m.paneViewInFlight {
+	if m.paneViewInFlight == 0 {
 		t.Fatalf("expected in flight set for queued refresh")
 	}
 }

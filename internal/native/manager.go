@@ -5,6 +5,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/regenrek/peakypanes/internal/diag"
 )
 
 // LayoutBaseSize is the normalized coordinate space for pane layouts.
@@ -137,6 +139,7 @@ func (m *Manager) notify(id string, seq uint64) {
 	select {
 	case m.events <- PaneEvent{PaneID: id, Seq: seq}:
 	default:
+		diag.LogEvery("native.events.drop", 2*time.Second, "native: drop pane event id=%s seq=%d", id, seq)
 	}
 }
 

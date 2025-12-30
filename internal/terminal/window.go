@@ -99,6 +99,7 @@ type Window struct {
 	cacheMu    sync.Mutex
 	cacheDirty bool
 	cacheANSI  string
+	cacheSeq   uint64
 
 	cacheCols      int
 	cacheRows      int
@@ -317,6 +318,18 @@ func (w *Window) UpdateSeq() uint64 {
 		return 0
 	}
 	return w.updateSeq.Load()
+}
+
+// ANSICacheSeq returns the UpdateSeq value that produced the cached ANSI frame.
+// It can lag behind UpdateSeq while the cache is dirty.
+func (w *Window) ANSICacheSeq() uint64 {
+	if w == nil {
+		return 0
+	}
+	w.cacheMu.Lock()
+	seq := w.cacheSeq
+	w.cacheMu.Unlock()
+	return seq
 }
 
 func (w *Window) Title() string {

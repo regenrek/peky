@@ -26,6 +26,15 @@ type Client struct {
 	sendMu sync.Mutex
 	events chan Event
 
+	eventMu     sync.Mutex
+	eventOrder  []eventKey
+	eventItems  map[eventKey]Event
+	eventNotify chan struct{}
+	eventOnce   sync.Once
+
+	done      chan struct{}
+	closeOnce sync.Once
+
 	closed atomic.Bool
 }
 
@@ -40,8 +49,8 @@ func Dial(ctx context.Context, socketPath, version string) (*Client, error) {
 		socketPath: socketPath,
 		version:    version,
 		pending:    make(map[uint64]chan Envelope),
-		events:     make(chan Event, 128),
 	}
+	client.initEvents()
 	go client.readLoop()
 	if err := client.hello(ctx); err != nil {
 		_ = conn.Close()
@@ -67,6 +76,11 @@ func (c *Client) Close() error {
 	}
 	c.pending = nil
 	c.pendingMu.Unlock()
+	c.closeOnce.Do(func() {
+		if c.done != nil {
+			close(c.done)
+		}
+	})
 	return nil
 }
 
@@ -111,11 +125,7 @@ func (c *Client) hello(ctx context.Context) error {
 }
 
 func (c *Client) readLoop() {
-	defer func() {
-		if c.events != nil {
-			close(c.events)
-		}
-	}()
+	c.initEvents()
 	for {
 		if c.conn == nil {
 			return
@@ -147,10 +157,98 @@ func (c *Client) readLoop() {
 			if err := decodePayload(env.Payload, &evt); err != nil {
 				continue
 			}
+			c.enqueueEvent(evt)
+		}
+	}
+}
+
+type eventKey struct {
+	Type   EventType
+	PaneID string
+}
+
+func eventKeyFor(evt Event) eventKey {
+	return eventKey{Type: evt.Type, PaneID: evt.PaneID}
+}
+
+func (c *Client) initEvents() {
+	if c == nil {
+		return
+	}
+	c.eventOnce.Do(func() {
+		if c.events == nil {
+			c.events = make(chan Event, 16)
+		}
+		if c.eventItems == nil {
+			c.eventItems = make(map[eventKey]Event)
+		}
+		if c.eventNotify == nil {
+			c.eventNotify = make(chan struct{}, 1)
+		}
+		if c.done == nil {
+			c.done = make(chan struct{})
+		}
+		go c.eventLoop()
+	})
+}
+
+func (c *Client) enqueueEvent(evt Event) {
+	if c == nil {
+		return
+	}
+	key := eventKeyFor(evt)
+	c.eventMu.Lock()
+	if c.eventItems == nil {
+		c.eventItems = make(map[eventKey]Event)
+	}
+	if _, ok := c.eventItems[key]; !ok {
+		c.eventOrder = append(c.eventOrder, key)
+	}
+	c.eventItems[key] = evt
+	c.eventMu.Unlock()
+	select {
+	case c.eventNotify <- struct{}{}:
+	default:
+	}
+}
+
+func (c *Client) popEvent() (Event, bool) {
+	if c == nil {
+		return Event{}, false
+	}
+	c.eventMu.Lock()
+	if len(c.eventOrder) == 0 {
+		c.eventMu.Unlock()
+		return Event{}, false
+	}
+	key := c.eventOrder[0]
+	c.eventOrder = c.eventOrder[1:]
+	evt := c.eventItems[key]
+	delete(c.eventItems, key)
+	c.eventMu.Unlock()
+	return evt, true
+}
+
+func (c *Client) eventLoop() {
+	defer func() {
+		if c.events != nil {
+			close(c.events)
+		}
+	}()
+	for {
+		if evt, ok := c.popEvent(); ok {
 			select {
 			case c.events <- evt:
-			default:
+			case <-c.done:
+				return
 			}
+			continue
+		}
+		select {
+		case <-c.eventNotify:
+			continue
+		case <-c.done:
+			return
 		}
 	}
 }

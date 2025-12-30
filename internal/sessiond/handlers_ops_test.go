@@ -23,6 +23,10 @@ func (s *stubPaneView) UpdateSeq() uint64 {
 	return 0
 }
 
+func (s *stubPaneView) ANSICacheSeq() uint64 {
+	return 0
+}
+
 func (s *stubPaneView) CopyModeActive() bool {
 	return false
 }

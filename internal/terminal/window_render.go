@@ -111,6 +111,7 @@ func (w *Window) refreshANSICache() {
 
 	w.cacheMu.Lock()
 	w.cacheANSI = s
+	w.cacheSeq = startSeq
 	w.cacheCols = cols
 	w.cacheRows = rows
 	w.cacheAltScreen = alt

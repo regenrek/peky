@@ -2,6 +2,8 @@ package sessiond
 
 import (
 	"time"
+
+	"github.com/regenrek/peakypanes/internal/diag"
 )
 
 func (d *Daemon) acceptLoop() {
@@ -159,6 +161,8 @@ func (d *Daemon) broadcast(event Event) {
 		select {
 		case client.eventCh <- outboundEnvelope{env: env, timeout: defaultWriteTimeout}:
 		default:
+			diag.LogEvery("sessiond.events.drop", 2*time.Second,
+				"sessiond: drop event type=%s pane=%s", event.Type, event.PaneID)
 		}
 	}
 }

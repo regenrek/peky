@@ -299,7 +299,7 @@ func (m *Manager) Snapshot(ctx context.Context, previewLines int) []SessionSnaps
 			continue
 		}
 		state, ok := states[ref.id]
-		if !ok || len(state.lines) < previewLines || state.sourceSeq < ref.seq {
+		if !ok || len(state.lines) < previewLines || state.sourceSeq < ref.seq || state.dirty {
 			needsUpdate[i] = true
 		}
 	}
@@ -327,11 +327,11 @@ func (m *Manager) Snapshot(ctx context.Context, previewLines int) []SessionSnaps
 			continue
 		}
 		lines, ready := renderPreviewLines(ref.window, previewLines)
-		if !ready {
+		if len(lines) == 0 {
 			lastProcessed = idx
 			continue
 		}
-		state := previewState{lines: append([]string(nil), lines...), sourceSeq: ref.seq}
+		state := previewState{lines: append([]string(nil), lines...), sourceSeq: ref.seq, dirty: !ready}
 		states[ref.id] = state
 		updates[ref.id] = state
 		lastProcessed = idx

@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/muesli/termenv"
 
+	"github.com/regenrek/peakypanes/internal/diag"
 	"github.com/regenrek/peakypanes/internal/sessiond"
 	"github.com/regenrek/peakypanes/internal/tui/mouse"
 )
@@ -15,6 +16,7 @@ import (
 const (
 	paneViewTimeout               = 2 * time.Second
 	paneViewMaxConcurrency        = 4
+	paneViewMaxBatch              = 8
 	paneViewMinIntervalFocused    = 33 * time.Millisecond
 	paneViewMinIntervalSelected   = 100 * time.Millisecond
 	paneViewMinIntervalBackground = 250 * time.Millisecond
@@ -47,8 +49,9 @@ func (m *Model) refreshPaneViewsCmd() tea.Cmd {
 	if m == nil {
 		return nil
 	}
-	if m.paneViewInFlight {
+	if m.paneViewInFlight > 0 {
 		m.paneViewQueued = true
+		diag.LogEvery("tui.paneviews.queue", 2*time.Second, "tui: pane views queued in_flight=%d", m.paneViewInFlight)
 		return nil
 	}
 	return m.startPaneViewFetch(m.paneViewRequests())
@@ -58,7 +61,7 @@ func (m *Model) refreshPaneViewFor(paneID string) tea.Cmd {
 	if m == nil || paneID == "" {
 		return nil
 	}
-	if m.paneViewInFlight {
+	if m.paneViewInFlight > 0 {
 		m.queuePaneViewID(paneID)
 		return nil
 	}
@@ -86,7 +89,21 @@ func (m *Model) refreshPaneViewFor(paneID string) tea.Cmd {
 	return m.startPaneViewFetch([]sessiond.PaneViewRequest{*req})
 }
 
+func (m *Model) refreshPaneViewsForIDs(ids map[string]struct{}) tea.Cmd {
+	if m == nil || len(ids) == 0 {
+		return nil
+	}
+	if m.paneViewInFlight > 0 {
+		for id := range ids {
+			m.queuePaneViewID(id)
+		}
+		return nil
+	}
+	return m.startPaneViewFetch(m.paneViewRequestsForIDs(ids))
+}
+
 func (m *Model) paneHitFor(paneID string) (mouse.PaneHit, bool) {
+
 	for _, hit := range m.paneHits() {
 		if hit.PaneID == paneID {
 			return hit, true
@@ -133,8 +150,22 @@ func (m *Model) startPaneViewFetch(reqs []sessiond.PaneViewRequest) tea.Cmd {
 	if m == nil || m.client == nil || len(reqs) == 0 {
 		return nil
 	}
-	m.paneViewInFlight = true
-	return m.fetchPaneViewsCmd(reqs)
+	chunks := chunkPaneViewRequests(reqs, paneViewMaxBatch)
+	if len(chunks) == 0 {
+		return nil
+	}
+	cmds := make([]tea.Cmd, 0, len(chunks))
+	for _, chunk := range chunks {
+		if len(chunk) == 0 {
+			continue
+		}
+		m.paneViewInFlight++
+		cmds = append(cmds, m.fetchPaneViewsCmd(chunk))
+	}
+	if len(cmds) == 1 {
+		return cmds[0]
+	}
+	return tea.Batch(cmds...)
 }
 
 func (m *Model) queuePaneViewID(paneID string) {
@@ -145,6 +176,24 @@ func (m *Model) queuePaneViewID(paneID string) {
 		m.paneViewQueuedIDs = make(map[string]struct{})
 	}
 	m.paneViewQueuedIDs[paneID] = struct{}{}
+}
+
+func chunkPaneViewRequests(reqs []sessiond.PaneViewRequest, maxBatch int) [][]sessiond.PaneViewRequest {
+	if len(reqs) == 0 {
+		return nil
+	}
+	if maxBatch <= 0 {
+		maxBatch = len(reqs)
+	}
+	chunks := make([][]sessiond.PaneViewRequest, 0, (len(reqs)+maxBatch-1)/maxBatch)
+	for i := 0; i < len(reqs); i += maxBatch {
+		end := i + maxBatch
+		if end > len(reqs) {
+			end = len(reqs)
+		}
+		chunks = append(chunks, reqs[i:end])
+	}
+	return chunks
 }
 
 func (m *Model) paneViewRequestsForIDs(ids map[string]struct{}) []sessiond.PaneViewRequest {
@@ -251,6 +300,7 @@ func (m *Model) allowPaneViewRequest(key paneViewKey, minInterval time.Duration)
 	now := time.Now()
 	if last, ok := m.paneViewLastReq[key]; ok {
 		if minInterval > 0 && now.Sub(last) < minInterval {
+			diag.LogEvery("tui.paneviews.throttle", 2*time.Second, "tui: pane view throttled pane=%s interval=%s", key.PaneID, minInterval)
 			return false
 		}
 	}

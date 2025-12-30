@@ -3,7 +3,9 @@ package app
 import (
 	"context"
 	"errors"
+	"time"
 
+	"github.com/regenrek/peakypanes/internal/diag"
 	"github.com/regenrek/peakypanes/internal/sessiond"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -182,8 +184,10 @@ func (m *Model) applyWindowSize(msg tea.WindowSizeMsg) {
 
 func (m *Model) handleRefreshTick(msg refreshTickMsg) tea.Cmd {
 	if m.refreshInFlight == 0 {
+		diag.LogEvery("tui.refresh.start", 2*time.Second, "tui: refresh tick start next_seq=%d", m.refreshSeq+1)
 		return tea.Batch(m.startRefreshCmd(), tickCmd(m.settings.RefreshInterval))
 	}
+	diag.LogEvery("tui.refresh.skip", 2*time.Second, "tui: refresh tick skipped in_flight=%d seq=%d", m.refreshInFlight, m.refreshSeq)
 	return tickCmd(m.settings.RefreshInterval)
 }
 
@@ -196,6 +200,7 @@ func (m *Model) handleSelectionRefresh(msg selectionRefreshMsg) tea.Cmd {
 
 func (m *Model) handleDashboardSnapshot(msg dashboardSnapshotMsg) tea.Cmd {
 	m.endRefresh()
+	diag.LogEvery("tui.snapshot.recv", 2*time.Second, "tui: snapshot recv seq=%d err=%v in_flight=%d", msg.Result.RefreshSeq, msg.Result.Err, m.refreshInFlight)
 	if msg.Result.RefreshSeq > 0 && msg.Result.RefreshSeq < m.refreshSeq {
 		if m.refreshQueued {
 			m.refreshQueued = false
@@ -212,11 +217,12 @@ func (m *Model) handleDashboardSnapshot(msg dashboardSnapshotMsg) tea.Cmd {
 	}
 	if msg.Result.Err != nil {
 		m.setToast("Refresh failed: "+msg.Result.Err.Error(), toastError)
+		cmd := m.refreshPaneViewsCmd()
 		if m.refreshQueued {
 			m.refreshQueued = false
-			return m.startRefreshCmd()
+			return tea.Batch(cmd, m.startRefreshCmd())
 		}
-		return nil
+		return cmd
 	}
 	m.lastAppliedSeq = msg.Result.RefreshSeq
 	if msg.Result.Warning != "" {
@@ -261,15 +267,47 @@ func (m *Model) handlePaneClosed(msg PaneClosedMsg) tea.Cmd {
 	return m.requestRefreshCmd()
 }
 
+const daemonEventBatchMax = 64
+
 func (m *Model) handleDaemonEvent(msg daemonEventMsg) tea.Cmd {
+	events := []sessiond.Event{msg.Event}
+	if m != nil && m.client != nil {
+		ch := m.client.Events()
+		drain := true
+		for i := 0; i < daemonEventBatchMax && drain; i++ {
+			select {
+			case evt, ok := <-ch:
+				if !ok {
+					drain = false
+					break
+				}
+				events = append(events, evt)
+			default:
+				drain = false
+			}
+		}
+	}
+	paneIDs := make(map[string]struct{})
+	refresh := false
+	for _, event := range events {
+		switch event.Type {
+		case sessiond.EventPaneUpdated:
+			if event.PaneID != "" {
+				paneIDs[event.PaneID] = struct{}{}
+			}
+		case sessiond.EventSessionChanged:
+			refresh = true
+		}
+	}
+	diag.LogEvery("tui.event", 2*time.Second, "tui: events batch=%d panes=%d refresh=%v", len(events), len(paneIDs), refresh)
 	cmds := []tea.Cmd{waitDaemonEvent(m.client)}
-	switch msg.Event.Type {
-	case sessiond.EventPaneUpdated:
-		if cmd := m.refreshPaneViewFor(msg.Event.PaneID); cmd != nil {
+	if refresh {
+		if cmd := m.requestRefreshCmd(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
-	case sessiond.EventSessionChanged:
-		if cmd := m.requestRefreshCmd(); cmd != nil {
+	}
+	if len(paneIDs) > 0 {
+		if cmd := m.refreshPaneViewsForIDs(paneIDs); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 	}
@@ -278,6 +316,7 @@ func (m *Model) handleDaemonEvent(msg daemonEventMsg) tea.Cmd {
 
 func (m *Model) handlePaneViews(msg paneViewsMsg) tea.Cmd {
 	var cmd tea.Cmd
+	diag.LogEvery("tui.paneviews.recv", 2*time.Second, "tui: paneViews recv count=%d err=%v in_flight=%d queued=%v queued_ids=%d", len(msg.Views), msg.Err, m.paneViewInFlight, m.paneViewQueued, len(m.paneViewQueuedIDs))
 	if msg.Err != nil && len(msg.Views) == 0 && !errors.Is(msg.Err, context.DeadlineExceeded) && !errors.Is(msg.Err, context.Canceled) {
 		m.setToast("Pane view failed: "+msg.Err.Error(), toastWarning)
 	}
@@ -306,15 +345,19 @@ func (m *Model) handlePaneViews(msg paneViewsMsg) tea.Cmd {
 			m.paneMouseMotion[view.PaneID] = view.AllowMotion
 		}
 	}
-	m.paneViewInFlight = false
-	if m.paneViewQueued {
-		m.paneViewQueued = false
-		m.paneViewQueuedIDs = nil
-		cmd = m.refreshPaneViewsCmd()
-	} else if len(m.paneViewQueuedIDs) > 0 {
-		queued := m.paneViewQueuedIDs
-		m.paneViewQueuedIDs = nil
-		cmd = m.startPaneViewFetch(m.paneViewRequestsForIDs(queued))
+	if m.paneViewInFlight > 0 {
+		m.paneViewInFlight--
+	}
+	if m.paneViewInFlight == 0 {
+		if m.paneViewQueued {
+			m.paneViewQueued = false
+			m.paneViewQueuedIDs = nil
+			cmd = m.refreshPaneViewsCmd()
+		} else if len(m.paneViewQueuedIDs) > 0 {
+			queued := m.paneViewQueuedIDs
+			m.paneViewQueuedIDs = nil
+			cmd = m.startPaneViewFetch(m.paneViewRequestsForIDs(queued))
+		}
 	}
 	return cmd
 }
