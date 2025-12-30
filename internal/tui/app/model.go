@@ -84,6 +84,8 @@ type Model struct {
 	quickReplyHistory      []string
 	quickReplyHistoryIndex int
 	quickReplyHistoryDraft string
+	quickReplySlashPending bool
+	quickReplySlashPalette bool
 
 	mouse mouse.Handler
 
@@ -181,7 +183,7 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 	m.filterInput.Width = 28
 
 	m.quickReplyInput = textinput.New()
-	m.quickReplyInput.Placeholder = "send a quick reply…"
+	m.quickReplyInput.Placeholder = "talk to your panes"
 	m.quickReplyInput.CharLimit = 400
 	m.quickReplyInput.Prompt = ""
 	qrStyle := lipgloss.NewStyle().

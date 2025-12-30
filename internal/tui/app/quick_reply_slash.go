@@ -2,6 +2,7 @@ package app
 
 import (
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -20,6 +21,10 @@ type quickReplyCommandOutcome struct {
 	ClearInput   bool
 	RecordPrompt bool
 }
+
+type slashPaletteMsg struct{}
+
+const slashPaletteDelay = 175 * time.Millisecond
 
 func (m *Model) handleQuickReplyCommand(input string) quickReplyCommandOutcome {
 	trimmed := strings.TrimSpace(input)
@@ -134,4 +139,36 @@ func tokensMatch(left, right []string) bool {
 		}
 	}
 	return true
+}
+
+func slashPaletteCmd() tea.Cmd {
+	return tea.Tick(slashPaletteDelay, func(time.Time) tea.Msg {
+		return slashPaletteMsg{}
+	})
+}
+
+func (m *Model) handleSlashPaletteMsg() tea.Cmd {
+	if !m.quickReplySlashPending {
+		return nil
+	}
+	m.quickReplySlashPending = false
+	if m.state != StateDashboard {
+		return nil
+	}
+	if strings.TrimSpace(m.quickReplyInput.Value()) != "/" {
+		return nil
+	}
+	m.quickReplySlashPalette = true
+	return m.openCommandPalette()
+}
+
+func (m *Model) clearSlashPaletteInput(clear bool) {
+	if !m.quickReplySlashPalette {
+		return
+	}
+	if clear {
+		m.quickReplyInput.SetValue("")
+		m.quickReplyInput.CursorEnd()
+	}
+	m.quickReplySlashPalette = false
 }

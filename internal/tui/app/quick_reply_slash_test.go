@@ -66,3 +66,27 @@ func TestQuickReplyBroadcastParsesAll(t *testing.T) {
 		t.Fatalf("expected quick reply cleared after broadcast, got %q", got)
 	}
 }
+
+func TestQuickReplySlashPaletteOpensAfterDelay(t *testing.T) {
+	m := newTestModelLite()
+	m.quickReplyInput.SetValue("")
+
+	_, cmd := m.updateQuickReply(keyRune('/'))
+	if cmd == nil {
+		t.Fatalf("expected slash palette cmd")
+	}
+	if !m.quickReplySlashPending {
+		t.Fatalf("expected slash palette pending")
+	}
+	if got := m.quickReplyInput.Value(); got != "/" {
+		t.Fatalf("expected input set to '/', got %q", got)
+	}
+
+	cmd = m.handleSlashPaletteMsg()
+	if cmd == nil {
+		t.Fatalf("expected palette open cmd")
+	}
+	if m.state != StateCommandPalette {
+		t.Fatalf("expected command palette state, got %v", m.state)
+	}
+}

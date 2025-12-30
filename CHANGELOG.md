@@ -23,6 +23,7 @@ This format is based on Keep a Changelog.
 - Preview cache now keys on pane update sequence for deterministic refresh behavior.
 - Command palette actions now render from the shared registry.
 - Quick reply help/hints now surface slash commands and history.
+- Quick reply bar now opens the command palette on `/`, with a cleaner input-only label and updated placeholder copy.
 
 ### Removed
 

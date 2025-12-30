@@ -105,6 +105,7 @@ func (m *Model) updateCommandPalette(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.runCommandPaletteSelection()
 		case "esc":
 			m.commandPalette.ResetFilter()
+			m.clearSlashPaletteInput(false)
 			m.setState(StateDashboard)
 			return m, nil
 		}
@@ -119,6 +120,7 @@ func (m *Model) updateCommandPalette(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q":
 		m.commandPalette.ResetFilter()
+		m.clearSlashPaletteInput(false)
 		m.setState(StateDashboard)
 		return m, nil
 	case "enter":
@@ -133,6 +135,7 @@ func (m *Model) updateCommandPalette(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *Model) runCommandPaletteSelection() tea.Cmd {
 	item, ok := m.commandPalette.SelectedItem().(picker.CommandItem)
 	m.commandPalette.ResetFilter()
+	m.clearSlashPaletteInput(true)
 	m.setState(StateDashboard)
 	if !ok || item.Run == nil {
 		return nil

@@ -324,8 +324,7 @@ func (m *Model) setQuickReplySize() {
 		contentWidth = m.width
 	}
 	barWidth := clamp(contentWidth-6, 30, 90)
-	labelWidth := len("Quick Reply: ")
-	inputWidth := barWidth - labelWidth - 2
+	inputWidth := barWidth - 8
 	if inputWidth < 10 {
 		inputWidth = 10
 	}
@@ -351,6 +350,15 @@ func (m *Model) updateQuickReply(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.panePrev):
 		return m, m.cyclePane(-1)
 	}
+	if m.quickReplySlashPending && msg.String() != "/" && msg.String() != "enter" {
+		m.quickReplySlashPending = false
+	}
+	if msg.String() == "/" && m.quickReplyInput.Value() == "" {
+		m.quickReplyInput.SetValue("/")
+		m.quickReplyInput.CursorEnd()
+		m.quickReplySlashPending = true
+		return m, slashPaletteCmd()
+	}
 	if m.quickReplyHistoryActive() && shouldExitQuickReplyHistory(msg) {
 		m.resetQuickReplyHistory()
 	}
@@ -367,6 +375,11 @@ func (m *Model) updateQuickReply(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
 		text := strings.TrimSpace(m.quickReplyInput.Value())
+		if m.quickReplySlashPending && text == "/" {
+			m.quickReplySlashPending = false
+			m.quickReplySlashPalette = true
+			return m, m.openCommandPalette()
+		}
 		if text == "" {
 			return m, m.attachOrStart()
 		}

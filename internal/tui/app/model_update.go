@@ -41,6 +41,8 @@ func (m *Model) handleUpdateMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return m, m.handlePaneClosed(msg), true
 	case quickReplySendMsg:
 		return m, m.handleQuickReplySend(msg), true
+	case slashPaletteMsg:
+		return m, m.handleSlashPaletteMsg(), true
 	case sessionStartedMsg:
 		return m, m.handleSessionStarted(msg), true
 	case SuccessMsg:
