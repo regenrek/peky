@@ -12,7 +12,7 @@ This format is based on Keep a Changelog.
 - Performance tooling: `scripts/perf-bench` and `scripts/perf-12pane`.
 - Snapshot integration coverage for dirty ANSI cache previews.
 - Pane view scheduler tests for starvation and timestamp preservation.
-- Daemon profiling hooks for CPU/heap captures via `PEAKYPANES_CPU_PROFILE` and `PEAKYPANES_MEM_PROFILE`.
+- Daemon profiling hooks for CPU/heap captures via `PEAKYPANES_CPU_PROFILE` and `PEAKYPANES_MEM_PROFILE` (build tag `profiler`).
 
 ### Changed
 - Pane view rendering now respects client deadlines and can fall back to cached views under pressure.

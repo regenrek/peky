@@ -1,3 +1,6 @@
+//go:build profiler
+// +build profiler
+
 package sessiond
 
 import (
