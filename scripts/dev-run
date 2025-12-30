@@ -31,7 +31,11 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
-set -- "${args[@]}"
+if ((${#args[@]})); then
+  set -- "${args[@]}"
+else
+  set --
+fi
 
 if [[ ${1:-} == "-h" || ${1:-} == "--help" ]]; then
   cat <<'USAGE'
