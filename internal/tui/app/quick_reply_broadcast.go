@@ -58,14 +58,13 @@ func (m *Model) sendQuickReplyBroadcast(scope quickReplyScope, text string) tea.
 				result.ClosedPaneIDs = append(result.ClosedPaneIDs, paneID)
 				continue
 			}
-			payload := quickReplyTextBytes(target.Pane, message)
+			payload := quickReplyInputBytes(target.Pane, message)
+			logQuickReplySendAttempt(target.Pane, payload)
 			ctx, cancel := context.WithTimeout(context.Background(), terminalActionTimeout)
 			err := m.client.SendInput(ctx, paneID, payload)
-			if err == nil {
-				err = m.client.SendInput(ctx, paneID, []byte{'\r'})
-			}
 			cancel()
 			if err != nil {
+				logQuickReplySendError(paneID, err)
 				if isPaneClosedError(err) {
 					result.ClosedPaneIDs = append(result.ClosedPaneIDs, paneID)
 					continue

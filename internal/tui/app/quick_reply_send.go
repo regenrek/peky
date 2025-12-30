@@ -18,8 +18,27 @@ func quickReplyTextBytes(pane PaneItem, text string) []byte {
 	return []byte(text)
 }
 
+func quickReplyInputBytes(pane PaneItem, text string) []byte {
+	payload := quickReplyTextBytes(pane, text)
+	submit := quickReplySubmitBytes(pane)
+	if len(submit) == 0 {
+		return payload
+	}
+	out := make([]byte, 0, len(payload)+len(submit))
+	out = append(out, payload...)
+	out = append(out, submit...)
+	return out
+}
+
+func quickReplySubmitBytes(pane PaneItem) []byte {
+	if quickReplyTargetIsCodex(pane) {
+		return []byte{'\r'}
+	}
+	return []byte{'\r'}
+}
+
 func quickReplyTargetIsCodex(pane PaneItem) bool {
-	return commandIsCodex(pane.StartCommand) || commandIsCodex(pane.Command)
+	return commandIsCodex(pane.StartCommand) || commandIsCodex(pane.Command) || titleIsCodex(pane.Title)
 }
 
 func commandIsCodex(command string) bool {
@@ -31,12 +50,40 @@ func commandIsCodex(command string) bool {
 	if err != nil || len(args) == 0 {
 		return false
 	}
-	switch strings.ToLower(baseNameAnySeparator(args[0])) {
-	case "codex", "codex.exe":
-		return true
-	default:
+	for _, arg := range args {
+		if codexArg(arg) {
+			return true
+		}
+	}
+	return false
+}
+
+func codexArg(arg string) bool {
+	base := strings.ToLower(strings.TrimSpace(baseNameAnySeparator(arg)))
+	if base == "" {
 		return false
 	}
+	base = strings.TrimSuffix(base, ".exe")
+	if base == "codex" {
+		return true
+	}
+	return strings.HasPrefix(base, "codex@")
+}
+
+func titleIsCodex(title string) bool {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return false
+	}
+	fields := strings.Fields(strings.ToLower(title))
+	if len(fields) == 0 {
+		return false
+	}
+	first := strings.TrimSuffix(fields[0], ":")
+	if first == "codex" {
+		return true
+	}
+	return strings.HasPrefix(first, "codex@")
 }
 
 func baseNameAnySeparator(path string) string {

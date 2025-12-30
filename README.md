@@ -6,15 +6,17 @@
 █       █████   █   █   █  ██     █      █        █   █   █  ██    █████   █████
 ```
 
-**Terminal dashboard with YAML-based layouts, native live previews, and persistent native sessions.**
+**Multi-project orchestration in a single TUI for AI agents and dev environments.**
 
 ![Peaky Panes Preview](assets/preview-peakypanes-v2.jpg)
 
 
-Define your layouts in YAML, share them with your team via git, and get consistent development environments everywhere. Sessions are owned by a **native daemon** so they keep running after the UI exits.
+Run all your projects and AI agents in one dashboard instead of juggling terminal windows or tabs. Define layouts in YAML, share them with your team via git, and get consistent environments everywhere. Sessions are owned by a **native daemon** so they keep running after the UI exits.
 
 ## Features
 
+- 🧠 **AI agent orchestration** - Run Codex/Claude/agents side by side with quick replies, slash commands, and broadcast
+- 🗂️ **Multi-project dashboard** - See every project/session in one TUI without switching windows
 - 📦 **Built-in layouts** - Works out of the box with sensible defaults
 - 🧩 **Exact grids** - Use `grid: 2x3` for consistent rows/columns
 - 📁 **Project-local config** - Commit `.peakypanes.yml` to git for team sharing

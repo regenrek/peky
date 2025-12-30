@@ -5,6 +5,9 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Fixed
+- Quick reply now detects Codex panes by title when command metadata is missing, so sends use bracketed paste + submit.
+
 ## 0.0.6 - 2025-12-30
 
 ### Added
