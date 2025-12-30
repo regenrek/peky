@@ -15,6 +15,8 @@ import (
 	"github.com/regenrek/peakypanes/internal/sessiond"
 )
 
+const daemonStopTimeout = 10 * time.Second
+
 // ===== Session lifecycle =====
 
 func (m *Model) attachOrStart() tea.Cmd {
@@ -94,6 +96,82 @@ func (m *Model) shutdownCmd() tea.Cmd {
 		}
 		return nil
 	}
+}
+
+func (m *Model) requestQuit() tea.Cmd {
+	if m == nil {
+		return nil
+	}
+	runningPanes := runningPaneCount(m.data.Projects)
+	switch m.settings.QuitBehavior {
+	case QuitBehaviorKeep:
+		return tea.Sequence(m.shutdownCmd(), tea.Quit)
+	case QuitBehaviorStop:
+		m.pendingQuit = quitActionStop
+		m.setToast("Stopping daemon...", toastInfo)
+		return m.stopDaemonCmd()
+	default:
+		if runningPanes == 0 {
+			return tea.Sequence(m.shutdownCmd(), tea.Quit)
+		}
+		m.confirmQuitRunning = runningPanes
+		m.setState(StateConfirmQuit)
+		return nil
+	}
+}
+
+func (m *Model) updateConfirmQuit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "enter":
+		m.confirmQuitRunning = 0
+		m.setState(StateDashboard)
+		return m, tea.Sequence(m.shutdownCmd(), tea.Quit)
+	case "k":
+		m.confirmQuitRunning = 0
+		m.setState(StateDashboard)
+		m.pendingQuit = quitActionStop
+		m.setToast("Stopping daemon...", toastInfo)
+		return m, m.stopDaemonCmd()
+	case "n", "esc":
+		m.confirmQuitRunning = 0
+		m.setState(StateDashboard)
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m *Model) stopDaemonCmd() tea.Cmd {
+	client := m.client
+	version := ""
+	if client != nil {
+		version = client.Version()
+	}
+	return func() tea.Msg {
+		if version == "" {
+			return daemonStopMsg{Err: errors.New("daemon version unavailable")}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), daemonStopTimeout)
+		defer cancel()
+		if err := sessiond.StopDaemon(ctx, version); err != nil {
+			return daemonStopMsg{Err: err}
+		}
+		return daemonStopMsg{}
+	}
+}
+
+func (m *Model) handleDaemonStop(msg daemonStopMsg) tea.Cmd {
+	if m.pendingQuit != quitActionStop {
+		if msg.Err != nil {
+			m.setToast("Stop daemon failed: "+msg.Err.Error(), toastError)
+		}
+		return nil
+	}
+	m.pendingQuit = quitActionNone
+	if msg.Err != nil {
+		m.setToast("Stop daemon failed: "+msg.Err.Error(), toastError)
+		return nil
+	}
+	return tea.Sequence(m.shutdownCmd(), tea.Quit)
 }
 
 func (m *Model) startProjectNative(session SessionItem, focus bool) tea.Cmd {
@@ -451,6 +529,20 @@ func (m *Model) killAllProjectSessions() tea.Cmd {
 	}
 	m.setToast("Killed all running sessions", toastSuccess)
 	return m.requestRefreshCmd()
+}
+
+func runningPaneCount(projects []ProjectGroup) int {
+	count := 0
+	for _, project := range projects {
+		for _, session := range project.Sessions {
+			for _, pane := range session.Panes {
+				if !pane.Dead {
+					count++
+				}
+			}
+		}
+	}
+	return count
 }
 
 func (m *Model) updateConfirmKill(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

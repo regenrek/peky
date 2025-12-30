@@ -95,8 +95,11 @@ func TestProjectRootSetupValidationAndHelpKeys(t *testing.T) {
 
 	m.setState(StateHelp)
 	_, cmd := m.updateHelp(keyRune('q'))
-	if cmd == nil {
-		t.Fatalf("expected quit cmd")
+	if cmd != nil {
+		t.Fatalf("expected quit prompt without cmd")
+	}
+	if m.state != StateConfirmQuit {
+		t.Fatalf("expected confirm quit state")
 	}
 }
 

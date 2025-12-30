@@ -60,52 +60,29 @@ func compileStatusMatcher(cfg layout.StatusRegexConfig) (statusMatcher, error) {
 }
 
 func defaultDashboardConfig(cfg layout.DashboardConfig) (DashboardConfig, error) {
-	refreshMS := cfg.RefreshMS
-	if refreshMS <= 0 {
-		refreshMS = defaultRefreshMS
+	refreshMS := positiveIntOrDefault(cfg.RefreshMS, defaultRefreshMS)
+	previewLines := positiveIntOrDefault(cfg.PreviewLines, defaultPreviewLines)
+	idleSeconds := positiveIntOrDefault(cfg.IdleSeconds, defaultIdleSeconds)
+	previewCompact := boolOrDefault(cfg.PreviewCompact, true)
+	agentDetection := resolveAgentDetection(cfg.AgentDetection)
+	previewMode, err := resolvePreviewMode(cfg.PreviewMode)
+	if err != nil {
+		return DashboardConfig{}, err
 	}
-	previewLines := cfg.PreviewLines
-	if previewLines <= 0 {
-		previewLines = defaultPreviewLines
+	sidebarHidden := boolOrDefault(cfg.Sidebar.Hidden, false)
+	attachBehavior, err := resolveAttachBehavior(cfg.AttachBehavior)
+	if err != nil {
+		return DashboardConfig{}, err
 	}
-	idleSeconds := cfg.IdleSeconds
-	if idleSeconds <= 0 {
-		idleSeconds = defaultIdleSeconds
+	paneNavigationMode, err := resolvePaneNavigationMode(cfg.PaneNavigationMode)
+	if err != nil {
+		return DashboardConfig{}, err
 	}
-	previewCompact := true
-	if cfg.PreviewCompact != nil {
-		previewCompact = *cfg.PreviewCompact
+	quitBehavior, err := resolveQuitBehavior(cfg.QuitBehavior)
+	if err != nil {
+		return DashboardConfig{}, err
 	}
-	agentDetection := AgentDetectionConfig{Codex: true, Claude: true}
-	if cfg.AgentDetection.Codex != nil {
-		agentDetection.Codex = *cfg.AgentDetection.Codex
-	}
-	if cfg.AgentDetection.Claude != nil {
-		agentDetection.Claude = *cfg.AgentDetection.Claude
-	}
-	previewMode := strings.TrimSpace(cfg.PreviewMode)
-	if previewMode == "" {
-		previewMode = "grid"
-	}
-	if previewMode != "grid" && previewMode != "layout" {
-		return DashboardConfig{}, fmt.Errorf("invalid preview_mode %q (use grid or layout)", previewMode)
-	}
-	sidebarHidden := false
-	if cfg.Sidebar.Hidden != nil {
-		sidebarHidden = *cfg.Sidebar.Hidden
-	}
-	attachBehavior, ok := normalizeAttachBehavior(cfg.AttachBehavior)
-	if !ok {
-		return DashboardConfig{}, fmt.Errorf("invalid attach_behavior %q (use current or detached)", cfg.AttachBehavior)
-	}
-	paneNavigationMode, ok := normalizePaneNavigationMode(cfg.PaneNavigationMode)
-	if !ok {
-		return DashboardConfig{}, fmt.Errorf("invalid pane_navigation_mode %q (use spatial or memory)", cfg.PaneNavigationMode)
-	}
-	projectRoots := normalizeProjectRoots(cfg.ProjectRoots)
-	if len(projectRoots) == 0 {
-		projectRoots = defaultProjectRoots()
-	}
+	projectRoots := resolveProjectRoots(cfg.ProjectRoots)
 	hiddenProjects := hiddenProjectKeySet(cfg.HiddenProjects)
 	matcher, err := compileStatusMatcher(cfg.StatusRegex)
 	if err != nil {
@@ -123,8 +100,77 @@ func defaultDashboardConfig(cfg layout.DashboardConfig) (DashboardConfig, error)
 		AgentDetection:     agentDetection,
 		AttachBehavior:     attachBehavior,
 		PaneNavigationMode: paneNavigationMode,
+		QuitBehavior:       quitBehavior,
 		HiddenProjects:     hiddenProjects,
 	}, nil
+}
+
+func positiveIntOrDefault(value, fallback int) int {
+	if value > 0 {
+		return value
+	}
+	return fallback
+}
+
+func boolOrDefault(value *bool, fallback bool) bool {
+	if value != nil {
+		return *value
+	}
+	return fallback
+}
+
+func resolveAgentDetection(cfg layout.AgentDetectionConfig) AgentDetectionConfig {
+	agentDetection := AgentDetectionConfig{Codex: true, Claude: true}
+	if cfg.Codex != nil {
+		agentDetection.Codex = *cfg.Codex
+	}
+	if cfg.Claude != nil {
+		agentDetection.Claude = *cfg.Claude
+	}
+	return agentDetection
+}
+
+func resolvePreviewMode(value string) (string, error) {
+	previewMode := strings.TrimSpace(value)
+	if previewMode == "" {
+		previewMode = "grid"
+	}
+	if previewMode != "grid" && previewMode != "layout" {
+		return "", fmt.Errorf("invalid preview_mode %q (use grid or layout)", previewMode)
+	}
+	return previewMode, nil
+}
+
+func resolveAttachBehavior(value string) (string, error) {
+	attachBehavior, ok := normalizeAttachBehavior(value)
+	if !ok {
+		return "", fmt.Errorf("invalid attach_behavior %q (use current or detached)", value)
+	}
+	return attachBehavior, nil
+}
+
+func resolvePaneNavigationMode(value string) (string, error) {
+	paneNavigationMode, ok := normalizePaneNavigationMode(value)
+	if !ok {
+		return "", fmt.Errorf("invalid pane_navigation_mode %q (use spatial or memory)", value)
+	}
+	return paneNavigationMode, nil
+}
+
+func resolveQuitBehavior(value string) (string, error) {
+	quitBehavior, ok := normalizeQuitBehavior(value)
+	if !ok {
+		return "", fmt.Errorf("invalid quit_behavior %q (use prompt, keep, or stop)", value)
+	}
+	return quitBehavior, nil
+}
+
+func resolveProjectRoots(roots []string) []string {
+	projectRoots := normalizeProjectRoots(roots)
+	if len(projectRoots) == 0 {
+		return defaultProjectRoots()
+	}
+	return projectRoots
 }
 
 func normalizeAttachBehavior(value string) (string, bool) {
@@ -152,6 +198,23 @@ func normalizePaneNavigationMode(value string) (string, bool) {
 		return PaneNavigationSpatial, true
 	case PaneNavigationMemory:
 		return PaneNavigationMemory, true
+	default:
+		return "", false
+	}
+}
+
+func normalizeQuitBehavior(value string) (string, bool) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return QuitBehaviorPrompt, true
+	}
+	switch strings.ToLower(trimmed) {
+	case QuitBehaviorPrompt:
+		return QuitBehaviorPrompt, true
+	case QuitBehaviorKeep:
+		return QuitBehaviorKeep, true
+	case QuitBehaviorStop:
+		return QuitBehaviorStop, true
 	default:
 		return "", false
 	}

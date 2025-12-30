@@ -5,6 +5,10 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Added
+- Configurable quit behavior (`dashboard.quit_behavior`) with prompt/keep/stop options for handling running sessions on exit.
+- Quit confirmation dialog (shown only when panes are running) with an option to stop the daemon and kill all panes.
+
 ### Fixed
 - Quick reply now detects Codex panes by title when command metadata is missing, so sends use bracketed paste + submit.
 - Pane titles ignore glyph-only window titles and fall back to pane index with short IDs for disambiguation.

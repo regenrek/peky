@@ -172,6 +172,69 @@ type slashSuggestionEntry struct {
 	Desc  string
 }
 
+const defaultBroadcastDesc = "Send to session/project/all panes"
+
+type slashEntryCollector struct {
+	prefix         string
+	includeAliases bool
+	entries        []slashSuggestionEntry
+	seen           map[string]struct{}
+}
+
+func newSlashEntryCollector(prefix string, includeAliases bool) *slashEntryCollector {
+	return &slashEntryCollector{
+		prefix:         prefix,
+		includeAliases: includeAliases,
+		entries:        make([]slashSuggestionEntry, 0, 16),
+		seen:           make(map[string]struct{}),
+	}
+}
+
+func (c *slashEntryCollector) addAlias(alias, desc string) {
+	normalized := normalizeCommandAlias(alias)
+	if normalized == "" {
+		return
+	}
+	if c.prefix != "" && !strings.HasPrefix(normalized, c.prefix) {
+		return
+	}
+	if _, ok := c.seen[normalized]; ok {
+		return
+	}
+	c.seen[normalized] = struct{}{}
+	c.entries = append(c.entries, slashSuggestionEntry{Alias: normalized, Desc: desc})
+}
+
+func (c *slashEntryCollector) addCommand(cmd commandSpec) {
+	desc := strings.TrimSpace(cmd.Desc)
+	if desc == "" {
+		desc = strings.TrimSpace(cmd.Label)
+	}
+	if c.includeAliases {
+		for _, alias := range cmd.Aliases {
+			c.addAlias(alias, desc)
+		}
+		return
+	}
+	if len(cmd.Aliases) == 0 {
+		return
+	}
+	c.addAlias(cmd.Aliases[0], desc)
+}
+
+func (c *slashEntryCollector) addCommands(cmds []commandSpec) {
+	for _, cmd := range cmds {
+		c.addCommand(cmd)
+	}
+}
+
+func (c *slashEntryCollector) addBroadcast(desc string) {
+	if strings.TrimSpace(desc) == "" {
+		desc = defaultBroadcastDesc
+	}
+	c.addAlias("all", desc)
+}
+
 func (m *Model) slashCompletionMatches(prefix string) ([]string, bool) {
 	entries, ok := m.slashSuggestionEntries(prefix, true)
 	if !ok {
@@ -189,57 +252,33 @@ func (m *Model) slashSuggestionEntries(prefix string, includeAliases bool) ([]sl
 	if err != nil {
 		return nil, false
 	}
-	entries := make([]slashSuggestionEntry, 0, 16)
-	seen := make(map[string]struct{})
-	addEntry := func(alias, desc string) {
-		normalized := normalizeCommandAlias(alias)
-		if normalized == "" {
-			return
-		}
-		if prefix != "" && !strings.HasPrefix(normalized, prefix) {
-			return
-		}
-		if _, ok := seen[normalized]; ok {
-			return
-		}
-		seen[normalized] = struct{}{}
-		entries = append(entries, slashSuggestionEntry{Alias: normalized, Desc: desc})
-	}
-
+	collector := newSlashEntryCollector(prefix, includeAliases)
 	broadcastAdded := false
 	for _, group := range registry.Groups {
 		if group.Name == "broadcast" && !broadcastAdded {
-			desc := ""
-			if len(group.Commands) > 0 {
-				desc = strings.TrimSpace(group.Commands[0].Desc)
-			}
-			if desc == "" {
-				desc = "Send to session/project/all panes"
-			}
-			addEntry("all", desc)
+			collector.addBroadcast(broadcastDescFromGroup(group))
 			broadcastAdded = true
 		}
-		for _, cmd := range group.Commands {
-			desc := strings.TrimSpace(cmd.Desc)
-			if desc == "" {
-				desc = strings.TrimSpace(cmd.Label)
-			}
-			if includeAliases {
-				for _, alias := range cmd.Aliases {
-					addEntry(alias, desc)
-				}
-				continue
-			}
-			if len(cmd.Aliases) == 0 {
-				continue
-			}
-			addEntry(cmd.Aliases[0], desc)
-		}
+		collector.addCommands(group.Commands)
 	}
 	if !broadcastAdded {
-		addEntry("all", "Send to session/project/all panes")
+		collector.addBroadcast(defaultBroadcastDesc)
 	}
-	return entries, true
+	return collector.entries, true
+}
+
+func broadcastDescFromGroup(group commandGroup) string {
+	if len(group.Commands) == 0 {
+		return defaultBroadcastDesc
+	}
+	desc := strings.TrimSpace(group.Commands[0].Desc)
+	if desc == "" {
+		desc = strings.TrimSpace(group.Commands[0].Label)
+	}
+	if desc == "" {
+		return defaultBroadcastDesc
+	}
+	return desc
 }
 
 func longestCommonPrefix(values []string) string {

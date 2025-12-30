@@ -40,6 +40,7 @@ type Model struct {
 	SettingsMenu             list.Model
 	DebugMenu                list.Model
 	ConfirmKill              ConfirmKill
+	ConfirmQuit              ConfirmQuit
 	ConfirmCloseProject      ConfirmCloseProject
 	ConfirmCloseAllProjects  ConfirmCloseAllProjects
 	ConfirmClosePane         ConfirmClosePane
@@ -128,6 +129,10 @@ type SlashSuggestion struct {
 type ConfirmKill struct {
 	Session string
 	Project string
+}
+
+type ConfirmQuit struct {
+	RunningPanes int
 }
 
 type ConfirmCloseProject struct {

@@ -44,6 +44,9 @@ func TestDefaultDashboardConfigDefaults(t *testing.T) {
 	if cfg.PaneNavigationMode != PaneNavigationSpatial {
 		t.Fatalf("PaneNavigationMode = %q", cfg.PaneNavigationMode)
 	}
+	if cfg.QuitBehavior != QuitBehaviorPrompt {
+		t.Fatalf("QuitBehavior = %q", cfg.QuitBehavior)
+	}
 	if len(cfg.ProjectRoots) != 1 || cfg.ProjectRoots[0] != filepath.Join(home, "projects") {
 		t.Fatalf("ProjectRoots = %#v", cfg.ProjectRoots)
 	}
@@ -61,6 +64,7 @@ func TestDefaultDashboardConfigOverrides(t *testing.T) {
 		Sidebar:            layout.DashboardSidebarConfig{Hidden: &sidebarHidden},
 		AttachBehavior:     "detached",
 		PaneNavigationMode: "memory",
+		QuitBehavior:       "keep",
 		ProjectRoots:       []string{"/tmp", "/tmp"},
 	})
 	if err != nil {
@@ -90,6 +94,9 @@ func TestDefaultDashboardConfigOverrides(t *testing.T) {
 	if cfg.PaneNavigationMode != PaneNavigationMemory {
 		t.Fatalf("PaneNavigationMode = %q", cfg.PaneNavigationMode)
 	}
+	if cfg.QuitBehavior != QuitBehaviorKeep {
+		t.Fatalf("QuitBehavior = %q", cfg.QuitBehavior)
+	}
 	if !reflect.DeepEqual(cfg.ProjectRoots, []string{"/tmp"}) {
 		t.Fatalf("ProjectRoots = %#v", cfg.ProjectRoots)
 	}
@@ -111,6 +118,13 @@ func TestDefaultDashboardConfigInvalidAttachBehavior(t *testing.T) {
 
 func TestDefaultDashboardConfigInvalidPaneNavigationMode(t *testing.T) {
 	_, err := defaultDashboardConfig(layout.DashboardConfig{PaneNavigationMode: "sideways"})
+	if err == nil {
+		t.Fatalf("defaultDashboardConfig() expected error")
+	}
+}
+
+func TestDefaultDashboardConfigInvalidQuitBehavior(t *testing.T) {
+	_, err := defaultDashboardConfig(layout.DashboardConfig{QuitBehavior: "nope"})
 	if err == nil {
 		t.Fatalf("defaultDashboardConfig() expected error")
 	}

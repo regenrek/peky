@@ -266,7 +266,7 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 					Aliases:  []string{"quit"},
 					Shortcut: shortcutQuit,
 					Run: func(m *Model, _ commandArgs) tea.Cmd {
-						return tea.Quit
+						return m.requestQuit()
 					},
 				},
 			},

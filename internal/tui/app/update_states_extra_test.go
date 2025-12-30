@@ -9,70 +9,71 @@ import (
 )
 
 func TestHandleKeyMsgAdditionalStates(t *testing.T) {
-	m := newTestModelLite()
+	t.Run("close and quit cancels", func(t *testing.T) {
+		m := newTestModelLite()
 
-	m.state = StateConfirmCloseProject
-	m.confirmClose = "Alpha"
-	if _, _, handled := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}}); !handled {
-		t.Fatalf("expected close project key handled")
-	}
-	if m.state != StateDashboard {
-		t.Fatalf("expected dashboard after cancel")
-	}
+		m.state = StateConfirmCloseProject
+		m.confirmClose = "Alpha"
+		assertHandledKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+		if m.state != StateDashboard {
+			t.Fatalf("expected dashboard after cancel")
+		}
 
-	m.state = StateConfirmCloseAllProjects
-	if _, _, handled := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}}); !handled {
-		t.Fatalf("expected close all projects key handled")
-	}
-	if m.state != StateDashboard {
-		t.Fatalf("expected dashboard after cancel")
-	}
+		m.state = StateConfirmCloseAllProjects
+		assertHandledKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+		if m.state != StateDashboard {
+			t.Fatalf("expected dashboard after cancel")
+		}
 
-	m.state = StateConfirmClosePane
-	m.confirmPaneSession = "alpha-1"
-	m.confirmPaneIndex = "1"
-	if _, _, handled := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}}); !handled {
-		t.Fatalf("expected close pane key handled")
-	}
+		m.state = StateConfirmQuit
+		m.confirmQuitRunning = 1
+		assertHandledKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+		if m.state != StateDashboard {
+			t.Fatalf("expected dashboard after quit cancel")
+		}
+	})
 
-	m.openRenameSession()
-	if _, _, handled := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEsc}); !handled {
-		t.Fatalf("expected rename key handled")
-	}
+	t.Run("close pane cancel", func(t *testing.T) {
+		m := newTestModelLite()
+		m.state = StateConfirmClosePane
+		m.confirmPaneSession = "alpha-1"
+		m.confirmPaneIndex = "1"
+		assertHandledKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	})
 
-	m.config = &layout.Config{}
-	m.openProjectRootSetup()
-	if _, _, handled := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEsc}); !handled {
-		t.Fatalf("expected project root setup handled")
-	}
+	t.Run("esc closes dialogs", func(t *testing.T) {
+		m := newTestModelLite()
 
-	m.state = StateLayoutPicker
-	if _, _, handled := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEsc}); !handled {
-		t.Fatalf("expected layout picker handled")
-	}
+		m.openRenameSession()
+		assertHandledKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
 
-	m.state = StatePaneSplitPicker
-	if _, _, handled := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEsc}); !handled {
-		t.Fatalf("expected pane split picker handled")
-	}
+		m.config = &layout.Config{}
+		m.openProjectRootSetup()
+		assertHandledKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
 
-	m.state = StatePaneSwapPicker
-	if _, _, handled := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEsc}); !handled {
-		t.Fatalf("expected pane swap picker handled")
-	}
+		m.state = StateLayoutPicker
+		assertHandledKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
 
-	m.state = StateCommandPalette
-	if _, _, handled := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEsc}); !handled {
-		t.Fatalf("expected command palette handled")
-	}
+		m.state = StatePaneSplitPicker
+		assertHandledKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
 
-	m.state = StateSettingsMenu
-	if _, _, handled := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEsc}); !handled {
-		t.Fatalf("expected settings menu handled")
-	}
+		m.state = StatePaneSwapPicker
+		assertHandledKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
 
-	m.state = StateDebugMenu
-	if _, _, handled := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyEsc}); !handled {
-		t.Fatalf("expected debug menu handled")
+		m.state = StateCommandPalette
+		assertHandledKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
+
+		m.state = StateSettingsMenu
+		assertHandledKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
+
+		m.state = StateDebugMenu
+		assertHandledKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
+	})
+}
+
+func assertHandledKey(t *testing.T, m *Model, msg tea.KeyMsg) {
+	t.Helper()
+	if _, _, handled := m.handleKeyMsg(msg); !handled {
+		t.Fatalf("expected key handled")
 	}
 }

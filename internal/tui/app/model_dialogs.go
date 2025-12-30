@@ -308,7 +308,7 @@ func (m *Model) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.setState(StateDashboard)
 		return m, nil
 	case key.Matches(msg, m.keys.quit):
-		return m, tea.Quit
+		return m, m.requestQuit()
 	}
 	return m, nil
 }
@@ -343,79 +343,6 @@ func (m *Model) openQuickReply() tea.Cmd {
 	m.resetQuickReplyHistory()
 	m.resetSlashMenu()
 	return m.refreshPaneViewsCmd()
-}
-
-func (m *Model) updateQuickReply(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if msg.String() == "tab" && m.applySlashCompletion() {
-		return m, nil
-	}
-	switch {
-	case key.Matches(msg, m.keys.paneNext):
-		return m, m.cyclePane(1)
-	case key.Matches(msg, m.keys.panePrev):
-		return m, m.cyclePane(-1)
-	}
-	switch msg.String() {
-	case "up":
-		if m.moveSlashSelection(-1) {
-			return m, nil
-		}
-	case "down":
-		if m.moveSlashSelection(1) {
-			return m, nil
-		}
-	}
-	if m.quickReplyHistoryActive() && shouldExitQuickReplyHistory(msg) {
-		m.resetQuickReplyHistory()
-	}
-	switch msg.String() {
-	case "up":
-		if m.moveQuickReplyHistory(-1) {
-			m.updateSlashSelection()
-			return m, nil
-		}
-	case "down":
-		if m.moveQuickReplyHistory(1) {
-			m.updateSlashSelection()
-			return m, nil
-		}
-	}
-	switch msg.String() {
-	case "enter":
-		if m.applySlashCompletion() {
-			return m, nil
-		}
-		text := strings.TrimSpace(m.quickReplyInput.Value())
-		if text == "" {
-			return m, m.attachOrStart()
-		}
-		outcome := m.handleQuickReplyCommand(text)
-		if outcome.Handled {
-			if outcome.RecordPrompt {
-				m.rememberQuickReply(text)
-			}
-			if outcome.ClearInput {
-				m.quickReplyInput.SetValue("")
-				m.quickReplyInput.CursorEnd()
-				m.resetQuickReplyHistory()
-				m.resetSlashMenu()
-			}
-			return m, outcome.Cmd
-		}
-		m.rememberQuickReply(text)
-		m.resetQuickReplyHistory()
-		return m, m.sendQuickReply()
-	case "esc":
-		m.quickReplyInput.SetValue("")
-		m.quickReplyInput.CursorEnd()
-		m.resetQuickReplyHistory()
-		m.resetSlashMenu()
-		return m, nil
-	}
-	var cmd tea.Cmd
-	m.quickReplyInput, cmd = m.quickReplyInput.Update(msg)
-	m.updateSlashSelection()
-	return m, cmd
 }
 
 func (m *Model) sendQuickReply() tea.Cmd {

@@ -310,6 +310,7 @@ dashboard:
     hidden: false
   attach_behavior: current  # current | detached
   pane_navigation_mode: spatial  # spatial | memory
+  quit_behavior: prompt  # prompt | keep | stop
   keymap:
     project_left: ["ctrl+q"]
     project_right: ["ctrl+e"]
@@ -340,6 +341,7 @@ dashboard:
 
 `attach_behavior` controls what the “attach/start” action does (default `current`): `current` focuses the selected session in the dashboard, and `detached` creates the session without switching focus.
 `pane_navigation_mode` controls left/right navigation across projects and dashboard columns: `spatial` keeps the same row when moving between projects, and `memory` restores the last selection per project.
+`quit_behavior` controls what happens on quit when panes are still running: `prompt` (default) shows a quit dialog, `keep` exits immediately and leaves sessions running, and `stop` stops the daemon (killing all panes).
 
 ### Agent Status Detection (Codex & Claude Code)
 

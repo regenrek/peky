@@ -118,6 +118,7 @@ func TestViewStates(t *testing.T) {
 	cases := []int{
 		viewHelp,
 		viewConfirmKill,
+		viewConfirmQuit,
 		viewConfirmCloseProject,
 		viewConfirmCloseAllProjects,
 		viewConfirmRestart,

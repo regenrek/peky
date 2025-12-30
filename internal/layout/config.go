@@ -128,6 +128,7 @@ type DashboardConfig struct {
 	AgentDetection     AgentDetectionConfig   `yaml:"agent_detection,omitempty"`
 	AttachBehavior     string                 `yaml:"attach_behavior,omitempty"`      // current | detached
 	PaneNavigationMode string                 `yaml:"pane_navigation_mode,omitempty"` // spatial | memory
+	QuitBehavior       string                 `yaml:"quit_behavior,omitempty"`        // prompt | keep | stop
 	HiddenProjects     []HiddenProjectConfig  `yaml:"hidden_projects,omitempty"`
 	Keymap             DashboardKeymapConfig  `yaml:"keymap,omitempty"`
 }

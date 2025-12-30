@@ -23,6 +23,7 @@ const (
 	StateConfirmCloseAllProjects
 	StateConfirmClosePane
 	StateConfirmRestart
+	StateConfirmQuit
 	StateHelp
 	StateCommandPalette
 	StateRenameSession
@@ -67,6 +68,12 @@ const (
 const (
 	PaneNavigationSpatial = "spatial"
 	PaneNavigationMemory  = "memory"
+)
+
+const (
+	QuitBehaviorPrompt = "prompt"
+	QuitBehaviorKeep   = "keep"
+	QuitBehaviorStop   = "stop"
 )
 
 // DashboardData contains all data required to render the dashboard.
@@ -154,6 +161,7 @@ type DashboardConfig struct {
 	AgentDetection     AgentDetectionConfig
 	AttachBehavior     string
 	PaneNavigationMode string
+	QuitBehavior       string
 	HiddenProjects     map[string]struct{}
 }
 
@@ -163,6 +171,14 @@ type selectionState struct {
 	Session   string
 	Pane      string
 }
+
+type quitAction int
+
+const (
+	quitActionNone quitAction = iota
+	quitActionKeep
+	quitActionStop
+)
 
 // dashboardSnapshotInput carries the state needed for refresh.
 type dashboardSnapshotInput struct {
@@ -216,6 +232,10 @@ type daemonRestartMsg struct {
 	Client         *sessiond.Client
 	PaneViewClient *sessiond.Client
 	Err            error
+}
+
+type daemonStopMsg struct {
+	Err error
 }
 
 // PaneClosedMsg signals the selected pane can no longer accept input.

@@ -70,6 +70,7 @@ var keyHandlers = map[ViewState]keyHandler{
 	},
 	StateConfirmClosePane: func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateConfirmClosePane(msg) },
 	StateConfirmRestart:   func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateConfirmRestart(msg) },
+	StateConfirmQuit:      func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateConfirmQuit(msg) },
 	StateHelp:             func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateHelp(msg) },
 	StateCommandPalette:   func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateCommandPalette(msg) },
 	StateSettingsMenu:     func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateSettingsMenu(msg) },
@@ -103,6 +104,9 @@ var updateHandlers = map[reflect.Type]updateHandler{
 	},
 	reflect.TypeOf(daemonRestartMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleDaemonRestart(msg.(daemonRestartMsg))
+	},
+	reflect.TypeOf(daemonStopMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleDaemonStop(msg.(daemonStopMsg))
 	},
 	reflect.TypeOf(PaneClosedMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handlePaneClosed(msg.(PaneClosedMsg))

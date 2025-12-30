@@ -199,7 +199,7 @@ func (m *Model) handleDashboardActions(msg tea.KeyMsg) (tea.Cmd, bool) {
 		m.setState(StateHelp)
 		return nil, true
 	case key.Matches(msg, m.keys.quit):
-		return tea.Sequence(m.shutdownCmd(), tea.Quit), true
+		return m.requestQuit(), true
 	default:
 		return nil, false
 	}

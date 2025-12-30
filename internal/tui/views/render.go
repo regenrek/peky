@@ -15,6 +15,7 @@ var viewRenderers = map[int]func(Model) string{
 	viewPaneSplitPicker:         func(m Model) string { return m.viewPaneSplitPicker() },
 	viewPaneSwapPicker:          func(m Model) string { return m.viewPaneSwapPicker() },
 	viewConfirmKill:             func(m Model) string { return m.viewConfirmKill() },
+	viewConfirmQuit:             func(m Model) string { return m.viewConfirmQuit() },
 	viewConfirmCloseProject:     func(m Model) string { return m.viewConfirmCloseProject() },
 	viewConfirmCloseAllProjects: func(m Model) string { return m.viewConfirmCloseAllProjects() },
 	viewConfirmClosePane:        func(m Model) string { return m.viewConfirmClosePane() },

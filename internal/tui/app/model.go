@@ -109,6 +109,8 @@ type Model struct {
 	confirmPaneID      string
 	confirmPaneTitle   string
 	confirmPaneRunning bool
+	confirmQuitRunning int
+	pendingQuit        quitAction
 
 	renameInput     textinput.Model
 	renameSession   string

@@ -61,6 +61,9 @@ func (m *Model) viewModel() views.Model {
 			Session: m.confirmSession,
 			Project: m.confirmProject,
 		},
+		ConfirmQuit: views.ConfirmQuit{
+			RunningPanes: m.confirmQuitRunning,
+		},
 		ConfirmCloseProject: views.ConfirmCloseProject{
 			Project:         m.confirmClose,
 			RunningSessions: runningSessionsForProject(m.data.Projects, m.confirmCloseID),
