@@ -398,45 +398,56 @@ func (w *Window) SendMouse(event uv.MouseEvent) bool {
 		return w.handleMouseWheel(wheel)
 	}
 
-	// In host-controlled views, don't forward mouse to the app.
-	if w.CopyModeActive() || w.ScrollbackModeActive() || w.GetScrollbackOffset() > 0 {
-		switch ev := event.(type) {
-		case uv.MouseClickEvent:
-			_ = w.handleMouseSelectClick(ev)
-			return true
-		case uv.MouseMotionEvent:
-			_ = w.handleMouseSelectMotion(ev)
-			return true
-		case uv.MouseReleaseEvent:
-			_ = w.handleMouseSelectRelease(ev)
-			return true
-		default:
-			return true
-		}
+	if w.handleMouseInHostModes(event) {
+		return true
 	}
 
 	// Host-level drag selection when the app is not capturing mouse (or Shift is held).
-	switch ev := event.(type) {
-	case uv.MouseClickEvent:
-		if w.handleMouseSelectClick(ev) {
-			return true
-		}
-	case uv.MouseMotionEvent:
-		if w.handleMouseSelectMotion(ev) {
-			return true
-		}
-	case uv.MouseReleaseEvent:
-		if w.handleMouseSelectRelease(ev) {
-			return true
-		}
+	if w.handleMouseSelection(event) {
+		return true
 	}
 
+	if !w.allowMouseForwarding(event) {
+		return false
+	}
+
+	return w.forwardMouseToTerm(event)
+}
+
+func (w *Window) handleMouseInHostModes(event uv.MouseEvent) bool {
+	if !w.CopyModeActive() && !w.ScrollbackModeActive() && w.GetScrollbackOffset() == 0 {
+		return false
+	}
+	switch ev := event.(type) {
+	case uv.MouseClickEvent:
+		_ = w.handleMouseSelectClick(ev)
+	case uv.MouseMotionEvent:
+		_ = w.handleMouseSelectMotion(ev)
+	case uv.MouseReleaseEvent:
+		_ = w.handleMouseSelectRelease(ev)
+	}
+	return true
+}
+
+func (w *Window) handleMouseSelection(event uv.MouseEvent) bool {
+	switch ev := event.(type) {
+	case uv.MouseClickEvent:
+		return w.handleMouseSelectClick(ev)
+	case uv.MouseMotionEvent:
+		return w.handleMouseSelectMotion(ev)
+	case uv.MouseReleaseEvent:
+		return w.handleMouseSelectRelease(ev)
+	default:
+		return false
+	}
+}
+
+func (w *Window) allowMouseForwarding(event uv.MouseEvent) bool {
 	if !w.HasMouseMode() {
 		return false
 	}
 	if _, isMotion := event.(uv.MouseMotionEvent); isMotion && !w.AllowsMouseMotion() {
 		return false
 	}
-
-	return w.forwardMouseToTerm(event)
+	return true
 }

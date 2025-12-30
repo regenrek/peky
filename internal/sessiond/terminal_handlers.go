@@ -136,20 +136,32 @@ func handleCopyModeKey(win paneWindow, key string) (TerminalKeyResponse, bool) {
 		return TerminalKeyResponse{}, false
 	}
 	if termkeys.IsCopyShortcutKey(key) {
-		text := win.CopyYankText()
-		win.ExitCopyMode()
-		if text == "" {
-			return TerminalKeyResponse{Handled: true, Toast: "Nothing to yank", ToastKind: ToastWarning}, true
-		}
-		return TerminalKeyResponse{Handled: true, Toast: "Yanked to clipboard", ToastKind: ToastSuccess, YankText: text}, true
+		return handleCopyYank(win)
 	}
 	if win.CopySelectionFromMouseActive() && isPrintableKey(key) {
-		win.ExitCopyMode()
-		if win.ScrollbackModeActive() || win.GetScrollbackOffset() > 0 {
-			win.ExitScrollback()
-		}
-		return TerminalKeyResponse{Handled: false}, true
+		return handleCopyModePrintable(win)
 	}
+	return handleCopyModeCommand(win, key)
+}
+
+func handleCopyYank(win paneWindow) (TerminalKeyResponse, bool) {
+	text := win.CopyYankText()
+	win.ExitCopyMode()
+	if text == "" {
+		return TerminalKeyResponse{Handled: true, Toast: "Nothing to yank", ToastKind: ToastWarning}, true
+	}
+	return TerminalKeyResponse{Handled: true, Toast: "Yanked to clipboard", ToastKind: ToastSuccess, YankText: text}, true
+}
+
+func handleCopyModePrintable(win paneWindow) (TerminalKeyResponse, bool) {
+	win.ExitCopyMode()
+	if win.ScrollbackModeActive() || win.GetScrollbackOffset() > 0 {
+		win.ExitScrollback()
+	}
+	return TerminalKeyResponse{Handled: false}, true
+}
+
+func handleCopyModeCommand(win paneWindow, key string) (TerminalKeyResponse, bool) {
 	switch key {
 	case "esc", "q":
 		win.ExitCopyMode()
@@ -176,12 +188,7 @@ func handleCopyModeKey(win paneWindow, key string) (TerminalKeyResponse, bool) {
 		win.CopyToggleSelect()
 		return TerminalKeyResponse{Handled: true, Toast: "Selection toggled (v) | Yank (y) | Exit (esc/q)", ToastKind: ToastInfo}, true
 	case "y":
-		text := win.CopyYankText()
-		win.ExitCopyMode()
-		if text == "" {
-			return TerminalKeyResponse{Handled: true, Toast: "Nothing to yank", ToastKind: ToastWarning}, true
-		}
-		return TerminalKeyResponse{Handled: true, Toast: "Yanked to clipboard", ToastKind: ToastSuccess, YankText: text}, true
+		return handleCopyYank(win)
 	default:
 		return TerminalKeyResponse{Handled: true}, true
 	}

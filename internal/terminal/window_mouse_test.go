@@ -293,6 +293,63 @@ func TestMouseWheelNoScrollbackDoesNothing(t *testing.T) {
 	}
 }
 
+func assertSendMouseHandled(t *testing.T, w *Window, event uv.MouseEvent, msg string) {
+	t.Helper()
+	if !w.SendMouse(event) {
+		t.Fatalf(msg)
+	}
+}
+
+func assertCopyModeInactive(t *testing.T, w *Window) {
+	t.Helper()
+	if w.CopyModeActive() {
+		t.Fatalf("expected copy mode inactive")
+	}
+}
+
+func assertCopyModeActive(t *testing.T, w *Window) {
+	t.Helper()
+	if !w.CopyModeActive() || w.CopyMode == nil {
+		t.Fatalf("expected copy mode active")
+	}
+}
+
+func assertCopySelecting(t *testing.T, w *Window) {
+	t.Helper()
+	if w.CopyMode == nil || !w.CopyMode.Selecting {
+		t.Fatalf("expected selecting true")
+	}
+}
+
+func assertMouseSelectionActive(t *testing.T, w *Window) {
+	t.Helper()
+	if !w.CopySelectionFromMouseActive() {
+		t.Fatalf("expected mouse selection active")
+	}
+}
+
+func assertSelectionCursor(t *testing.T, w *Window, x, absY int) {
+	t.Helper()
+	if w.CopyMode == nil || w.CopyMode.CursorX != x || w.CopyMode.CursorAbsY != absY {
+		t.Fatalf("expected cursor at (%d,%d), got (%d,%d)", x, absY, w.CopyMode.CursorX, w.CopyMode.CursorAbsY)
+	}
+}
+
+func assertSelectionStartEnd(t *testing.T, w *Window, sx, sy, ex, ey int) {
+	t.Helper()
+	if w.CopyMode == nil || w.CopyMode.SelStartX != sx || w.CopyMode.SelStartAbsY != sy || w.CopyMode.SelEndX != ex || w.CopyMode.SelEndAbsY != ey {
+		t.Fatalf("expected selection start(%d,%d) end(%d,%d), got start(%d,%d) end(%d,%d)",
+			sx, sy, ex, ey, w.CopyMode.SelStartX, w.CopyMode.SelStartAbsY, w.CopyMode.SelEndX, w.CopyMode.SelEndAbsY)
+	}
+}
+
+func assertMouseNotForwarded(t *testing.T, emu *fakeEmu) {
+	t.Helper()
+	if emu.sentMouse != nil {
+		t.Fatalf("expected mouse not forwarded to app")
+	}
+}
+
 func TestMouseDragSelectionEntersCopyMode(t *testing.T) {
 	emu := &fakeEmu{
 		cols: 5,
@@ -318,63 +375,29 @@ func TestMouseDragSelectionEntersCopyMode(t *testing.T) {
 		updates: make(chan struct{}, 10),
 	}
 
-	if w.CopyModeActive() {
-		t.Fatalf("expected copy mode inactive at start")
-	}
+	assertCopyModeInactive(t, w)
 
 	emu.sentMouse = nil
-	if !w.SendMouse(uv.MouseClickEvent{X: 1, Y: 0, Button: uv.MouseLeft}) {
-		t.Fatalf("expected click to start selection")
-	}
-	if !w.CopyModeActive() || w.CopyMode == nil {
-		t.Fatalf("expected copy mode active after click")
-	}
-	if !w.CopyMode.Selecting {
-		t.Fatalf("expected selecting true after click")
-	}
-	if !w.CopySelectionFromMouseActive() {
-		t.Fatalf("expected mouse selection active after click")
-	}
+	assertSendMouseHandled(t, w, uv.MouseClickEvent{X: 1, Y: 0, Button: uv.MouseLeft}, "expected click to start selection")
+	assertCopyModeActive(t, w)
+	assertCopySelecting(t, w)
+	assertMouseSelectionActive(t, w)
 	// sbLen=5, offset=0 => topAbsY=5, y=0 => absY=5
-	if w.CopyMode.CursorX != 1 || w.CopyMode.CursorAbsY != 5 {
-		t.Fatalf("expected cursor at (1,5), got (%d,%d)", w.CopyMode.CursorX, w.CopyMode.CursorAbsY)
-	}
-	if w.CopyMode.SelStartX != 1 || w.CopyMode.SelStartAbsY != 5 || w.CopyMode.SelEndX != 1 || w.CopyMode.SelEndAbsY != 5 {
-		t.Fatalf("expected selection start=end at (1,5), got start(%d,%d) end(%d,%d)",
-			w.CopyMode.SelStartX, w.CopyMode.SelStartAbsY, w.CopyMode.SelEndX, w.CopyMode.SelEndAbsY)
-	}
-	if emu.sentMouse != nil {
-		t.Fatalf("expected click not forwarded to app when starting host selection")
-	}
+	assertSelectionCursor(t, w, 1, 5)
+	assertSelectionStartEnd(t, w, 1, 5, 1, 5)
+	assertMouseNotForwarded(t, emu)
 
 	emu.sentMouse = nil
-	if !w.SendMouse(uv.MouseMotionEvent{X: 3, Y: 2, Button: uv.MouseNone}) {
-		t.Fatalf("expected drag motion to update selection")
-	}
+	assertSendMouseHandled(t, w, uv.MouseMotionEvent{X: 3, Y: 2, Button: uv.MouseNone}, "expected drag motion to update selection")
 	// y=2 => absY=7
-	if w.CopyMode.CursorX != 3 || w.CopyMode.CursorAbsY != 7 {
-		t.Fatalf("expected cursor at (3,7), got (%d,%d)", w.CopyMode.CursorX, w.CopyMode.CursorAbsY)
-	}
-	if w.CopyMode.SelStartX != 1 || w.CopyMode.SelStartAbsY != 5 {
-		t.Fatalf("expected selection start preserved at (1,5), got (%d,%d)", w.CopyMode.SelStartX, w.CopyMode.SelStartAbsY)
-	}
-	if w.CopyMode.SelEndX != 3 || w.CopyMode.SelEndAbsY != 7 {
-		t.Fatalf("expected selection end at (3,7), got (%d,%d)", w.CopyMode.SelEndX, w.CopyMode.SelEndAbsY)
-	}
-	if emu.sentMouse != nil {
-		t.Fatalf("expected motion not forwarded to app during host selection")
-	}
+	assertSelectionCursor(t, w, 3, 7)
+	assertSelectionStartEnd(t, w, 1, 5, 3, 7)
+	assertMouseNotForwarded(t, emu)
 
 	emu.sentMouse = nil
-	if !w.SendMouse(uv.MouseReleaseEvent{X: 3, Y: 2, Button: uv.MouseLeft}) {
-		t.Fatalf("expected release handled in copy mode")
-	}
-	if !w.CopySelectionFromMouseActive() {
-		t.Fatalf("expected mouse selection to remain active after release")
-	}
-	if emu.sentMouse != nil {
-		t.Fatalf("expected release not forwarded to app during host selection")
-	}
+	assertSendMouseHandled(t, w, uv.MouseReleaseEvent{X: 3, Y: 2, Button: uv.MouseLeft}, "expected release handled in copy mode")
+	assertMouseSelectionActive(t, w)
+	assertMouseNotForwarded(t, emu)
 }
 
 func TestMouseSelectionAutoCopiesOnRelease(t *testing.T) {
