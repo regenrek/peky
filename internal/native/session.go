@@ -208,7 +208,33 @@ func (m *Manager) Snapshot(ctx context.Context, previewLines int) []SessionSnaps
 		previewLines = 0
 	}
 
+	out, paneRefs, paneIDs := m.snapshotSessions()
+	if previewLines <= 0 || len(paneRefs) == 0 {
+		return out
+	}
+
+	states, cursor := m.snapshotPreviewStates(paneIDs)
+	needsUpdate := previewNeedsUpdate(paneRefs, states, previewLines)
+	updates, nextCursor := m.collectPreviewUpdates(ctx, previewLines, paneRefs, states, needsUpdate, cursor)
+	m.applyPreviewUpdates(updates, nextCursor)
+	applyPreviewLines(out, paneRefs, states, previewLines)
+
+	return out
+}
+
+type panePreviewRef struct {
+	id         string
+	window     *terminal.Window
+	lastActive time.Time
+	seq        uint64
+	sessionIdx int
+	paneIdx    int
+}
+
+func (m *Manager) snapshotSessions() ([]SessionSnapshot, []panePreviewRef, []string) {
 	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	sessions := make([]*Session, 0, len(m.sessions))
 	for _, session := range m.sessions {
 		sessions = append(sessions, session)
@@ -219,15 +245,6 @@ func (m *Manager) Snapshot(ctx context.Context, previewLines int) []SessionSnaps
 		}
 		return sessions[i].CreatedAt.Before(sessions[j].CreatedAt)
 	})
-
-	type panePreviewRef struct {
-		id         string
-		window     *terminal.Window
-		lastActive time.Time
-		seq        uint64
-		sessionIdx int
-		paneIdx    int
-	}
 
 	out := make([]SessionSnapshot, len(sessions))
 	paneRefs := make([]panePreviewRef, 0, len(sessions)*2)
@@ -245,13 +262,7 @@ func (m *Manager) Snapshot(ctx context.Context, previewLines int) []SessionSnaps
 		paneTitles := resolveSessionPaneTitles(session)
 		out[si].Panes = make([]PaneSnapshot, len(panes))
 		for pi, pane := range panes {
-			title := strings.TrimSpace(paneTitles[pane])
-			if title == "" {
-				title = strings.TrimSpace(pane.Title)
-			}
-			if title == "" && pane.window != nil {
-				title = strings.TrimSpace(pane.window.Title())
-			}
+			title := paneSnapshotTitle(pane, paneTitles)
 			out[si].Panes[pi] = PaneSnapshot{
 				ID:            pane.ID,
 				Index:         pane.Index,
@@ -274,7 +285,6 @@ func (m *Manager) Snapshot(ctx context.Context, previewLines int) []SessionSnaps
 			if pane.window != nil {
 				seq = pane.window.UpdateSeq()
 			}
-
 			paneRefs = append(paneRefs, panePreviewRef{
 				id:         pane.ID,
 				window:     pane.window,
@@ -286,33 +296,51 @@ func (m *Manager) Snapshot(ctx context.Context, previewLines int) []SessionSnaps
 			paneIDs = append(paneIDs, pane.ID)
 		}
 	}
-	m.mu.RUnlock()
+	return out, paneRefs, paneIDs
+}
 
-	if previewLines <= 0 || len(paneRefs) == 0 {
-		return out
+func paneSnapshotTitle(pane *Pane, paneTitles map[*Pane]string) string {
+	title := strings.TrimSpace(paneTitles[pane])
+	if title == "" {
+		title = strings.TrimSpace(pane.Title)
 	}
+	if title == "" && pane.window != nil {
+		title = strings.TrimSpace(pane.window.Title())
+	}
+	return title
+}
 
-	states, cursor := m.snapshotPreviewStates(paneIDs)
-	needsUpdate := make([]bool, len(paneRefs))
-	for i, ref := range paneRefs {
+func previewNeedsUpdate(refs []panePreviewRef, states map[string]previewState, previewLines int) []bool {
+	needsUpdate := make([]bool, len(refs))
+	for i, ref := range refs {
 		if ref.window == nil {
 			continue
 		}
 		state, ok := states[ref.id]
-		if !ok || len(state.lines) < previewLines || state.sourceSeq < ref.seq {
+		if !ok || len(state.lines) < previewLines || state.sourceSeq < ref.seq || state.dirty {
 			needsUpdate[i] = true
 		}
 	}
+	return needsUpdate
+}
 
+func (m *Manager) collectPreviewUpdates(
+	ctx context.Context,
+	previewLines int,
+	refs []panePreviewRef,
+	states map[string]previewState,
+	needsUpdate []bool,
+	cursor int,
+) (map[string]previewState, int) {
 	start := cursor
-	if start < 0 || start >= len(paneRefs) {
+	if start < 0 || start >= len(refs) {
 		start = 0
 	}
 	updates := make(map[string]previewState)
 	lastProcessed := -1
 	deadline, hasDeadline := ctx.Deadline()
-	for i := 0; i < len(paneRefs); i++ {
-		idx := (start + i) % len(paneRefs)
+	for i := 0; i < len(refs); i++ {
+		idx := (start + i) % len(refs)
 		if !needsUpdate[idx] {
 			continue
 		}
@@ -322,16 +350,16 @@ func (m *Manager) Snapshot(ctx context.Context, previewLines int) []SessionSnaps
 		if hasDeadline && time.Now().After(deadline) {
 			break
 		}
-		ref := paneRefs[idx]
+		ref := refs[idx]
 		if ref.window == nil {
 			continue
 		}
 		lines, ready := renderPreviewLines(ref.window, previewLines)
-		if !ready {
+		if len(lines) == 0 {
 			lastProcessed = idx
 			continue
 		}
-		state := previewState{lines: append([]string(nil), lines...), sourceSeq: ref.seq}
+		state := previewState{lines: append([]string(nil), lines...), sourceSeq: ref.seq, dirty: !ready}
 		states[ref.id] = state
 		updates[ref.id] = state
 		lastProcessed = idx
@@ -340,13 +368,15 @@ func (m *Manager) Snapshot(ctx context.Context, previewLines int) []SessionSnaps
 	nextCursor := -1
 	if lastProcessed >= 0 {
 		nextCursor = lastProcessed + 1
-		if nextCursor >= len(paneRefs) {
+		if nextCursor >= len(refs) {
 			nextCursor = 0
 		}
 	}
-	m.applyPreviewUpdates(updates, nextCursor)
+	return updates, nextCursor
+}
 
-	for _, ref := range paneRefs {
+func applyPreviewLines(out []SessionSnapshot, refs []panePreviewRef, states map[string]previewState, previewLines int) {
+	for _, ref := range refs {
 		state, ok := states[ref.id]
 		if !ok || len(state.lines) == 0 {
 			continue
@@ -357,8 +387,6 @@ func (m *Manager) Snapshot(ctx context.Context, previewLines int) []SessionSnaps
 		}
 		out[ref.sessionIdx].Panes[ref.paneIdx].Preview = append([]string(nil), lines...)
 	}
-
-	return out
 }
 
 // SessionSnapshot describes a read-only view of a session.

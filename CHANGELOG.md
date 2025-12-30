@@ -5,11 +5,16 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.0.6 - 2025-12-30
+
 ### Added
 - Pane view update sequencing with NotModified responses to skip unchanged renders.
 - Pane view priority scheduling to keep focused panes responsive under load.
 - VT damage tracking primitives for future incremental rendering work.
-- Performance tooling: `scripts/perf-bench`, `scripts/perf-40pane`, and `docs/perf.md`.
+- Performance tooling: `scripts/perf-bench`, `scripts/perf-12pane`, and `scripts/perf-40pane`.
+- Snapshot integration coverage for dirty ANSI cache previews.
+- Pane view scheduler tests for starvation and timestamp preservation.
+- Daemon profiling hooks for CPU/heap captures via `PEAKYPANES_CPU_PROFILE` and `PEAKYPANES_MEM_PROFILE` (build tag `profiler`).
 - Quick reply slash commands that mirror command palette actions.
 - Quick reply broadcast support with `/all` and optional scope targets.
 - Quick reply history navigation with up/down cycling.
@@ -23,6 +28,10 @@ This format is based on Keep a Changelog.
 - ANSI view rendering is cached-first with background refresh to avoid sync render spikes.
 - TUI pane view cache stores update sequences to avoid re-requesting unchanged panes.
 - Preview cache now keys on pane update sequence for deterministic refresh behavior.
+- Snapshot previews now accept dirty ANSI frames and track dirty state for follow-up refreshes.
+- Pane view NotModified gating uses ANSI cache sequence to avoid stalling live previews.
+- TUI batches daemon events to refresh pane views without starving updates under load.
+- Perf load script now defaults to 12 panes and lives at `scripts/perf-12pane`.
 - Command palette actions now render from the shared registry.
 - Quick reply help/hints now surface slash commands and history.
 - Quick reply slash commands now show a padded dropdown overlay above the input with arrow-key selection and tab completion.
@@ -30,10 +39,12 @@ This format is based on Keep a Changelog.
 - Project and dashboard left/right navigation now defaults to spatial row selection (set `pane_navigation_mode: memory` to restore per-project memory).
 
 ### Removed
+- Retired perf and investigation docs (`docs/perf.md`, `docs/investigation-live-preview.md`).
 
 ### Fixed
 - Pane swaps no longer notify while holding the manager lock, preventing deadlocks.
 - Pane view cache state is cleared on daemon restart to avoid stale seq comparisons.
+- Live pane previews remain current even when ANSI cache lags or event throughput spikes.
 
 ## 0.0.5 - 2025-12-29
 
@@ -42,6 +53,8 @@ This format is based on Keep a Changelog.
 - Live pane rendering in the dashboard and project views for native sessions.
 - Terminal focus toggle for native panes (default `ctrl+\`, configurable).
 - Native mouse support in the dashboard: single-click selects panes, double-click toggles terminal focus, and motion forwarding is throttled to avoid CPU spikes.
+- Mouse wheel scrollback for native panes with shift/ctrl modifiers and drag-to-select copy mode in terminal focus.
+- Mouse drag selection now auto-copies to the clipboard and shows a success toast.
 - Project config change detection to refresh selection without reopening projects.
 - Pane management actions: add pane (split), move pane to new window, swap panes, and close pane with a running-process confirmation.
 - Session-only jump keys (`alt+w` / `alt+s`) alongside the flat session/window navigation.
@@ -64,6 +77,8 @@ This format is based on Keep a Changelog.
 - Refactored command palette items for clarity.
 - Window rendering now supports scrollback viewports and copy-mode highlights for native panes.
 - Alternate screen panes no longer record scrollback history.
+- Normal-screen mouse wheel always scrolls host scrollback (app mouse reporting is ignored outside alt-screen).
+- Mouse motion forwarding now enables during drag selection even when the app isn't requesting motion events.
 - Default pane titles now compress path-like window names to readable repo-relative labels and de-duplicate duplicates.
 - Session env overrides are persisted and reapplied on restore; splits inherit session env.
 - State persistence is debounced and flushed on shutdown to reduce write amplification.
@@ -88,6 +103,7 @@ This format is based on Keep a Changelog.
 - Daemon transport now shuts down dead client links and client writes honor request deadlines to prevent refresh timeouts.
 - Client calls now guard against closed connections during daemon restarts.
 - Terminal focus footer hint now highlights only when active.
+- Mouse wheel scrolling no longer injects raw SGR mouse escape sequences into shells.
 
 ## 0.0.4 - 2025-12-25
 

@@ -149,6 +149,7 @@ func (m *Model) refreshSelectionForProjectConfig() bool {
 	state := projectConfigStateForPath(projectPath)
 	prev, ok := m.projectConfigState[projectPath]
 	m.projectConfigState[projectPath] = state
+	m.updateProjectLocalConfig(projectPath, state)
 	if !ok || prev.equal(state) {
 		return false
 	}

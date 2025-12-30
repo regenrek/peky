@@ -132,6 +132,11 @@ layout:
 #     - codex-3
 #     - codex-4
 #     - codex-5
+
+# Optional per-project dashboard overrides
+# dashboard:
+#   sidebar:
+#     hidden: true
 ```
 
 ### Global Config (`~/.config/peakypanes/config.yml`)
@@ -263,7 +268,8 @@ Keymap overrides are available in the global config (`~/.config/peakypanes/confi
 
 Project
 - `ctrl+o` open project picker (creates session detached; stay in dashboard)
-- `ctrl+b` close project (hides from tabs; sessions keep running; press k in the dialog to kill)
+- `ctrl+b` toggle sidebar (show/hide sessions list)
+- `alt+c` close project (hides from tabs; sessions keep running; press k in the dialog to kill)
 
 Session
 - `enter` attach/start session (when reply is empty)
@@ -298,6 +304,8 @@ dashboard:
   preview_compact: true
   idle_seconds: 20
   preview_mode: grid  # grid | layout
+  sidebar:
+    hidden: false
   attach_behavior: current  # current | detached
   pane_navigation_mode: spatial  # spatial | memory
   keymap:
@@ -313,6 +321,8 @@ dashboard:
     scrollback: ["f7"]
     copy_mode: ["f8"]
     toggle_panes: ["ctrl+u"]
+    toggle_sidebar: ["ctrl+b"]
+    close_project: ["alt+c"]
     command_palette: ["ctrl+p"]
     edit_config: ["ctrl+,"]
     help: ["ctrl+g"]
@@ -384,7 +394,7 @@ Manual npm smoke run (fresh HOME/XDG config):
 
 ```bash
 scripts/fresh-run
-scripts/fresh-run 0.0.5 --with-project
+scripts/fresh-run 0.0.6 --with-project
 ```
 
 GitHub Actions runs gofmt checks, go vet, go test with coverage, and race on Linux.

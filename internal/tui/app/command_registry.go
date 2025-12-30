@@ -42,10 +42,11 @@ type commandRegistry struct {
 
 func (m *Model) commandRegistry() (commandRegistry, error) {
 	var shortcutOpenProject, shortcutCloseProject, shortcutNewSession, shortcutKillSession string
-	var shortcutFilter, shortcutHelp, shortcutQuit string
+	var shortcutFilter, shortcutHelp, shortcutQuit, shortcutToggleSidebar string
 	if m.keys != nil {
 		shortcutOpenProject = keyLabel(m.keys.openProject)
 		shortcutCloseProject = keyLabel(m.keys.closeProject)
+		shortcutToggleSidebar = keyLabel(m.keys.toggleSidebar)
 		shortcutNewSession = keyLabel(m.keys.newSession)
 		shortcutKillSession = keyLabel(m.keys.kill)
 		shortcutFilter = keyLabel(m.keys.filter)
@@ -161,6 +162,16 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 					Shortcut: shortcutOpenProject,
 					Run: func(m *Model, _ commandArgs) tea.Cmd {
 						m.openProjectPicker()
+						return nil
+					},
+				},
+				{
+					ID:       "project_toggle_sidebar",
+					Label:    "Project: Toggle sidebar",
+					Desc:     "Show or hide the project sidebar",
+					Shortcut: shortcutToggleSidebar,
+					Run: func(m *Model, _ commandArgs) tea.Cmd {
+						m.toggleSidebar()
 						return nil
 					},
 				},

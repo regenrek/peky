@@ -43,14 +43,32 @@ func (m *Manager) RestoreSession(ctx context.Context, spec SessionRestoreSpec) (
 	if m.closed.Load() {
 		return nil, errors.New("native: manager closed")
 	}
+	name, path, panesSpec, env, err := normalizeRestoreSpec(spec)
+	if err != nil {
+		return nil, err
+	}
+	activeIndex := activePaneIndex(panesSpec)
+	panes, err := m.restorePanes(ctx, path, env, panesSpec, activeIndex)
+	if err != nil {
+		return nil, err
+	}
+	session := buildRestoredSession(spec, name, path, env, panes)
+	if err := m.commitRestoredSession(session, panes); err != nil {
+		return nil, err
+	}
+	m.finishRestoredSession(panes)
+	return session, nil
+}
+
+func normalizeRestoreSpec(spec SessionRestoreSpec) (string, string, []PaneRestoreSpec, []string, error) {
 	name := strings.TrimSpace(spec.Name)
 	if name == "" {
-		return nil, errors.New("native: session name is required")
+		return "", "", nil, nil, errors.New("native: session name is required")
 	}
 	path := strings.TrimSpace(spec.Path)
 	if path != "" {
 		if err := validatePath(path); err != nil {
-			return nil, err
+			return "", "", nil, nil, err
 		}
 		path = filepath.Clean(path)
 	}
@@ -63,17 +81,23 @@ func (m *Manager) RestoreSession(ctx context.Context, spec SessionRestoreSpec) (
 			RestoreError:  "no panes to restore",
 		}}
 	}
-	activeIndex := ""
+	env := append([]string(nil), spec.Env...)
+	return name, path, panesSpec, env, nil
+}
+
+func activePaneIndex(panesSpec []PaneRestoreSpec) string {
 	for _, pane := range panesSpec {
 		if pane.Active {
-			activeIndex = pane.Index
-			break
+			return pane.Index
 		}
 	}
-	if activeIndex == "" {
-		activeIndex = panesSpec[0].Index
+	if len(panesSpec) == 0 {
+		return ""
 	}
-	env := append([]string(nil), spec.Env...)
+	return panesSpec[0].Index
+}
+
+func (m *Manager) restorePanes(ctx context.Context, path string, env []string, panesSpec []PaneRestoreSpec, activeIndex string) ([]*Pane, error) {
 	panes := make([]*Pane, 0, len(panesSpec))
 	for _, paneSpec := range panesSpec {
 		active := paneSpec.Index == activeIndex
@@ -84,6 +108,10 @@ func (m *Manager) RestoreSession(ctx context.Context, spec SessionRestoreSpec) (
 		}
 		panes = append(panes, pane)
 	}
+	return panes, nil
+}
+
+func buildRestoredSession(spec SessionRestoreSpec, name, path string, env []string, panes []*Pane) *Session {
 	session := &Session{
 		Name:       name,
 		Path:       path,
@@ -95,19 +123,25 @@ func (m *Manager) RestoreSession(ctx context.Context, spec SessionRestoreSpec) (
 	if session.CreatedAt.IsZero() {
 		session.CreatedAt = time.Now()
 	}
+	return session
+}
 
+func (m *Manager) commitRestoredSession(session *Session, panes []*Pane) error {
 	m.mu.Lock()
 	if _, ok := m.sessions[session.Name]; ok {
 		m.mu.Unlock()
 		m.closePanes(panes)
-		return nil, fmt.Errorf("native: session %q already exists", session.Name)
+		return fmt.Errorf("native: session %q already exists", session.Name)
 	}
 	m.sessions[session.Name] = session
 	for _, pane := range panes {
 		m.panes[pane.ID] = pane
 	}
 	m.mu.Unlock()
+	return nil
+}
 
+func (m *Manager) finishRestoredSession(panes []*Pane) {
 	for _, pane := range panes {
 		m.forwardUpdates(pane)
 	}
@@ -115,7 +149,6 @@ func (m *Manager) RestoreSession(ctx context.Context, spec SessionRestoreSpec) (
 		m.notifyPane(pane.ID)
 	}
 	m.version.Add(1)
-	return session, nil
 }
 
 func (m *Manager) restorePane(ctx context.Context, path string, env []string, spec PaneRestoreSpec, active bool) (*Pane, error) {

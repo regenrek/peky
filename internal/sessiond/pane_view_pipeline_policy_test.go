@@ -16,6 +16,9 @@ type fakePaneViewWin struct {
 }
 
 func (w *fakePaneViewWin) UpdateSeq() uint64 { return 0 }
+func (w *fakePaneViewWin) ANSICacheSeq() uint64 {
+	return 0
+}
 
 func (w *fakePaneViewWin) ViewLipglossCtx(ctx context.Context, showCursor bool, profile termenv.Profile) (string, error) {
 	w.lipglossCalls++
@@ -31,7 +34,7 @@ func (w *fakePaneViewWin) ViewANSICtx(ctx context.Context) (string, error) {
 func (w *fakePaneViewWin) ViewLipgloss(showCursor bool, profile termenv.Profile) string { return "LIP" }
 func (w *fakePaneViewWin) ViewANSI() string                                             { return "ANSI" }
 
-// Extra method for the copy-mode exception. paneViewString uses a type assertion.
+// CopyModeActive is required by the paneViewWindow interface for render policy decisions.
 func (w *fakePaneViewWin) CopyModeActive() bool { return w.copyMode }
 
 func TestPaneViewString_RenderPolicy(t *testing.T) {

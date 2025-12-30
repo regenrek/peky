@@ -14,6 +14,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/sessiond"
 )
 
 // ===== Rename dialogs =====
@@ -415,57 +416,77 @@ func (m *Model) updateQuickReply(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) sendQuickReply() tea.Cmd {
+	plan, cmd, ok := m.quickReplyPlan()
+	if !ok {
+		return cmd
+	}
+	return func() tea.Msg {
+		return m.sendQuickReplyToPane(plan)
+	}
+}
+
+type quickReplyPlan struct {
+	paneID  string
+	payload []byte
+	label   string
+}
+
+func (m *Model) quickReplyPlan() (quickReplyPlan, tea.Cmd, bool) {
 	text := strings.TrimSpace(m.quickReplyInput.Value())
 	if text == "" {
-		return NewInfoCmd("Nothing to send")
+		return quickReplyPlan{}, NewInfoCmd("Nothing to send"), false
 	}
 	m.quickReplyInput.SetValue("")
 	m.resetSlashMenu()
 	pane := m.selectedPane()
 	if pane == nil || strings.TrimSpace(pane.ID) == "" {
-		return NewWarningCmd("No pane selected")
+		return quickReplyPlan{}, NewWarningCmd("No pane selected"), false
 	}
 	paneID := strings.TrimSpace(pane.ID)
 	if m.isPaneInputDisabled(paneID) {
-		return nil
+		return quickReplyPlan{}, nil, false
 	}
 	if pane.Dead {
-		return func() tea.Msg {
-			return newPaneClosedMsg(paneID, nil)
-		}
+		return quickReplyPlan{}, func() tea.Msg { return newPaneClosedMsg(paneID, nil) }, false
 	}
 	payload := quickReplyTextBytes(*pane, text)
 	label := strings.TrimSpace(pane.Title)
 	if label == "" {
 		label = fmt.Sprintf("pane %s", pane.Index)
 	}
-	return func() tea.Msg {
-		if m.client == nil {
-			return ErrorMsg{Err: errors.New("session client unavailable"), Context: "send to pane"}
-		}
-		if m.isPaneInputDisabled(paneID) {
-			return nil
-		}
-		if pane := m.paneByID(paneID); pane == nil || pane.Dead {
-			return newPaneClosedMsg(paneID, nil)
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), terminalActionTimeout)
-		defer cancel()
-		if err := m.client.SendInput(ctx, paneID, payload); err != nil {
-			if isPaneClosedError(err) {
-				return newPaneClosedMsg(paneID, err)
-			}
-			return ErrorMsg{Err: err, Context: "send to pane"}
-		}
-		if err := m.client.SendInput(ctx, paneID, []byte{'\r'}); err != nil {
-			if isPaneClosedError(err) {
-				return newPaneClosedMsg(paneID, err)
-			}
-			return ErrorMsg{Err: err, Context: "send to pane"}
-		}
-		if label != "" {
-			return SuccessMsg{Message: "Sent to " + label}
-		}
-		return SuccessMsg{Message: "Sent"}
+	return quickReplyPlan{paneID: paneID, payload: payload, label: label}, nil, true
+}
+
+func (m *Model) sendQuickReplyToPane(plan quickReplyPlan) tea.Msg {
+	if m.client == nil {
+		return ErrorMsg{Err: errors.New("session client unavailable"), Context: "send to pane"}
 	}
+	if m.isPaneInputDisabled(plan.paneID) {
+		return nil
+	}
+	if pane := m.paneByID(plan.paneID); pane == nil || pane.Dead {
+		return newPaneClosedMsg(plan.paneID, nil)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), terminalActionTimeout)
+	defer cancel()
+	if msg := sendPaneInput(ctx, m.client, plan.paneID, plan.payload); msg != nil {
+		return msg
+	}
+	if msg := sendPaneInput(ctx, m.client, plan.paneID, []byte{'\r'}); msg != nil {
+		return msg
+	}
+	if plan.label != "" {
+		return SuccessMsg{Message: "Sent to " + plan.label}
+	}
+	return SuccessMsg{Message: "Sent"}
+}
+
+func sendPaneInput(ctx context.Context, client *sessiond.Client, paneID string, payload []byte) tea.Msg {
+	if err := client.SendInput(ctx, paneID, payload); err != nil {
+		if isPaneClosedError(err) {
+			return newPaneClosedMsg(paneID, err)
+		}
+		return ErrorMsg{Err: err, Context: "send to pane"}
+	}
+	return nil
 }

@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	defaultSnapshotTimeout = 2 * time.Second
+	defaultSnapshotTimeout = 4 * time.Second
 )
 
 // SetAutoStart queues a session to start when the TUI launches.

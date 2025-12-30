@@ -118,64 +118,72 @@ func (w *Writer) Close(ctx context.Context) error {
 }
 
 func (w *Writer) loop() {
-	var (
-		pending    RuntimeState
-		hasPending bool
-		timer      *time.Timer
-		timerCh    <-chan time.Time
-	)
+	var state writerPendingState
 	for {
 		select {
 		case st := <-w.persistCh:
-			pending = st
-			hasPending = true
-			if timer != nil {
-				if !timer.Stop() {
-					select {
-					case <-timer.C:
-					default:
-					}
-				}
-			}
-			timer = time.NewTimer(w.opts.Debounce)
-			timerCh = timer.C
-		case <-timerCh:
-			if hasPending {
-				_ = w.writeState(pending)
-				hasPending = false
-			}
-			timerCh = nil
+			w.handlePersist(&state, st)
+		case <-state.timerCh:
+			w.handleTimer(&state)
 		case resp := <-w.flushCh:
-			if timer != nil {
-				if !timer.Stop() {
-					select {
-					case <-timer.C:
-					default:
-					}
-				}
-			}
-			timerCh = nil
-			var err error
-			if hasPending {
-				err = w.writeState(pending)
-				hasPending = false
-			}
-			resp <- err
+			resp <- w.handleFlush(&state)
 		case resp := <-w.closeCh:
-			if timer != nil {
-				if !timer.Stop() {
-					select {
-					case <-timer.C:
-					default:
-					}
-				}
-			}
-			var err error
-			if hasPending {
-				err = w.writeState(pending)
-			}
-			resp <- err
+			resp <- w.handleClose(&state)
 			return
+		}
+	}
+}
+
+type writerPendingState struct {
+	pending    RuntimeState
+	hasPending bool
+	timer      *time.Timer
+	timerCh    <-chan time.Time
+}
+
+func (w *Writer) handlePersist(state *writerPendingState, st RuntimeState) {
+	state.pending = st
+	state.hasPending = true
+	stopTimer(state.timer)
+	state.timer = time.NewTimer(w.opts.Debounce)
+	state.timerCh = state.timer.C
+}
+
+func (w *Writer) handleTimer(state *writerPendingState) {
+	if state.hasPending {
+		_ = w.writeState(state.pending)
+		state.hasPending = false
+	}
+	state.timerCh = nil
+}
+
+func (w *Writer) handleFlush(state *writerPendingState) error {
+	stopTimer(state.timer)
+	state.timerCh = nil
+	if !state.hasPending {
+		return nil
+	}
+	err := w.writeState(state.pending)
+	state.hasPending = false
+	return err
+}
+
+func (w *Writer) handleClose(state *writerPendingState) error {
+	stopTimer(state.timer)
+	if !state.hasPending {
+		return nil
+	}
+	return w.writeState(state.pending)
+}
+
+func stopTimer(timer *time.Timer) {
+	if timer == nil {
+		return
+	}
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
 		}
 	}
 }

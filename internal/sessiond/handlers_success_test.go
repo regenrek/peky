@@ -160,6 +160,13 @@ func TestHandleSessionNamesSnapshotAndRename(t *testing.T) {
 	}
 	d := &Daemon{manager: manager}
 
+	assertSessionNames(t, d)
+	assertSnapshot(t, d, manager)
+	assertRenameSession(t, d, manager)
+}
+
+func assertSessionNames(t *testing.T, d *Daemon) {
+	t.Helper()
 	data, err := d.handleSessionNames()
 	if err != nil {
 		t.Fatalf("handleSessionNames: %v", err)
@@ -171,12 +178,15 @@ func TestHandleSessionNamesSnapshotAndRename(t *testing.T) {
 	if len(namesResp.Names) != 2 {
 		t.Fatalf("expected 2 session names")
 	}
+}
 
+func assertSnapshot(t *testing.T, d *Daemon, manager *fakeManager) {
+	t.Helper()
 	payload, err := encodePayload(SnapshotRequest{PreviewLines: 2})
 	if err != nil {
 		t.Fatalf("encodePayload: %v", err)
 	}
-	data, err = d.handleSnapshot(payload)
+	data, err := d.handleSnapshot(payload)
 	if err != nil {
 		t.Fatalf("handleSnapshot: %v", err)
 	}
@@ -193,12 +203,15 @@ func TestHandleSessionNamesSnapshotAndRename(t *testing.T) {
 	if manager.lastSnapshotDeadline.IsZero() {
 		t.Fatalf("expected snapshot deadline to be set")
 	}
+}
 
-	payload, err = encodePayload(RenameSessionRequest{OldName: "alpha", NewName: "gamma"})
+func assertRenameSession(t *testing.T, d *Daemon, manager *fakeManager) {
+	t.Helper()
+	payload, err := encodePayload(RenameSessionRequest{OldName: "alpha", NewName: "gamma"})
 	if err != nil {
 		t.Fatalf("encodePayload: %v", err)
 	}
-	data, err = d.handleRenameSession(payload)
+	data, err := d.handleRenameSession(payload)
 	if err != nil {
 		t.Fatalf("handleRenameSession: %v", err)
 	}

@@ -34,6 +34,7 @@ type EventType string
 const (
 	EventPaneUpdated    EventType = "pane_updated"
 	EventSessionChanged EventType = "session_changed"
+	EventToast          EventType = "toast"
 )
 
 // Event is broadcast from daemon to clients.
@@ -42,6 +43,8 @@ type Event struct {
 	PaneID        string
 	PaneUpdateSeq uint64
 	Session       string
+	Toast         string
+	ToastKind     ToastLevel
 }
 
 // HelloRequest begins a connection handshake.

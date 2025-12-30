@@ -129,6 +129,12 @@ func TestKeyBindings(t *testing.T) {
 	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlU}, km.togglePanes) {
 		t.Error("togglePanes binding should match ctrl+u")
 	}
+	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlB}, km.toggleSidebar) {
+		t.Error("toggleSidebar binding should match ctrl+b")
+	}
+	if !key.Matches(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}, Alt: true}, km.closeProject) {
+		t.Error("closeProject binding should match alt+c")
+	}
 	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlG}, km.help) {
 		t.Error("help binding should match ctrl+g")
 	}

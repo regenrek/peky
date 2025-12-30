@@ -89,6 +89,9 @@ func (m Model) viewBody(width, height int) string {
 
 func (m Model) viewProjectBody(width, height int) string {
 	base := width / 3
+	if m.SidebarHidden {
+		return m.viewPreview(width, height)
+	}
 	leftWidth := clamp(base-(width/30), 22, 36)
 	if leftWidth > width-10 {
 		leftWidth = width / 2
@@ -141,6 +144,11 @@ func (m Model) viewSplash(width, height int) string {
 	if strings.TrimSpace(m.SplashInfo) == "" && width < 4 {
 		return padLines(m.EmptyStateMessage, width, height)
 	}
+	lines := m.buildSplashLines(width, height)
+	return renderSplashLines(lines, width, height, m.EmptyStateMessage)
+}
+
+func (m Model) buildSplashLines(width, height int) []string {
 	logoText := logo.Render(width, false)
 	if width < logo.FullWidth() || height < logo.FullHeight()+2 {
 		logoText = logo.SmallRender(width)
@@ -162,8 +170,12 @@ func (m Model) viewSplash(width, height int) string {
 		lines = append(lines, "")
 		lines = append(lines, centerLine(theme.DialogNote.Render(info), width))
 	}
+	return lines
+}
+
+func renderSplashLines(lines []string, width, height int, emptyMessage string) string {
 	if len(lines) == 0 {
-		return padLines(m.EmptyStateMessage, width, height)
+		return padLines(emptyMessage, width, height)
 	}
 	contentHeight := len(lines)
 	if contentHeight >= height {

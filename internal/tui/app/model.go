@@ -42,6 +42,7 @@ type dashboardKeyMap struct {
 	newSession      key.Binding
 	terminalFocus   key.Binding
 	togglePanes     key.Binding
+	toggleSidebar   key.Binding
 	openProject     key.Binding
 	commandPalette  key.Binding
 	refresh         key.Binding
@@ -72,6 +73,8 @@ type Model struct {
 	settings           DashboardConfig
 	config             *layout.Config
 	projectConfigState map[string]projectConfigState
+	projectLocalConfig map[string]projectLocalConfigCache
+	sidebarOverrides   map[string]bool
 
 	keys *dashboardKeyMap
 
@@ -128,6 +131,8 @@ type Model struct {
 	lastAppliedSeq   uint64
 
 	terminalFocus bool
+	// terminalMouseDrag tracks an in-progress drag selection in terminal focus.
+	terminalMouseDrag bool
 
 	autoStart *AutoStartSpec
 
@@ -139,7 +144,7 @@ type Model struct {
 	paneViewSeq     map[paneViewKey]uint64
 	paneViewLastReq map[paneViewKey]time.Time
 
-	paneViewInFlight  bool
+	paneViewInFlight  int
 	paneViewQueued    bool
 	paneViewQueuedIDs map[string]struct{}
 }

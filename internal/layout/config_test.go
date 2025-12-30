@@ -155,6 +155,22 @@ func TestLoadProjectLocalYamlFallback(t *testing.T) {
 	}
 }
 
+func TestLoadProjectLocalDashboardSidebar(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, ".peakypanes.yml")
+	if err := os.WriteFile(path, []byte("dashboard:\n  sidebar:\n    hidden: true\n"), 0o644); err != nil {
+		t.Fatalf("write project config: %v", err)
+	}
+
+	cfg, err := LoadProjectLocal(tmpDir)
+	if err != nil {
+		t.Fatalf("LoadProjectLocal() error: %v", err)
+	}
+	if cfg.Dashboard.Sidebar.Hidden == nil || !*cfg.Dashboard.Sidebar.Hidden {
+		t.Fatalf("LoadProjectLocal dashboard sidebar hidden = %#v", cfg.Dashboard.Sidebar.Hidden)
+	}
+}
+
 func TestLoadLayoutFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "layout.yml")

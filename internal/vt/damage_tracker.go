@@ -100,41 +100,64 @@ func (d *DamageTracker) MarkRect(rect uv.Rectangle) {
 // It also marks the newly introduced blank rows as dirty so the renderer can paint correct
 // background attributes for those rows.
 func (d *DamageTracker) MarkScroll(dy int) {
-	if d.full {
-		d.scrollDy = 0
+	if d.shouldSkipScroll(dy) {
 		return
 	}
-	if d.height <= 0 || dy == 0 {
-		return
-	}
-	if dy >= d.height || dy <= -d.height {
+	if scrollOutOfBounds(dy, d.height) {
 		d.MarkAll()
 		return
 	}
 
 	d.scrollDy += dy
-	if d.scrollDy >= d.height || d.scrollDy <= -d.height {
+	if scrollOutOfBounds(d.scrollDy, d.height) {
 		d.MarkAll()
 		return
 	}
 
+	d.ensureDirtyRows()
+	shiftDirtyRows(d.dirtyRows, dy)
+	markScrollFillRows(d.dirtyRows, dy, d.height)
+}
+
+func (d *DamageTracker) shouldSkipScroll(dy int) bool {
+	if d.full {
+		d.scrollDy = 0
+		return true
+	}
+	if d.height <= 0 || dy == 0 {
+		return true
+	}
+	return false
+}
+
+func (d *DamageTracker) ensureDirtyRows() {
 	if d.dirtyRows == nil || len(d.dirtyRows) != d.height {
 		d.dirtyRows = make([]bool, d.height)
-	} else {
-		shiftDirtyRows(d.dirtyRows, dy)
 	}
+}
 
+func scrollOutOfBounds(dy, height int) bool {
+	return dy >= height || dy <= -height
+}
+
+func markScrollFillRows(rows []bool, dy, height int) {
 	if dy > 0 {
-		for y := 0; y < dy && y < d.height; y++ {
-			d.dirtyRows[y] = true
+		limit := dy
+		if limit > height {
+			limit = height
+		}
+		for y := 0; y < limit; y++ {
+			rows[y] = true
 		}
 		return
 	}
-	rows := -dy
-	for y := d.height - rows; y < d.height; y++ {
-		if y >= 0 && y < d.height {
-			d.dirtyRows[y] = true
-		}
+	fill := -dy
+	start := height - fill
+	if start < 0 {
+		start = 0
+	}
+	for y := start; y < height; y++ {
+		rows[y] = true
 	}
 }
 

@@ -4,6 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode"
+
+	"github.com/regenrek/peakypanes/internal/termkeys"
 )
 
 func (d *Daemon) terminalAction(req TerminalActionRequest) (TerminalActionResponse, error) {
@@ -132,6 +135,33 @@ func handleCopyModeKey(win paneWindow, key string) (TerminalKeyResponse, bool) {
 	if !win.CopyModeActive() {
 		return TerminalKeyResponse{}, false
 	}
+	if termkeys.IsCopyShortcutKey(key) {
+		return handleCopyYank(win)
+	}
+	if win.CopySelectionFromMouseActive() && isPrintableKey(key) {
+		return handleCopyModePrintable(win)
+	}
+	return handleCopyModeCommand(win, key)
+}
+
+func handleCopyYank(win paneWindow) (TerminalKeyResponse, bool) {
+	text := win.CopyYankText()
+	win.ExitCopyMode()
+	if text == "" {
+		return TerminalKeyResponse{Handled: true, Toast: "Nothing to yank", ToastKind: ToastWarning}, true
+	}
+	return TerminalKeyResponse{Handled: true, Toast: "Yanked to clipboard", ToastKind: ToastSuccess, YankText: text}, true
+}
+
+func handleCopyModePrintable(win paneWindow) (TerminalKeyResponse, bool) {
+	win.ExitCopyMode()
+	if win.ScrollbackModeActive() || win.GetScrollbackOffset() > 0 {
+		win.ExitScrollback()
+	}
+	return TerminalKeyResponse{Handled: false}, true
+}
+
+func handleCopyModeCommand(win paneWindow, key string) (TerminalKeyResponse, bool) {
 	switch key {
 	case "esc", "q":
 		win.ExitCopyMode()
@@ -158,15 +188,21 @@ func handleCopyModeKey(win paneWindow, key string) (TerminalKeyResponse, bool) {
 		win.CopyToggleSelect()
 		return TerminalKeyResponse{Handled: true, Toast: "Selection toggled (v) | Yank (y) | Exit (esc/q)", ToastKind: ToastInfo}, true
 	case "y":
-		text := win.CopyYankText()
-		win.ExitCopyMode()
-		if text == "" {
-			return TerminalKeyResponse{Handled: true, Toast: "Nothing to yank", ToastKind: ToastWarning}, true
-		}
-		return TerminalKeyResponse{Handled: true, Toast: "Yanked to clipboard", ToastKind: ToastSuccess, YankText: text}, true
+		return handleCopyYank(win)
 	default:
 		return TerminalKeyResponse{Handled: true}, true
 	}
+}
+
+func isPrintableKey(key string) bool {
+	if key == "" {
+		return false
+	}
+	runes := []rune(key)
+	if len(runes) != 1 {
+		return false
+	}
+	return unicode.IsPrint(runes[0])
 }
 
 func handleScrollbackKey(win paneWindow, req TerminalKeyRequest) (TerminalKeyResponse, bool) {

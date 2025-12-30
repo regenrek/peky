@@ -8,21 +8,23 @@ import (
 )
 
 type fakeTerminalWindow struct {
-	altScreen     bool
-	copyMode      bool
-	scrollback    bool
-	scrollOffset  int
-	yankText      string
-	viewANSI      string
-	viewLipgloss  string
-	hasMouse      bool
-	allowMotion   bool
-	updateSeq     uint64
-	resizeCols    int
-	resizeRows    int
-	calls         map[string]int
-	lastCopyMoveX int
-	lastCopyMoveY int
+	altScreen      bool
+	copyMode       bool
+	copySelecting  bool
+	mouseSelection bool
+	scrollback     bool
+	scrollOffset   int
+	yankText       string
+	viewANSI       string
+	viewLipgloss   string
+	hasMouse       bool
+	allowMotion    bool
+	updateSeq      uint64
+	resizeCols     int
+	resizeRows     int
+	calls          map[string]int
+	lastCopyMoveX  int
+	lastCopyMoveY  int
 }
 
 func (f *fakeTerminalWindow) record(name string) {
@@ -33,8 +35,15 @@ func (f *fakeTerminalWindow) record(name string) {
 }
 
 func (f *fakeTerminalWindow) UpdateSeq() uint64 { return f.updateSeq }
+func (f *fakeTerminalWindow) ANSICacheSeq() uint64 {
+	return f.updateSeq
+}
 
-func (f *fakeTerminalWindow) CopyModeActive() bool { return f.copyMode }
+func (f *fakeTerminalWindow) CopyModeActive() bool      { return f.copyMode }
+func (f *fakeTerminalWindow) CopySelectionActive() bool { return f.copyMode && f.copySelecting }
+func (f *fakeTerminalWindow) CopySelectionFromMouseActive() bool {
+	return f.copyMode && f.copySelecting && f.mouseSelection
+}
 func (f *fakeTerminalWindow) Resize(cols, rows int) error {
 	f.resizeCols = cols
 	f.resizeRows = rows
@@ -46,13 +55,22 @@ func (f *fakeTerminalWindow) CopyMove(dx, dy int) {
 	f.lastCopyMoveY = dy
 	f.record("copyMove")
 }
-func (f *fakeTerminalWindow) CopyPageDown()        { f.record("copyPageDown") }
-func (f *fakeTerminalWindow) CopyPageUp()          { f.record("copyPageUp") }
-func (f *fakeTerminalWindow) CopyToggleSelect()    { f.record("copyToggle") }
+func (f *fakeTerminalWindow) CopyPageDown() { f.record("copyPageDown") }
+func (f *fakeTerminalWindow) CopyPageUp()   { f.record("copyPageUp") }
+func (f *fakeTerminalWindow) CopyToggleSelect() {
+	f.copySelecting = !f.copySelecting
+	f.mouseSelection = false
+	f.record("copyToggle")
+}
 func (f *fakeTerminalWindow) CopyYankText() string { f.record("copyYank"); return f.yankText }
 func (f *fakeTerminalWindow) EnterCopyMode()       { f.copyMode = true; f.record("enterCopy") }
 func (f *fakeTerminalWindow) EnterScrollback()     { f.scrollback = true; f.record("enterScrollback") }
-func (f *fakeTerminalWindow) ExitCopyMode()        { f.copyMode = false; f.record("exitCopy") }
+func (f *fakeTerminalWindow) ExitCopyMode() {
+	f.copyMode = false
+	f.copySelecting = false
+	f.mouseSelection = false
+	f.record("exitCopy")
+}
 func (f *fakeTerminalWindow) ExitScrollback() {
 	f.scrollback = false
 	f.scrollOffset = 0
@@ -222,5 +240,74 @@ func TestHandleTerminalKeyNormal(t *testing.T) {
 	}
 	if !resp.Handled || win.calls["enterScrollback"] == 0 {
 		t.Fatalf("expected scrollback entered, resp=%#v calls=%#v", resp, win.calls)
+	}
+}
+
+func TestHandleCopyModeKeyAutoExitSelectionPassthrough(t *testing.T) {
+	win := &fakeTerminalWindow{copyMode: true, copySelecting: true, mouseSelection: true}
+
+	resp, handled := handleCopyModeKey(win, "a")
+	if !handled || resp.Handled {
+		t.Fatalf("expected passthrough when selection active, resp=%#v handled=%v", resp, handled)
+	}
+	if win.calls["exitCopy"] == 0 || win.copyMode {
+		t.Fatalf("expected copy mode exited, calls=%#v copyMode=%v", win.calls, win.copyMode)
+	}
+}
+
+func TestHandleCopyModeKeySelectionKeepsCopyModeForCopyKeys(t *testing.T) {
+	win := &fakeTerminalWindow{copyMode: true, copySelecting: true}
+
+	resp, handled := handleCopyModeKey(win, "j")
+	if !handled || !resp.Handled {
+		t.Fatalf("expected movement handled, resp=%#v handled=%v", resp, handled)
+	}
+	if win.calls["exitCopy"] != 0 {
+		t.Fatalf("did not expect exit copy mode, calls=%#v", win.calls)
+	}
+	if win.calls["copyMove"] == 0 {
+		t.Fatalf("expected copyMove, calls=%#v", win.calls)
+	}
+}
+
+func TestHandleCopyModeKeyMouseSelectionPassesPrintableKeys(t *testing.T) {
+	win := &fakeTerminalWindow{copyMode: true, copySelecting: true, mouseSelection: true, yankText: "yanked"}
+
+	resp, handled := handleCopyModeKey(win, "y")
+	if !handled || resp.Handled {
+		t.Fatalf("expected y passthrough for mouse selection, resp=%#v handled=%v", resp, handled)
+	}
+	if win.calls["copyYank"] != 0 {
+		t.Fatalf("did not expect yank for mouse selection, calls=%#v", win.calls)
+	}
+	if win.calls["exitCopy"] == 0 || win.copyMode {
+		t.Fatalf("expected copy mode exited, calls=%#v copyMode=%v", win.calls, win.copyMode)
+	}
+}
+
+func TestHandleCopyModeKeyMouseSelectionCopyShortcutsYank(t *testing.T) {
+	win := &fakeTerminalWindow{copyMode: true, copySelecting: true, mouseSelection: true, yankText: "yanked"}
+
+	resp, handled := handleCopyModeKey(win, "ctrl+c")
+	if !handled || !resp.Handled || resp.YankText != "yanked" {
+		t.Fatalf("expected copy shortcut to yank, resp=%#v handled=%v", resp, handled)
+	}
+	if win.calls["copyYank"] == 0 {
+		t.Fatalf("expected yank call, calls=%#v", win.calls)
+	}
+	if win.calls["exitCopy"] == 0 || win.copyMode {
+		t.Fatalf("expected copy mode exited, calls=%#v copyMode=%v", win.calls, win.copyMode)
+	}
+}
+
+func TestHandleCopyModeKeyNoSelectionStillConsumesNonCopyKeys(t *testing.T) {
+	win := &fakeTerminalWindow{copyMode: true}
+
+	resp, handled := handleCopyModeKey(win, "a")
+	if !handled || !resp.Handled {
+		t.Fatalf("expected key consumed when no selection, resp=%#v handled=%v", resp, handled)
+	}
+	if win.calls["exitCopy"] != 0 {
+		t.Fatalf("did not expect exit copy mode, calls=%#v", win.calls)
 	}
 }

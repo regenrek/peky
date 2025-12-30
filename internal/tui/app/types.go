@@ -149,6 +149,7 @@ type DashboardConfig struct {
 	IdleThreshold      time.Duration
 	StatusMatcher      statusMatcher
 	PreviewMode        string
+	SidebarHidden      bool
 	ProjectRoots       []string
 	AgentDetection     AgentDetectionConfig
 	AttachBehavior     string

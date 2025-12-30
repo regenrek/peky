@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/regenrek/peakypanes/internal/sessiond"
+	"github.com/regenrek/peakypanes/internal/termkeys"
 )
 
 const terminalActionTimeout = 2 * time.Second
@@ -87,6 +88,9 @@ func (m *Model) sendPaneInputCmd(payload []byte, contextLabel string) tea.Cmd {
 }
 
 func isTerminalControlKey(key string) bool {
+	if termkeys.IsCopyShortcutKey(key) {
+		return true
+	}
 	switch key {
 	case "esc", "q", "v", "y", "g", "G":
 		return true

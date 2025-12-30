@@ -71,39 +71,9 @@ func (m *Model) hideAllProjectsInConfig(projects []ProjectGroup) (int, error) {
 	}
 	added := 0
 	for _, project := range projects {
-		key := normalizeProjectKey(project.Path, project.Name)
-		if key == "" {
-			continue
+		if appendHiddenProject(cfg, project, existing) {
+			added++
 		}
-		if _, ok := existing[key]; ok {
-			continue
-		}
-		name := strings.TrimSpace(project.Name)
-		nameKey := strings.ToLower(name)
-		if nameKey != "" {
-			if _, ok := existing[nameKey]; ok {
-				continue
-			}
-		}
-		path := normalizeProjectPath(project.Path)
-		pathKey := strings.ToLower(path)
-		if pathKey != "" {
-			if _, ok := existing[pathKey]; ok {
-				continue
-			}
-		}
-		entry := layout.HiddenProjectConfig{
-			Name: name,
-			Path: path,
-		}
-		cfg.Dashboard.HiddenProjects = append(cfg.Dashboard.HiddenProjects, entry)
-		if nameKey != "" {
-			existing[nameKey] = struct{}{}
-		}
-		if pathKey != "" {
-			existing[pathKey] = struct{}{}
-		}
-		added++
 	}
 	if added == 0 {
 		return 0, nil
@@ -118,6 +88,42 @@ func (m *Model) hideAllProjectsInConfig(projects []ProjectGroup) (int, error) {
 	m.config = cfg
 	m.settings.HiddenProjects = hiddenProjectKeySet(cfg.Dashboard.HiddenProjects)
 	return added, nil
+}
+
+func appendHiddenProject(cfg *layout.Config, project ProjectGroup, existing map[string]struct{}) bool {
+	key := normalizeProjectKey(project.Path, project.Name)
+	if key == "" {
+		return false
+	}
+	if _, ok := existing[key]; ok {
+		return false
+	}
+	name := strings.TrimSpace(project.Name)
+	nameKey := strings.ToLower(name)
+	if nameKey != "" {
+		if _, ok := existing[nameKey]; ok {
+			return false
+		}
+	}
+	path := normalizeProjectPath(project.Path)
+	pathKey := strings.ToLower(path)
+	if pathKey != "" {
+		if _, ok := existing[pathKey]; ok {
+			return false
+		}
+	}
+	entry := layout.HiddenProjectConfig{
+		Name: name,
+		Path: path,
+	}
+	cfg.Dashboard.HiddenProjects = append(cfg.Dashboard.HiddenProjects, entry)
+	if nameKey != "" {
+		existing[nameKey] = struct{}{}
+	}
+	if pathKey != "" {
+		existing[pathKey] = struct{}{}
+	}
+	return true
 }
 
 func (m *Model) unhideProjectInConfig(entry layout.HiddenProjectConfig) (bool, error) {

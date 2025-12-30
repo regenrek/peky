@@ -2,18 +2,31 @@ package native
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/regenrek/peakypanes/internal/diag"
 )
 
 // LayoutBaseSize is the normalized coordinate space for pane layouts.
 const LayoutBaseSize = 1000
 
-// PaneEvent signals that a pane updated.
+// PaneEventType identifies the kind of pane event.
+type PaneEventType uint8
+
+const (
+	PaneEventUpdated PaneEventType = iota + 1
+	PaneEventToast
+)
+
+// PaneEvent signals that a pane updated or emitted a toast.
 type PaneEvent struct {
+	Type   PaneEventType
 	PaneID string
 	Seq    uint64
+	Toast  string
 }
 
 // Manager owns native sessions and panes.
@@ -129,14 +142,33 @@ func (m *Manager) notify(id string, seq uint64) {
 		return
 	}
 	m.version.Add(1)
+	m.emitEvent(PaneEvent{Type: PaneEventUpdated, PaneID: id, Seq: seq})
+}
+
+func (m *Manager) notifyToast(id, message string) {
+	if m == nil || m.closed.Load() {
+		return
+	}
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return
+	}
+	m.emitEvent(PaneEvent{Type: PaneEventToast, PaneID: id, Toast: message})
+}
+
+func (m *Manager) emitEvent(event PaneEvent) {
+	if m == nil || m.closed.Load() {
+		return
+	}
 	m.eventsMu.Lock()
 	defer m.eventsMu.Unlock()
 	if m.eventsClosed {
 		return
 	}
 	select {
-	case m.events <- PaneEvent{PaneID: id, Seq: seq}:
+	case m.events <- event:
 	default:
+		diag.LogEvery("native.events.drop", 2*time.Second, "native: drop pane event id=%s seq=%d type=%d", event.PaneID, event.Seq, event.Type)
 	}
 }
 
