@@ -11,8 +11,16 @@ func TestQuickReplySlashKillPane(t *testing.T) {
 	m.quickReplyInput.SetValue("/kill")
 
 	m.updateQuickReply(tea.KeyMsg{Type: tea.KeyEnter})
+	if got := m.quickReplyInput.Value(); got != "/kill " {
+		t.Fatalf("expected slash completion on enter, got %q", got)
+	}
+	if m.state != StateDashboard {
+		t.Fatalf("expected dashboard state after completion, got %v", m.state)
+	}
+
+	m.updateQuickReply(tea.KeyMsg{Type: tea.KeyEnter})
 	if m.state != StateConfirmClosePane {
-		t.Fatalf("expected confirm close pane state, got %v", m.state)
+		t.Fatalf("expected confirm close pane state after second enter, got %v", m.state)
 	}
 }
 

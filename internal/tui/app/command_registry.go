@@ -42,13 +42,14 @@ type commandRegistry struct {
 
 func (m *Model) commandRegistry() (commandRegistry, error) {
 	var shortcutOpenProject, shortcutCloseProject, shortcutNewSession, shortcutKillSession string
-	var shortcutFilter, shortcutHelp, shortcutQuit, shortcutToggleSidebar string
+	var shortcutFilter, shortcutHelp, shortcutQuit, shortcutToggleSidebar, shortcutTogglePanes string
 	if m.keys != nil {
 		shortcutOpenProject = keyLabel(m.keys.openProject)
 		shortcutCloseProject = keyLabel(m.keys.closeProject)
 		shortcutToggleSidebar = keyLabel(m.keys.toggleSidebar)
 		shortcutNewSession = keyLabel(m.keys.newSession)
 		shortcutKillSession = keyLabel(m.keys.kill)
+		shortcutTogglePanes = keyLabel(m.keys.togglePanes)
 		shortcutFilter = keyLabel(m.keys.filter)
 		shortcutHelp = keyLabel(m.keys.help)
 		shortcutQuit = keyLabel(m.keys.quit)
@@ -71,7 +72,7 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 					ID:      "pane_swap",
 					Label:   "Pane: Swap pane",
 					Desc:    "Swap the selected pane with another",
-					Aliases: []string{"swap", "pane swap"},
+					Aliases: []string{"pane swap"},
 					Run: func(m *Model, _ commandArgs) tea.Cmd {
 						m.openPaneSwapPicker()
 						return nil
@@ -147,6 +148,16 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 					Shortcut: shortcutFilter,
 					Run: func(m *Model, args commandArgs) tea.Cmd {
 						return m.applySessionFilter(args.Raw)
+					},
+				},
+				{
+					ID:       "session_toggle_panes",
+					Label:    "Session: Toggle panes",
+					Desc:     "Expand or collapse panes for the selected session",
+					Shortcut: shortcutTogglePanes,
+					Run: func(m *Model, _ commandArgs) tea.Cmd {
+						m.togglePanes()
+						return nil
 					},
 				},
 			},

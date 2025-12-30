@@ -382,6 +382,9 @@ func (m *Model) updateQuickReply(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	switch msg.String() {
 	case "enter":
+		if m.applySlashCompletion() {
+			return m, nil
+		}
 		text := strings.TrimSpace(m.quickReplyInput.Value())
 		if text == "" {
 			return m, m.attachOrStart()

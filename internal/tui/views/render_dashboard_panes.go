@@ -70,7 +70,11 @@ func renderDashboardColumn(column DashboardColumn, width, height int, selected b
 
 	layout := buildDashboardColumnLayout(column, bodyHeight, selected, ctx)
 	blocks := renderDashboardPaneBlocks(column, layout, width, selected, ctx)
-	body := padLines(strings.Join(blocks, "\n"), width, bodyHeight)
+	bodyHeightUsed := layout.blockHeight * len(blocks)
+	if bodyHeightUsed < 1 {
+		bodyHeightUsed = bodyHeight
+	}
+	body := padLines(strings.Join(blocks, "\n"), width, bodyHeightUsed)
 	return strings.Join(append(headerLines, body), "\n")
 }
 
