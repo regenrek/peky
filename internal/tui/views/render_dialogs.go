@@ -27,6 +27,23 @@ func (m Model) viewConfirmKill() string {
 	})
 }
 
+func (m Model) viewConfirmQuit() string {
+	var body strings.Builder
+	if m.ConfirmQuit.RunningPanes > 0 {
+		body.WriteString(theme.DialogLabel.Render("Running panes: "))
+		body.WriteString(theme.DialogValue.Render(fmt.Sprintf("%d", m.ConfirmQuit.RunningPanes)))
+		body.WriteString("\n\n")
+	}
+	body.WriteString(theme.DialogNote.Render("Quit now? Sessions stay running unless you stop the daemon."))
+	body.WriteString("\n")
+	body.WriteString(theme.DialogNote.Render("Press k to stop the daemon and kill all panes."))
+	return m.renderConfirmDialog("Quit PeakyPanes?", body.String(), []dialogChoice{
+		{Key: "y", Label: "quit (keep sessions)"},
+		{Key: "k", Label: "quit & stop daemon"},
+		{Key: "n", Label: "cancel"},
+	})
+}
+
 func (m Model) viewConfirmCloseProject() string {
 	var body strings.Builder
 	if m.ConfirmCloseProject.Project != "" {

@@ -23,6 +23,7 @@ const (
 	StateConfirmCloseAllProjects
 	StateConfirmClosePane
 	StateConfirmRestart
+	StateConfirmQuit
 	StateHelp
 	StateCommandPalette
 	StateRenameSession
@@ -62,6 +63,17 @@ const (
 const (
 	AttachBehaviorCurrent  = "current"
 	AttachBehaviorDetached = "detached"
+)
+
+const (
+	PaneNavigationSpatial = "spatial"
+	PaneNavigationMemory  = "memory"
+)
+
+const (
+	QuitBehaviorPrompt = "prompt"
+	QuitBehaviorKeep   = "keep"
+	QuitBehaviorStop   = "stop"
 )
 
 // DashboardData contains all data required to render the dashboard.
@@ -138,17 +150,19 @@ type AgentDetectionConfig struct {
 
 // DashboardConfig wraps dashboard settings after defaults applied.
 type DashboardConfig struct {
-	RefreshInterval time.Duration
-	PreviewLines    int
-	PreviewCompact  bool
-	IdleThreshold   time.Duration
-	StatusMatcher   statusMatcher
-	PreviewMode     string
-	SidebarHidden   bool
-	ProjectRoots    []string
-	AgentDetection  AgentDetectionConfig
-	AttachBehavior  string
-	HiddenProjects  map[string]struct{}
+	RefreshInterval    time.Duration
+	PreviewLines       int
+	PreviewCompact     bool
+	IdleThreshold      time.Duration
+	StatusMatcher      statusMatcher
+	PreviewMode        string
+	SidebarHidden      bool
+	ProjectRoots       []string
+	AgentDetection     AgentDetectionConfig
+	AttachBehavior     string
+	PaneNavigationMode string
+	QuitBehavior       string
+	HiddenProjects     map[string]struct{}
 }
 
 // selectionState tracks the current selection by stable project ID.
@@ -157,6 +171,14 @@ type selectionState struct {
 	Session   string
 	Pane      string
 }
+
+type quitAction int
+
+const (
+	quitActionNone quitAction = iota
+	quitActionKeep
+	quitActionStop
+)
 
 // dashboardSnapshotInput carries the state needed for refresh.
 type dashboardSnapshotInput struct {
@@ -210,6 +232,10 @@ type daemonRestartMsg struct {
 	Client         *sessiond.Client
 	PaneViewClient *sessiond.Client
 	Err            error
+}
+
+type daemonStopMsg struct {
+	Err error
 }
 
 // PaneClosedMsg signals the selected pane can no longer accept input.

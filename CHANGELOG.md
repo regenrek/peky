@@ -5,16 +5,30 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Added
+- Configurable quit behavior (`dashboard.quit_behavior`) with prompt/keep/stop options for handling running sessions on exit.
+- Quit confirmation dialog (shown only when panes are running) with an option to stop the daemon and kill all panes.
+
+### Fixed
+- Quick reply now detects Codex panes by title when command metadata is missing, so sends use bracketed paste + submit.
+- Pane titles ignore glyph-only window titles and fall back to pane index with short IDs for disambiguation.
+
 ## 0.0.6 - 2025-12-30
 
 ### Added
 - Pane view update sequencing with NotModified responses to skip unchanged renders.
 - Pane view priority scheduling to keep focused panes responsive under load.
 - VT damage tracking primitives for future incremental rendering work.
-- Performance tooling: `scripts/perf-bench` and `scripts/perf-12pane`.
+- Performance tooling: `scripts/perf-bench`, `scripts/perf-12pane`, and `scripts/perf-40pane`.
 - Snapshot integration coverage for dirty ANSI cache previews.
 - Pane view scheduler tests for starvation and timestamp preservation.
 - Daemon profiling hooks for CPU/heap captures via `PEAKYPANES_CPU_PROFILE` and `PEAKYPANES_MEM_PROFILE` (build tag `profiler`).
+- Quick reply slash commands that mirror command palette actions.
+- Quick reply broadcast support with `/all` and optional scope targets.
+- Quick reply history navigation with up/down cycling.
+- Command registry to keep palette and slash actions in sync.
+- Dashboard `pane_navigation_mode` config to choose spatial or memory selection behavior.
+- Command palette entry for the `/all` broadcast quick reply.
 
 ### Changed
 - Pane view rendering now respects client deadlines and can fall back to cached views under pressure.
@@ -26,6 +40,11 @@ This format is based on Keep a Changelog.
 - Pane view NotModified gating uses ANSI cache sequence to avoid stalling live previews.
 - TUI batches daemon events to refresh pane views without starving updates under load.
 - Perf load script now defaults to 12 panes and lives at `scripts/perf-12pane`.
+- Command palette actions now render from the shared registry.
+- Quick reply help/hints now surface slash commands and history.
+- Quick reply slash commands now show a padded dropdown overlay above the input with arrow-key selection and tab completion.
+- Dashboard keymap defaults now use `ctrl+q/ctrl+e` for project nav, `ctrl+a/ctrl+d` for pane nav, and `ctrl+,` for edit config.
+- Project and dashboard left/right navigation now defaults to spatial row selection (set `pane_navigation_mode: memory` to restore per-project memory).
 
 ### Removed
 - Retired perf and investigation docs (`docs/perf.md`, `docs/investigation-live-preview.md`).

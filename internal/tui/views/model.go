@@ -29,6 +29,8 @@ type Model struct {
 	FilterActive             bool
 	FilterInput              textinput.Model
 	QuickReplyInput          textinput.Model
+	SlashSuggestions         []SlashSuggestion
+	SlashSelected            int
 	TerminalFocus            bool
 	SupportsTerminalFocus    bool
 	ProjectPicker            list.Model
@@ -38,6 +40,7 @@ type Model struct {
 	SettingsMenu             list.Model
 	DebugMenu                list.Model
 	ConfirmKill              ConfirmKill
+	ConfirmQuit              ConfirmQuit
 	ConfirmCloseProject      ConfirmCloseProject
 	ConfirmCloseAllProjects  ConfirmCloseAllProjects
 	ConfirmClosePane         ConfirmClosePane
@@ -117,9 +120,19 @@ type KeyHints struct {
 	Quit            string
 }
 
+type SlashSuggestion struct {
+	Text     string
+	MatchLen int
+	Desc     string
+}
+
 type ConfirmKill struct {
 	Session string
 	Project string
+}
+
+type ConfirmQuit struct {
+	RunningPanes int
 }
 
 type ConfirmCloseProject struct {

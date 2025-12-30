@@ -50,8 +50,8 @@ func (m Model) viewDashboardContent() string {
 	}
 	sections = append(sections, body, quickReply)
 	sections = append(sections, footer)
-
-	return lipgloss.JoinVertical(lipgloss.Top, sections...)
+	view := lipgloss.JoinVertical(lipgloss.Top, sections...)
+	return m.overlaySlashMenu(view, contentWidth, contentHeight, headerHeight, headerGap, bodyHeight)
 }
 
 func (m Model) viewHeader(width int) string {
@@ -409,22 +409,12 @@ func (m Model) viewQuickReply(width int) string {
 	if contentWidth < 10 {
 		contentWidth = 10
 	}
-	maxWidth := contentWidth - 6
-	if maxWidth < 0 {
-		maxWidth = 0
-	}
-	minWidth := 20
-	if minWidth > maxWidth {
-		minWidth = maxWidth
-	}
-	inputWidth := clamp(contentWidth-18, minWidth, maxWidth)
-	m.QuickReplyInput.Width = inputWidth
 
-	hintText := "enter send • esc clear"
+	hintText := "enter send • esc clear • up/down history/select • / commands • tab complete"
 	if m.SupportsTerminalFocus {
 		toggle := m.Keys.TerminalFocus
 		if m.TerminalFocus {
-			hintText = fmt.Sprintf("%s quick reply", toggle)
+			hintText = fmt.Sprintf("%s input mode", toggle)
 		} else {
 			hintText = fmt.Sprintf("%s terminal focus • %s", toggle, hintText)
 		}
@@ -434,10 +424,17 @@ func (m Model) viewQuickReply(width int) string {
 		Foreground(theme.TextPrimary).
 		Background(theme.QuickReplyBg)
 	accent := base.Foreground(theme.QuickReplyAcc).Render("▌ ")
-	label := base.Bold(true).Background(theme.QuickReplyTag).Render(" Quick Reply ")
 	hint := base.Foreground(theme.TextDim).Italic(true).Render(" " + hintText)
+	inputWidth := contentWidth - lipgloss.Width(accent) - lipgloss.Width(hint)
+	if inputWidth < 10 {
+		inputWidth = 10
+	}
+	if inputWidth > contentWidth {
+		inputWidth = contentWidth
+	}
+	m.QuickReplyInput.Width = inputWidth
 
-	line := accent + label + m.QuickReplyInput.View() + hint
+	line := accent + m.QuickReplyInput.View() + hint
 	line = ansi.Truncate(line, contentWidth, "")
 	visible := lipgloss.Width(line)
 	if visible < contentWidth {
@@ -449,7 +446,231 @@ func (m Model) viewQuickReply(width int) string {
 	lines := []string{
 		pad + blank + pad,
 		pad + line + pad,
-		pad + blank + pad,
 	}
+	lines = append(lines, pad+blank+pad)
 	return strings.Join(lines, "\n")
+}
+
+func (m Model) overlaySlashMenu(base string, width, height, headerHeight, headerGap, bodyHeight int) string {
+	if len(m.SlashSuggestions) == 0 || width <= 0 || height <= 0 {
+		return base
+	}
+	menuX := 2
+	menuWidth := width - 4
+	if menuWidth < 10 {
+		menuWidth = width
+		menuX = 0
+	}
+	availableHeight := headerHeight + headerGap + bodyHeight
+	menu := renderSlashMenu(m.SlashSuggestions, m.SlashSelected, menuWidth, availableHeight)
+	if strings.TrimSpace(menu) == "" {
+		return base
+	}
+	menuHeight := lipgloss.Height(menu)
+	if menuHeight <= 0 {
+		return base
+	}
+	menuY := availableHeight - menuHeight
+	if menuY < 0 {
+		menuY = 0
+	}
+	return overlayAt(base, menu, width, height, menuX, menuY)
+}
+
+func renderSlashMenu(suggestions []SlashSuggestion, selectedIdx, width, maxHeight int) string {
+	if len(suggestions) == 0 || width <= 0 || maxHeight <= 0 {
+		return ""
+	}
+	visible, selectedVisible := slashMenuVisible(suggestions, selectedIdx, maxHeight)
+	if len(visible) == 0 {
+		return ""
+	}
+	commandWidth := slashMenuCommandWidth(visible)
+	if commandWidth == 0 {
+		return ""
+	}
+	return renderSlashMenuLines(visible, selectedVisible, width, slashMenuStyles(), commandWidth)
+}
+
+type slashMenuStyleSet struct {
+	base              lipgloss.Style
+	normal            lipgloss.Style
+	highlight         lipgloss.Style
+	desc              lipgloss.Style
+	selectedBase      lipgloss.Style
+	selectedNormal    lipgloss.Style
+	selectedHighlight lipgloss.Style
+	selectedDesc      lipgloss.Style
+}
+
+type slashMenuLineStyle struct {
+	base      lipgloss.Style
+	normal    lipgloss.Style
+	highlight lipgloss.Style
+	desc      lipgloss.Style
+}
+
+func slashMenuStyles() slashMenuStyleSet {
+	base := lipgloss.NewStyle().
+		Background(theme.Highlight).
+		Foreground(theme.TextPrimary)
+	selectedBase := lipgloss.NewStyle().
+		Background(theme.Accent).
+		Foreground(theme.TextPrimary)
+	return slashMenuStyleSet{
+		base:              base,
+		normal:            base.Foreground(theme.TextSecondary),
+		highlight:         base.Foreground(theme.TextPrimary),
+		desc:              base.Foreground(theme.TextDim),
+		selectedBase:      selectedBase,
+		selectedNormal:    selectedBase.Foreground(theme.TextPrimary),
+		selectedHighlight: selectedBase.Foreground(theme.TextPrimary).Bold(true),
+		selectedDesc:      selectedBase.Foreground(theme.TextPrimary),
+	}
+}
+
+func (s slashMenuStyleSet) lineStyle(selected bool) slashMenuLineStyle {
+	if selected {
+		return slashMenuLineStyle{
+			base:      s.selectedBase,
+			normal:    s.selectedNormal,
+			highlight: s.selectedHighlight,
+			desc:      s.selectedDesc,
+		}
+	}
+	return slashMenuLineStyle{
+		base:      s.base,
+		normal:    s.normal,
+		highlight: s.highlight,
+		desc:      s.desc,
+	}
+}
+
+func slashMenuVisible(suggestions []SlashSuggestion, selectedIdx, maxHeight int) ([]SlashSuggestion, int) {
+	if maxHeight <= 2 {
+		return nil, -1
+	}
+	maxSuggestions := 10
+	if maxSuggestions > len(suggestions) {
+		maxSuggestions = len(suggestions)
+	}
+	if maxSuggestions > maxHeight-2 {
+		maxSuggestions = maxHeight - 2
+	}
+	if maxSuggestions <= 0 {
+		return nil, -1
+	}
+	if selectedIdx < 0 || selectedIdx >= len(suggestions) {
+		selectedIdx = 0
+	}
+	start := 0
+	if selectedIdx >= maxSuggestions {
+		start = selectedIdx - (maxSuggestions - 1)
+	}
+	if start+maxSuggestions > len(suggestions) {
+		start = len(suggestions) - maxSuggestions
+	}
+	if start < 0 {
+		start = 0
+	}
+	end := start + maxSuggestions
+	return suggestions[start:end], selectedIdx - start
+}
+
+func slashMenuCommandWidth(visible []SlashSuggestion) int {
+	commandWidth := 0
+	for i := 0; i < len(visible); i++ {
+		length := lipgloss.Width(visible[i].Text)
+		if length > commandWidth {
+			commandWidth = length
+		}
+	}
+	return commandWidth
+}
+
+func renderSlashMenuLines(
+	visible []SlashSuggestion,
+	selectedIdx int,
+	width int,
+	styles slashMenuStyleSet,
+	commandWidth int,
+) string {
+	contentWidth := slashMenuContentWidth(width)
+	lines := make([]string, 0, len(visible)+2)
+	lines = append(lines, styles.base.Render(strings.Repeat(" ", width)))
+	for i := 0; i < len(visible); i++ {
+		line := renderSlashMenuLine(visible[i], styles.lineStyle(i == selectedIdx), commandWidth, width, contentWidth)
+		lines = append(lines, line)
+	}
+	lines = append(lines, styles.base.Render(strings.Repeat(" ", width)))
+	return strings.Join(lines, "\n")
+}
+
+func renderSlashMenuLine(
+	suggestion SlashSuggestion,
+	styles slashMenuLineStyle,
+	commandWidth int,
+	width int,
+	contentWidth int,
+) string {
+	rendered := renderSlashSuggestion(suggestion, styles.normal, styles.highlight)
+	rendered = padSlashCommand(rendered, suggestion.Text, commandWidth, styles.base)
+	rendered = appendSlashDesc(rendered, suggestion.Desc, styles.base, styles.desc)
+	return fitSlashMenuLine(rendered, styles.base, width, contentWidth)
+}
+
+func slashMenuContentWidth(width int) int {
+	contentWidth := width - 2
+	if contentWidth < 1 {
+		contentWidth = width
+	}
+	return contentWidth
+}
+
+func padSlashCommand(rendered, command string, commandWidth int, style lipgloss.Style) string {
+	cmdPad := commandWidth - lipgloss.Width(command)
+	if cmdPad <= 0 {
+		return rendered
+	}
+	return rendered + style.Render(strings.Repeat(" ", cmdPad))
+}
+
+func appendSlashDesc(rendered, desc string, baseStyle, descStyle lipgloss.Style) string {
+	desc = strings.TrimSpace(desc)
+	if desc == "" {
+		return rendered
+	}
+	return rendered + baseStyle.Render("  ") + descStyle.Render(desc)
+}
+
+func fitSlashMenuLine(rendered string, baseStyle lipgloss.Style, width, contentWidth int) string {
+	rendered = ansi.Truncate(rendered, contentWidth, "")
+	visible := lipgloss.Width(rendered)
+	if visible < contentWidth {
+		rendered += baseStyle.Render(strings.Repeat(" ", contentWidth-visible))
+	}
+	if contentWidth < width {
+		rendered = baseStyle.Render(" ") + rendered + baseStyle.Render(" ")
+	}
+	return rendered
+}
+
+func renderSlashSuggestion(suggestion SlashSuggestion, normal, highlight lipgloss.Style) string {
+	text := suggestion.Text
+	if text == "" {
+		return ""
+	}
+	matchLen := suggestion.MatchLen
+	if matchLen < 0 {
+		matchLen = 0
+	}
+	if matchLen > len(text) {
+		matchLen = len(text)
+	}
+	if matchLen == 0 {
+		return normal.Render(text)
+	}
+	prefix := text[:matchLen]
+	rest := text[matchLen:]
+	return highlight.Render(prefix) + normal.Render(rest)
 }

@@ -6,15 +6,17 @@
 █       █████   █   █   █  ██     █      █        █   █   █  ██    █████   █████
 ```
 
-**Terminal dashboard with YAML-based layouts, native live previews, and persistent native sessions.**
+**Multi-project orchestration in a single TUI for AI agents and dev environments.**
 
 ![Peaky Panes Preview](assets/preview-peakypanes-v2.jpg)
 
 
-Define your layouts in YAML, share them with your team via git, and get consistent development environments everywhere. Sessions are owned by a **native daemon** so they keep running after the UI exits.
+Run all your projects and AI agents in one dashboard instead of juggling terminal windows or tabs. Define layouts in YAML, share them with your team via git, and get consistent environments everywhere. Sessions are owned by a **native daemon** so they keep running after the UI exits.
 
 ## Features
 
+- 🧠 **AI agent orchestration** - Run Codex/Claude/agents side by side with quick replies, slash commands, and broadcast
+- 🗂️ **Multi-project dashboard** - See every project/session in one TUI without switching windows
 - 📦 **Built-in layouts** - Works out of the box with sensible defaults
 - 🧩 **Exact grids** - Use `grid: 2x3` for consistent rows/columns
 - 📁 **Project-local config** - Commit `.peakypanes.yml` to git for team sharing
@@ -258,10 +260,10 @@ The dashboard shows:
 - Projects on top (tabs)
 - Sessions on the left (with pane counts and expandable panes)
 - Live pane preview on the right (native panes are fully interactive)
-- Quick reply bar (always visible) and target pane highlight for follow-ups
+- Input bar (always visible) and target pane highlight for follow-ups
 
 Navigation (always visible):
-- `ctrl+a/ctrl+d` project, `ctrl+w/ctrl+s` session/panes, `alt+w/alt+s` session only, `tab/⇧tab` pane, `ctrl+g` help
+- `ctrl+q/ctrl+e` project, `ctrl+w/ctrl+s` session/panes, `alt+w/alt+s` session only, `ctrl+a/ctrl+d` pane, `ctrl+g` help
 
 Key bindings (also shown in the help view):
 Keymap overrides are available in the global config (`~/.config/peakypanes/config.yml`).
@@ -291,9 +293,9 @@ Pane
 
 Other
 - `ctrl+p` command palette
-- `ctrl+r` refresh, `ctrl+e` edit config, `ctrl+f` filter, `ctrl+c` quit
+- `ctrl+r` refresh, `ctrl+,` edit config, `ctrl+f` filter, `ctrl+c` quit
 
-Quick reply details: the input is always active—type and press `enter` to send to the highlighted pane. Use `esc` to clear. Toggle terminal focus to send raw keystrokes into the pane. Use scrollback (`f7`) to navigate output and copy mode (`f8`) to select/yank (`v` select, `y` yank, `esc/q` exit).
+Input details: the input is always active—type and press `enter` to send to the highlighted pane. Use `esc` to clear. Type `/` to see slash commands and press `tab` to autocomplete. Toggle terminal focus to send raw keystrokes into the pane. Use scrollback (`f7`) to navigate output and copy mode (`f8`) to select/yank (`v` select, `y` yank, `esc/q` exit).
 
 ### Dashboard Config (optional)
 
@@ -307,15 +309,17 @@ dashboard:
   sidebar:
     hidden: false
   attach_behavior: current  # current | detached
+  pane_navigation_mode: spatial  # spatial | memory
+  quit_behavior: prompt  # prompt | keep | stop
   keymap:
-    project_left: ["ctrl+a"]
-    project_right: ["ctrl+d"]
+    project_left: ["ctrl+q"]
+    project_right: ["ctrl+e"]
     session_up: ["ctrl+w"]
     session_down: ["ctrl+s"]
     session_only_up: ["alt+w"]
     session_only_down: ["alt+s"]
-    pane_next: ["tab"]
-    pane_prev: ["shift+tab"]
+    pane_next: ["ctrl+d"]
+    pane_prev: ["ctrl+a"]
     terminal_focus: ["ctrl+\\"]
     scrollback: ["f7"]
     copy_mode: ["f8"]
@@ -323,6 +327,7 @@ dashboard:
     toggle_sidebar: ["ctrl+b"]
     close_project: ["alt+c"]
     command_palette: ["ctrl+p"]
+    edit_config: ["ctrl+,"]
     help: ["ctrl+g"]
     quit: ["ctrl+c"]
   status_regex:
@@ -335,6 +340,8 @@ dashboard:
 ```
 
 `attach_behavior` controls what the “attach/start” action does (default `current`): `current` focuses the selected session in the dashboard, and `detached` creates the session without switching focus.
+`pane_navigation_mode` controls left/right navigation across projects and dashboard columns: `spatial` keeps the same row when moving between projects, and `memory` restores the last selection per project.
+`quit_behavior` controls what happens on quit when panes are still running: `prompt` (default) shows a quit dialog, `keep` exits immediately and leaves sessions running, and `stop` stops the daemon (killing all panes).
 
 ### Agent Status Detection (Codex & Claude Code)
 

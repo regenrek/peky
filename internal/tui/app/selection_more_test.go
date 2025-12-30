@@ -25,6 +25,18 @@ func TestSelectionTabNavigation(t *testing.T) {
 	}
 }
 
+func TestSelectionSpatialProjectNavigation(t *testing.T) {
+	m := newTestModelLite()
+	m.settings.PaneNavigationMode = PaneNavigationSpatial
+
+	m.tab = TabProject
+	m.selection = selectionState{ProjectID: projectKey("/alpha", "Alpha"), Session: "alpha-1", Pane: "2"}
+	m.selectTab(1)
+	if m.selection.ProjectID != projectKey("/beta", "Beta") || m.selection.Session != "beta-1" || m.selection.Pane != "1" {
+		t.Fatalf("expected spatial project selection, got %#v", m.selection)
+	}
+}
+
 func TestSelectionSessionAndPaneNavigation(t *testing.T) {
 	m := newTestModelLite()
 
@@ -79,6 +91,27 @@ func TestSelectionDashboardAndToggle(t *testing.T) {
 
 	if m.selectedProject() == nil || m.selectedSession() == nil || m.selectedPane() == nil {
 		t.Fatalf("expected selected project/session/pane")
+	}
+}
+
+func TestSelectionSpatialDashboardProjectNavigation(t *testing.T) {
+	m := newTestModelLite()
+	m.settings.PaneNavigationMode = PaneNavigationSpatial
+
+	m.data.Projects[1].Sessions[0].Panes = append(m.data.Projects[1].Sessions[0].Panes, PaneItem{
+		ID: "p5", Index: "2", Title: "five", Command: "bash", Left: 50, Top: 0, Width: 50, Height: 20,
+	})
+	m.selectionByProject[projectKey("/beta", "Beta")] = selectionState{
+		ProjectID: projectKey("/beta", "Beta"),
+		Session:   "beta-1",
+		Pane:      "1",
+	}
+
+	m.tab = TabDashboard
+	m.selection = selectionState{ProjectID: projectKey("/alpha", "Alpha"), Session: "alpha-1", Pane: "2"}
+	m.selectDashboardProject(1)
+	if m.selection.ProjectID != projectKey("/beta", "Beta") || m.selection.Session != "beta-1" || m.selection.Pane != "2" {
+		t.Fatalf("expected spatial dashboard selection, got %#v", m.selection)
 	}
 }
 

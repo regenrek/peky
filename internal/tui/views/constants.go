@@ -12,6 +12,7 @@ const (
 	viewConfirmCloseAllProjects
 	viewConfirmClosePane
 	viewConfirmRestart
+	viewConfirmQuit
 	viewHelp
 	viewCommandPalette
 	viewRenameSession

@@ -206,6 +206,44 @@ func overlayCenteredSized(base, overlay string, width, height, overlayW, overlay
 	return renderBufferLines(baseBuf)
 }
 
+func overlayAt(base, overlay string, width, height, x, y int) string {
+	if width <= 0 || height <= 0 {
+		return base
+	}
+	base = padLines(base, width, height)
+	baseBuf := cellbuf.NewBuffer(width, height)
+	cellbuf.SetContent(baseBuf, base)
+
+	overlayW := lipgloss.Width(overlay)
+	overlayH := lipgloss.Height(overlay)
+	if overlayW <= 0 || overlayH <= 0 {
+		return renderBufferLines(baseBuf)
+	}
+	if x < 0 {
+		x = 0
+	}
+	if y < 0 {
+		y = 0
+	}
+	if x+overlayW > width {
+		overlayW = width - x
+	}
+	if y+overlayH > height {
+		overlayH = height - y
+	}
+	if overlayW <= 0 || overlayH <= 0 {
+		return renderBufferLines(baseBuf)
+	}
+	rect := cellbuf.Rect(x, y, overlayW, overlayH)
+
+	bgLine := lipgloss.NewStyle().Background(theme.Background).Render(strings.Repeat(" ", overlayW))
+	bgBlock := strings.Repeat(bgLine+"\n", overlayH-1) + bgLine
+	cellbuf.SetContentRect(baseBuf, bgBlock, rect)
+	cellbuf.SetContentRect(baseBuf, overlay, rect)
+
+	return renderBufferLines(baseBuf)
+}
+
 func clamp(value, min, max int) int {
 	if value < min {
 		return min

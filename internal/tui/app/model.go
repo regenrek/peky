@@ -83,7 +83,12 @@ type Model struct {
 	filterInput  textinput.Model
 	filterActive bool
 
-	quickReplyInput textinput.Model
+	quickReplyInput        textinput.Model
+	quickReplyHistory      []string
+	quickReplyHistoryIndex int
+	quickReplyHistoryDraft string
+	quickReplySlashIndex   int
+	quickReplySlashPrefix  string
 
 	mouse mouse.Handler
 
@@ -104,6 +109,8 @@ type Model struct {
 	confirmPaneID      string
 	confirmPaneTitle   string
 	confirmPaneRunning bool
+	confirmQuitRunning int
+	pendingQuit        quitAction
 
 	renameInput     textinput.Model
 	renameSession   string
@@ -183,7 +190,7 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 	m.filterInput.Width = 28
 
 	m.quickReplyInput = textinput.New()
-	m.quickReplyInput.Placeholder = "send a quick reply…"
+	m.quickReplyInput.Placeholder = "talk to your panes"
 	m.quickReplyInput.CharLimit = 400
 	m.quickReplyInput.Prompt = ""
 	qrStyle := lipgloss.NewStyle().
@@ -196,6 +203,8 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 	m.quickReplyInput.PromptStyle = qrStyle
 	m.quickReplyInput.Cursor.Style = qrStyle.Reverse(true)
 	m.quickReplyInput.Focus()
+	m.quickReplyHistoryIndex = -1
+	m.quickReplySlashIndex = -1
 
 	m.setupProjectPicker()
 	m.setupLayoutPicker()

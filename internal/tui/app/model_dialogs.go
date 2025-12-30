@@ -308,7 +308,7 @@ func (m *Model) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.setState(StateDashboard)
 		return m, nil
 	case key.Matches(msg, m.keys.quit):
-		return m, tea.Quit
+		return m, m.requestQuit()
 	}
 	return m, nil
 }
@@ -325,8 +325,7 @@ func (m *Model) setQuickReplySize() {
 		contentWidth = m.width
 	}
 	barWidth := clamp(contentWidth-6, 30, 90)
-	labelWidth := len("Quick Reply: ")
-	inputWidth := barWidth - labelWidth - 2
+	inputWidth := barWidth - 8
 	if inputWidth < 10 {
 		inputWidth = 10
 	}
@@ -341,30 +340,9 @@ func (m *Model) openQuickReply() tea.Cmd {
 	m.setTerminalFocus(false)
 	m.quickReplyInput.SetValue("")
 	m.quickReplyInput.Focus()
+	m.resetQuickReplyHistory()
+	m.resetSlashMenu()
 	return m.refreshPaneViewsCmd()
-}
-
-func (m *Model) updateQuickReply(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch {
-	case key.Matches(msg, m.keys.paneNext):
-		return m, m.cyclePane(1)
-	case key.Matches(msg, m.keys.panePrev):
-		return m, m.cyclePane(-1)
-	}
-	switch msg.String() {
-	case "enter":
-		if strings.TrimSpace(m.quickReplyInput.Value()) == "" {
-			return m, m.attachOrStart()
-		}
-		return m, m.sendQuickReply()
-	case "esc":
-		m.quickReplyInput.SetValue("")
-		m.quickReplyInput.CursorEnd()
-		return m, nil
-	}
-	var cmd tea.Cmd
-	m.quickReplyInput, cmd = m.quickReplyInput.Update(msg)
-	return m, cmd
 }
 
 func (m *Model) sendQuickReply() tea.Cmd {
@@ -389,6 +367,7 @@ func (m *Model) quickReplyPlan() (quickReplyPlan, tea.Cmd, bool) {
 		return quickReplyPlan{}, NewInfoCmd("Nothing to send"), false
 	}
 	m.quickReplyInput.SetValue("")
+	m.resetSlashMenu()
 	pane := m.selectedPane()
 	if pane == nil || strings.TrimSpace(pane.ID) == "" {
 		return quickReplyPlan{}, NewWarningCmd("No pane selected"), false
@@ -400,7 +379,7 @@ func (m *Model) quickReplyPlan() (quickReplyPlan, tea.Cmd, bool) {
 	if pane.Dead {
 		return quickReplyPlan{}, func() tea.Msg { return newPaneClosedMsg(paneID, nil) }, false
 	}
-	payload := quickReplyTextBytes(*pane, text)
+	payload := quickReplyInputBytes(*pane, text)
 	label := strings.TrimSpace(pane.Title)
 	if label == "" {
 		label = fmt.Sprintf("pane %s", pane.Index)
@@ -415,15 +394,14 @@ func (m *Model) sendQuickReplyToPane(plan quickReplyPlan) tea.Msg {
 	if m.isPaneInputDisabled(plan.paneID) {
 		return nil
 	}
-	if pane := m.paneByID(plan.paneID); pane == nil || pane.Dead {
+	pane := m.paneByID(plan.paneID)
+	if pane == nil || pane.Dead {
 		return newPaneClosedMsg(plan.paneID, nil)
 	}
+	logQuickReplySendAttempt(*pane, plan.payload)
 	ctx, cancel := context.WithTimeout(context.Background(), terminalActionTimeout)
 	defer cancel()
 	if msg := sendPaneInput(ctx, m.client, plan.paneID, plan.payload); msg != nil {
-		return msg
-	}
-	if msg := sendPaneInput(ctx, m.client, plan.paneID, []byte{'\r'}); msg != nil {
 		return msg
 	}
 	if plan.label != "" {
@@ -434,6 +412,7 @@ func (m *Model) sendQuickReplyToPane(plan quickReplyPlan) tea.Msg {
 
 func sendPaneInput(ctx context.Context, client *sessiond.Client, paneID string, payload []byte) tea.Msg {
 	if err := client.SendInput(ctx, paneID, payload); err != nil {
+		logQuickReplySendError(paneID, err)
 		if isPaneClosedError(err) {
 			return newPaneClosedMsg(paneID, err)
 		}

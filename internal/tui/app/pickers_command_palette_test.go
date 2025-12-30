@@ -24,14 +24,15 @@ func TestCommandPaletteItemsAndRun(t *testing.T) {
 }
 
 type paletteScan struct {
-	foundSettings bool
-	foundDebug    bool
-	foundPane     bool
-	foundSession  bool
-	foundProject  bool
-	paneIndex     int
-	sessionIndex  int
-	projectIndex  int
+	foundSettings  bool
+	foundDebug     bool
+	foundPane      bool
+	foundSession   bool
+	foundProject   bool
+	foundBroadcast bool
+	paneIndex      int
+	sessionIndex   int
+	projectIndex   int
 }
 
 func scanPaletteItems(t *testing.T, items []list.Item) paletteScan {
@@ -52,6 +53,9 @@ func scanPaletteItems(t *testing.T, items []list.Item) paletteScan {
 		}
 		if cmdItem.Label == "Debug" {
 			scan.foundDebug = true
+		}
+		if cmdItem.Label == "Broadcast: /all" {
+			scan.foundBroadcast = true
 		}
 		if cmdItem.Run != nil {
 			_ = cmdItem.Run()
@@ -95,6 +99,9 @@ func assertPaletteEntries(t *testing.T, scan paletteScan) {
 	t.Helper()
 	if !scan.foundSettings || !scan.foundDebug {
 		t.Fatalf("expected settings and debug entries")
+	}
+	if !scan.foundBroadcast {
+		t.Fatalf("expected broadcast entry")
 	}
 	if !scan.foundPane || !scan.foundSession || !scan.foundProject {
 		t.Fatalf("expected pane, session, and project groups")
