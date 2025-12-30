@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/regenrek/peakypanes/internal/userpath"
 )
@@ -24,9 +25,8 @@ type paneTitleEntry struct {
 }
 
 type paneTitleStats struct {
-	total    int
-	eligible int
-	used     int
+	total int
+	used  int
 }
 
 func resolveSessionPaneTitles(session *Session) map[*Pane]string {
@@ -43,7 +43,7 @@ func resolveSessionPaneTitles(session *Session) map[*Pane]string {
 		if pane.window != nil {
 			winTitle = pane.window.Title()
 		}
-		title, kind := resolvePaneTitle(session.Path, pane.Title, winTitle, pane.Index)
+		title, kind := resolvePaneTitle(session.Path, pane.Title, winTitle, pane.Index, pane.ID)
 		entries = append(entries, paneTitleEntry{pane: pane, title: title, kind: kind})
 	}
 
@@ -63,9 +63,6 @@ func dedupePaneTitles(entries []paneTitleEntry) map[*Pane]string {
 			stats[entry.title] = rec
 		}
 		rec.total++
-		if entry.kind == paneTitlePath || entry.kind == paneTitleFallback {
-			rec.eligible++
-		}
 	}
 
 	for _, entry := range entries {
@@ -78,29 +75,28 @@ func dedupePaneTitles(entries []paneTitleEntry) map[*Pane]string {
 			out[entry.pane] = title
 			continue
 		}
-		if entry.kind != paneTitlePath && entry.kind != paneTitleFallback {
-			out[entry.pane] = title
-			continue
+		if entry.pane != nil {
+			if suffix := shortPaneID(entry.pane.ID); suffix != "" {
+				out[entry.pane] = fmt.Sprintf("%s (%s)", title, suffix)
+				continue
+			}
 		}
 		rec.used++
-		if rec.eligible == rec.total {
-			if rec.used == 1 {
-				out[entry.pane] = title
-			} else {
-				out[entry.pane] = fmt.Sprintf("%s #%d", title, rec.used)
-			}
-			continue
-		}
-		out[entry.pane] = fmt.Sprintf("%s #%d", title, rec.used+1)
+		out[entry.pane] = fmt.Sprintf("%s #%d", title, rec.used)
 	}
 
 	return out
 }
 
-func resolvePaneTitle(sessionPath, paneTitle, windowTitle, paneIndex string) (string, paneTitleKind) {
+func resolvePaneTitle(sessionPath, paneTitle, windowTitle, paneIndex, paneID string) (string, paneTitleKind) {
 	paneTitle = strings.TrimSpace(paneTitle)
 	windowTitle = strings.TrimSpace(windowTitle)
 
+	if windowTitle != "" {
+		if !windowTitleLooksLabel(windowTitle) {
+			windowTitle = ""
+		}
+	}
 	if windowTitle != "" {
 		if pathTitle, ok := extractPathFromTitle(windowTitle); ok {
 			if paneTitle != "" {
@@ -118,9 +114,9 @@ func resolvePaneTitle(sessionPath, paneTitle, windowTitle, paneIndex string) (st
 	}
 	paneIndex = strings.TrimSpace(paneIndex)
 	if paneIndex != "" {
-		return fmt.Sprintf("pane %s", paneIndex), paneTitleFallback
+		return fallbackPaneTitle(paneIndex, paneID), paneTitleFallback
 	}
-	return "pane", paneTitleFallback
+	return fallbackPaneTitle("", paneID), paneTitleFallback
 }
 
 func extractPathFromTitle(title string) (string, bool) {
@@ -142,6 +138,21 @@ func extractPathFromTitle(title string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func windowTitleLooksLabel(title string) bool {
+	if title == "" {
+		return false
+	}
+	if _, ok := extractPathFromTitle(title); ok {
+		return true
+	}
+	for _, r := range title {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return true
+		}
+	}
+	return false
 }
 
 func pathCandidate(segment string) string {
@@ -216,6 +227,31 @@ func shortenPathTitle(pathTitle, sessionPath string) string {
 		display = userpath.ShortenUser(expanded)
 	}
 	return compressPathForDisplay(display, 2)
+}
+
+func fallbackPaneTitle(paneIndex, paneID string) string {
+	label := "pane"
+	paneIndex = strings.TrimSpace(paneIndex)
+	if paneIndex != "" {
+		label = fmt.Sprintf("pane %s", paneIndex)
+	}
+	shortID := shortPaneID(paneID)
+	if shortID == "" {
+		return label
+	}
+	return fmt.Sprintf("%s (%s)", label, shortID)
+}
+
+func shortPaneID(paneID string) string {
+	paneID = strings.TrimSpace(paneID)
+	if paneID == "" {
+		return ""
+	}
+	const maxLen = 6
+	if len(paneID) <= maxLen {
+		return paneID
+	}
+	return paneID[len(paneID)-maxLen:]
 }
 
 func sessionBaseName(sessionPath string) string {

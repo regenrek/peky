@@ -7,6 +7,7 @@ This format is based on Keep a Changelog.
 
 ### Fixed
 - Quick reply now detects Codex panes by title when command metadata is missing, so sends use bracketed paste + submit.
+- Pane titles ignore glyph-only window titles and fall back to pane index with short IDs for disambiguation.
 
 ## 0.0.6 - 2025-12-30
 

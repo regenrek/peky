@@ -71,31 +71,36 @@ func TestResolvePaneTitle(t *testing.T) {
 	root := filepath.Join(home, "projects", "cli", "aidex")
 	windowPath := filepath.Join(root, "src")
 
-	title, kind := resolvePaneTitle(root, "server", "codex", "0")
+	title, kind := resolvePaneTitle(root, "server", "codex", "0", "p-1")
 	if title != "codex" || kind != paneTitleWindow {
 		t.Fatalf("window title override = %q kind %v", title, kind)
 	}
 
-	title, kind = resolvePaneTitle(root, "server", fmt.Sprintf("user@host:%s", windowPath), "0")
+	title, kind = resolvePaneTitle(root, "server", fmt.Sprintf("user@host:%s", windowPath), "0", "p-2")
 	if title != "server" || kind != paneTitleExplicit {
 		t.Fatalf("explicit title with path window = %q kind %v", title, kind)
 	}
 
-	title, kind = resolvePaneTitle(root, "", fmt.Sprintf("user@host:%s", windowPath), "1")
+	title, kind = resolvePaneTitle(root, "", fmt.Sprintf("user@host:%s", windowPath), "1", "p-3")
 	if title != "aidex:src" || kind != paneTitlePath {
 		t.Fatalf("path window title = %q kind %v", title, kind)
 	}
 
-	title, kind = resolvePaneTitle(root, "", "", "2")
-	if title != "pane 2" || kind != paneTitleFallback {
+	title, kind = resolvePaneTitle(root, "", "", "2", "p-4")
+	if title != "pane 2 (p-4)" || kind != paneTitleFallback {
 		t.Fatalf("fallback title = %q kind %v", title, kind)
+	}
+
+	title, kind = resolvePaneTitle(root, "", ">>>", "3", "p-5")
+	if title != "pane 3 (p-5)" || kind != paneTitleFallback {
+		t.Fatalf("non-text window title = %q kind %v", title, kind)
 	}
 }
 
 func TestDedupePaneTitles(t *testing.T) {
-	paneA := &Pane{Index: "0"}
-	paneB := &Pane{Index: "1"}
-	paneC := &Pane{Index: "2"}
+	paneA := &Pane{ID: "p-1", Index: "0"}
+	paneB := &Pane{ID: "p-2", Index: "1"}
+	paneC := &Pane{ID: "p-3", Index: "2"}
 
 	entries := []paneTitleEntry{
 		{pane: paneA, title: "aidex", kind: paneTitlePath},
@@ -103,7 +108,7 @@ func TestDedupePaneTitles(t *testing.T) {
 		{pane: paneC, title: "server", kind: paneTitleExplicit},
 	}
 	result := dedupePaneTitles(entries)
-	if result[paneA] != "aidex" || result[paneB] != "aidex #2" {
+	if result[paneA] != "aidex (p-1)" || result[paneB] != "aidex (p-2)" {
 		t.Fatalf("dedupe path titles = %#v", result)
 	}
 	if result[paneC] != "server" {
@@ -115,7 +120,7 @@ func TestDedupePaneTitles(t *testing.T) {
 		{pane: paneB, title: "shell", kind: paneTitlePath},
 	}
 	result = dedupePaneTitles(entries)
-	if result[paneA] != "shell" || result[paneB] != "shell #2" {
+	if result[paneA] != "shell (p-1)" || result[paneB] != "shell (p-2)" {
 		t.Fatalf("dedupe mixed titles = %#v", result)
 	}
 }
