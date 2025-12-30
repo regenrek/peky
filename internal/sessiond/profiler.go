@@ -26,10 +26,10 @@ const (
 )
 
 type daemonProfiler struct {
-	cpuPath string
-	memPath string
-	cpuFile *os.File
-	stopMu  sync.Mutex
+	cpuPath  string
+	memPath  string
+	cpuFile  *os.File
+	stopMu   sync.Mutex
 	stopOnce sync.Once
 }
 
