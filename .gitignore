@@ -67,12 +67,14 @@ Desktop.ini
 # Project-specific
 # Add any project-specific ignore patterns here
 peakypanes
+devwatch
 
 docs/internal
 .spezi
 .ck
 .cursor
 .ckignore
+.claude/
 
 docs/tasks
 .bench/
