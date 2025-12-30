@@ -11,6 +11,7 @@ This format is based on Keep a Changelog.
 - Terminal focus toggle for native panes (default `ctrl+\`, configurable).
 - Native mouse support in the dashboard: single-click selects panes, double-click toggles terminal focus, and motion forwarding is throttled to avoid CPU spikes.
 - Mouse wheel scrollback for native panes with shift/ctrl modifiers and drag-to-select copy mode in terminal focus.
+- Mouse drag selection now auto-copies to the clipboard and shows a success toast.
 - Project config change detection to refresh selection without reopening projects.
 - Pane management actions: add pane (split), move pane to new window, swap panes, and close pane with a running-process confirmation.
 - Session-only jump keys (`alt+w` / `alt+s`) alongside the flat session/window navigation.
