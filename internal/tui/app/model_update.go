@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"reflect"
 	"time"
 
 	"github.com/regenrek/peakypanes/internal/diag"
@@ -23,45 +24,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleUpdateMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
-	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.applyWindowSize(msg)
-		return m, nil, true
-	case refreshTickMsg:
-		return m, m.handleRefreshTick(msg), true
-	case selectionRefreshMsg:
-		return m, m.handleSelectionRefresh(msg), true
-	case dashboardSnapshotMsg:
-		return m, m.handleDashboardSnapshot(msg), true
-	case daemonEventMsg:
-		return m, m.handleDaemonEvent(msg), true
-	case paneViewsMsg:
-		return m, m.handlePaneViews(msg), true
-	case daemonRestartMsg:
-		return m, m.handleDaemonRestart(msg), true
-	case PaneClosedMsg:
-		return m, m.handlePaneClosed(msg), true
-	case sessionStartedMsg:
-		return m, m.handleSessionStarted(msg), true
-	case SuccessMsg:
-		m.setToast(msg.Message, toastSuccess)
-		return m, nil, true
-	case WarningMsg:
-		m.setToast(msg.Message, toastWarning)
-		return m, nil, true
-	case InfoMsg:
-		m.setToast(msg.Message, toastInfo)
-		return m, nil, true
-	case ErrorMsg:
-		m.setToast(msg.Error(), toastError)
-		return m, nil, true
-	case tea.MouseMsg:
-		return m.handleMouseMsg(msg)
-	case tea.KeyMsg:
-		return m.handleKeyMsg(msg)
-	default:
-		return nil, nil, false
+	if handler, ok := updateHandlers[reflect.TypeOf(msg)]; ok {
+		model, cmd := handler(m, msg)
+		return model, cmd, true
 	}
+	if mouseMsg, ok := msg.(tea.MouseMsg); ok {
+		return m.handleMouseMsg(mouseMsg)
+	}
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		return m.handleKeyMsg(keyMsg)
+	}
+	return nil, nil, false
 }
 
 func (m *Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
@@ -73,58 +46,86 @@ func (m *Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 }
 
 func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
-	switch m.state {
-	case StateDashboard:
-		model, cmd := m.updateDashboard(msg)
+	if handler := keyHandlers[m.state]; handler != nil {
+		model, cmd := handler(m, msg)
 		return model, cmd, true
-	case StateProjectPicker:
-		model, cmd := m.updateProjectPicker(msg)
-		return model, cmd, true
-	case StateLayoutPicker:
-		model, cmd := m.updateLayoutPicker(msg)
-		return model, cmd, true
-	case StatePaneSplitPicker:
-		model, cmd := m.updatePaneSplitPicker(msg)
-		return model, cmd, true
-	case StatePaneSwapPicker:
-		model, cmd := m.updatePaneSwapPicker(msg)
-		return model, cmd, true
-	case StateConfirmKill:
-		model, cmd := m.updateConfirmKill(msg)
-		return model, cmd, true
-	case StateConfirmCloseProject:
-		model, cmd := m.updateConfirmCloseProject(msg)
-		return model, cmd, true
-	case StateConfirmCloseAllProjects:
-		model, cmd := m.updateConfirmCloseAllProjects(msg)
-		return model, cmd, true
-	case StateConfirmClosePane:
-		model, cmd := m.updateConfirmClosePane(msg)
-		return model, cmd, true
-	case StateConfirmRestart:
-		model, cmd := m.updateConfirmRestart(msg)
-		return model, cmd, true
-	case StateHelp:
-		model, cmd := m.updateHelp(msg)
-		return model, cmd, true
-	case StateCommandPalette:
-		model, cmd := m.updateCommandPalette(msg)
-		return model, cmd, true
-	case StateSettingsMenu:
-		model, cmd := m.updateSettingsMenu(msg)
-		return model, cmd, true
-	case StateDebugMenu:
-		model, cmd := m.updateDebugMenu(msg)
-		return model, cmd, true
-	case StateRenameSession, StateRenamePane:
-		model, cmd := m.updateRename(msg)
-		return model, cmd, true
-	case StateProjectRootSetup:
-		model, cmd := m.updateProjectRootSetup(msg)
-		return model, cmd, true
-	default:
-		return nil, nil, false
 	}
+	return nil, nil, false
+}
+
+type keyHandler func(*Model, tea.KeyMsg) (tea.Model, tea.Cmd)
+
+var keyHandlers = map[ViewState]keyHandler{
+	StateDashboard:       func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateDashboard(msg) },
+	StateProjectPicker:   func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateProjectPicker(msg) },
+	StateLayoutPicker:    func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateLayoutPicker(msg) },
+	StatePaneSplitPicker: func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updatePaneSplitPicker(msg) },
+	StatePaneSwapPicker:  func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updatePaneSwapPicker(msg) },
+	StateConfirmKill:     func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateConfirmKill(msg) },
+	StateConfirmCloseProject: func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+		return m.updateConfirmCloseProject(msg)
+	},
+	StateConfirmCloseAllProjects: func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+		return m.updateConfirmCloseAllProjects(msg)
+	},
+	StateConfirmClosePane: func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateConfirmClosePane(msg) },
+	StateConfirmRestart:   func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateConfirmRestart(msg) },
+	StateHelp:             func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateHelp(msg) },
+	StateCommandPalette:   func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateCommandPalette(msg) },
+	StateSettingsMenu:     func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateSettingsMenu(msg) },
+	StateDebugMenu:        func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateDebugMenu(msg) },
+	StateRenameSession:    func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateRename(msg) },
+	StateRenamePane:       func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateRename(msg) },
+	StateProjectRootSetup: func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateProjectRootSetup(msg) },
+}
+
+type updateHandler func(*Model, tea.Msg) (tea.Model, tea.Cmd)
+
+var updateHandlers = map[reflect.Type]updateHandler{
+	reflect.TypeOf(tea.WindowSizeMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		m.applyWindowSize(msg.(tea.WindowSizeMsg))
+		return m, nil
+	},
+	reflect.TypeOf(refreshTickMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleRefreshTick(msg.(refreshTickMsg))
+	},
+	reflect.TypeOf(selectionRefreshMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleSelectionRefresh(msg.(selectionRefreshMsg))
+	},
+	reflect.TypeOf(dashboardSnapshotMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleDashboardSnapshot(msg.(dashboardSnapshotMsg))
+	},
+	reflect.TypeOf(daemonEventMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleDaemonEvent(msg.(daemonEventMsg))
+	},
+	reflect.TypeOf(paneViewsMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handlePaneViews(msg.(paneViewsMsg))
+	},
+	reflect.TypeOf(daemonRestartMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleDaemonRestart(msg.(daemonRestartMsg))
+	},
+	reflect.TypeOf(PaneClosedMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handlePaneClosed(msg.(PaneClosedMsg))
+	},
+	reflect.TypeOf(sessionStartedMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleSessionStarted(msg.(sessionStartedMsg))
+	},
+	reflect.TypeOf(SuccessMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		m.setToast(msg.(SuccessMsg).Message, toastSuccess)
+		return m, nil
+	},
+	reflect.TypeOf(WarningMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		m.setToast(msg.(WarningMsg).Message, toastWarning)
+		return m, nil
+	},
+	reflect.TypeOf(InfoMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		m.setToast(msg.(InfoMsg).Message, toastInfo)
+		return m, nil
+	},
+	reflect.TypeOf(ErrorMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		m.setToast(msg.(ErrorMsg).Error(), toastError)
+		return m, nil
+	},
 }
 
 func (m *Model) handlePassiveUpdates(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
@@ -320,6 +321,20 @@ func (m *Model) handlePaneViews(msg paneViewsMsg) tea.Cmd {
 	if msg.Err != nil && len(msg.Views) == 0 && !errors.Is(msg.Err, context.DeadlineExceeded) && !errors.Is(msg.Err, context.Canceled) {
 		m.setToast("Pane view failed: "+msg.Err.Error(), toastWarning)
 	}
+	m.ensurePaneViewMaps()
+	for _, view := range msg.Views {
+		m.applyPaneView(view)
+	}
+	if m.paneViewInFlight > 0 {
+		m.paneViewInFlight--
+	}
+	if m.paneViewInFlight == 0 {
+		cmd = m.handlePaneViewQueue()
+	}
+	return cmd
+}
+
+func (m *Model) ensurePaneViewMaps() {
 	if m.paneViews == nil {
 		m.paneViews = make(map[paneViewKey]string)
 	}
@@ -329,37 +344,33 @@ func (m *Model) handlePaneViews(msg paneViewsMsg) tea.Cmd {
 	if m.paneViewSeq == nil {
 		m.paneViewSeq = make(map[paneViewKey]uint64)
 	}
-	for _, view := range msg.Views {
-		key := paneViewKeyFrom(view)
+}
 
-		if view.UpdateSeq > 0 {
-			m.paneViewSeq[key] = view.UpdateSeq
-		}
-		if !view.NotModified {
-			if view.View != "" {
-				m.paneViews[key] = view.View
-			}
-		}
+func (m *Model) applyPaneView(view sessiond.PaneViewResponse) {
+	key := paneViewKeyFrom(view)
+	if view.UpdateSeq > 0 {
+		m.paneViewSeq[key] = view.UpdateSeq
+	}
+	if !view.NotModified && view.View != "" {
+		m.paneViews[key] = view.View
+	}
+	if view.PaneID != "" {
+		m.paneMouseMotion[view.PaneID] = view.AllowMotion
+	}
+}
 
-		if view.PaneID != "" {
-			m.paneMouseMotion[view.PaneID] = view.AllowMotion
-		}
+func (m *Model) handlePaneViewQueue() tea.Cmd {
+	if m.paneViewQueued {
+		m.paneViewQueued = false
+		m.paneViewQueuedIDs = nil
+		return m.refreshPaneViewsCmd()
 	}
-	if m.paneViewInFlight > 0 {
-		m.paneViewInFlight--
+	if len(m.paneViewQueuedIDs) > 0 {
+		queued := m.paneViewQueuedIDs
+		m.paneViewQueuedIDs = nil
+		return m.startPaneViewFetch(m.paneViewRequestsForIDs(queued))
 	}
-	if m.paneViewInFlight == 0 {
-		if m.paneViewQueued {
-			m.paneViewQueued = false
-			m.paneViewQueuedIDs = nil
-			cmd = m.refreshPaneViewsCmd()
-		} else if len(m.paneViewQueuedIDs) > 0 {
-			queued := m.paneViewQueuedIDs
-			m.paneViewQueuedIDs = nil
-			cmd = m.startPaneViewFetch(m.paneViewRequestsForIDs(queued))
-		}
-	}
-	return cmd
+	return nil
 }
 
 func (m *Model) handleSessionStarted(msg sessionStartedMsg) tea.Cmd {

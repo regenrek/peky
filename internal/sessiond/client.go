@@ -32,7 +32,7 @@ type Client struct {
 	eventNotify chan struct{}
 	eventOnce   sync.Once
 
-	doneOnce sync.Once
+	doneOnce  sync.Once
 	done      chan struct{}
 	closeOnce sync.Once
 

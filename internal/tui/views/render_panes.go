@@ -346,6 +346,27 @@ func renderPaneTile(pane Pane, width, height int, compact bool, target bool, bor
 }
 
 func (m Model) renderPaneTileLive(pane Pane, width, height int, compact bool, target bool, borders tileBorders) string {
+	title := paneTileTitle(pane, target)
+	style := paneTileStyle(borders)
+	style, contentWidth, innerHeight := paneTileLayoutFor(width, height, style)
+
+	header := fmt.Sprintf("%s %s", renderBadge(pane.Status), title)
+	lines := []string{truncateTileLine(header, contentWidth)}
+	if strings.TrimSpace(pane.Command) != "" {
+		lines = append(lines, truncateTileLine(pane.Command, contentWidth))
+	}
+
+	maxPreview := innerHeight - len(lines)
+	if maxPreview < 0 {
+		maxPreview = 0
+	}
+	lines = append(lines, paneTilePreviewLines(m, pane, contentWidth, maxPreview, compact, target)...)
+
+	content := padLines(strings.Join(lines, "\n"), contentWidth, innerHeight)
+	return style.Render(content)
+}
+
+func paneTileTitle(pane Pane, target bool) string {
 	title := pane.Title
 	if target {
 		title = "TARGET " + title
@@ -353,8 +374,11 @@ func (m Model) renderPaneTileLive(pane Pane, width, height int, compact bool, ta
 	if pane.Active {
 		title = "▶ " + title
 	}
+	return title
+}
 
-	style := lipgloss.NewStyle().
+func paneTileStyle(borders tileBorders) lipgloss.Style {
+	return lipgloss.NewStyle().
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderTop(borders.top).
 		BorderRight(borders.right).
@@ -366,7 +390,9 @@ func (m Model) renderPaneTileLive(pane Pane, width, height int, compact bool, ta
 		BorderBottomForeground(borders.colors.bottom).
 		BorderLeftForeground(borders.colors.left).
 		Padding(0, 1)
+}
 
+func paneTileLayoutFor(width, height int, style lipgloss.Style) (lipgloss.Style, int, int) {
 	frameW, frameH := style.GetFrameSize()
 	borderW := style.GetHorizontalBorderSize()
 	borderH := style.GetVerticalBorderSize()
@@ -387,43 +413,35 @@ func (m Model) renderPaneTileLive(pane Pane, width, height int, compact bool, ta
 		blockHeight = 1
 	}
 	style = style.Width(blockWidth).Height(blockHeight)
+	return style, contentWidth, innerHeight
+}
 
-	header := fmt.Sprintf("%s %s", renderBadge(pane.Status), title)
-	lines := []string{truncateTileLine(header, contentWidth)}
-	if strings.TrimSpace(pane.Command) != "" {
-		lines = append(lines, truncateTileLine(pane.Command, contentWidth))
+func paneTilePreviewLines(m Model, pane Pane, contentWidth, maxPreview int, compact, target bool) []string {
+	if maxPreview <= 0 {
+		return nil
 	}
-
-	maxPreview := innerHeight - len(lines)
-	if maxPreview < 0 {
-		maxPreview = 0
+	if live := paneTileLiveView(m, pane, contentWidth, maxPreview, target); live != "" {
+		return strings.Split(padLines(live, contentWidth, maxPreview), "\n")
 	}
-	if maxPreview > 0 {
-		live := ""
-		if m.PaneView != nil && strings.TrimSpace(pane.ID) != "" {
-			live = m.PaneView(pane.ID, contentWidth, maxPreview, target && m.TerminalFocus)
-		}
-		if live != "" {
-			live = padLines(live, contentWidth, maxPreview)
-			lines = append(lines, strings.Split(live, "\n")...)
-		} else {
-			previewSource := pane.Preview
-			if len(previewSource) == 0 {
-				if summary := strings.TrimSpace(pane.SummaryLine); summary != "" {
-					previewSource = []string{summary}
-				}
-			}
-			if compact {
-				previewSource = compactPreviewLines(previewSource)
-			}
-			previewSource = trimTrailingBlankLines(previewSource)
-			previewLines := tailLines(previewSource, maxPreview)
-			lines = append(lines, truncateTileLines(previewLines, contentWidth)...)
+	previewSource := pane.Preview
+	if len(previewSource) == 0 {
+		if summary := strings.TrimSpace(pane.SummaryLine); summary != "" {
+			previewSource = []string{summary}
 		}
 	}
+	if compact {
+		previewSource = compactPreviewLines(previewSource)
+	}
+	previewSource = trimTrailingBlankLines(previewSource)
+	previewLines := tailLines(previewSource, maxPreview)
+	return truncateTileLines(previewLines, contentWidth)
+}
 
-	content := padLines(strings.Join(lines, "\n"), contentWidth, innerHeight)
-	return style.Render(content)
+func paneTileLiveView(m Model, pane Pane, contentWidth, maxPreview int, target bool) string {
+	if m.PaneView == nil || strings.TrimSpace(pane.ID) == "" {
+		return ""
+	}
+	return m.PaneView(pane.ID, contentWidth, maxPreview, target && m.TerminalFocus)
 }
 
 func paneBounds(panes []Pane) (int, int) {

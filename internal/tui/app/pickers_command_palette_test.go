@@ -18,33 +18,40 @@ func TestCommandPaletteItemsAndRun(t *testing.T) {
 	if len(items) == 0 {
 		t.Fatalf("expected command palette items")
 	}
-	foundSettings := false
-	foundDebug := false
-	foundPane := false
-	foundSession := false
-	foundProject := false
-	paneIndex := -1
-	sessionIndex := -1
-	projectIndex := -1
+	scan := scanPaletteItems(t, items)
+	assertPaletteEntries(t, scan)
+	assertPaletteOrder(t, scan)
+}
+
+type paletteScan struct {
+	foundSettings bool
+	foundDebug    bool
+	foundPane     bool
+	foundSession  bool
+	foundProject  bool
+	paneIndex     int
+	sessionIndex  int
+	projectIndex  int
+}
+
+func scanPaletteItems(t *testing.T, items []list.Item) paletteScan {
+	t.Helper()
+	scan := paletteScan{
+		paneIndex:    -1,
+		sessionIndex: -1,
+		projectIndex: -1,
+	}
 	for _, item := range items {
 		cmdItem, ok := item.(picker.CommandItem)
 		if !ok {
 			continue
 		}
-		if strings.Contains(cmdItem.Label, "Reopen") {
-			t.Fatalf("unexpected reopen entry in command palette")
-		}
-		if strings.Contains(cmdItem.Label, "Quick reply") {
-			t.Fatalf("unexpected quick reply entry in command palette")
-		}
-		if strings.Contains(cmdItem.Label, "Attach / start") {
-			t.Fatalf("unexpected attach/start entry in command palette")
-		}
+		assertPaletteLabel(t, cmdItem.Label)
 		if cmdItem.Label == "Settings" {
-			foundSettings = true
+			scan.foundSettings = true
 		}
 		if cmdItem.Label == "Debug" {
-			foundDebug = true
+			scan.foundDebug = true
 		}
 		if cmdItem.Run != nil {
 			_ = cmdItem.Run()
@@ -55,26 +62,48 @@ func TestCommandPaletteItemsAndRun(t *testing.T) {
 		if !ok {
 			continue
 		}
-		if strings.HasPrefix(cmdItem.Label, "Pane:") && paneIndex == -1 {
-			paneIndex = i
-			foundPane = true
+		if strings.HasPrefix(cmdItem.Label, "Pane:") && scan.paneIndex == -1 {
+			scan.paneIndex = i
+			scan.foundPane = true
 		}
-		if strings.HasPrefix(cmdItem.Label, "Session:") && sessionIndex == -1 {
-			sessionIndex = i
-			foundSession = true
+		if strings.HasPrefix(cmdItem.Label, "Session:") && scan.sessionIndex == -1 {
+			scan.sessionIndex = i
+			scan.foundSession = true
 		}
-		if strings.HasPrefix(cmdItem.Label, "Project:") && projectIndex == -1 {
-			projectIndex = i
-			foundProject = true
+		if strings.HasPrefix(cmdItem.Label, "Project:") && scan.projectIndex == -1 {
+			scan.projectIndex = i
+			scan.foundProject = true
 		}
 	}
-	if !foundSettings || !foundDebug {
+	return scan
+}
+
+func assertPaletteLabel(t *testing.T, label string) {
+	t.Helper()
+	if strings.Contains(label, "Reopen") {
+		t.Fatalf("unexpected reopen entry in command palette")
+	}
+	if strings.Contains(label, "Quick reply") {
+		t.Fatalf("unexpected quick reply entry in command palette")
+	}
+	if strings.Contains(label, "Attach / start") {
+		t.Fatalf("unexpected attach/start entry in command palette")
+	}
+}
+
+func assertPaletteEntries(t *testing.T, scan paletteScan) {
+	t.Helper()
+	if !scan.foundSettings || !scan.foundDebug {
 		t.Fatalf("expected settings and debug entries")
 	}
-	if !foundPane || !foundSession || !foundProject {
+	if !scan.foundPane || !scan.foundSession || !scan.foundProject {
 		t.Fatalf("expected pane, session, and project groups")
 	}
-	if paneIndex >= sessionIndex || sessionIndex >= projectIndex {
+}
+
+func assertPaletteOrder(t *testing.T, scan paletteScan) {
+	t.Helper()
+	if scan.paneIndex >= scan.sessionIndex || scan.sessionIndex >= scan.projectIndex {
 		t.Fatalf("expected pane items before session and project items")
 	}
 }
