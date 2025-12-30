@@ -49,6 +49,83 @@ func (m *Model) selectionForProjectID(projectID string) selectionState {
 	return selectionState{ProjectID: projectID}
 }
 
+func (m *Model) paneNavigationMode() string {
+	mode := strings.TrimSpace(m.settings.PaneNavigationMode)
+	if mode == "" {
+		return PaneNavigationSpatial
+	}
+	return mode
+}
+
+func (m *Model) projectNavigationSelection(projectID string) selectionState {
+	if m.paneNavigationMode() == PaneNavigationMemory {
+		return m.selectionForProjectID(projectID)
+	}
+	return m.spatialProjectSelection(projectID)
+}
+
+func (m *Model) spatialProjectSelection(projectID string) selectionState {
+	if projectID == "" {
+		return selectionState{}
+	}
+	target := findProjectByID(m.data.Projects, projectID)
+	if target == nil {
+		return selectionState{ProjectID: projectID}
+	}
+	currentIndex := 0
+	if current := m.selectedProject(); current != nil {
+		currentSessions := m.filteredSessions(current.Sessions)
+		currentItems := buildSessionPaneEntries(currentSessions, m.sessionExpanded)
+		if len(currentItems) > 0 {
+			currentIndex = findSessionPaneIndex(currentItems, m.selection)
+			if currentIndex < 0 {
+				currentIndex = 0
+			}
+		}
+	}
+	targetSessions := m.filteredSessions(target.Sessions)
+	targetItems := buildSessionPaneEntries(targetSessions, m.sessionExpanded)
+	if len(targetItems) == 0 {
+		return selectionState{ProjectID: projectID}
+	}
+	if currentIndex >= len(targetItems) {
+		currentIndex = len(targetItems) - 1
+	}
+	entry := targetItems[currentIndex]
+	return selectionState{ProjectID: projectID, Session: entry.session, Pane: entry.pane}
+}
+
+func (m *Model) spatialDashboardSelection(columns []DashboardProjectColumn, target DashboardProjectColumn) selectionState {
+	if target.ProjectID == "" {
+		return selectionState{}
+	}
+	if len(target.Panes) == 0 {
+		return selectionState{ProjectID: target.ProjectID}
+	}
+	currentIndex := m.dashboardProjectIndex(columns)
+	if currentIndex < 0 || currentIndex >= len(columns) {
+		currentIndex = 0
+	}
+	rowIndex := 0
+	if len(columns) > 0 {
+		currentColumn := columns[currentIndex]
+		if len(currentColumn.Panes) > 0 {
+			if idx := dashboardPaneIndex(currentColumn.Panes, m.selection); idx >= 0 {
+				rowIndex = idx
+			}
+		}
+	}
+	if rowIndex >= len(target.Panes) {
+		rowIndex = len(target.Panes) - 1
+	}
+	pane := target.Panes[rowIndex]
+	return selectionState{
+		ProjectID: target.ProjectID,
+		Session:   pane.SessionName,
+		Pane:      pane.Pane.Index,
+	}
+}
+
 func (m *Model) applySelection(sel selectionState) {
 	m.selection = sel
 	m.rememberSelection(sel)
@@ -108,7 +185,7 @@ func (m *Model) selectTab(delta int) {
 		if delta < 0 {
 			projectID = m.data.Projects[len(m.data.Projects)-1].ID
 		}
-		resolved := resolveSelection(m.data.Projects, m.selectionForProjectID(projectID))
+		resolved := resolveSelection(m.data.Projects, m.projectNavigationSelection(projectID))
 		m.applySelection(resolved)
 		m.selectionVersion++
 		return
@@ -126,7 +203,7 @@ func (m *Model) selectTab(delta int) {
 		return
 	}
 	projectID := m.data.Projects[next-1].ID
-	resolved := resolveSelection(m.data.Projects, m.selectionForProjectID(projectID))
+	resolved := resolveSelection(m.data.Projects, m.projectNavigationSelection(projectID))
 	m.applySelection(resolved)
 	m.selectionVersion++
 }
@@ -148,7 +225,7 @@ func (m *Model) selectProjectTab(projectID string) bool {
 	if project == nil {
 		return false
 	}
-	resolved := resolveSelection(m.data.Projects, m.selectionForProjectID(project.ID))
+	resolved := resolveSelection(m.data.Projects, m.projectNavigationSelection(project.ID))
 	changed := m.tab != TabProject || m.selection != resolved
 	m.tab = TabProject
 	m.applySelection(resolved)
@@ -284,8 +361,13 @@ func (m *Model) selectDashboardProject(delta int) {
 	}
 	idx = wrapIndex(idx+delta, len(filtered))
 	target := filtered[idx]
-	desired := m.selectionForProjectID(target.ProjectID)
-	resolved := resolveDashboardSelectionFromColumns(filtered, desired)
+	var resolved selectionState
+	if m.paneNavigationMode() == PaneNavigationMemory {
+		desired := m.selectionForProjectID(target.ProjectID)
+		resolved = resolveDashboardSelectionFromColumns(filtered, desired)
+	} else {
+		resolved = m.spatialDashboardSelection(filtered, target)
+	}
 	if resolved.ProjectID == "" {
 		resolved.ProjectID = target.ProjectID
 	}

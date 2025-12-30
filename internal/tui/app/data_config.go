@@ -94,6 +94,10 @@ func defaultDashboardConfig(cfg layout.DashboardConfig) (DashboardConfig, error)
 	if !ok {
 		return DashboardConfig{}, fmt.Errorf("invalid attach_behavior %q (use current or detached)", cfg.AttachBehavior)
 	}
+	paneNavigationMode, ok := normalizePaneNavigationMode(cfg.PaneNavigationMode)
+	if !ok {
+		return DashboardConfig{}, fmt.Errorf("invalid pane_navigation_mode %q (use spatial or memory)", cfg.PaneNavigationMode)
+	}
 	projectRoots := normalizeProjectRoots(cfg.ProjectRoots)
 	if len(projectRoots) == 0 {
 		projectRoots = defaultProjectRoots()
@@ -104,16 +108,17 @@ func defaultDashboardConfig(cfg layout.DashboardConfig) (DashboardConfig, error)
 		return DashboardConfig{}, err
 	}
 	return DashboardConfig{
-		RefreshInterval: time.Duration(refreshMS) * time.Millisecond,
-		PreviewLines:    previewLines,
-		PreviewCompact:  previewCompact,
-		IdleThreshold:   time.Duration(idleSeconds) * time.Second,
-		StatusMatcher:   matcher,
-		PreviewMode:     previewMode,
-		ProjectRoots:    projectRoots,
-		AgentDetection:  agentDetection,
-		AttachBehavior:  attachBehavior,
-		HiddenProjects:  hiddenProjects,
+		RefreshInterval:    time.Duration(refreshMS) * time.Millisecond,
+		PreviewLines:       previewLines,
+		PreviewCompact:     previewCompact,
+		IdleThreshold:      time.Duration(idleSeconds) * time.Second,
+		StatusMatcher:      matcher,
+		PreviewMode:        previewMode,
+		ProjectRoots:       projectRoots,
+		AgentDetection:     agentDetection,
+		AttachBehavior:     attachBehavior,
+		PaneNavigationMode: paneNavigationMode,
+		HiddenProjects:     hiddenProjects,
 	}, nil
 }
 
@@ -127,6 +132,21 @@ func normalizeAttachBehavior(value string) (string, bool) {
 		return AttachBehaviorCurrent, true
 	case AttachBehaviorDetached:
 		return AttachBehaviorDetached, true
+	default:
+		return "", false
+	}
+}
+
+func normalizePaneNavigationMode(value string) (string, bool) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return PaneNavigationSpatial, true
+	}
+	switch strings.ToLower(trimmed) {
+	case PaneNavigationSpatial:
+		return PaneNavigationSpatial, true
+	case PaneNavigationMemory:
+		return PaneNavigationMemory, true
 	default:
 		return "", false
 	}

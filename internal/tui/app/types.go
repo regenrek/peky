@@ -64,6 +64,11 @@ const (
 	AttachBehaviorDetached = "detached"
 )
 
+const (
+	PaneNavigationSpatial = "spatial"
+	PaneNavigationMemory  = "memory"
+)
+
 // DashboardData contains all data required to render the dashboard.
 type DashboardData struct {
 	Projects    []ProjectGroup
@@ -138,16 +143,17 @@ type AgentDetectionConfig struct {
 
 // DashboardConfig wraps dashboard settings after defaults applied.
 type DashboardConfig struct {
-	RefreshInterval time.Duration
-	PreviewLines    int
-	PreviewCompact  bool
-	IdleThreshold   time.Duration
-	StatusMatcher   statusMatcher
-	PreviewMode     string
-	ProjectRoots    []string
-	AgentDetection  AgentDetectionConfig
-	AttachBehavior  string
-	HiddenProjects  map[string]struct{}
+	RefreshInterval    time.Duration
+	PreviewLines       int
+	PreviewCompact     bool
+	IdleThreshold      time.Duration
+	StatusMatcher      statusMatcher
+	PreviewMode        string
+	ProjectRoots       []string
+	AgentDetection     AgentDetectionConfig
+	AttachBehavior     string
+	PaneNavigationMode string
+	HiddenProjects     map[string]struct{}
 }
 
 // selectionState tracks the current selection by stable project ID.

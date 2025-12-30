@@ -372,6 +372,7 @@ var supportedSpecialKeys = func() map[string]struct{} {
 		"f19":              {},
 		"f20":              {},
 		"ctrl+@":           {},
+		"ctrl+,":           {},
 		"ctrl+\\":          {},
 		"ctrl+]":           {},
 		"ctrl+^":           {},

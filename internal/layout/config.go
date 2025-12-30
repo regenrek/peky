@@ -111,17 +111,18 @@ type HiddenProjectConfig struct {
 
 // DashboardConfig configures the Peaky Panes dashboard UI.
 type DashboardConfig struct {
-	RefreshMS      int                   `yaml:"refresh_ms,omitempty"`
-	PreviewLines   int                   `yaml:"preview_lines,omitempty"`
-	PreviewCompact *bool                 `yaml:"preview_compact,omitempty"`
-	IdleSeconds    int                   `yaml:"idle_seconds,omitempty"`
-	StatusRegex    StatusRegexConfig     `yaml:"status_regex,omitempty"`
-	PreviewMode    string                `yaml:"preview_mode,omitempty"` // grid | layout
-	ProjectRoots   []string              `yaml:"project_roots,omitempty"`
-	AgentDetection AgentDetectionConfig  `yaml:"agent_detection,omitempty"`
-	AttachBehavior string                `yaml:"attach_behavior,omitempty"` // current | detached
-	HiddenProjects []HiddenProjectConfig `yaml:"hidden_projects,omitempty"`
-	Keymap         DashboardKeymapConfig `yaml:"keymap,omitempty"`
+	RefreshMS          int                   `yaml:"refresh_ms,omitempty"`
+	PreviewLines       int                   `yaml:"preview_lines,omitempty"`
+	PreviewCompact     *bool                 `yaml:"preview_compact,omitempty"`
+	IdleSeconds        int                   `yaml:"idle_seconds,omitempty"`
+	StatusRegex        StatusRegexConfig     `yaml:"status_regex,omitempty"`
+	PreviewMode        string                `yaml:"preview_mode,omitempty"` // grid | layout
+	ProjectRoots       []string              `yaml:"project_roots,omitempty"`
+	AgentDetection     AgentDetectionConfig  `yaml:"agent_detection,omitempty"`
+	AttachBehavior     string                `yaml:"attach_behavior,omitempty"`      // current | detached
+	PaneNavigationMode string                `yaml:"pane_navigation_mode,omitempty"` // spatial | memory
+	HiddenProjects     []HiddenProjectConfig `yaml:"hidden_projects,omitempty"`
+	Keymap             DashboardKeymapConfig `yaml:"keymap,omitempty"`
 }
 
 // ZellijSection holds zellij-specific config.

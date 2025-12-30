@@ -299,6 +299,7 @@ dashboard:
   idle_seconds: 20
   preview_mode: grid  # grid | layout
   attach_behavior: current  # current | detached
+  pane_navigation_mode: spatial  # spatial | memory
   keymap:
     project_left: ["ctrl+q"]
     project_right: ["ctrl+e"]
@@ -326,6 +327,7 @@ dashboard:
 ```
 
 `attach_behavior` controls what the “attach/start” action does (default `current`): `current` focuses the selected session in the dashboard, and `detached` creates the session without switching focus.
+`pane_navigation_mode` controls left/right navigation across projects and dashboard columns: `spatial` keeps the same row when moving between projects, and `memory` restores the last selection per project.
 
 ### Agent Status Detection (Codex & Claude Code)
 

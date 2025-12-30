@@ -38,6 +38,9 @@ func TestDefaultDashboardConfigDefaults(t *testing.T) {
 	if cfg.AttachBehavior != AttachBehaviorCurrent {
 		t.Fatalf("AttachBehavior = %q", cfg.AttachBehavior)
 	}
+	if cfg.PaneNavigationMode != PaneNavigationSpatial {
+		t.Fatalf("PaneNavigationMode = %q", cfg.PaneNavigationMode)
+	}
 	if len(cfg.ProjectRoots) != 1 || cfg.ProjectRoots[0] != filepath.Join(home, "projects") {
 		t.Fatalf("ProjectRoots = %#v", cfg.ProjectRoots)
 	}
@@ -46,13 +49,14 @@ func TestDefaultDashboardConfigDefaults(t *testing.T) {
 func TestDefaultDashboardConfigOverrides(t *testing.T) {
 	compact := false
 	cfg, err := defaultDashboardConfig(layout.DashboardConfig{
-		RefreshMS:      500,
-		PreviewLines:   5,
-		IdleSeconds:    3,
-		PreviewCompact: &compact,
-		PreviewMode:    "layout",
-		AttachBehavior: "detached",
-		ProjectRoots:   []string{"/tmp", "/tmp"},
+		RefreshMS:          500,
+		PreviewLines:       5,
+		IdleSeconds:        3,
+		PreviewCompact:     &compact,
+		PreviewMode:        "layout",
+		AttachBehavior:     "detached",
+		PaneNavigationMode: "memory",
+		ProjectRoots:       []string{"/tmp", "/tmp"},
 	})
 	if err != nil {
 		t.Fatalf("defaultDashboardConfig() error: %v", err)
@@ -75,6 +79,9 @@ func TestDefaultDashboardConfigOverrides(t *testing.T) {
 	if cfg.AttachBehavior != AttachBehaviorDetached {
 		t.Fatalf("AttachBehavior = %q", cfg.AttachBehavior)
 	}
+	if cfg.PaneNavigationMode != PaneNavigationMemory {
+		t.Fatalf("PaneNavigationMode = %q", cfg.PaneNavigationMode)
+	}
 	if !reflect.DeepEqual(cfg.ProjectRoots, []string{"/tmp"}) {
 		t.Fatalf("ProjectRoots = %#v", cfg.ProjectRoots)
 	}
@@ -89,6 +96,13 @@ func TestDefaultDashboardConfigInvalidPreviewMode(t *testing.T) {
 
 func TestDefaultDashboardConfigInvalidAttachBehavior(t *testing.T) {
 	_, err := defaultDashboardConfig(layout.DashboardConfig{AttachBehavior: "weird"})
+	if err == nil {
+		t.Fatalf("defaultDashboardConfig() expected error")
+	}
+}
+
+func TestDefaultDashboardConfigInvalidPaneNavigationMode(t *testing.T) {
+	_, err := defaultDashboardConfig(layout.DashboardConfig{PaneNavigationMode: "sideways"})
 	if err == nil {
 		t.Fatalf("defaultDashboardConfig() expected error")
 	}
