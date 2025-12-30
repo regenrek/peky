@@ -47,7 +47,7 @@ func TestDashboardActionKeys(t *testing.T) {
 	}
 
 	m.setState(StateDashboard)
-	m.updateDashboard(keyRune('b'))
+	m.updateDashboard(keyRune('z'))
 	if m.state != StateConfirmCloseProject {
 		t.Fatalf("expected confirm close project state")
 	}

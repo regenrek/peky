@@ -1,7 +1,10 @@
 package sessiond
 
 import (
+	"strings"
 	"time"
+
+	"github.com/regenrek/peakypanes/internal/native"
 )
 
 func (d *Daemon) acceptLoop() {
@@ -53,7 +56,19 @@ func (d *Daemon) eventLoop() {
 		return
 	}
 	for event := range d.manager.Events() {
-		d.broadcast(Event{Type: EventPaneUpdated, PaneID: event.PaneID})
+		eventType := event.Type
+		if eventType == 0 {
+			eventType = native.PaneEventUpdated
+		}
+		switch eventType {
+		case native.PaneEventToast:
+			if strings.TrimSpace(event.Toast) == "" {
+				continue
+			}
+			d.broadcast(Event{Type: EventToast, PaneID: event.PaneID, Toast: event.Toast, ToastKind: ToastSuccess})
+		default:
+			d.broadcast(Event{Type: EventPaneUpdated, PaneID: event.PaneID})
+		}
 	}
 }
 

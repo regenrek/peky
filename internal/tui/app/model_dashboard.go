@@ -25,6 +25,9 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 	m.applyTogglePanes(msg)
+	if cmd, handled := m.handleSidebarToggle(msg); handled {
+		return m, cmd
+	}
 	if cmd, handled := m.handleDashboardActions(msg); handled {
 		return m, cmd
 	}
@@ -156,6 +159,14 @@ func (m *Model) applyTogglePanes(msg tea.KeyMsg) {
 	if key.Matches(msg, m.keys.togglePanes) {
 		m.togglePanes()
 	}
+}
+
+func (m *Model) handleSidebarToggle(msg tea.KeyMsg) (tea.Cmd, bool) {
+	if !key.Matches(msg, m.keys.toggleSidebar) {
+		return nil, false
+	}
+	m.toggleSidebar()
+	return nil, true
 }
 
 func (m *Model) handleDashboardActions(msg tea.KeyMsg) (tea.Cmd, bool) {

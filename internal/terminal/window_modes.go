@@ -26,6 +26,18 @@ func (w *Window) CopyModeActive() bool {
 	return w.CopyMode != nil && w.CopyMode.Active
 }
 
+func (w *Window) CopySelectionActive() bool {
+	w.stateMu.Lock()
+	defer w.stateMu.Unlock()
+	return w.CopyMode != nil && w.CopyMode.Active && w.CopyMode.Selecting
+}
+
+func (w *Window) CopySelectionFromMouseActive() bool {
+	w.stateMu.Lock()
+	defer w.stateMu.Unlock()
+	return w.CopyMode != nil && w.CopyMode.Active && w.CopyMode.Selecting && w.mouseSelection
+}
+
 func (w *Window) ScrollbackModeActive() bool {
 	w.stateMu.Lock()
 	defer w.stateMu.Unlock()
@@ -261,6 +273,7 @@ func (w *Window) EnterCopyMode() {
 	cm.SelEndX, cm.SelEndAbsY = cm.CursorX, cm.CursorAbsY
 
 	w.CopyMode = cm
+	w.mouseSelection = false
 	w.ensureCopyCursorVisibleLocked(sbLen)
 	w.stateMu.Unlock()
 
@@ -273,6 +286,7 @@ func (w *Window) ExitCopyMode() {
 	}
 	w.stateMu.Lock()
 	w.CopyMode = nil
+	w.mouseSelection = false
 	// Auto-exit scrollback mode if at live view.
 	if w.ScrollbackOffset == 0 {
 		w.ScrollbackMode = false
@@ -291,6 +305,7 @@ func (w *Window) CopyToggleSelect() {
 		w.stateMu.Unlock()
 		return
 	}
+	w.mouseSelection = false
 	if !cm.Selecting {
 		cm.Selecting = true
 		cm.SelStartX, cm.SelStartAbsY = cm.CursorX, cm.CursorAbsY

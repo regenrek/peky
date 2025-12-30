@@ -20,6 +20,8 @@ This format is based on Keep a Changelog.
 - Live pane rendering in the dashboard and project views for native sessions.
 - Terminal focus toggle for native panes (default `ctrl+\`, configurable).
 - Native mouse support in the dashboard: single-click selects panes, double-click toggles terminal focus, and motion forwarding is throttled to avoid CPU spikes.
+- Mouse wheel scrollback for native panes with shift/ctrl modifiers and drag-to-select copy mode in terminal focus.
+- Mouse drag selection now auto-copies to the clipboard and shows a success toast.
 - Project config change detection to refresh selection without reopening projects.
 - Pane management actions: add pane (split), move pane to new window, swap panes, and close pane with a running-process confirmation.
 - Session-only jump keys (`alt+w` / `alt+s`) alongside the flat session/window navigation.
@@ -42,6 +44,8 @@ This format is based on Keep a Changelog.
 - Refactored command palette items for clarity.
 - Window rendering now supports scrollback viewports and copy-mode highlights for native panes.
 - Alternate screen panes no longer record scrollback history.
+- Normal-screen mouse wheel always scrolls host scrollback (app mouse reporting is ignored outside alt-screen).
+- Mouse motion forwarding now enables during drag selection even when the app isn't requesting motion events.
 - Default pane titles now compress path-like window names to readable repo-relative labels and de-duplicate duplicates.
 - Session env overrides are persisted and reapplied on restore; splits inherit session env.
 - State persistence is debounced and flushed on shutdown to reduce write amplification.
@@ -66,6 +70,7 @@ This format is based on Keep a Changelog.
 - Daemon transport now shuts down dead client links and client writes honor request deadlines to prevent refresh timeouts.
 - Client calls now guard against closed connections during daemon restarts.
 - Terminal focus footer hint now highlights only when active.
+- Mouse wheel scrolling no longer injects raw SGR mouse escape sequences into shells.
 
 ## 0.0.4 - 2025-12-25
 

@@ -13,7 +13,7 @@ import (
 func TestBuildDashboardKeyMapOverride(t *testing.T) {
 	cfg := layout.DashboardKeymapConfig{
 		ProjectLeft: []string{"ctrl+h"},
-		SessionUp:   []string{"ctrl+k"},
+		SessionUp:   []string{"ctrl+j"},
 	}
 	km, err := buildDashboardKeyMap(cfg)
 	if err != nil {
@@ -22,8 +22,8 @@ func TestBuildDashboardKeyMapOverride(t *testing.T) {
 	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlH}, km.projectLeft) {
 		t.Error("projectLeft binding should match ctrl+h")
 	}
-	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlK}, km.sessionUp) {
-		t.Error("sessionUp binding should match ctrl+k")
+	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlJ}, km.sessionUp) {
+		t.Error("sessionUp binding should match ctrl+j")
 	}
 }
 

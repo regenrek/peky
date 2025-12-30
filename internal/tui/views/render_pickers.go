@@ -97,6 +97,7 @@ func (m Model) viewHelp() string {
 	left.WriteString("\nProject\n")
 	left.WriteString(fmt.Sprintf("  %s Open project picker\n", m.Keys.OpenProject))
 	left.WriteString(fmt.Sprintf("  %s Close project\n", m.Keys.CloseProject))
+	left.WriteString(fmt.Sprintf("  %s Toggle sidebar\n", m.Keys.ToggleSidebar))
 	left.WriteString("\nSession\n")
 	left.WriteString("  enter Attach/start session (when reply empty)\n")
 	left.WriteString(fmt.Sprintf("  %s New session (pick layout)\n", m.Keys.NewSession))
@@ -108,6 +109,8 @@ func (m Model) viewHelp() string {
 	left.WriteString(fmt.Sprintf("  %s Toggle terminal focus (Peaky Panes sessions)\n", m.Keys.TerminalFocus))
 	left.WriteString(fmt.Sprintf("  %s Scrollback mode (Peaky Panes sessions)\n", m.Keys.Scrollback))
 	left.WriteString(fmt.Sprintf("  %s Copy mode (Peaky Panes sessions)\n", m.Keys.CopyMode))
+	left.WriteString("  mouse Wheel scrollback (shift=1, ctrl=page)\n")
+	left.WriteString("  mouse Drag select (terminal focus)\n")
 	left.WriteString("  type  Send input to focused pane\n")
 
 	var right strings.Builder

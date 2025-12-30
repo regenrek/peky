@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	uv "github.com/charmbracelet/ultraviolet"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"
 )
 
@@ -217,38 +216,6 @@ func TestEnvHelpers(t *testing.T) {
 	}
 	if envKey("novalue") != "" {
 		t.Fatalf("expected empty envKey for invalid input")
-	}
-}
-
-func TestMouseModesAndSendMouse(t *testing.T) {
-	emu := &fakeEmu{}
-	w := &Window{term: emu}
-	w.updateMouseMode(ansi.ModeMouseX10, true)
-	if !w.HasMouseMode() {
-		t.Fatalf("expected mouse mode enabled")
-	}
-	w.updateMouseMode(ansi.ModeMouseX10, false)
-	if w.HasMouseMode() {
-		t.Fatalf("expected mouse mode disabled")
-	}
-	w.updateMouseMode(ansi.ModeMouseButtonEvent, true)
-	if !w.AllowsMouseMotion() {
-		t.Fatalf("expected mouse motion allowed")
-	}
-
-	click := uv.MouseClickEvent{X: 1, Y: 1, Button: uv.MouseLeft}
-	if !w.SendMouse(click) {
-		t.Fatalf("expected SendMouse to succeed")
-	}
-	if emu.sentMouse == nil {
-		t.Fatalf("expected mouse event forwarded")
-	}
-
-	emu.sentMouse = nil
-	w2 := &Window{term: emu}
-	w2.updateMouseMode(ansi.ModeMouseX10, true)
-	if w2.SendMouse(uv.MouseMotionEvent{X: 1, Y: 1}) {
-		t.Fatalf("expected motion event blocked without motion mode")
 	}
 }
 

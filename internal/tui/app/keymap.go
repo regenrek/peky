@@ -107,6 +107,13 @@ func buildDashboardKeyMap(cfg layout.DashboardKeymapConfig) (*dashboardKeyMap, e
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.togglePanes = b },
 		},
 		{
+			name:     "toggle_sidebar",
+			desc:     "sidebar",
+			defaults: []string{"ctrl+b"},
+			override: cfg.ToggleSidebar,
+			assign:   func(m *dashboardKeyMap, b key.Binding) { m.toggleSidebar = b },
+		},
+		{
 			name:     "open_project",
 			desc:     "open project",
 			defaults: []string{"ctrl+o"},
@@ -144,7 +151,7 @@ func buildDashboardKeyMap(cfg layout.DashboardKeymapConfig) (*dashboardKeyMap, e
 		{
 			name:     "close_project",
 			desc:     "close project",
-			defaults: []string{"ctrl+b"},
+			defaults: []string{"alt+c"},
 			override: cfg.CloseProject,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.closeProject = b },
 		},

@@ -35,6 +35,9 @@ func TestDefaultDashboardConfigDefaults(t *testing.T) {
 	if cfg.PreviewMode != "grid" {
 		t.Fatalf("PreviewMode = %q", cfg.PreviewMode)
 	}
+	if cfg.SidebarHidden {
+		t.Fatalf("SidebarHidden = %v", cfg.SidebarHidden)
+	}
 	if cfg.AttachBehavior != AttachBehaviorCurrent {
 		t.Fatalf("AttachBehavior = %q", cfg.AttachBehavior)
 	}
@@ -45,12 +48,14 @@ func TestDefaultDashboardConfigDefaults(t *testing.T) {
 
 func TestDefaultDashboardConfigOverrides(t *testing.T) {
 	compact := false
+	sidebarHidden := true
 	cfg, err := defaultDashboardConfig(layout.DashboardConfig{
 		RefreshMS:      500,
 		PreviewLines:   5,
 		IdleSeconds:    3,
 		PreviewCompact: &compact,
 		PreviewMode:    "layout",
+		Sidebar:        layout.DashboardSidebarConfig{Hidden: &sidebarHidden},
 		AttachBehavior: "detached",
 		ProjectRoots:   []string{"/tmp", "/tmp"},
 	})
@@ -71,6 +76,9 @@ func TestDefaultDashboardConfigOverrides(t *testing.T) {
 	}
 	if cfg.PreviewMode != "layout" {
 		t.Fatalf("PreviewMode = %q", cfg.PreviewMode)
+	}
+	if !cfg.SidebarHidden {
+		t.Fatalf("SidebarHidden = %v", cfg.SidebarHidden)
 	}
 	if cfg.AttachBehavior != AttachBehaviorDetached {
 		t.Fatalf("AttachBehavior = %q", cfg.AttachBehavior)

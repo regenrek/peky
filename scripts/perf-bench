@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+OUT="$ROOT/.bench"
+mkdir -p "$OUT"
+
+STAMP="$(date +%Y%m%d-%H%M%S)"
+OUTFILE="$OUT/bench-$STAMP.txt"
+
+{
+  echo "# peakypanes benchmarks"
+  echo "# date: $STAMP"
+  echo "# go: $(go version)"
+  echo "# root: $ROOT"
+  echo
+} | tee "$OUTFILE"
+
+GOFLAGS="${GOFLAGS:-}"
+
+{
+  echo "## internal/terminal"
+  go test ./internal/terminal -run=^$ -bench=BenchmarkWindowRender -benchmem -count=5 -benchtime=1s
+  echo
+  echo "## internal/sessiond"
+  go test ./internal/sessiond -run=^$ -bench=BenchmarkPaneViewResponse -benchmem -count=5 -benchtime=1s
+} | tee -a "$OUTFILE"
+
+echo
+
+echo "Saved benchmark output to: $OUTFILE"

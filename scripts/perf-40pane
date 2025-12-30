@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+OUT="$ROOT/.bench/perf-40"
+mkdir -p "$OUT"
+
+GRID_ROWS="${GRID_ROWS:-5}"
+GRID_COLS="${GRID_COLS:-8}"
+RATE_MS="${RATE_MS:-50}"
+
+if ! [[ "$GRID_ROWS" =~ ^[0-9]+$ ]] || ! [[ "$GRID_COLS" =~ ^[0-9]+$ ]] || ! [[ "$RATE_MS" =~ ^[0-9]+$ ]]; then
+  echo "GRID_ROWS, GRID_COLS, and RATE_MS must be positive integers." >&2
+  exit 1
+fi
+if [ "$GRID_ROWS" -lt 1 ] || [ "$GRID_COLS" -lt 1 ] || [ "$RATE_MS" -lt 1 ]; then
+  echo "GRID_ROWS, GRID_COLS, and RATE_MS must be >= 1." >&2
+  exit 1
+fi
+
+GRID="${GRID_ROWS}x${GRID_COLS}"
+RATE_S="$(awk "BEGIN { printf \"%.3f\", ${RATE_MS}/1000 }")"
+ANSI_HEAVY="${ANSI_HEAVY:-0}"
+
+CMD='bash -lc '\''i=0; while true; do printf "%s %06d\n" "${PEAKYPANES_PANE_ID:-}" "$i"; i=$((i+1)); sleep '"${RATE_S}"'; done'\'''
+if [ "${ANSI_HEAVY}" = "1" ]; then
+  CMD='bash -lc '\''i=0; while true; do r=$((i%256)); g=$(((i*37)%256)); b=$(((i*91)%256)); printf "\033[38;2;%d;%d;%dm%s %06d\033[0m\n" "$r" "$g" "$b" "${PEAKYPANES_PANE_ID:-}" "$i"; i=$((i+1)); sleep '"${RATE_S}"'; done'\'''
+fi
+
+CONFIG="$OUT/.peakypanes.yml"
+PERF_GRID="$GRID" PERF_CMD="$CMD" PERF_CONFIG="$CONFIG" python - <<'PY'
+import json
+import os
+
+grid = os.environ["PERF_GRID"]
+cmd = os.environ["PERF_CMD"]
+config = os.environ["PERF_CONFIG"]
+escaped = json.dumps(cmd)[1:-1]
+with open(config, "w", encoding="utf-8") as f:
+    f.write("session: perf-40\\n")
+    f.write("layout:\\n")
+    f.write(f"  grid: {grid}\\n")
+    f.write(f"  command: \"{escaped}\"\\n")
+PY
+
+cat <<EOF2
+Wrote: $CONFIG
+
+Next steps:
+  peakypanes start --path $OUT
+
+Notes:
+  - This runs ${GRID_ROWS}x${GRID_COLS} panes with ~${RATE_MS}ms output cadence.
+  - Stop by closing the UI or killing the peakypanes process.
+EOF2

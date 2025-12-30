@@ -20,6 +20,7 @@ type Model struct {
 	DashboardSelectedProject string
 	SidebarProject           *Project
 	SidebarSessions          []Session
+	SidebarHidden            bool
 	PreviewSession           *Session
 	SelectionProject         string
 	SelectionSession         string
@@ -104,6 +105,7 @@ type KeyHints struct {
 	NewSession      string
 	KillSession     string
 	TogglePanes     string
+	ToggleSidebar   string
 	TerminalFocus   string
 	Scrollback      string
 	CopyMode        string

@@ -76,6 +76,11 @@ type AgentDetectionConfig struct {
 	Claude *bool `yaml:"claude,omitempty"`
 }
 
+// DashboardSidebarConfig configures the dashboard sidebar.
+type DashboardSidebarConfig struct {
+	Hidden *bool `yaml:"hidden,omitempty"`
+}
+
 // DashboardKeymapConfig defines dashboard key bindings.
 type DashboardKeymapConfig struct {
 	ProjectLeft     []string `yaml:"project_left,omitempty"`
@@ -90,6 +95,7 @@ type DashboardKeymapConfig struct {
 	NewSession      []string `yaml:"new_session,omitempty"`
 	TerminalFocus   []string `yaml:"terminal_focus,omitempty"`
 	TogglePanes     []string `yaml:"toggle_panes,omitempty"`
+	ToggleSidebar   []string `yaml:"toggle_sidebar,omitempty"`
 	OpenProject     []string `yaml:"open_project,omitempty"`
 	CommandPalette  []string `yaml:"command_palette,omitempty"`
 	Refresh         []string `yaml:"refresh,omitempty"`
@@ -111,17 +117,18 @@ type HiddenProjectConfig struct {
 
 // DashboardConfig configures the Peaky Panes dashboard UI.
 type DashboardConfig struct {
-	RefreshMS      int                   `yaml:"refresh_ms,omitempty"`
-	PreviewLines   int                   `yaml:"preview_lines,omitempty"`
-	PreviewCompact *bool                 `yaml:"preview_compact,omitempty"`
-	IdleSeconds    int                   `yaml:"idle_seconds,omitempty"`
-	StatusRegex    StatusRegexConfig     `yaml:"status_regex,omitempty"`
-	PreviewMode    string                `yaml:"preview_mode,omitempty"` // grid | layout
-	ProjectRoots   []string              `yaml:"project_roots,omitempty"`
-	AgentDetection AgentDetectionConfig  `yaml:"agent_detection,omitempty"`
-	AttachBehavior string                `yaml:"attach_behavior,omitempty"` // current | detached
-	HiddenProjects []HiddenProjectConfig `yaml:"hidden_projects,omitempty"`
-	Keymap         DashboardKeymapConfig `yaml:"keymap,omitempty"`
+	RefreshMS      int                    `yaml:"refresh_ms,omitempty"`
+	PreviewLines   int                    `yaml:"preview_lines,omitempty"`
+	PreviewCompact *bool                  `yaml:"preview_compact,omitempty"`
+	IdleSeconds    int                    `yaml:"idle_seconds,omitempty"`
+	StatusRegex    StatusRegexConfig      `yaml:"status_regex,omitempty"`
+	PreviewMode    string                 `yaml:"preview_mode,omitempty"` // grid | layout
+	Sidebar        DashboardSidebarConfig `yaml:"sidebar,omitempty"`
+	ProjectRoots   []string               `yaml:"project_roots,omitempty"`
+	AgentDetection AgentDetectionConfig   `yaml:"agent_detection,omitempty"`
+	AttachBehavior string                 `yaml:"attach_behavior,omitempty"` // current | detached
+	HiddenProjects []HiddenProjectConfig  `yaml:"hidden_projects,omitempty"`
+	Keymap         DashboardKeymapConfig  `yaml:"keymap,omitempty"`
 }
 
 // ZellijSection holds zellij-specific config.
@@ -147,12 +154,18 @@ type Config struct {
 	Dashboard  DashboardConfig          `yaml:"dashboard,omitempty"`
 }
 
+// ProjectDashboardConfig configures dashboard overrides in .peakypanes.yml.
+type ProjectDashboardConfig struct {
+	Sidebar DashboardSidebarConfig `yaml:"sidebar,omitempty"`
+}
+
 // ProjectLocalConfig is the schema for .peakypanes.yml in project directories.
 type ProjectLocalConfig struct {
-	Session string            `yaml:"session,omitempty"`
-	Layout  *LayoutConfig     `yaml:"layout,omitempty"`
-	Vars    map[string]string `yaml:"vars,omitempty"`
-	Tools   ToolsConfig       `yaml:"tools,omitempty"`
+	Session   string                 `yaml:"session,omitempty"`
+	Layout    *LayoutConfig          `yaml:"layout,omitempty"`
+	Vars      map[string]string      `yaml:"vars,omitempty"`
+	Tools     ToolsConfig            `yaml:"tools,omitempty"`
+	Dashboard ProjectDashboardConfig `yaml:"dashboard,omitempty"`
 }
 
 // LoadConfig reads and parses a YAML config file.

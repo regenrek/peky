@@ -60,6 +60,9 @@ type Options struct {
 
 	Cols int
 	Rows int
+
+	// OnToast is called for terminal-originated toast messages.
+	OnToast func(message string)
 }
 
 // Window is a single interactive terminal pane:
@@ -108,6 +111,14 @@ type Window struct {
 	CopyMode *CopyMode
 	// ScrollbackOffset is how many lines "up" from live view we are (0 == live).
 	ScrollbackOffset int
+
+	// Mouse selection drag state (guarded by stateMu).
+	mouseSelectActive      bool
+	mouseSelectStartedCopy bool
+	mouseSelectMoved       bool
+	mouseSelection         bool
+
+	toastFn func(string)
 
 	lastUpdate atomic.Int64 // unix nanos
 }
@@ -191,6 +202,7 @@ func NewWindow(opts Options) (*Window, error) {
 		renderCh:   make(chan struct{}, 1),
 		cancel:     cancel,
 		cacheDirty: true,
+		toastFn:    opts.OnToast,
 	}
 	w.title.Store(opts.Title)
 	w.cursorVisible.Store(true)
@@ -440,6 +452,16 @@ func (w *Window) markDirty() {
 	case w.updates <- struct{}{}:
 	default:
 	}
+}
+
+func (w *Window) notifyToast(message string) {
+	if w == nil || strings.TrimSpace(message) == "" {
+		return
+	}
+	if w.toastFn == nil {
+		return
+	}
+	w.toastFn(message)
 }
 
 // detectShell is a conservative default. In PeakyPanes, panes often run a command;

@@ -100,6 +100,21 @@ func TestPaneViewQueueing(t *testing.T) {
 	}
 }
 
+func TestHandleDaemonEventToast(t *testing.T) {
+	m := newTestModelLite()
+	_ = m.handleDaemonEvent(daemonEventMsg{Event: sessiond.Event{
+		Type:      sessiond.EventToast,
+		Toast:     "Copied to clipboard",
+		ToastKind: sessiond.ToastSuccess,
+	}})
+	if m.toast.Text == "" {
+		t.Fatalf("expected toast message set")
+	}
+	if m.toast.Level != toastSuccess {
+		t.Fatalf("expected success toast level, got %v", m.toast.Level)
+	}
+}
+
 func TestRefreshQueueing(t *testing.T) {
 	m := newTestModelLite()
 	m.refreshInFlight = 1

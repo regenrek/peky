@@ -19,6 +19,7 @@ func selectionFromMouse(sel mouse.Selection) selectionState {
 }
 
 func (m *Model) updateDashboardMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	m.updateTerminalMouseDrag(msg)
 	cmd := m.mouse.UpdateDashboard(msg, mouse.DashboardCallbacks{
 		HitHeader:             m.hitTestHeader,
 		HitPane:               m.hitTestPane,
@@ -53,9 +54,12 @@ func (m *Model) allowMouseMotion() bool {
 	}
 	pane := m.selectedPane()
 	if pane == nil || strings.TrimSpace(pane.ID) == "" {
-		return false
+		return m.terminalMouseDrag
 	}
-	return m.paneMouseMotion[pane.ID]
+	if m.paneMouseMotion[pane.ID] {
+		return true
+	}
+	return m.terminalMouseDrag
 }
 
 func (m *Model) applySelectionFromHit(sel mouse.Selection) bool {
@@ -109,7 +113,7 @@ func (m *Model) forwardMouseEvent(hit mouse.PaneHit, msg tea.MouseMsg) tea.Cmd {
 	if !ok {
 		return nil
 	}
-	if payload.Action == sessiond.MouseActionMotion && !m.paneMouseMotion[hit.PaneID] {
+	if payload.Action == sessiond.MouseActionMotion && !m.paneMouseMotion[hit.PaneID] && !m.terminalMouseDrag {
 		return nil
 	}
 	paneID := hit.PaneID
@@ -121,6 +125,29 @@ func (m *Model) forwardMouseEvent(hit mouse.PaneHit, msg tea.MouseMsg) tea.Cmd {
 		}
 		return nil
 	}
+}
+
+func (m *Model) updateTerminalMouseDrag(msg tea.MouseMsg) {
+	if m == nil {
+		return
+	}
+	if msg.Action == tea.MouseActionRelease && msg.Button == tea.MouseButtonLeft {
+		m.terminalMouseDrag = false
+		return
+	}
+	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
+		return
+	}
+	if m.state != StateDashboard || !m.terminalFocus || !m.supportsTerminalFocus() {
+		m.terminalMouseDrag = false
+		return
+	}
+	hit, ok := m.hitTestPane(msg.X, msg.Y)
+	if !ok || !m.hitIsSelected(hit) || !hit.Content.Contains(msg.X, msg.Y) {
+		m.terminalMouseDrag = false
+		return
+	}
+	m.terminalMouseDrag = true
 }
 
 func mousePayloadFromTea(msg tea.MouseMsg, x, y int) (sessiond.MouseEventPayload, bool) {

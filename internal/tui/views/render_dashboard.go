@@ -89,6 +89,9 @@ func (m Model) viewBody(width, height int) string {
 
 func (m Model) viewProjectBody(width, height int) string {
 	base := width / 3
+	if m.SidebarHidden {
+		return m.viewPreview(width, height)
+	}
 	leftWidth := clamp(base-(width/30), 22, 36)
 	if leftWidth > width-10 {
 		leftWidth = width / 2

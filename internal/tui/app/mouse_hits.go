@@ -116,6 +116,23 @@ func (m *Model) projectPaneHits() []mouse.PaneHit {
 		return nil
 	}
 
+	if m.sidebarHidden(project) {
+		preview := mouse.Rect{
+			X: body.X,
+			Y: body.Y,
+			W: body.W,
+			H: body.H,
+		}
+		if preview.W <= 0 || preview.H <= 0 {
+			return nil
+		}
+		mode := m.settings.PreviewMode
+		if mode == "layout" {
+			return projectPaneLayoutHits(project, session, session.Panes, preview)
+		}
+		return projectPaneTileHits(project, session, session.Panes, preview)
+	}
+
 	base := body.W / 3
 	leftWidth := clamp(base-(body.W/30), 22, 36)
 	if leftWidth > body.W-10 {
