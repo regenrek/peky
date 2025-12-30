@@ -3,6 +3,16 @@
 
 package sessiond
 
-func (d *Daemon) startProfiler() {}
+func (d *Daemon) startProfiler() {
+	if d == nil {
+		return
+	}
+	_ = d.profileStop
+}
 
-func (d *Daemon) stopProfiler() {}
+func (d *Daemon) stopProfiler() {
+	if d == nil {
+		return
+	}
+	_ = d.profileStop
+}
