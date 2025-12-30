@@ -105,11 +105,11 @@ func TestKeyBindings(t *testing.T) {
 		t.Fatalf("buildDashboardKeyMap() error: %v", err)
 	}
 
-	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlA}, km.projectLeft) {
-		t.Error("projectLeft binding should match ctrl+a")
+	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlQ}, km.projectLeft) {
+		t.Error("projectLeft binding should match ctrl+q")
 	}
-	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlD}, km.projectRight) {
-		t.Error("projectRight binding should match ctrl+d")
+	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlE}, km.projectRight) {
+		t.Error("projectRight binding should match ctrl+e")
 	}
 	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlW}, km.sessionUp) {
 		t.Error("sessionUp binding should match ctrl+w")
@@ -123,8 +123,14 @@ func TestKeyBindings(t *testing.T) {
 	if !key.Matches(tea.KeyMsg{Type: tea.KeyTab}, km.paneNext) {
 		t.Error("paneNext binding should match Tab key")
 	}
+	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlD}, km.paneNext) {
+		t.Error("paneNext binding should match ctrl+d")
+	}
 	if !key.Matches(tea.KeyMsg{Type: tea.KeyShiftTab}, km.panePrev) {
 		t.Error("panePrev binding should match Shift+Tab key")
+	}
+	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlA}, km.panePrev) {
+		t.Error("panePrev binding should match ctrl+a")
 	}
 	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlU}, km.togglePanes) {
 		t.Error("togglePanes binding should match ctrl+u")

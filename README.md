@@ -253,10 +253,10 @@ The dashboard shows:
 - Projects on top (tabs)
 - Sessions on the left (with pane counts and expandable panes)
 - Live pane preview on the right (native panes are fully interactive)
-- Quick reply bar (always visible) and target pane highlight for follow-ups
+- Input bar (always visible) and target pane highlight for follow-ups
 
 Navigation (always visible):
-- `ctrl+a/ctrl+d` project, `ctrl+w/ctrl+s` session/panes, `alt+w/alt+s` session only, `tab/⇧tab` pane, `ctrl+g` help
+- `ctrl+q/ctrl+e` project, `ctrl+w/ctrl+s` session/panes, `alt+w/alt+s` session only, `tab/⇧tab` or `ctrl+a/ctrl+d` pane, `ctrl+g` help
 
 Key bindings (also shown in the help view):
 Keymap overrides are available in the global config (`~/.config/peakypanes/config.yml`).
@@ -285,9 +285,9 @@ Pane
 
 Other
 - `ctrl+p` command palette
-- `ctrl+r` refresh, `ctrl+e` edit config, `ctrl+f` filter, `ctrl+c` quit
+- `ctrl+r` refresh, `ctrl+,` edit config, `ctrl+f` filter, `ctrl+c` quit
 
-Quick reply details: the input is always active—type and press `enter` to send to the highlighted pane. Use `esc` to clear. Toggle terminal focus to send raw keystrokes into the pane. Use scrollback (`f7`) to navigate output and copy mode (`f8`) to select/yank (`v` select, `y` yank, `esc/q` exit).
+Input details: the input is always active—type and press `enter` to send to the highlighted pane. Use `esc` to clear. Toggle terminal focus to send raw keystrokes into the pane. Use scrollback (`f7`) to navigate output and copy mode (`f8`) to select/yank (`v` select, `y` yank, `esc/q` exit).
 
 ### Dashboard Config (optional)
 
@@ -300,19 +300,20 @@ dashboard:
   preview_mode: grid  # grid | layout
   attach_behavior: current  # current | detached
   keymap:
-    project_left: ["ctrl+a"]
-    project_right: ["ctrl+d"]
+    project_left: ["ctrl+q"]
+    project_right: ["ctrl+e"]
     session_up: ["ctrl+w"]
     session_down: ["ctrl+s"]
     session_only_up: ["alt+w"]
     session_only_down: ["alt+s"]
-    pane_next: ["tab"]
-    pane_prev: ["shift+tab"]
+    pane_next: ["tab", "ctrl+d"]
+    pane_prev: ["shift+tab", "ctrl+a"]
     terminal_focus: ["ctrl+\\"]
     scrollback: ["f7"]
     copy_mode: ["f8"]
     toggle_panes: ["ctrl+u"]
     command_palette: ["ctrl+p"]
+    edit_config: ["ctrl+,"]
     help: ["ctrl+g"]
     quit: ["ctrl+c"]
   status_regex:

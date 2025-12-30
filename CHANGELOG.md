@@ -24,6 +24,7 @@ This format is based on Keep a Changelog.
 - Command palette actions now render from the shared registry.
 - Quick reply help/hints now surface slash commands and history.
 - Quick reply bar now opens the command palette on `/`, with a cleaner input-only label and updated placeholder copy.
+- Dashboard keymap defaults now use `ctrl+q/ctrl+e` for project nav, `ctrl+a/ctrl+d` for pane nav, and `ctrl+,` for edit config.
 
 ### Removed
 
