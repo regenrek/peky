@@ -553,6 +553,8 @@ if [[ -f "$daemon_log" ]]; then
   awk '
   function dur_ms(s) {
     if (s == "" || s == "-") { return "" }
+    if (s ~ /µs$/) { sub(/µs$/, "", s); return (s + 0) / 1000 }
+    if (s ~ /us$/) { sub(/us$/, "", s); return (s + 0) / 1000 }
     if (s ~ /ms$/) { sub(/ms$/, "", s); return s + 0 }
     if (s ~ /s$/) { sub(/s$/, "", s); return (s + 0) * 1000 }
     return s + 0
