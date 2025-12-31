@@ -46,7 +46,31 @@ func applyShorthand(specDoc *spec.Spec, args []string) []string {
 		return args
 	}
 	if len(args) == 2 && !strings.HasPrefix(args[1], "-") {
+		if isTopLevelCommand(specDoc, args[1]) {
+			return args
+		}
 		return []string{args[0], "start", "--layout", args[1]}
 	}
 	return args
+}
+
+func isTopLevelCommand(specDoc *spec.Spec, value string) bool {
+	if specDoc == nil {
+		return false
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	for _, cmd := range specDoc.Commands {
+		if strings.EqualFold(cmd.Name, value) {
+			return true
+		}
+		for _, alias := range cmd.Aliases {
+			if strings.EqualFold(alias, value) {
+				return true
+			}
+		}
+	}
+	return false
 }

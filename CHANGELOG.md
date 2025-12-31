@@ -16,6 +16,9 @@ This format is based on Keep a Changelog.
 - CLI now runs entirely on `urfave/cli/v3` with spec-driven help and slash command shortcuts.
 - TUI quick-reply slash commands are derived from the CLI spec for single-source-of-truth behavior.
 
+### Fixed
+- Layout shorthand no longer overrides explicit top-level commands like `daemon`.
+
 ## 0.0.8 - 2025-12-31
 
 ### Fixed
