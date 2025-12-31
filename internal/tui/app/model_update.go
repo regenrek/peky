@@ -209,6 +209,17 @@ func (m *Model) handleSelectionRefresh(msg selectionRefreshMsg) tea.Cmd {
 func (m *Model) handleDashboardSnapshot(msg dashboardSnapshotMsg) tea.Cmd {
 	m.endRefresh()
 	diag.LogEvery("tui.snapshot.recv", 2*time.Second, "tui: snapshot recv seq=%d err=%v in_flight=%d", msg.Result.RefreshSeq, msg.Result.Err, m.refreshInFlight)
+	if perfDebugEnabled() && msg.Result.RefreshSeq != 0 {
+		if m.refreshStarted != nil {
+			if started, ok := m.refreshStarted[msg.Result.RefreshSeq]; ok {
+				delete(m.refreshStarted, msg.Result.RefreshSeq)
+				dur := time.Since(started)
+				if dur > perfSlowRefreshTotal {
+					logPerfEvery("tui.refresh.total", perfLogInterval, "tui: refresh slow seq=%d dur=%s err=%v", msg.Result.RefreshSeq, dur, msg.Result.Err)
+				}
+			}
+		}
+	}
 	if msg.Result.RefreshSeq > 0 && msg.Result.RefreshSeq < m.refreshSeq {
 		if m.refreshQueued {
 			m.refreshQueued = false
@@ -397,6 +408,15 @@ func (m *Model) applyPaneView(view sessiond.PaneViewResponse) {
 	}
 	if view.PaneID != "" {
 		m.paneMouseMotion[view.PaneID] = view.AllowMotion
+	}
+	if perfDebugEnabled() && view.PaneID != "" && view.View != "" {
+		if m.paneViewFirst == nil {
+			m.paneViewFirst = make(map[string]struct{})
+		}
+		if _, ok := m.paneViewFirst[view.PaneID]; !ok {
+			m.paneViewFirst[view.PaneID] = struct{}{}
+			logPerfEvery("tui.paneview.first."+view.PaneID, 0, "tui: pane view first pane=%s mode=%v cols=%d rows=%d", view.PaneID, view.Mode, view.Cols, view.Rows)
+		}
 	}
 }
 

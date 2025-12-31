@@ -71,6 +71,8 @@ type Window struct {
 	id    string
 	title atomic.Value // string
 
+	createdAt time.Time
+
 	cmd *exec.Cmd
 	pty xpty.Pty
 
@@ -129,6 +131,11 @@ type Window struct {
 	lastUpdate atomic.Int64 // unix nanos
 
 	updateSeq atomic.Uint64
+
+	firstReadAt           atomic.Int64
+	firstWriteAt          atomic.Int64
+	firstReadAfterWriteAt atomic.Int64
+	lastWriteAt           atomic.Int64
 }
 
 // NewWindow starts a new process attached to a PTY and backed by a VT emulator.
@@ -206,6 +213,7 @@ func NewWindow(opts Options) (*Window, error) {
 		term:       term,
 		cols:       cols,
 		rows:       rows,
+		createdAt:  time.Now(),
 		updates:    make(chan struct{}, 1),
 		renderCh:   make(chan struct{}, 1),
 		cancel:     cancel,
@@ -380,6 +388,41 @@ func (w *Window) Rows() int { return w.rows }
 // Updates returns a coalesced signal channel.
 // Read from this in Bubble Tea to know when to re-render.
 func (w *Window) Updates() <-chan struct{} { return w.updates }
+
+func (w *Window) CreatedAt() time.Time {
+	if w == nil {
+		return time.Time{}
+	}
+	return w.createdAt
+}
+
+func (w *Window) FirstReadAt() time.Time {
+	if w == nil {
+		return time.Time{}
+	}
+	return timeFromUnixNano(w.firstReadAt.Load())
+}
+
+func (w *Window) FirstWriteAt() time.Time {
+	if w == nil {
+		return time.Time{}
+	}
+	return timeFromUnixNano(w.firstWriteAt.Load())
+}
+
+func (w *Window) FirstReadAfterWriteAt() time.Time {
+	if w == nil {
+		return time.Time{}
+	}
+	return timeFromUnixNano(w.firstReadAfterWriteAt.Load())
+}
+
+func timeFromUnixNano(value int64) time.Time {
+	if value == 0 {
+		return time.Time{}
+	}
+	return time.Unix(0, value)
+}
 
 // Close shuts down goroutines and releases PTY/VT resources.
 func (w *Window) Close() error {

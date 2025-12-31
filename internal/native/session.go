@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -170,6 +171,9 @@ func (m *Manager) StartSession(ctx context.Context, spec SessionSpec) (*Session,
 		return nil, err
 	}
 	session.Panes = panes
+	if perfDebugEnabled() {
+		log.Printf("native: session %s panes=%d layout=%s", session.Name, len(panes), session.LayoutName)
+	}
 
 	m.mu.Lock()
 	if _, ok := m.sessions[session.Name]; ok {
@@ -192,6 +196,8 @@ func (m *Manager) StartSession(ctx context.Context, spec SessionSpec) (*Session,
 		m.notifyPane(pane.ID)
 	}
 	m.version.Add(1)
+
+	m.dispatchLayoutSends(session, spec.Layout)
 
 	return session, nil
 }

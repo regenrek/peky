@@ -313,6 +313,9 @@ func hiddenProjectKeySet(entries []layout.HiddenProjectConfig) map[string]struct
 }
 
 func loadConfig(path string) (*layout.Config, error) {
+	if strings.TrimSpace(path) == "" {
+		return &layout.Config{}, nil
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {

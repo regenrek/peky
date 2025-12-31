@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/regenrek/peakypanes/internal/runenv"
 )
 
 const (
@@ -51,6 +53,12 @@ func DefaultLogPath() (string, error) {
 }
 
 func runtimeDir() (string, error) {
+	if override := runenv.RuntimeDir(); override != "" {
+		if err := os.MkdirAll(override, 0o755); err != nil {
+			return "", fmt.Errorf("create runtime dir: %w", err)
+		}
+		return override, nil
+	}
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("resolve config dir: %w", err)

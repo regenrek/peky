@@ -44,6 +44,9 @@ type Manager struct {
 	previewMu     sync.Mutex
 	previewCache  map[string]previewState
 	previewCursor int
+
+	perfMu     sync.Mutex
+	perfLogged map[string]uint8
 }
 
 // NewManager creates a new native session manager.
@@ -125,8 +128,9 @@ func (m *Manager) markActive(id string) {
 		return
 	}
 	var seq uint64
+	var pane *Pane
 	m.mu.Lock()
-	pane := m.panes[id]
+	pane = m.panes[id]
 	if pane != nil {
 		pane.LastActive = time.Now()
 		if pane.window != nil {
@@ -134,6 +138,9 @@ func (m *Manager) markActive(id string) {
 		}
 	}
 	m.mu.Unlock()
+	if pane != nil {
+		m.logPanePerf(pane)
+	}
 	m.notify(id, seq)
 }
 

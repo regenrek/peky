@@ -52,3 +52,10 @@ func TestLoadConfigMissing(t *testing.T) {
 		t.Fatalf("expected empty config, err=%v", err)
 	}
 }
+
+func TestLoadConfigEmptyPath(t *testing.T) {
+	cfg, err := loadConfig(" ")
+	if err != nil || cfg == nil {
+		t.Fatalf("expected empty config for empty path, err=%v", err)
+	}
+}

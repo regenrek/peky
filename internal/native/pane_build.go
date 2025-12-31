@@ -40,6 +40,7 @@ func (m *Manager) buildGridPanes(ctx context.Context, path string, layoutCfg *la
 	}
 	commands := layout.ResolveGridCommands(layoutCfg, grid.Panes())
 	titles := layout.ResolveGridTitles(layoutCfg, grid.Panes())
+	paneDefs := layoutCfg.Panes
 
 	cellW := LayoutBaseSize / grid.Columns
 	cellH := LayoutBaseSize / grid.Rows
@@ -51,12 +52,21 @@ func (m *Manager) buildGridPanes(ctx context.Context, path string, layoutCfg *la
 		for c := 0; c < grid.Columns; c++ {
 			idx := r*grid.Columns + c
 			title := ""
+			cmd := ""
 			if idx < len(titles) {
 				title = titles[idx]
 			}
-			cmd := ""
 			if idx < len(commands) {
 				cmd = commands[idx]
+			}
+			if idx < len(paneDefs) {
+				paneDef := paneDefs[idx]
+				if strings.TrimSpace(paneDef.Title) != "" {
+					title = paneDef.Title
+				}
+				if strings.TrimSpace(paneDef.Cmd) != "" {
+					cmd = paneDef.Cmd
+				}
 			}
 			left := c * cellW
 			top := r * cellH

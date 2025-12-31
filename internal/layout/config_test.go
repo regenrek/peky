@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/regenrek/peakypanes/internal/runenv"
 )
 
 func TestExpandVars(t *testing.T) {
@@ -38,6 +40,7 @@ func TestExpandVars(t *testing.T) {
 }
 
 func TestExpandLayoutVars(t *testing.T) {
+	submitDelay := 150
 	layout := &LayoutConfig{
 		Name: "demo",
 		Vars: map[string]string{
@@ -52,8 +55,9 @@ func TestExpandLayoutVars(t *testing.T) {
 		},
 		Titles: []string{"${PROJECT_PATH}"},
 		Panes: []PaneDef{
-			{Title: "${BAR}", Cmd: "${EXTRA}", Setup: []string{"${FOO}"}},
+			{Title: "${BAR}", Cmd: "${EXTRA}", Setup: []string{"${FOO}"}, DirectSend: []SendAction{{Text: "${FOO} ${PROJECT_NAME}", Submit: true, SubmitDelayMS: &submitDelay}}},
 		},
+		BroadcastSend: []SendAction{{Text: "${BAR} ${PROJECT_PATH}", Submit: true}},
 	}
 
 	extra := map[string]string{
@@ -91,6 +95,18 @@ func TestExpandLayoutVars(t *testing.T) {
 	}
 	if !reflect.DeepEqual(expanded.Panes[0].Setup, []string{"override"}) {
 		t.Fatalf("expanded.Panes[0].Setup = %#v", expanded.Panes[0].Setup)
+	}
+	if len(expanded.Panes[0].DirectSend) != 1 || expanded.Panes[0].DirectSend[0].Text != "override myapp" {
+		t.Fatalf("expanded.Panes[0].DirectSend = %#v", expanded.Panes[0].DirectSend)
+	}
+	if !expanded.Panes[0].DirectSend[0].Submit || expanded.Panes[0].DirectSend[0].SubmitDelayMS == nil || *expanded.Panes[0].DirectSend[0].SubmitDelayMS != submitDelay {
+		t.Fatalf("expanded.Panes[0].DirectSend submit = %#v", expanded.Panes[0].DirectSend[0])
+	}
+	if len(expanded.BroadcastSend) != 1 || expanded.BroadcastSend[0].Text != "two /work/app" {
+		t.Fatalf("expanded.BroadcastSend = %#v", expanded.BroadcastSend)
+	}
+	if !expanded.BroadcastSend[0].Submit {
+		t.Fatalf("expanded.BroadcastSend submit = %#v", expanded.BroadcastSend[0])
 	}
 }
 
@@ -190,6 +206,8 @@ func TestLoadLayoutFile(t *testing.T) {
 func TestDefaultPaths(t *testing.T) {
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
+	t.Setenv(runenv.ConfigDirEnv, "")
+	t.Setenv(runenv.FreshConfigEnv, "")
 
 	cfgPath, err := DefaultConfigPath()
 	if err != nil {
@@ -205,6 +223,40 @@ func TestDefaultPaths(t *testing.T) {
 	}
 	if layoutsDir != filepath.Join(tmpHome, ".config", "peakypanes", "layouts") {
 		t.Fatalf("DefaultLayoutsDir() = %q", layoutsDir)
+	}
+}
+
+func TestDefaultPathsConfigDirOverride(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(runenv.ConfigDirEnv, dir)
+	t.Setenv(runenv.FreshConfigEnv, "")
+
+	cfgPath, err := DefaultConfigPath()
+	if err != nil {
+		t.Fatalf("DefaultConfigPath() error: %v", err)
+	}
+	if cfgPath != filepath.Join(dir, "config.yml") {
+		t.Fatalf("DefaultConfigPath() = %q", cfgPath)
+	}
+
+	layoutsDir, err := DefaultLayoutsDir()
+	if err != nil {
+		t.Fatalf("DefaultLayoutsDir() error: %v", err)
+	}
+	if layoutsDir != filepath.Join(dir, "layouts") {
+		t.Fatalf("DefaultLayoutsDir() = %q", layoutsDir)
+	}
+}
+
+func TestDefaultConfigPathFreshConfig(t *testing.T) {
+	t.Setenv(runenv.FreshConfigEnv, "1")
+
+	cfgPath, err := DefaultConfigPath()
+	if err != nil {
+		t.Fatalf("DefaultConfigPath() error: %v", err)
+	}
+	if cfgPath != "" {
+		t.Fatalf("DefaultConfigPath() = %q", cfgPath)
 	}
 }
 

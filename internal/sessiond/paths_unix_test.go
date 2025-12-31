@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/regenrek/peakypanes/internal/runenv"
 )
 
 func TestDefaultPathsEnvOverride(t *testing.T) {
@@ -43,6 +45,7 @@ func TestDefaultPathsRuntimeDir(t *testing.T) {
 	t.Setenv(socketEnv, "")
 	t.Setenv(pidEnv, "")
 	t.Setenv(logEnv, "")
+	t.Setenv(runenv.RuntimeDirEnv, "")
 
 	socketPath, err := DefaultSocketPath()
 	if err != nil {
@@ -64,6 +67,37 @@ func TestDefaultPathsRuntimeDir(t *testing.T) {
 	runtimeDir := filepath.Join(configDir, "peakypanes")
 	if _, err := os.Stat(runtimeDir); err != nil {
 		t.Fatalf("expected runtime dir created: %v", err)
+	}
+
+	if socketPath != filepath.Join(runtimeDir, "daemon.sock") {
+		t.Fatalf("socketPath = %q", socketPath)
+	}
+	if pidPath != filepath.Join(runtimeDir, "daemon.pid") {
+		t.Fatalf("pidPath = %q", pidPath)
+	}
+	if logPath != filepath.Join(runtimeDir, "daemon.log") {
+		t.Fatalf("logPath = %q", logPath)
+	}
+}
+
+func TestDefaultPathsRuntimeDirOverride(t *testing.T) {
+	runtimeDir := t.TempDir()
+	t.Setenv(runenv.RuntimeDirEnv, runtimeDir)
+	t.Setenv(socketEnv, "")
+	t.Setenv(pidEnv, "")
+	t.Setenv(logEnv, "")
+
+	socketPath, err := DefaultSocketPath()
+	if err != nil {
+		t.Fatalf("DefaultSocketPath: %v", err)
+	}
+	pidPath, err := DefaultPidPath()
+	if err != nil {
+		t.Fatalf("DefaultPidPath: %v", err)
+	}
+	logPath, err := DefaultLogPath()
+	if err != nil {
+		t.Fatalf("DefaultLogPath: %v", err)
 	}
 
 	if socketPath != filepath.Join(runtimeDir, "daemon.sock") {

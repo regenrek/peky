@@ -28,12 +28,14 @@ const DefaultStateDebounce = 250 * time.Millisecond
 
 // DaemonConfig configures a session daemon instance.
 type DaemonConfig struct {
-	Version       string
-	SocketPath    string
-	PidPath       string
-	StatePath     string
-	StateDebounce time.Duration
-	HandleSignals bool
+	Version                 string
+	SocketPath              string
+	PidPath                 string
+	StatePath               string
+	StateDebounce           time.Duration
+	HandleSignals           bool
+	SkipRestore             bool
+	DisableStatePersistence bool
 }
 
 // Daemon owns persistent sessions and serves clients over a local socket.
@@ -46,6 +48,7 @@ type Daemon struct {
 	statePath   string
 	stateWriter *state.Writer
 	version     string
+	skipRestore bool
 	profileStop func()
 	startMu     sync.Mutex
 	spawnMu     sync.Mutex
@@ -59,6 +62,7 @@ type Daemon struct {
 	clients   map[uint64]*clientConn
 	clientsMu sync.RWMutex
 	clientSeq atomic.Uint64
+	debugSnap atomic.Int64
 
 	closing atomic.Bool
 	wg      sync.WaitGroup
@@ -90,10 +94,13 @@ func NewDaemon(cfg DaemonConfig) (*Daemon, error) {
 	if debounce < 0 {
 		debounce = DefaultStateDebounce
 	}
-	stateWriter := state.NewWriter(statePath, state.WriterOptions{
-		Debounce: debounce,
-		FileMode: 0o600,
-	})
+	var stateWriter *state.Writer
+	if !cfg.DisableStatePersistence {
+		stateWriter = state.NewWriter(statePath, state.WriterOptions{
+			Debounce: debounce,
+			FileMode: 0o600,
+		})
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	d := &Daemon{
 		manager:     wrapManager(native.NewManager()),
@@ -102,6 +109,7 @@ func NewDaemon(cfg DaemonConfig) (*Daemon, error) {
 		statePath:   statePath,
 		stateWriter: stateWriter,
 		version:     cfg.Version,
+		skipRestore: cfg.SkipRestore,
 		ctx:         ctx,
 		cancel:      cancel,
 		clients:     make(map[uint64]*clientConn),
@@ -144,8 +152,10 @@ func (d *Daemon) Start() error {
 		_ = listener.Close()
 		return err
 	}
-	if err := d.restorePersistedState(); err != nil {
-		log.Printf("sessiond: restore state: %v", err)
+	if !d.skipRestore {
+		if err := d.restorePersistedState(); err != nil {
+			log.Printf("sessiond: restore state: %v", err)
+		}
 	}
 	d.startProfiler()
 

@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/runenv"
 )
 
 func TestRenameDialogs(t *testing.T) {
@@ -42,6 +43,7 @@ func TestRenameDialogs(t *testing.T) {
 }
 
 func TestProjectRootSetupAndHelp(t *testing.T) {
+	t.Setenv(runenv.FreshConfigEnv, "")
 	if !needsProjectRootSetup(nil, false) {
 		t.Fatalf("expected project root setup needed")
 	}
@@ -66,6 +68,13 @@ func TestProjectRootSetupAndHelp(t *testing.T) {
 	m.updateHelp(tea.KeyMsg{Type: tea.KeyEsc})
 	if m.state != StateDashboard {
 		t.Fatalf("expected dashboard after help esc")
+	}
+}
+
+func TestProjectRootSetupSkippedForFreshConfig(t *testing.T) {
+	t.Setenv(runenv.FreshConfigEnv, "1")
+	if needsProjectRootSetup(&layout.Config{}, true) {
+		t.Fatalf("expected project root setup skipped when fresh config enabled")
 	}
 }
 

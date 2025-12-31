@@ -1,6 +1,7 @@
 package app
 
 import (
+	"path/filepath"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -35,6 +36,7 @@ func TestDashboardActionKeys(t *testing.T) {
 	}
 
 	m.setState(StateDashboard)
+	m.configPath = filepath.Join(t.TempDir(), "config.yml")
 	_, cmd := m.updateDashboard(keyRune('e'))
 	if cmd == nil {
 		t.Fatalf("expected edit config cmd")

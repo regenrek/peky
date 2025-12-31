@@ -7,17 +7,19 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/regenrek/peakypanes/internal/runenv"
 	"gopkg.in/yaml.v3"
 )
 
 // PaneDef defines a single pane within a layout.
 type PaneDef struct {
-	Title   string   `yaml:"title,omitempty"`
-	Cmd     string   `yaml:"cmd,omitempty"`
-	Size    string   `yaml:"size,omitempty"`    // e.g., "50%", "30"
-	Split   string   `yaml:"split,omitempty"`   // "horizontal" or "vertical"
-	Setup   []string `yaml:"setup,omitempty"`   // commands to run before main cmd
-	Enabled string   `yaml:"enabled,omitempty"` // expression like "${VAR:-true}"
+	Title      string       `yaml:"title,omitempty"`
+	Cmd        string       `yaml:"cmd,omitempty"`
+	Size       string       `yaml:"size,omitempty"`        // e.g., "50%", "30"
+	Split      string       `yaml:"split,omitempty"`       // "horizontal" or "vertical"
+	Setup      []string     `yaml:"setup,omitempty"`       // commands to run before main cmd
+	Enabled    string       `yaml:"enabled,omitempty"`     // expression like "${VAR:-true}"
+	DirectSend []SendAction `yaml:"direct_send,omitempty"` // input actions sent after pane start
 }
 
 // LayoutSettings contains optional layout configuration.
@@ -32,12 +34,22 @@ type LayoutConfig struct {
 	Description string            `yaml:"description,omitempty"`
 	Vars        map[string]string `yaml:"vars,omitempty"`
 	Settings    LayoutSettings    `yaml:"settings,omitempty"`
-	// Grid layouts (optional). If Grid is set, Panes is ignored.
+	// Grid layouts (optional). If Grid is set, Panes overrides per-pane settings.
 	Grid     string    `yaml:"grid,omitempty"`     // e.g., "2x3"
 	Command  string    `yaml:"command,omitempty"`  // run in every pane
 	Commands []string  `yaml:"commands,omitempty"` // per-pane commands (row-major)
 	Titles   []string  `yaml:"titles,omitempty"`   // optional per-pane titles (row-major)
 	Panes    []PaneDef `yaml:"panes,omitempty"`
+	// BroadcastSend defines input actions sent to every pane after start.
+	BroadcastSend []SendAction `yaml:"broadcast_send,omitempty"`
+}
+
+// SendAction defines an input payload sent to a pane after start.
+type SendAction struct {
+	Text          string `yaml:"text,omitempty"`
+	SendDelayMS   *int   `yaml:"send_delay_ms,omitempty"`
+	Submit        bool   `yaml:"submit,omitempty"`
+	SubmitDelayMS *int   `yaml:"submit_delay_ms,omitempty"`
 }
 
 // ProjectConfig represents a project entry in the config file.
@@ -316,6 +328,14 @@ func ExpandLayoutVars(layout *LayoutConfig, extraVars map[string]string, project
 	for _, title := range layout.Titles {
 		expanded.Titles = append(expanded.Titles, ExpandVars(title, vars, projectPath, projectName))
 	}
+	for _, action := range layout.BroadcastSend {
+		expanded.BroadcastSend = append(expanded.BroadcastSend, SendAction{
+			Text:          ExpandVars(action.Text, vars, projectPath, projectName),
+			SendDelayMS:   action.SendDelayMS,
+			Submit:        action.Submit,
+			SubmitDelayMS: action.SubmitDelayMS,
+		})
+	}
 
 	for _, pane := range layout.Panes {
 		expandedPane := PaneDef{
@@ -327,6 +347,14 @@ func ExpandLayoutVars(layout *LayoutConfig, extraVars map[string]string, project
 		}
 		for _, setup := range pane.Setup {
 			expandedPane.Setup = append(expandedPane.Setup, ExpandVars(setup, vars, projectPath, projectName))
+		}
+		for _, action := range pane.DirectSend {
+			expandedPane.DirectSend = append(expandedPane.DirectSend, SendAction{
+				Text:          ExpandVars(action.Text, vars, projectPath, projectName),
+				SendDelayMS:   action.SendDelayMS,
+				Submit:        action.Submit,
+				SubmitDelayMS: action.SubmitDelayMS,
+			})
 		}
 		expanded.Panes = append(expanded.Panes, expandedPane)
 	}
@@ -345,6 +373,12 @@ func (l *LayoutConfig) ToYAML() (string, error) {
 
 // DefaultConfigPath returns the default global config path.
 func DefaultConfigPath() (string, error) {
+	if runenv.FreshConfigEnabled() {
+		return "", nil
+	}
+	if dir := runenv.ConfigDir(); dir != "" {
+		return filepath.Join(dir, "config.yml"), nil
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
@@ -354,6 +388,9 @@ func DefaultConfigPath() (string, error) {
 
 // DefaultLayoutsDir returns the default layouts directory.
 func DefaultLayoutsDir() (string, error) {
+	if dir := runenv.ConfigDir(); dir != "" {
+		return filepath.Join(dir, "layouts"), nil
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err

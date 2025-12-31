@@ -24,6 +24,12 @@ layout:
       split: vertical
     - title: docker
       cmd: "docker compose logs -f"
+  # Optional automation inputs:
+  # broadcast_send:
+  #   - text: "claude"
+  #     send_delay_ms: 750
+  #     submit: true
+  #     submit_delay_ms: 250
 
 # Or use exact grids
 # layout:
@@ -42,6 +48,18 @@ layout:
 #     - codex-3
 #     - codex-4
 #     - codex-5
+#
+# Grid + panes (per-pane direct_send, overrides commands/titles):
+# layout:
+#   grid: 2x2
+#   panes:
+#     - title: pane-1
+#       cmd: "claude"
+#       direct_send:
+#         - text: "give me a bubble sort in typescript and rust and go"
+#           send_delay_ms: 750
+#           submit: true
+#           submit_delay_ms: 250
 
 # Optional per-project dashboard overrides
 # dashboard:

@@ -1,0 +1,10 @@
+session: perf-claude-10
+
+layout:
+  grid: 2x5
+  command: "claude"
+  broadcast_send:
+    - text: "give me a bubble sort in typescript and rust and go and at the end a bunch of funny green emojis"
+      send_delay_ms: 10000
+      submit: true
+      submit_delay_ms: 250

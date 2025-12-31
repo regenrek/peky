@@ -9,10 +9,12 @@ import (
 )
 
 type startOptions struct {
-	layoutName string
-	session    string
-	path       string
-	showHelp   bool
+	layoutName   string
+	session      string
+	path         string
+	showHelp     bool
+	freshConfig  bool
+	temporaryRun bool
 }
 
 func runStart(args []string) {
@@ -21,6 +23,17 @@ func runStart(args []string) {
 		fmt.Print(startHelpText)
 		return
 	}
+	if opts.temporaryRun {
+		opts.freshConfig = true
+	}
+	cleanup, err := applyRunEnv(runEnvOptions{
+		freshConfig:  opts.freshConfig,
+		temporaryRun: opts.temporaryRun,
+	})
+	if err != nil {
+		fatal("%v", err)
+	}
+	defer cleanup()
 	projectPath := strings.TrimSpace(opts.path)
 	if projectPath == "" {
 		var err error
@@ -57,6 +70,10 @@ func parseStartArgs(args []string) startOptions {
 				opts.path = args[i+1]
 				i++
 			}
+		case "--fresh-config":
+			opts.freshConfig = true
+		case "--temporary-run":
+			opts.temporaryRun = true
 		case "-h", "--help":
 			opts.showHelp = true
 		default:

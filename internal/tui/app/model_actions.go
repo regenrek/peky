@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/runenv"
 	"github.com/regenrek/peakypanes/internal/sessiond"
 )
 
@@ -197,7 +198,7 @@ func (m *Model) startSessionNative(sessionName, path, layoutName string, focus b
 		if m.client == nil {
 			return sessionStartedMsg{Path: path, Err: errors.New("session client unavailable"), Focus: focus}
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), runenv.StartSessionTimeout())
 		defer cancel()
 		resp, err := m.client.StartSession(ctx, sessiond.StartSessionRequest{
 			Name:       sessionName,
@@ -221,11 +222,16 @@ func (m *Model) startSessionAtPathDetached(path string) tea.Cmd {
 }
 
 func (m *Model) editConfig() tea.Cmd {
+	configPath, err := m.requireConfigPath()
+	if err != nil {
+		m.setToast("Edit config failed: "+err.Error(), toastError)
+		return nil
+	}
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
 		editor = "vim"
 	}
-	return tea.ExecProcess(exec.Command(editor, m.configPath), func(error) tea.Msg { return nil })
+	return tea.ExecProcess(exec.Command(editor, configPath), func(error) tea.Msg { return nil })
 }
 
 // ===== Kill/Close confirmations =====

@@ -22,6 +22,7 @@ func newTestModelLite() *Model {
 		paneInputDisabled:      make(map[string]struct{}),
 		paneViewSeq:            make(map[paneViewKey]uint64),
 		paneViewLastReq:        make(map[paneViewKey]time.Time),
+		paneViewFirst:          make(map[string]struct{}),
 		quickReplyHistoryIndex: -1,
 		quickReplySlashIndex:   -1,
 		settings: DashboardConfig{

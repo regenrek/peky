@@ -164,6 +164,14 @@ func TestParseStartArgs(t *testing.T) {
 	if !opts.showHelp {
 		t.Fatalf("parseStartArgs(--help) should set showHelp")
 	}
+	opts = parseStartArgs([]string{"--fresh-config"})
+	if !opts.freshConfig {
+		t.Fatalf("parseStartArgs(--fresh-config) should set freshConfig")
+	}
+	opts = parseStartArgs([]string{"--temporary-run"})
+	if !opts.temporaryRun {
+		t.Fatalf("parseStartArgs(--temporary-run) should set temporaryRun")
+	}
 }
 
 func captureStdout(fn func()) string {

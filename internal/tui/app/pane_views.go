@@ -350,6 +350,7 @@ type paneViewResult struct {
 }
 
 func fetchPaneViews(client *sessiond.Client, reqs []sessiond.PaneViewRequest) paneViewsMsg {
+	start := time.Now()
 	results := make(chan paneViewResult, len(reqs))
 	jobs := make(chan sessiond.PaneViewRequest)
 
@@ -370,6 +371,12 @@ func fetchPaneViews(client *sessiond.Client, reqs []sessiond.PaneViewRequest) pa
 	}()
 
 	views, firstErr := collectPaneViewResults(results)
+	if perfDebugEnabled() {
+		dur := time.Since(start)
+		if dur > perfSlowPaneViewBatch {
+			logPerfEvery("tui.paneviews.batch", perfLogInterval, "tui: pane view batch slow dur=%s reqs=%d views=%d err=%v", dur, len(reqs), len(views), firstErr)
+		}
+	}
 	if len(views) == 0 && firstErr != nil {
 		return paneViewsMsg{Err: firstErr}
 	}
@@ -398,8 +405,15 @@ func paneViewWorker(client *sessiond.Client, jobs <-chan sessiond.PaneViewReques
 		if deadline, ok := ctx.Deadline(); ok {
 			req.DeadlineUnixNano = deadline.UnixNano()
 		}
+		start := time.Now()
 		resp, err := client.GetPaneView(ctx, req)
 		cancel()
+		if perfDebugEnabled() {
+			dur := time.Since(start)
+			if dur > perfSlowPaneViewReq {
+				logPerfEvery("tui.paneviews.req", perfLogInterval, "tui: pane view req slow pane=%s dur=%s cols=%d rows=%d mode=%v priority=%v err=%v", req.PaneID, dur, req.Cols, req.Rows, req.Mode, req.Priority, err)
+			}
+		}
 		if err != nil {
 			results <- paneViewResult{err: err}
 			continue

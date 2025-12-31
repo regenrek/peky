@@ -14,6 +14,7 @@ const (
 	paneViewMaxConcurrency   = 4
 	paneViewDeadlineSlack    = 50 * time.Millisecond
 	paneViewStarvationWindow = 750 * time.Millisecond
+	paneViewSlowThreshold    = 50 * time.Millisecond
 )
 
 func paneViewEffectiveSeq(win paneViewWindow, renderMode PaneViewMode) uint64 {
@@ -408,7 +409,17 @@ func (d *Daemon) paneViewResponse(ctx context.Context, client *clientConn, paneI
 		return resp, err
 	}
 
-	view, err := paneViewString(ctx, win, info.renderReq)
+	var view string
+	if perfDebugEnabled() {
+		start := time.Now()
+		view, err = paneViewString(ctx, win, info.renderReq)
+		dur := time.Since(start)
+		if dur > paneViewSlowThreshold {
+			logPerfEvery("sessiond.paneview.render", perfLogInterval, "sessiond: pane view render slow pane=%s mode=%v dur=%s cols=%d rows=%d", paneID, info.renderMode, dur, info.cols, info.rows)
+		}
+	} else {
+		view, err = paneViewString(ctx, win, info.renderReq)
+	}
 	if err != nil {
 		return paneViewRenderError(err, client, info.key)
 	}

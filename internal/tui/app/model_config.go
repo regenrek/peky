@@ -20,6 +20,10 @@ func (m *Model) hideProjectInConfig(project ProjectGroup) (bool, error) {
 	if key == "" {
 		return false, fmt.Errorf("invalid project key")
 	}
+	configPath, err := m.requireConfigPath()
+	if err != nil {
+		return false, err
+	}
 	cfg, err := loadConfig(m.configPath)
 	if err != nil {
 		return false, fmt.Errorf("load config: %w", err)
@@ -46,10 +50,10 @@ func (m *Model) hideProjectInConfig(project ProjectGroup) (bool, error) {
 	}
 	cfg.Dashboard.HiddenProjects = append(cfg.Dashboard.HiddenProjects, entry)
 	cfg.Dashboard.HiddenProjects = normalizeHiddenProjects(cfg.Dashboard.HiddenProjects)
-	if err := os.MkdirAll(filepath.Dir(m.configPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
 		return false, fmt.Errorf("create config dir: %w", err)
 	}
-	if err := layout.SaveConfig(m.configPath, cfg); err != nil {
+	if err := layout.SaveConfig(configPath, cfg); err != nil {
 		return false, err
 	}
 	m.config = cfg
@@ -60,6 +64,10 @@ func (m *Model) hideProjectInConfig(project ProjectGroup) (bool, error) {
 func (m *Model) hideAllProjectsInConfig(projects []ProjectGroup) (int, error) {
 	if len(projects) == 0 {
 		return 0, nil
+	}
+	configPath, err := m.requireConfigPath()
+	if err != nil {
+		return 0, err
 	}
 	cfg, err := loadConfig(m.configPath)
 	if err != nil {
@@ -79,10 +87,10 @@ func (m *Model) hideAllProjectsInConfig(projects []ProjectGroup) (int, error) {
 		return 0, nil
 	}
 	cfg.Dashboard.HiddenProjects = normalizeHiddenProjects(cfg.Dashboard.HiddenProjects)
-	if err := os.MkdirAll(filepath.Dir(m.configPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
 		return 0, fmt.Errorf("create config dir: %w", err)
 	}
-	if err := layout.SaveConfig(m.configPath, cfg); err != nil {
+	if err := layout.SaveConfig(configPath, cfg); err != nil {
 		return 0, err
 	}
 	m.config = cfg
@@ -131,6 +139,10 @@ func (m *Model) unhideProjectInConfig(entry layout.HiddenProjectConfig) (bool, e
 	if target.empty() {
 		return false, nil
 	}
+	configPath, err := m.requireConfigPath()
+	if err != nil {
+		return false, err
+	}
 	cfg, err := loadConfig(m.configPath)
 	if err != nil {
 		return false, fmt.Errorf("load config: %w", err)
@@ -151,10 +163,10 @@ func (m *Model) unhideProjectInConfig(entry layout.HiddenProjectConfig) (bool, e
 		return false, nil
 	}
 	cfg.Dashboard.HiddenProjects = normalizeHiddenProjects(kept)
-	if err := os.MkdirAll(filepath.Dir(m.configPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
 		return false, fmt.Errorf("create config dir: %w", err)
 	}
-	if err := layout.SaveConfig(m.configPath, cfg); err != nil {
+	if err := layout.SaveConfig(configPath, cfg); err != nil {
 		return false, err
 	}
 	m.config = cfg
@@ -219,6 +231,14 @@ func hiddenProjectLabel(entry layout.HiddenProjectConfig) string {
 		return userpath.ShortenUser(path)
 	}
 	return "unknown project"
+}
+
+func (m *Model) requireConfigPath() (string, error) {
+	path := strings.TrimSpace(m.configPath)
+	if path == "" {
+		return "", fmt.Errorf("config path unavailable (fresh-config mode)")
+	}
+	return path, nil
 }
 
 func (m *Model) reopenHiddenProject(entry layout.HiddenProjectConfig) tea.Cmd {

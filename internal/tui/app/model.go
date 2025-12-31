@@ -131,6 +131,7 @@ type Model struct {
 	refreshQueued    bool
 	refreshSeq       uint64
 	lastAppliedSeq   uint64
+	refreshStarted   map[uint64]time.Time
 
 	terminalFocus bool
 	// terminalMouseDrag tracks an in-progress drag selection in terminal focus.
@@ -145,6 +146,7 @@ type Model struct {
 
 	paneViewSeq     map[paneViewKey]uint64
 	paneViewLastReq map[paneViewKey]time.Time
+	paneViewFirst   map[string]struct{}
 
 	paneViewInFlight  int
 	paneViewQueued    bool
@@ -182,6 +184,7 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 
 		paneViewSeq:     make(map[paneViewKey]uint64),
 		paneViewLastReq: make(map[paneViewKey]time.Time),
+		paneViewFirst:   make(map[string]struct{}),
 	}
 
 	m.filterInput = textinput.New()

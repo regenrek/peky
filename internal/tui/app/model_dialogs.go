@@ -14,6 +14,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/runenv"
 	"github.com/regenrek/peakypanes/internal/sessiond"
 )
 
@@ -177,6 +178,9 @@ func (m *Model) renamePaneTarget() (string, string, bool) {
 // ===== Project root setup =====
 
 func needsProjectRootSetup(cfg *layout.Config, configExists bool) bool {
+	if runenv.FreshConfigEnabled() {
+		return false
+	}
 	if cfg == nil {
 		return true
 	}
@@ -281,15 +285,19 @@ func validateProjectRoots(roots []string) ([]string, []string) {
 }
 
 func (m *Model) saveProjectRoots(roots []string) error {
+	configPath, err := m.requireConfigPath()
+	if err != nil {
+		return err
+	}
 	cfg, err := loadConfig(m.configPath)
 	if err != nil {
 		return err
 	}
 	cfg.Dashboard.ProjectRoots = roots
-	if err := os.MkdirAll(filepath.Dir(m.configPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
 		return err
 	}
-	if err := layout.SaveConfig(m.configPath, cfg); err != nil {
+	if err := layout.SaveConfig(configPath, cfg); err != nil {
 		return err
 	}
 	m.config = cfg

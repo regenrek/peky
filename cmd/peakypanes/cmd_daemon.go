@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/regenrek/peakypanes/internal/runenv"
 	"github.com/regenrek/peakypanes/internal/sessiond"
 )
 
@@ -34,9 +35,11 @@ func runDaemon(args []string) {
 	}
 
 	daemon, err := sessiond.NewDaemon(sessiond.DaemonConfig{
-		Version:       version,
-		StateDebounce: sessiond.DefaultStateDebounce,
-		HandleSignals: true,
+		Version:                 version,
+		StateDebounce:           sessiond.DefaultStateDebounce,
+		HandleSignals:           true,
+		SkipRestore:             runenv.FreshConfigEnabled(),
+		DisableStatePersistence: runenv.FreshConfigEnabled(),
 	})
 	if err != nil {
 		fatal("failed to create daemon: %v", err)

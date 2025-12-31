@@ -1,0 +1,651 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+usage() {
+  cat <<'USAGE'
+Usage: scripts/perf-profiler [--layout <file>] [--secs <n>] [--fgprof <n>] [--trace <n>] [--block] [--block-rate <duration>] [--mutex] [--mutex-fraction <n>] [--start-delay <n|duration>] [--align-with-send] [--start-on-send] [--trigger-timeout <n|duration>] [--start-timeout <n|duration>] [--gops] [--no-tmux] [--no-ghostty]
+
+Runs a fresh perf session with the profiler build tag enabled and captures
+CPU/heap profiles plus a summary report under .bench.
+
+Options:
+  --layout <file>   Layout YAML to run (default: testdata/performance-tests/peakypanes-perf12.yml)
+  --secs <n>        CPU profile duration in seconds (default: 30)
+  --fgprof <n>      Enable fgprof capture for N seconds (sequential after CPU)
+  --trace <n>       Enable runtime trace capture for N seconds (sequential after fgprof)
+  --block           Enable block profile capture (written at end)
+  --block-rate <d>  Block profile rate (Go duration or ns int, default: 10ms)
+  --mutex           Enable mutex profile capture (written at end)
+  --mutex-fraction <n> Mutex profile fraction (1/N events, default: 1)
+  --start-delay <n> Delay before profiling starts (seconds or Go duration, e.g. 5s)
+  --align-with-send Align profile start to 1s before layout send_delay_ms (if present)
+  --start-on-send   Wait for the first automation send before starting profiles
+  --trigger-timeout Timeout waiting for the first send (seconds or Go duration)
+  --start-timeout   Timeout for StartSession RPC (seconds or Go duration)
+  --gops            Enable gops agent (config lives under the run output)
+  --no-tmux         Skip the tmux monitor dashboard (tail + htop)
+  --no-ghostty      Run peakypanes in the current terminal (no Ghostty)
+  -h, --help        Show this help
+
+Environment:
+  PROFILE_SECS      Same as --secs
+  PROFILE_DONE      Optional path for a done marker file
+  PROFILE_FGPROF    Same as --fgprof (seconds)
+  PROFILE_TRACE     Same as --trace (seconds)
+  PROFILE_BLOCK_RATE   Same as --block-rate (duration or ns int)
+  PROFILE_MUTEX_FRACTION Same as --mutex-fraction
+  PROFILE_START_DELAY Same as --start-delay
+  PROFILE_ALIGN_SEND  Same as --align-with-send (set to 1)
+  PROFILE_START_ON_SEND Same as --start-on-send (set to 1)
+  PROFILE_TRIGGER_TIMEOUT Same as --trigger-timeout
+  PROFILE_START_TIMEOUT Same as --start-timeout
+  PROFILE_GOPS      Same as --gops (set to 1)
+
+Notes:
+  - This is dev-only and uses a profiler build tag.
+  - The run uses --temporary-run to avoid user config/state.
+USAGE
+}
+
+layout_file="$ROOT/testdata/performance-tests/peakypanes-perf12.yml"
+profile_secs="${PROFILE_SECS:-30}"
+fgprof_secs="${PROFILE_FGPROF:-}"
+trace_secs="${PROFILE_TRACE:-}"
+block_rate="${PROFILE_BLOCK_RATE:-}"
+mutex_fraction="${PROFILE_MUTEX_FRACTION:-}"
+start_delay="${PROFILE_START_DELAY:-}"
+align_with_send="${PROFILE_ALIGN_SEND:-}"
+start_on_send="${PROFILE_START_ON_SEND:-}"
+trigger_timeout="${PROFILE_TRIGGER_TIMEOUT:-}"
+start_timeout="${PROFILE_START_TIMEOUT:-}"
+enable_gops=false
+use_tmux=true
+use_ghostty=true
+enable_block=false
+enable_mutex=false
+
+if [[ -n "$block_rate" ]]; then
+  enable_block=true
+fi
+if [[ -n "$mutex_fraction" ]]; then
+  enable_mutex=true
+fi
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --layout)
+      shift
+      layout_file="${1:-}"
+      if [[ -z "$layout_file" ]]; then
+        echo "perf-profiler: --layout requires a file" >&2
+        exit 1
+      fi
+      shift
+      ;;
+    --secs)
+      shift
+      profile_secs="${1:-}"
+      if [[ -z "$profile_secs" ]]; then
+        echo "perf-profiler: --secs requires a number" >&2
+        exit 1
+      fi
+      shift
+      ;;
+    --no-tmux)
+      use_tmux=false
+      shift
+      ;;
+    --fgprof)
+      shift
+      fgprof_secs="${1:-}"
+      if [[ -z "$fgprof_secs" ]]; then
+        echo "perf-profiler: --fgprof requires a number" >&2
+        exit 1
+      fi
+      shift
+      ;;
+    --trace)
+      shift
+      trace_secs="${1:-}"
+      if [[ -z "$trace_secs" ]]; then
+        echo "perf-profiler: --trace requires a number" >&2
+        exit 1
+      fi
+      shift
+      ;;
+    --block)
+      enable_block=true
+      shift
+      ;;
+    --block-rate)
+      shift
+      block_rate="${1:-}"
+      if [[ -z "$block_rate" ]]; then
+        echo "perf-profiler: --block-rate requires a value" >&2
+        exit 1
+      fi
+      enable_block=true
+      shift
+      ;;
+    --mutex)
+      enable_mutex=true
+      shift
+      ;;
+    --mutex-fraction)
+      shift
+      mutex_fraction="${1:-}"
+      if [[ -z "$mutex_fraction" ]]; then
+        echo "perf-profiler: --mutex-fraction requires a value" >&2
+        exit 1
+      fi
+      enable_mutex=true
+      shift
+      ;;
+    --start-delay)
+      shift
+      start_delay="${1:-}"
+      if [[ -z "$start_delay" ]]; then
+        echo "perf-profiler: --start-delay requires a value" >&2
+        exit 1
+      fi
+      shift
+      ;;
+    --start-timeout)
+      shift
+      start_timeout="${1:-}"
+      if [[ -z "$start_timeout" ]]; then
+        echo "perf-profiler: --start-timeout requires a value" >&2
+        exit 1
+      fi
+      shift
+      ;;
+    --align-with-send)
+      align_with_send=1
+      shift
+      ;;
+    --start-on-send)
+      start_on_send=1
+      shift
+      ;;
+    --trigger-timeout)
+      shift
+      trigger_timeout="${1:-}"
+      if [[ -z "$trigger_timeout" ]]; then
+        echo "perf-profiler: --trigger-timeout requires a value" >&2
+        exit 1
+      fi
+      shift
+      ;;
+    --gops)
+      enable_gops=true
+      shift
+      ;;
+    --no-ghostty)
+      use_ghostty=false
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "perf-profiler: unknown flag $1" >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [[ ! -f "$layout_file" ]]; then
+  echo "perf-profiler: layout file not found: $layout_file" >&2
+  exit 1
+fi
+if ! [[ "$profile_secs" =~ ^[0-9]+$ ]]; then
+  echo "perf-profiler: --secs must be an integer" >&2
+  exit 1
+fi
+if [[ "$profile_secs" -lt 1 ]]; then
+  echo "perf-profiler: --secs must be >= 1" >&2
+  exit 1
+fi
+if [[ -n "$fgprof_secs" && ! "$fgprof_secs" =~ ^[0-9]+$ ]]; then
+  echo "perf-profiler: --fgprof must be an integer" >&2
+  exit 1
+fi
+if [[ -n "$fgprof_secs" && "$fgprof_secs" -lt 1 ]]; then
+  echo "perf-profiler: --fgprof must be >= 1" >&2
+  exit 1
+fi
+if [[ -n "$trace_secs" && ! "$trace_secs" =~ ^[0-9]+$ ]]; then
+  echo "perf-profiler: --trace must be an integer" >&2
+  exit 1
+fi
+if [[ -n "$trace_secs" && "$trace_secs" -lt 1 ]]; then
+  echo "perf-profiler: --trace must be >= 1" >&2
+  exit 1
+fi
+if [[ -n "$block_rate" && ! "$block_rate" =~ ^[0-9]+(ns|us|ms|s|m|h)?$ ]]; then
+  echo "perf-profiler: --block-rate must be a duration (e.g. 10ms) or ns integer" >&2
+  exit 1
+fi
+if [[ -n "$mutex_fraction" && ! "$mutex_fraction" =~ ^[0-9]+$ ]]; then
+  echo "perf-profiler: --mutex-fraction must be an integer" >&2
+  exit 1
+fi
+if [[ -n "$mutex_fraction" && "$mutex_fraction" -lt 1 ]]; then
+  echo "perf-profiler: --mutex-fraction must be >= 1" >&2
+  exit 1
+fi
+if [[ -n "$start_delay" && ! "$start_delay" =~ ^[0-9]+([smh]|ms)?$ ]]; then
+  echo "perf-profiler: --start-delay must be seconds or duration (e.g. 5 or 5s)" >&2
+  exit 1
+fi
+if [[ -n "$trigger_timeout" && ! "$trigger_timeout" =~ ^[0-9]+([smh]|ms)?$ ]]; then
+  echo "perf-profiler: --trigger-timeout must be seconds or duration (e.g. 30 or 30s)" >&2
+  exit 1
+fi
+if [[ -n "$start_timeout" && ! "$start_timeout" =~ ^[0-9]+([smh]|ms)?$ ]]; then
+  echo "perf-profiler: --start-timeout must be seconds or duration (e.g. 30 or 30s)" >&2
+  exit 1
+fi
+
+if [[ -n "$start_on_send" && -n "$align_with_send" ]]; then
+  echo "perf-profiler: --align-with-send ignored because --start-on-send is set" >&2
+  align_with_send=""
+fi
+
+if [[ -z "$start_delay" && -n "$align_with_send" ]]; then
+  send_delay_ms=""
+  if [[ -f "$layout_file" ]]; then
+    send_delay_ms="$(awk -F: '/send_delay_ms/ {gsub(/[^0-9]/, "", $2); if ($2 != "") {print $2; exit}}' "$layout_file")"
+  fi
+  if [[ -n "$send_delay_ms" ]]; then
+    send_delay_sec=$((send_delay_ms / 1000))
+    if [[ "$send_delay_sec" -gt 1 ]]; then
+      start_delay=$((send_delay_sec - 1))
+    else
+      start_delay=0
+    fi
+  fi
+fi
+if [[ -n "$start_on_send" && -z "$trigger_timeout" ]]; then
+  trigger_timeout="60s"
+fi
+
+if [[ "$enable_block" == true && -z "$block_rate" ]]; then
+  block_rate="10ms"
+fi
+if [[ "$enable_mutex" == true && -z "$mutex_fraction" ]]; then
+  mutex_fraction="1"
+fi
+
+stamp="$(date +%Y%m%d-%H%M%S)"
+out_root="$ROOT/.bench/profiler-12/$stamp"
+run_dir="$out_root/run"
+mkdir -p "$run_dir"
+
+cp "$layout_file" "$run_dir/.peakypanes.yml"
+
+bin_path="$out_root/peakypanes-profiler"
+(
+  cd "$ROOT"
+  go build -tags profiler -o "$bin_path" ./cmd/peakypanes
+)
+
+export PEAKYPANES_CPU_PROFILE="$out_root/cpu.pprof"
+export PEAKYPANES_MEM_PROFILE="$out_root/heap.pprof"
+export PEAKYPANES_CPU_PROFILE_SECS="$profile_secs"
+export PEAKYPANES_DAEMON_LOG="$out_root/daemon.log"
+export PEAKYPANES_PROFILE_DONE="$out_root/DONE"
+export PEAKYPANES_PERF_DEBUG="1"
+if [[ "$enable_block" == true ]]; then
+  export PEAKYPANES_BLOCK_PROFILE="$out_root/block.pprof"
+  if [[ -n "$block_rate" ]]; then
+    export PEAKYPANES_BLOCK_RATE="$block_rate"
+  fi
+fi
+if [[ "$enable_mutex" == true ]]; then
+  export PEAKYPANES_MUTEX_PROFILE="$out_root/mutex.pprof"
+  if [[ -n "$mutex_fraction" ]]; then
+    export PEAKYPANES_MUTEX_FRACTION="$mutex_fraction"
+  fi
+fi
+if [[ -n "$start_delay" ]]; then
+  export PEAKYPANES_PROFILE_START_DELAY="$start_delay"
+fi
+if [[ -n "$start_on_send" ]]; then
+  export PEAKYPANES_PROFILE_START_ON_SEND="1"
+fi
+if [[ -n "$trigger_timeout" ]]; then
+  export PEAKYPANES_PROFILE_TRIGGER_TIMEOUT="$trigger_timeout"
+fi
+if [[ -n "$fgprof_secs" ]]; then
+  export PEAKYPANES_FGPROF="$out_root/fgprof.pprof"
+  export PEAKYPANES_FGPROF_SECS="$fgprof_secs"
+fi
+if [[ -n "$trace_secs" ]]; then
+  export PEAKYPANES_TRACE="$out_root/trace.out"
+  export PEAKYPANES_TRACE_SECS="$trace_secs"
+fi
+if [[ -n "$start_timeout" ]]; then
+  export PEAKYPANES_START_TIMEOUT="$start_timeout"
+fi
+if [[ "$enable_gops" == true ]]; then
+  gops_dir="$out_root/gops"
+  mkdir -p "$gops_dir"
+  export PEAKYPANES_GOPS=1
+  export PEAKYPANES_GOPS_CONFIG_DIR="$gops_dir"
+fi
+
+report="$out_root/report.txt"
+run_log="$out_root/run.log"
+daemon_log="$out_root/daemon.log"
+done_marker="$out_root/DONE"
+rm -f "$done_marker"
+touch "$run_log" "$daemon_log"
+
+{
+  echo "# peakypanes perf profiler"
+  echo "date: $stamp"
+  echo "layout: $layout_file"
+  echo "profile_secs: $profile_secs"
+  echo "perf_debug: enabled"
+  if [[ -n "$start_delay" ]]; then
+    echo "profile_start_delay: $start_delay"
+  fi
+  if [[ -n "$start_on_send" ]]; then
+    echo "profile_start_on_send: true"
+  fi
+  if [[ -n "$trigger_timeout" ]]; then
+    echo "profile_trigger_timeout: $trigger_timeout"
+  fi
+  if [[ -n "$start_timeout" ]]; then
+    echo "start_timeout: $start_timeout"
+  fi
+  if [[ -n "$fgprof_secs" ]]; then
+    echo "fgprof_secs: $fgprof_secs"
+    echo "fgprof: $out_root/fgprof.pprof"
+  fi
+  if [[ -n "$trace_secs" ]]; then
+    echo "trace_secs: $trace_secs"
+    echo "trace: $out_root/trace.out"
+  fi
+  if [[ "$enable_block" == true ]]; then
+    echo "block_profile: $out_root/block.pprof"
+    if [[ -n "$block_rate" ]]; then
+      echo "block_rate: $block_rate"
+    fi
+  fi
+  if [[ "$enable_mutex" == true ]]; then
+    echo "mutex_profile: $out_root/mutex.pprof"
+    if [[ -n "$mutex_fraction" ]]; then
+      echo "mutex_fraction: $mutex_fraction"
+    fi
+  fi
+  if [[ "$enable_gops" == true ]]; then
+    echo "gops: enabled"
+    echo "gops_config: $out_root/gops"
+  fi
+  echo "go: $(go version)"
+  echo "bin: $bin_path"
+  echo "out: $out_root"
+  echo "done: $done_marker"
+  echo
+} > "$report"
+
+monitor_session=""
+if [[ "$use_tmux" == true && -z "${TMUX:-}" ]]; then
+  if command -v tmux >/dev/null 2>&1; then
+    monitor_session="perf-profiler-$stamp"
+    monitor_cmd="set +euo pipefail; tail -n 200 -f $(printf %q "$daemon_log") & while [[ ! -f $(printf %q "$done_marker") ]]; do sleep 1; done; echo \"===== PROFILER DONE =====\"; wait"
+    tmux new-session -d -s "$monitor_session" -c "$ROOT" "$monitor_cmd"
+    left_pane="$(tmux display-message -p -t "$monitor_session:" "#{pane_id}")"
+    pane_cmd="htop"
+    if command -v htop >/dev/null 2>&1; then
+      pane_cmd="htop -F peakypanes,claude"
+    else
+      pane_cmd="top"
+    fi
+    tmux split-window -h -t "$left_pane" -c "$ROOT" "$pane_cmd"
+    window_id="$(tmux display-message -p -t "$monitor_session:" "#{window_id}")"
+    tmux select-layout -t "$window_id" even-horizontal
+    tmux set-option -t "$monitor_session" remain-on-exit on >/dev/null 2>&1 || true
+  fi
+fi
+
+run_cmd=""
+start_wrapper="$out_root/start.sh"
+cat <<EOF > "$start_wrapper"
+#!/usr/bin/env bash
+set -euo pipefail
+
+attempt=0
+max="\${PEAKYPANES_START_RETRIES:-5}"
+if [[ "\$max" -lt 1 ]]; then
+  max=1
+fi
+
+while true; do
+  $(printf %q "$bin_path") start --temporary-run --path $(printf %q "$run_dir")
+  code=\$?
+  if [[ "\$code" -eq 0 ]]; then
+    exit 0
+  fi
+  attempt=\$((attempt + 1))
+  if [[ "\$attempt" -ge "\$max" ]]; then
+    echo "peakypanes: start failed after \$attempt attempts (exit \$code)" >&2
+    exit "\$code"
+  fi
+  echo "peakypanes: start failed (exit \$code), retrying..." >&2
+  sleep 1
+done
+EOF
+chmod +x "$start_wrapper"
+
+if command -v script >/dev/null 2>&1; then
+  run_cmd="script -q $(printf %q "$run_log") $(printf %q "$start_wrapper")"
+else
+  run_cmd="$(printf %q "$start_wrapper")"
+fi
+
+if [[ "$use_ghostty" == true ]]; then
+  if [[ "$(uname -s)" == "Darwin" && -d "/Applications/Ghostty.app" ]]; then
+    env_exports=$(printf 'export PEAKYPANES_CPU_PROFILE=%q; export PEAKYPANES_MEM_PROFILE=%q; export PEAKYPANES_CPU_PROFILE_SECS=%q; export PEAKYPANES_DAEMON_LOG=%q; export PEAKYPANES_PROFILE_DONE=%q; export PEAKYPANES_PERF_DEBUG=%q; ' "$PEAKYPANES_CPU_PROFILE" "$PEAKYPANES_MEM_PROFILE" "$PEAKYPANES_CPU_PROFILE_SECS" "$PEAKYPANES_DAEMON_LOG" "$PEAKYPANES_PROFILE_DONE" "$PEAKYPANES_PERF_DEBUG")
+    if [[ -n "$start_delay" ]]; then
+      env_exports+=$(printf 'export PEAKYPANES_PROFILE_START_DELAY=%q; ' "$start_delay")
+    fi
+    if [[ -n "$start_on_send" ]]; then
+      env_exports+=$(printf 'export PEAKYPANES_PROFILE_START_ON_SEND=%q; ' "1")
+    fi
+    if [[ -n "$trigger_timeout" ]]; then
+      env_exports+=$(printf 'export PEAKYPANES_PROFILE_TRIGGER_TIMEOUT=%q; ' "$trigger_timeout")
+    fi
+    if [[ -n "$start_timeout" ]]; then
+      env_exports+=$(printf 'export PEAKYPANES_START_TIMEOUT=%q; ' "$start_timeout")
+    fi
+    if [[ -n "$fgprof_secs" ]]; then
+      env_exports+=$(printf 'export PEAKYPANES_FGPROF=%q; export PEAKYPANES_FGPROF_SECS=%q; ' "$PEAKYPANES_FGPROF" "$PEAKYPANES_FGPROF_SECS")
+    fi
+    if [[ -n "$trace_secs" ]]; then
+      env_exports+=$(printf 'export PEAKYPANES_TRACE=%q; export PEAKYPANES_TRACE_SECS=%q; ' "$PEAKYPANES_TRACE" "$PEAKYPANES_TRACE_SECS")
+    fi
+    if [[ "$enable_block" == true ]]; then
+      env_exports+=$(printf 'export PEAKYPANES_BLOCK_PROFILE=%q; ' "$PEAKYPANES_BLOCK_PROFILE")
+      if [[ -n "$block_rate" ]]; then
+        env_exports+=$(printf 'export PEAKYPANES_BLOCK_RATE=%q; ' "$PEAKYPANES_BLOCK_RATE")
+      fi
+    fi
+    if [[ "$enable_mutex" == true ]]; then
+      env_exports+=$(printf 'export PEAKYPANES_MUTEX_PROFILE=%q; ' "$PEAKYPANES_MUTEX_PROFILE")
+      if [[ -n "$mutex_fraction" ]]; then
+        env_exports+=$(printf 'export PEAKYPANES_MUTEX_FRACTION=%q; ' "$PEAKYPANES_MUTEX_FRACTION")
+      fi
+    fi
+    if [[ "$enable_gops" == true ]]; then
+      env_exports+=$(printf 'export PEAKYPANES_GOPS=%q; export PEAKYPANES_GOPS_CONFIG_DIR=%q; ' "$PEAKYPANES_GOPS" "$PEAKYPANES_GOPS_CONFIG_DIR")
+    fi
+    cmd=$(printf 'set -euo pipefail; %s cd %q; %s' "$env_exports" "$ROOT" "$run_cmd")
+    open -na Ghostty.app --args -e /bin/bash -lc "$cmd"
+  else
+    echo "perf-profiler: Ghostty not available; running in current terminal." >&2
+    use_ghostty=false
+  fi
+fi
+
+if [[ "$use_ghostty" == false ]]; then
+  echo "Profiler output: $out_root"
+  echo "Run log: $run_log"
+  echo "perf_debug: enabled"
+  echo "Daemon log: $daemon_log"
+  if [[ -n "$start_delay" ]]; then
+    echo "profile_start_delay: $start_delay"
+  fi
+  if [[ -n "$start_on_send" ]]; then
+    echo "profile_start_on_send: true"
+  fi
+  if [[ -n "$trigger_timeout" ]]; then
+    echo "profile_trigger_timeout: $trigger_timeout"
+  fi
+  if [[ -n "$start_timeout" ]]; then
+    echo "start_timeout: $start_timeout"
+  fi
+  if [[ -n "$fgprof_secs" ]]; then
+    echo "fgprof: $out_root/fgprof.pprof"
+  fi
+  if [[ -n "$trace_secs" ]]; then
+    echo "trace: $out_root/trace.out"
+  fi
+  if [[ "$enable_block" == true ]]; then
+    echo "block: $out_root/block.pprof"
+  fi
+  if [[ "$enable_mutex" == true ]]; then
+    echo "mutex: $out_root/mutex.pprof"
+  fi
+  if [[ "$enable_gops" == true ]]; then
+    echo "gops config: $out_root/gops"
+  fi
+  echo "Done marker: $done_marker"
+  echo
+  eval "$run_cmd"
+fi
+
+if [[ -n "$monitor_session" ]]; then
+  tmux attach -t "$monitor_session"
+fi
+
+if [[ -f "$out_root/cpu.pprof" ]]; then
+  go tool pprof -top -nodecount=30 "$bin_path" "$out_root/cpu.pprof" > "$out_root/cpu.top.txt" || true
+fi
+if [[ -f "$out_root/heap.pprof" ]]; then
+  go tool pprof -top -nodecount=30 "$bin_path" "$out_root/heap.pprof" > "$out_root/heap.top.txt" || true
+fi
+if [[ -f "$out_root/block.pprof" ]]; then
+  go tool pprof -top -nodecount=30 "$bin_path" "$out_root/block.pprof" > "$out_root/block.top.txt" || true
+fi
+if [[ -f "$out_root/mutex.pprof" ]]; then
+  go tool pprof -top -nodecount=30 "$bin_path" "$out_root/mutex.pprof" > "$out_root/mutex.top.txt" || true
+fi
+
+timings_out="$out_root/timings.tsv"
+timings_summary="$out_root/timings.summary.txt"
+if [[ -f "$daemon_log" ]]; then
+  awk '
+  function dur_ms(s) {
+    if (s == "" || s == "-") { return "" }
+    if (s ~ /ms$/) { sub(/ms$/, "", s); return s + 0 }
+    if (s ~ /s$/) { sub(/s$/, "", s); return (s + 0) * 1000 }
+    return s + 0
+  }
+  /native: pane first output after input / {
+    pane=""; since=""; sincein=""
+    for (i=1;i<=NF;i++) {
+      if ($i ~ /^pane=/) { pane=substr($i,6) }
+      if ($i ~ /^since_start=/) { since=substr($i,13) }
+      if ($i ~ /^since_input=/) { sincein=substr($i,13) }
+    }
+    if (pane != "") { outafter[pane]=since; sincein_arr[pane]=sincein; panes[pane]=1 }
+    next
+  }
+  /native: pane first output / && !/after input/ && /since_start=/ {
+    pane=""; since=""
+    for (i=1;i<=NF;i++) {
+      if ($i ~ /^pane=/) { pane=substr($i,6) }
+      if ($i ~ /^since_start=/) { since=substr($i,13) }
+    }
+    if (pane != "") { out[pane]=since; panes[pane]=1 }
+    next
+  }
+  /native: pane first input sent / && /since_start=/ {
+    pane=""; since=""
+    for (i=1;i<=NF;i++) {
+      if ($i ~ /^pane=/) { pane=substr($i,6) }
+      if ($i ~ /^since_start=/) { since=substr($i,13) }
+    }
+    if (pane != "") { ins[pane]=since; panes[pane]=1 }
+    next
+  }
+  END {
+    print "pane_num\tpane\tfirst_output\tfirst_input\tfirst_output_after_input\tsince_input\tfirst_output_ms\tfirst_input_ms\tfirst_output_after_input_ms\tsince_input_ms"
+    for (p in panes) {
+      n = substr(p,3) + 0
+      o = (p in out ? out[p] : "-")
+      i = (p in ins ? ins[p] : "-")
+      oa = (p in outafter ? outafter[p] : "-")
+      si = (p in sincein_arr ? sincein_arr[p] : "-")
+      om = dur_ms(o); if (om == "") { om = "-" }
+      im = dur_ms(i); if (im == "") { im = "-" }
+      oam = dur_ms(oa); if (oam == "") { oam = "-" }
+      sim = dur_ms(si); if (sim == "") { sim = "-" }
+      printf "%03d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", n, p, o, i, oa, si, om, im, oam, sim
+    }
+  }' "$daemon_log" | sort -n > "$timings_out"
+
+  awk -F '\t' '
+  function upd(val, minv, maxv, sumv, cntv) {
+    if (val == "" || val == "-") { return minv "\t" maxv "\t" sumv "\t" cntv }
+    v = val + 0
+    if (cntv == 0 || v < minv) { minv = v }
+    if (cntv == 0 || v > maxv) { maxv = v }
+    sumv += v
+    cntv += 1
+    return minv "\t" maxv "\t" sumv "\t" cntv
+  }
+  NR == 1 { next }
+  {
+    split(upd($7, min_out, max_out, sum_out, cnt_out), a, "\t"); min_out=a[1]; max_out=a[2]; sum_out=a[3]; cnt_out=a[4]
+    split(upd($8, min_in, max_in, sum_in, cnt_in), a, "\t"); min_in=a[1]; max_in=a[2]; sum_in=a[3]; cnt_in=a[4]
+    split(upd($9, min_oa, max_oa, sum_oa, cnt_oa), a, "\t"); min_oa=a[1]; max_oa=a[2]; sum_oa=a[3]; cnt_oa=a[4]
+    split(upd($10, min_si, max_si, sum_si, cnt_si), a, "\t"); min_si=a[1]; max_si=a[2]; sum_si=a[3]; cnt_si=a[4]
+  }
+  END {
+    print "timings_summary_ms:"
+    if (cnt_out > 0) { printf "  first_output: count=%d min=%.3f max=%.3f avg=%.3f\n", cnt_out, min_out, max_out, sum_out/cnt_out } else { print "  first_output: no data" }
+    if (cnt_in > 0) { printf "  first_input: count=%d min=%.3f max=%.3f avg=%.3f\n", cnt_in, min_in, max_in, sum_in/cnt_in } else { print "  first_input: no data" }
+    if (cnt_oa > 0) { printf "  first_output_after_input: count=%d min=%.3f max=%.3f avg=%.3f\n", cnt_oa, min_oa, max_oa, sum_oa/cnt_oa } else { print "  first_output_after_input: no data" }
+    if (cnt_si > 0) { printf "  since_input: count=%d min=%.3f max=%.3f avg=%.3f\n", cnt_si, min_si, max_si, sum_si/cnt_si } else { print "  since_input: no data" }
+  }' "$timings_out" > "$timings_summary"
+
+  {
+    echo
+    echo "timings_table: $timings_out"
+    echo "timings_summary: $timings_summary"
+    echo
+    cat "$timings_summary"
+  } >> "$report"
+fi
+
+cat <<EOF
+
+Saved profiler artifacts to: $out_root
+- cpu.pprof / heap.pprof
+- cpu.top.txt / heap.top.txt
+- report.txt
+- run.log
+- daemon.log
+- DONE (marker file)
+$( [[ -n "$fgprof_secs" ]] && echo "- fgprof.pprof" )
+$( [[ -n "$trace_secs" ]] && echo "- trace.out" )
+$( [[ "$enable_block" == true ]] && echo "- block.pprof / block.top.txt" )
+$( [[ "$enable_mutex" == true ]] && echo "- mutex.pprof / mutex.top.txt" )
+EOF

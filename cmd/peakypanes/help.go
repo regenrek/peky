@@ -40,6 +40,8 @@ Usage:
 
 Options:
   -h, --help           Show this help
+  --fresh-config       Start with no global config or saved state
+  --temporary-run      Use a temporary runtime + config dir (implies --fresh-config)
 
 Examples:
   peakypanes dashboard
@@ -120,6 +122,8 @@ Options:
   --layout <name>      Use specific layout (default: auto-detect)
   --session <name>     Override session name (default: directory name)
   --path <dir>         Project directory (default: current directory)
+  --fresh-config       Start with no global config or saved state
+  --temporary-run      Use a temporary runtime + config dir (implies --fresh-config)
   -h, --help           Show this help
 
 Layout Detection (in order):

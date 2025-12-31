@@ -50,6 +50,7 @@ func (d *Daemon) handleSnapshot(payload []byte) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
 	defer cancel()
 	sessions := manager.Snapshot(ctx, req.PreviewLines)
+	d.debugSnapshot(req.PreviewLines, sessions)
 	resp := SnapshotResponse{Version: manager.Version(), Sessions: sessions}
 	return encodePayload(resp)
 }

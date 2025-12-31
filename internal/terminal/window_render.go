@@ -7,6 +7,7 @@ import (
 	"io"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	uv "github.com/charmbracelet/ultraviolet"
@@ -90,13 +91,31 @@ func (w *Window) refreshANSICache() {
 
 	startSeq := w.UpdateSeq()
 
+	perf := perfDebugEnabled()
+	var start time.Time
+	if perf {
+		start = time.Now()
+	}
+
 	w.termMu.Lock()
+	lockWait := time.Duration(0)
+	if perf {
+		lockWait = time.Since(start)
+	}
 	term := w.term
 	if term == nil {
 		w.termMu.Unlock()
 		return
 	}
-	s := term.Render()
+	var renderDur time.Duration
+	var s string
+	if perf {
+		renderStart := time.Now()
+		s = term.Render()
+		renderDur = time.Since(renderStart)
+	} else {
+		s = term.Render()
+	}
 	cols := term.Width()
 	rows := term.Height()
 	if cols < 0 {
@@ -108,6 +127,19 @@ func (w *Window) refreshANSICache() {
 	alt := w.altScreen.Load()
 	w.termMu.Unlock()
 	endSeq := w.UpdateSeq()
+
+	if perf {
+		total := time.Since(start)
+		if lockWait > perfSlowLock {
+			logPerfEvery("term.ansi.lock", perfLogInterval, "terminal: ansi lock wait=%s cols=%d rows=%d", lockWait, cols, rows)
+		}
+		if renderDur > perfSlowANSIRender {
+			logPerfEvery("term.ansi.render", perfLogInterval, "terminal: ansi render dur=%s cols=%d rows=%d", renderDur, cols, rows)
+		}
+		if total > perfSlowANSIRender {
+			logPerfEvery("term.ansi.total", perfLogInterval, "terminal: ansi total dur=%s cols=%d rows=%d", total, cols, rows)
+		}
+	}
 
 	w.cacheMu.Lock()
 	w.cacheANSI = s
@@ -142,6 +174,11 @@ func (w *Window) ViewLipglossCtx(ctx context.Context, showCursor bool, profile t
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
+	perf := perfDebugEnabled()
+	var start time.Time
+	if perf {
+		start = time.Now()
+	}
 	cells, cols, rows, state, err := w.collectLipglossCells(ctx, showCursor)
 	if err != nil || cols <= 0 || rows <= 0 {
 		return "", err
@@ -156,7 +193,26 @@ func (w *Window) ViewLipglossCtx(ctx context.Context, showCursor bool, profile t
 		Profile:    profile,
 	}
 
-	return renderCellsLipglossCtx(ctx, cols, rows, snapCellAt, opts)
+	var collectDur time.Duration
+	if perf {
+		collectDur = time.Since(start)
+		if collectDur > perfSlowLipgloss {
+			logPerfEvery("term.lipgloss.collect", perfLogInterval, "terminal: lipgloss collect dur=%s cols=%d rows=%d", collectDur, cols, rows)
+		}
+	}
+	renderStart := time.Now()
+	out, renderErr := renderCellsLipglossCtx(ctx, cols, rows, snapCellAt, opts)
+	if perf {
+		renderDur := time.Since(renderStart)
+		if renderDur > perfSlowLipgloss {
+			logPerfEvery("term.lipgloss.render", perfLogInterval, "terminal: lipgloss render dur=%s cols=%d rows=%d", renderDur, cols, rows)
+		}
+		total := time.Since(start)
+		if total > perfSlowLipglossAll {
+			logPerfEvery("term.lipgloss.total", perfLogInterval, "terminal: lipgloss total dur=%s cols=%d rows=%d", total, cols, rows)
+		}
+	}
+	return out, renderErr
 }
 
 func ensureContext(ctx context.Context) context.Context {

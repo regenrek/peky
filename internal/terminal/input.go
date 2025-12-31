@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"syscall"
+	"time"
 )
 
 // SendInput writes bytes to the underlying PTY.
@@ -53,6 +54,10 @@ func (w *Window) SendInput(input []byte) error {
 	if n != len(input) {
 		return fmt.Errorf("terminal: partial write: wrote %d of %d", n, len(input))
 	}
+
+	now := time.Now().UnixNano()
+	w.lastWriteAt.Store(now)
+	w.firstWriteAt.CompareAndSwap(0, now)
 
 	// Input often changes the screen (echo, app updates).
 	w.markDirty()
@@ -180,13 +185,49 @@ func (w *Window) handleTerminalWrite(data []byte) {
 	oldSB := 0
 	newSB := 0
 
+	perf := perfDebugEnabled()
+	var start time.Time
+	if perf {
+		start = time.Now()
+	}
+
 	w.termMu.Lock()
+	lockWait := time.Duration(0)
+	if perf {
+		lockWait = time.Since(start)
+	}
 	if w.term != nil {
 		oldSB = w.term.ScrollbackLen()
-		_, _ = w.term.Write(data)
+		if perf {
+			writeStart := time.Now()
+			_, _ = w.term.Write(data)
+			writeDur := time.Since(writeStart)
+			if writeDur > perfSlowWrite {
+				logPerfEvery("term.write.apply", perfLogInterval, "terminal: term.Write dur=%s bytes=%d", writeDur, len(data))
+			}
+		} else {
+			_, _ = w.term.Write(data)
+		}
 		newSB = w.term.ScrollbackLen()
 	}
 	w.termMu.Unlock()
+
+	nowNano := time.Now().UnixNano()
+	w.firstReadAt.CompareAndSwap(0, nowNano)
+	lastWrite := w.lastWriteAt.Load()
+	if lastWrite != 0 {
+		w.firstReadAfterWriteAt.CompareAndSwap(0, nowNano)
+	}
+
+	if perf {
+		total := time.Since(start)
+		if lockWait > perfSlowLock {
+			logPerfEvery("term.write.lock", perfLogInterval, "terminal: termMu wait=%s bytes=%d", lockWait, len(data))
+		}
+		if total > perfSlowWrite {
+			logPerfEvery("term.write.total", perfLogInterval, "terminal: handleTerminalWrite dur=%s bytes=%d", total, len(data))
+		}
+	}
 
 	if newSB > oldSB {
 		w.onScrollbackGrew(newSB - oldSB)
