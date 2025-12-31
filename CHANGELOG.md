@@ -5,6 +5,19 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Added
+- Performance profiler harness (`scripts/perf-profiler`) with trace/fgprof/gops capture and timing summaries.
+- Performance layout fixtures for 10-pane baselines plus wait-for-output variant.
+- Performance test README in `testdata/performance-tests/`.
+
+### Changed
+- Layout send actions default to waiting for first output when `send_delay_ms` is omitted.
+- Pane dimension limits now clamp across sessiond, terminal, and VT layers to prevent oversize allocations.
+- VT parser data buffer reduced from 4MB to 64KB (configurable via env override).
+
+### Fixed
+- Pane view cache now enforces TTL + max-entry eviction to prevent unbounded growth.
+
 ## 0.0.8 - 2025-12-31
 
 ### Fixed
