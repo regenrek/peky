@@ -13,6 +13,21 @@ type quickReplyTarget struct {
 	Pane PaneItem
 }
 
+type quickReplyTargetStatus int
+
+const (
+	quickReplyTargetSent quickReplyTargetStatus = iota
+	quickReplyTargetSkipped
+	quickReplyTargetClosed
+	quickReplyTargetFailed
+)
+
+type quickReplyTargetResult struct {
+	Status quickReplyTargetStatus
+	PaneID string
+	Err    error
+}
+
 type quickReplySendResult struct {
 	ScopeLabel    string
 	Total         int
@@ -45,39 +60,54 @@ func (m *Model) sendQuickReplyBroadcast(scope quickReplyScope, text string) tea.
 			Total:      len(targets),
 		}
 		for _, target := range targets {
-			paneID := strings.TrimSpace(target.Pane.ID)
-			if paneID == "" {
-				result.Skipped++
-				continue
-			}
-			if m.isPaneInputDisabled(paneID) {
-				result.Skipped++
-				continue
-			}
-			if pane := m.paneByID(paneID); pane == nil || pane.Dead {
-				result.ClosedPaneIDs = append(result.ClosedPaneIDs, paneID)
-				continue
-			}
-			payload := quickReplyInputBytes(target.Pane, message)
-			logQuickReplySendAttempt(target.Pane, payload)
-			ctx, cancel := context.WithTimeout(context.Background(), terminalActionTimeout)
-			err := m.client.SendInput(ctx, paneID, payload)
-			cancel()
-			if err != nil {
-				logQuickReplySendError(paneID, err)
-				if isPaneClosedError(err) {
-					result.ClosedPaneIDs = append(result.ClosedPaneIDs, paneID)
-					continue
-				}
-				result.Failed++
-				if result.FirstError == "" {
-					result.FirstError = err.Error()
-				}
-				continue
-			}
-			result.Sent++
+			targetResult := m.sendQuickReplyToTarget(target, message)
+			applyQuickReplyTargetResult(&result, targetResult)
 		}
 		return quickReplySendMsg{Result: result}
+	}
+}
+
+func (m *Model) sendQuickReplyToTarget(target quickReplyTarget, message string) quickReplyTargetResult {
+	paneID := strings.TrimSpace(target.Pane.ID)
+	if paneID == "" {
+		return quickReplyTargetResult{Status: quickReplyTargetSkipped}
+	}
+	if m.isPaneInputDisabled(paneID) {
+		return quickReplyTargetResult{Status: quickReplyTargetSkipped, PaneID: paneID}
+	}
+	if pane := m.paneByID(paneID); pane == nil || pane.Dead {
+		return quickReplyTargetResult{Status: quickReplyTargetClosed, PaneID: paneID}
+	}
+	payload := quickReplyInputBytes(target.Pane, message)
+	logQuickReplySendAttempt(target.Pane, payload)
+	ctx, cancel := context.WithTimeout(context.Background(), terminalActionTimeout)
+	err := m.client.SendInput(ctx, paneID, payload)
+	cancel()
+	if err != nil {
+		logQuickReplySendError(paneID, err)
+		if isPaneClosedError(err) {
+			return quickReplyTargetResult{Status: quickReplyTargetClosed, PaneID: paneID, Err: err}
+		}
+		return quickReplyTargetResult{Status: quickReplyTargetFailed, PaneID: paneID, Err: err}
+	}
+	return quickReplyTargetResult{Status: quickReplyTargetSent, PaneID: paneID}
+}
+
+func applyQuickReplyTargetResult(result *quickReplySendResult, targetResult quickReplyTargetResult) {
+	switch targetResult.Status {
+	case quickReplyTargetSent:
+		result.Sent++
+	case quickReplyTargetSkipped:
+		result.Skipped++
+	case quickReplyTargetClosed:
+		if targetResult.PaneID != "" {
+			result.ClosedPaneIDs = append(result.ClosedPaneIDs, targetResult.PaneID)
+		}
+	case quickReplyTargetFailed:
+		result.Failed++
+		if result.FirstError == "" && targetResult.Err != nil {
+			result.FirstError = targetResult.Err.Error()
+		}
 	}
 }
 
