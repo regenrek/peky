@@ -12,6 +12,7 @@ This format is based on Keep a Changelog.
 - Daemon-side relay, event, and action logging plus output snapshots for pane history/tail.
 - Shared policy packages for session/path validation and workspace/project operations.
 - Daemon lifecycle subcommands (`daemon start|stop`).
+- CLI smoke script (`scripts/cli-smoke.sh`) to build, start the daemon, and exercise core commands.
 
 ### Changed
 - CLI now runs entirely on `urfave/cli/v3` with spec-driven help and slash command shortcuts.

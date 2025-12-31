@@ -20,4 +20,10 @@ scripts/fresh-run
 scripts/fresh-run X.Y.Z --with-project
 ```
 
+CLI smoke run (builds `./bin/peakypanes`, starts daemon, runs core commands):
+
+```bash
+scripts/cli-smoke.sh
+```
+
 GitHub Actions runs gofmt checks, go vet, go test with coverage, and race on Linux.
