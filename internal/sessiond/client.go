@@ -164,9 +164,13 @@ func (c *Client) readLoop() {
 type eventKey struct {
 	Type   EventType
 	PaneID string
+	ID     string
 }
 
 func eventKeyFor(evt Event) eventKey {
+	if evt.ID != "" {
+		return eventKey{Type: evt.Type, ID: evt.ID}
+	}
 	return eventKey{Type: evt.Type, PaneID: evt.PaneID}
 }
 
@@ -354,12 +358,21 @@ func (c *Client) SessionNames(ctx context.Context) ([]string, error) {
 
 // Snapshot fetches session snapshots.
 func (c *Client) Snapshot(ctx context.Context, previewLines int) ([]native.SessionSnapshot, uint64, error) {
-	req := SnapshotRequest{PreviewLines: previewLines}
-	var resp SnapshotResponse
-	if _, err := c.call(ctx, OpSnapshot, req, &resp); err != nil {
+	resp, err := c.SnapshotState(ctx, previewLines)
+	if err != nil {
 		return nil, 0, err
 	}
 	return resp.Sessions, resp.Version, nil
+}
+
+// SnapshotState fetches session snapshots with focus state.
+func (c *Client) SnapshotState(ctx context.Context, previewLines int) (SnapshotResponse, error) {
+	req := SnapshotRequest{PreviewLines: previewLines}
+	var resp SnapshotResponse
+	if _, err := c.call(ctx, OpSnapshot, req, &resp); err != nil {
+		return SnapshotResponse{}, err
+	}
+	return resp, nil
 }
 
 // StartSession starts a session via the daemon.
@@ -392,6 +405,12 @@ func (c *Client) RenamePane(ctx context.Context, sessionName, paneIndex, newTitl
 	return err
 }
 
+// RenamePaneByID renames a pane by pane id.
+func (c *Client) RenamePaneByID(ctx context.Context, paneID, newTitle string) error {
+	_, err := c.call(ctx, OpRenamePane, RenamePaneRequest{PaneID: paneID, NewTitle: newTitle}, nil)
+	return err
+}
+
 // SplitPane splits a pane.
 func (c *Client) SplitPane(ctx context.Context, sessionName, paneIndex string, vertical bool, percent int) (string, error) {
 	var resp SplitPaneResponse
@@ -407,6 +426,12 @@ func (c *Client) ClosePane(ctx context.Context, sessionName, paneIndex string) e
 	return err
 }
 
+// ClosePaneByID closes a pane by pane id.
+func (c *Client) ClosePaneByID(ctx context.Context, paneID string) error {
+	_, err := c.call(ctx, OpClosePane, ClosePaneRequest{PaneID: paneID}, nil)
+	return err
+}
+
 // SwapPanes swaps two panes in a session.
 func (c *Client) SwapPanes(ctx context.Context, sessionName, paneA, paneB string) error {
 	_, err := c.call(ctx, OpSwapPanes, SwapPanesRequest{SessionName: sessionName, PaneA: paneA, PaneB: paneB}, nil)
@@ -417,6 +442,33 @@ func (c *Client) SwapPanes(ctx context.Context, sessionName, paneA, paneB string
 func (c *Client) SendInput(ctx context.Context, paneID string, input []byte) error {
 	_, err := c.call(ctx, OpSendInput, SendInputRequest{PaneID: paneID, Input: input}, nil)
 	return err
+}
+
+// SendInputAction forwards raw input and records an action entry.
+func (c *Client) SendInputAction(ctx context.Context, paneID string, input []byte, action, summary string) error {
+	req := SendInputRequest{PaneID: paneID, Input: input, RecordAction: true, Action: action, Summary: summary}
+	_, err := c.call(ctx, OpSendInput, req, nil)
+	return err
+}
+
+// SendInputScope forwards raw input to a scope and returns per-pane results.
+func (c *Client) SendInputScope(ctx context.Context, scope string, input []byte) (SendInputResponse, error) {
+	var resp SendInputResponse
+	req := SendInputRequest{Scope: scope, Input: input}
+	if _, err := c.call(ctx, OpSendInput, req, &resp); err != nil {
+		return SendInputResponse{}, err
+	}
+	return resp, nil
+}
+
+// SendInputScopeAction forwards raw input to a scope and records action entries.
+func (c *Client) SendInputScopeAction(ctx context.Context, scope string, input []byte, action, summary string) (SendInputResponse, error) {
+	var resp SendInputResponse
+	req := SendInputRequest{Scope: scope, Input: input, RecordAction: true, Action: action, Summary: summary}
+	if _, err := c.call(ctx, OpSendInput, req, &resp); err != nil {
+		return SendInputResponse{}, err
+	}
+	return resp, nil
 }
 
 // SendMouse forwards a mouse event to a pane.
@@ -436,6 +488,130 @@ func (c *Client) GetPaneView(ctx context.Context, req PaneViewRequest) (PaneView
 	var resp PaneViewResponse
 	if _, err := c.call(ctx, OpPaneView, req, &resp); err != nil {
 		return PaneViewResponse{}, err
+	}
+	return resp, nil
+}
+
+// PaneOutput fetches output lines for a pane.
+func (c *Client) PaneOutput(ctx context.Context, req PaneOutputRequest) (PaneOutputResponse, error) {
+	var resp PaneOutputResponse
+	if _, err := c.call(ctx, OpPaneOutput, req, &resp); err != nil {
+		return PaneOutputResponse{}, err
+	}
+	return resp, nil
+}
+
+// PaneSnapshot fetches scrollback snapshot for a pane.
+func (c *Client) PaneSnapshot(ctx context.Context, paneID string, rows int) (PaneSnapshotResponse, error) {
+	var resp PaneSnapshotResponse
+	req := PaneSnapshotRequest{PaneID: paneID, Rows: rows}
+	if _, err := c.call(ctx, OpPaneSnapshot, req, &resp); err != nil {
+		return PaneSnapshotResponse{}, err
+	}
+	return resp, nil
+}
+
+// PaneHistory returns pane action history.
+func (c *Client) PaneHistory(ctx context.Context, req PaneHistoryRequest) (PaneHistoryResponse, error) {
+	var resp PaneHistoryResponse
+	if _, err := c.call(ctx, OpPaneHistory, req, &resp); err != nil {
+		return PaneHistoryResponse{}, err
+	}
+	return resp, nil
+}
+
+// PaneWait waits for output match.
+func (c *Client) PaneWait(ctx context.Context, req PaneWaitRequest) (PaneWaitResponse, error) {
+	var resp PaneWaitResponse
+	if _, err := c.call(ctx, OpPaneWait, req, &resp); err != nil {
+		return PaneWaitResponse{}, err
+	}
+	return resp, nil
+}
+
+// PaneTags returns tags for a pane.
+func (c *Client) PaneTags(ctx context.Context, paneID string) ([]string, error) {
+	req := PaneTagRequest{PaneID: paneID}
+	var resp PaneTagListResponse
+	if _, err := c.call(ctx, OpPaneTagList, req, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Tags, nil
+}
+
+// AddPaneTags adds tags to a pane.
+func (c *Client) AddPaneTags(ctx context.Context, paneID string, tags []string) ([]string, error) {
+	req := PaneTagRequest{PaneID: paneID, Tags: tags}
+	var resp PaneTagListResponse
+	if _, err := c.call(ctx, OpPaneTagAdd, req, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Tags, nil
+}
+
+// RemovePaneTags removes tags from a pane.
+func (c *Client) RemovePaneTags(ctx context.Context, paneID string, tags []string) ([]string, error) {
+	req := PaneTagRequest{PaneID: paneID, Tags: tags}
+	var resp PaneTagListResponse
+	if _, err := c.call(ctx, OpPaneTagRemove, req, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Tags, nil
+}
+
+// FocusSession focuses a session in the daemon.
+func (c *Client) FocusSession(ctx context.Context, name string) error {
+	_, err := c.call(ctx, OpSessionFocus, FocusSessionRequest{Name: name}, nil)
+	return err
+}
+
+// FocusPane focuses a pane in the daemon.
+func (c *Client) FocusPane(ctx context.Context, paneID string) error {
+	_, err := c.call(ctx, OpPaneFocus, PaneFocusRequest{PaneID: paneID}, nil)
+	return err
+}
+
+// SignalPane sends a signal to a pane process.
+func (c *Client) SignalPane(ctx context.Context, paneID, signal string) error {
+	_, err := c.call(ctx, OpPaneSignal, PaneSignalRequest{PaneID: paneID, Signal: signal}, nil)
+	return err
+}
+
+// RelayCreate creates a relay.
+func (c *Client) RelayCreate(ctx context.Context, cfg RelayConfig) (RelayInfo, error) {
+	var resp RelayCreateResponse
+	if _, err := c.call(ctx, OpRelayCreate, RelayCreateRequest{Config: cfg}, &resp); err != nil {
+		return RelayInfo{}, err
+	}
+	return resp.Relay, nil
+}
+
+// RelayList lists relays.
+func (c *Client) RelayList(ctx context.Context) ([]RelayInfo, error) {
+	var resp RelayListResponse
+	if _, err := c.call(ctx, OpRelayList, nil, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Relays, nil
+}
+
+// RelayStop stops a relay.
+func (c *Client) RelayStop(ctx context.Context, id string) error {
+	_, err := c.call(ctx, OpRelayStop, RelayStopRequest{ID: id}, nil)
+	return err
+}
+
+// RelayStopAll stops all relays.
+func (c *Client) RelayStopAll(ctx context.Context) error {
+	_, err := c.call(ctx, OpRelayStopAll, nil, nil)
+	return err
+}
+
+// EventsReplay returns recent events.
+func (c *Client) EventsReplay(ctx context.Context, req EventsReplayRequest) (EventsReplayResponse, error) {
+	var resp EventsReplayResponse
+	if _, err := c.call(ctx, OpEventsReplay, req, &resp); err != nil {
+		return EventsReplayResponse{}, err
 	}
 	return resp, nil
 }

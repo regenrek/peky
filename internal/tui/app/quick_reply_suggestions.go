@@ -3,6 +3,8 @@ package app
 import (
 	"strings"
 	"unicode"
+
+	"github.com/regenrek/peakypanes/internal/cli/spec"
 )
 
 type slashSuggestion struct {
@@ -235,6 +237,28 @@ func (c *slashEntryCollector) addBroadcast(desc string) {
 	c.addAlias("all", desc)
 }
 
+func (c *slashEntryCollector) addShortcuts(shortcuts []spec.SlashShortcut) {
+	for _, shortcut := range shortcuts {
+		alias := strings.TrimSpace(shortcut.Name)
+		if alias == "" {
+			continue
+		}
+		desc := strings.TrimSpace(shortcut.Summary)
+		if desc == "" {
+			desc = "Slash shortcut"
+		}
+		c.addAlias(alias, desc)
+	}
+}
+
+func loadSlashShortcuts() []spec.SlashShortcut {
+	doc, err := spec.LoadDefault()
+	if err != nil || doc == nil {
+		return nil
+	}
+	return doc.SlashShortcuts
+}
+
 func (m *Model) slashCompletionMatches(prefix string) ([]string, bool) {
 	entries, ok := m.slashSuggestionEntries(prefix, true)
 	if !ok {
@@ -264,6 +288,7 @@ func (m *Model) slashSuggestionEntries(prefix string, includeAliases bool) ([]sl
 	if !broadcastAdded {
 		collector.addBroadcast(defaultBroadcastDesc)
 	}
+	collector.addShortcuts(loadSlashShortcuts())
 	return collector.entries, true
 }
 

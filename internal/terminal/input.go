@@ -53,6 +53,7 @@ func (w *Window) SendInput(input []byte) error {
 	if n != len(input) {
 		return fmt.Errorf("terminal: partial write: wrote %d of %d", n, len(input))
 	}
+	w.bytesIn.Add(uint64(n))
 
 	// Input often changes the screen (echo, app updates).
 	w.markDirty()
@@ -179,6 +180,13 @@ func (w *Window) handleTerminalWrite(data []byte) {
 	// Track scrollback growth so scrollback view stays stable.
 	oldSB := 0
 	newSB := 0
+	if len(data) > 0 {
+		w.bytesOut.Add(uint64(len(data)))
+		if w.outputFn != nil {
+			payload := append([]byte(nil), data...)
+			w.outputFn(payload)
+		}
+	}
 
 	w.termMu.Lock()
 	if w.term != nil {

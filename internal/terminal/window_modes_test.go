@@ -35,6 +35,7 @@ func (f *fakeEmu) SetCallbacks(vt.Callbacks) {}
 func (f *fakeEmu) Height() int               { return f.rows }
 func (f *fakeEmu) Width() int                { return f.cols }
 func (f *fakeEmu) IsAltScreen() bool         { return f.alt }
+func (f *fakeEmu) Cwd() string               { return "" }
 
 func (f *fakeEmu) ScrollbackLen() int { return len(f.sb) }
 func (f *fakeEmu) ScrollbackLine(i int) []uv.Cell {

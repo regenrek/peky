@@ -46,6 +46,9 @@ var requestHandlers = map[Op]requestHandler{
 	OpRenameSession: func(d *Daemon, payload []byte) ([]byte, error) {
 		return d.handleRenameSession(payload)
 	},
+	OpSessionFocus: func(d *Daemon, payload []byte) ([]byte, error) {
+		return d.handleSessionFocus(payload)
+	},
 	OpRenamePane: func(d *Daemon, payload []byte) ([]byte, error) {
 		return d.handleRenamePane(payload)
 	},
@@ -69,6 +72,48 @@ var requestHandlers = map[Op]requestHandler{
 	},
 	OpPaneView: func(d *Daemon, payload []byte) ([]byte, error) {
 		return d.handlePaneView(payload)
+	},
+	OpPaneOutput: func(d *Daemon, payload []byte) ([]byte, error) {
+		return d.handlePaneOutput(payload)
+	},
+	OpPaneSnapshot: func(d *Daemon, payload []byte) ([]byte, error) {
+		return d.handlePaneSnapshot(payload)
+	},
+	OpPaneHistory: func(d *Daemon, payload []byte) ([]byte, error) {
+		return d.handlePaneHistory(payload)
+	},
+	OpPaneWait: func(d *Daemon, payload []byte) ([]byte, error) {
+		return d.handlePaneWait(payload)
+	},
+	OpPaneTagAdd: func(d *Daemon, payload []byte) ([]byte, error) {
+		return d.handlePaneTagAdd(payload)
+	},
+	OpPaneTagRemove: func(d *Daemon, payload []byte) ([]byte, error) {
+		return d.handlePaneTagRemove(payload)
+	},
+	OpPaneTagList: func(d *Daemon, payload []byte) ([]byte, error) {
+		return d.handlePaneTagList(payload)
+	},
+	OpPaneFocus: func(d *Daemon, payload []byte) ([]byte, error) {
+		return d.handlePaneFocus(payload)
+	},
+	OpPaneSignal: func(d *Daemon, payload []byte) ([]byte, error) {
+		return d.handlePaneSignal(payload)
+	},
+	OpRelayCreate: func(d *Daemon, payload []byte) ([]byte, error) {
+		return d.handleRelayCreate(payload)
+	},
+	OpRelayList: func(d *Daemon, payload []byte) ([]byte, error) {
+		return d.handleRelayList(payload)
+	},
+	OpRelayStop: func(d *Daemon, payload []byte) ([]byte, error) {
+		return d.handleRelayStop(payload)
+	},
+	OpRelayStopAll: func(d *Daemon, payload []byte) ([]byte, error) {
+		return d.handleRelayStopAll(payload)
+	},
+	OpEventsReplay: func(d *Daemon, payload []byte) ([]byte, error) {
+		return d.handleEventsReplay(payload)
 	},
 	OpTerminalAction: func(d *Daemon, payload []byte) ([]byte, error) {
 		return d.handleTerminalActionPayload(payload)

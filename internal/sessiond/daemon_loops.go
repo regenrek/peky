@@ -156,6 +156,7 @@ func (d *Daemon) writeLoop(client *clientConn) {
 }
 
 func (d *Daemon) broadcast(event Event) {
+	event = d.recordEvent(event)
 	d.clientsMu.RLock()
 	defer d.clientsMu.RUnlock()
 	if len(d.clients) == 0 {

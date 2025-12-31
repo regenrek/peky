@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/workspace"
 )
 
 func TestRenameDialogs(t *testing.T) {
@@ -108,9 +109,9 @@ func TestHiddenProjectLabelsAndReopen(t *testing.T) {
 	if hiddenProjectLabel(entry) == "" {
 		t.Fatalf("expected hidden project label")
 	}
-	keys := hiddenProjectKeysFrom(entry)
-	if keys.empty() || !keys.matches(entry) {
-		t.Fatalf("expected hidden project key match")
+	keys := workspace.HiddenProjectKeySet([]layout.HiddenProjectConfig{entry})
+	if len(keys) == 0 {
+		t.Fatalf("expected hidden project key set")
 	}
 
 	m := newTestModelLite()

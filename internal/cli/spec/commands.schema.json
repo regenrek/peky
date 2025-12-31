@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://peakypanes.dev/schemas/cli/command-spec/1.0.0.json",
+  "title": "PeakyPanes CLI Command Spec",
+  "type": "object",
+  "required": ["version", "app", "commands"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {"type": "integer", "minimum": 1},
+    "app": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "summary": {"type": "string"},
+        "default_command": {"type": "string"},
+        "allow_layout_shorthand": {"type": "boolean"}
+      }
+    },
+    "global_flags": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/Flag"}
+    },
+    "slash_shortcuts": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/SlashShortcut"}
+    },
+    "commands": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/Command"}
+    }
+  },
+  "$defs": {
+    "Flag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "type"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "aliases": {"type": "array", "items": {"type": "string"}},
+        "type": {"type": "string", "enum": ["string", "bool", "int", "float", "duration", "path", "enum", "string_list"]},
+        "required": {"type": "boolean"},
+        "default": {},
+        "enum": {"type": "array", "items": {"type": "string"}},
+        "repeatable": {"type": "boolean"},
+        "description": {"type": "string"},
+        "env": {"type": "string"},
+        "hidden": {"type": "boolean"}
+      }
+    },
+    "Arg": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "type"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "type": {"type": "string", "enum": ["string", "path", "int", "float", "duration", "enum"]},
+        "required": {"type": "boolean"},
+        "variadic": {"type": "boolean"},
+        "enum": {"type": "array", "items": {"type": "string"}},
+        "description": {"type": "string"}
+      }
+    },
+    "Constraint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "fields"],
+      "properties": {
+        "type": {"type": "string", "enum": ["exactly_one", "at_least_one", "requires", "excludes"]},
+        "fields": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "JsonSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["supported"],
+      "properties": {
+        "supported": {"type": "boolean"},
+        "schema_ref": {"type": "string"},
+        "stream": {"type": "boolean"}
+      }
+    },
+    "SlashSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "aliases": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "SlashShortcut": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "command"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "summary": {"type": "string"},
+        "command": {"type": "string", "minLength": 1},
+        "flags": {"type": "object", "additionalProperties": true}
+      }
+    },
+    "Command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "id", "summary"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "id": {"type": "string", "minLength": 1},
+        "summary": {"type": "string", "minLength": 1},
+        "description": {"type": "string"},
+        "aliases": {"type": "array", "items": {"type": "string"}},
+        "flags": {"type": "array", "items": {"$ref": "#/$defs/Flag"}},
+        "args": {"type": "array", "items": {"$ref": "#/$defs/Arg"}},
+        "constraints": {"type": "array", "items": {"$ref": "#/$defs/Constraint"}},
+        "side_effects": {"type": "boolean"},
+        "confirm": {"type": "boolean"},
+        "json": {"$ref": "#/$defs/JsonSpec"},
+        "slash": {"$ref": "#/$defs/SlashSpec"},
+        "hidden": {"type": "boolean"},
+        "subcommands": {"type": "array", "items": {"$ref": "#/$defs/Command"}}
+      }
+    }
+  }
+}

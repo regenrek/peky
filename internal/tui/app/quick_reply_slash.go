@@ -2,8 +2,12 @@ package app
 
 import (
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/kballard/go-shellquote"
+
+	"github.com/regenrek/peakypanes/internal/cli/spec"
 )
 
 type quickReplyScope string
@@ -86,6 +90,9 @@ func (m *Model) runSlashCommand(input string) (tea.Cmd, bool, bool, bool) {
 		}
 		return alias.command.Run(m, args), true, true, true
 	}
+	if cmd, ok, clear, record := m.runSlashShortcut(body); ok {
+		return cmd, true, clear, record
+	}
 	return NewWarningCmd("Unknown command"), false, false, false
 }
 
@@ -134,4 +141,103 @@ func tokensMatch(left, right []string) bool {
 		}
 	}
 	return true
+}
+
+func (m *Model) runSlashShortcut(body string) (tea.Cmd, bool, bool, bool) {
+	body = strings.TrimSpace(body)
+	if body == "" {
+		return nil, false, false, false
+	}
+	parts, err := shellquote.Split(body)
+	if err != nil || len(parts) == 0 {
+		return nil, false, false, false
+	}
+	name := strings.ToLower(parts[0])
+	doc, err := spec.LoadDefault()
+	if err != nil || doc == nil {
+		return nil, false, false, false
+	}
+	for _, shortcut := range doc.SlashShortcuts {
+		if strings.ToLower(shortcut.Name) != name {
+			continue
+		}
+		command := strings.TrimSpace(shortcut.Command)
+		if command == "" {
+			return NewWarningCmd("Unknown command"), true, true, false
+		}
+		text := strings.TrimSpace(strings.Join(parts[1:], " "))
+		if text == "" {
+			return NewInfoCmd("Nothing to send"), true, false, false
+		}
+		scope := quickReplyScopeSession
+		if raw, ok := shortcut.Flags["scope"]; ok {
+			if value, ok := raw.(string); ok {
+				scope = parseQuickReplyScope(value)
+			}
+		}
+		if raw, ok := shortcut.Flags["pane-id"]; ok {
+			if id, ok := raw.(string); ok && id != "" {
+				if pane := m.paneByID(id); pane != nil {
+					return m.sendQuickReplySingle(*pane, text, shortcutDelay(shortcut)), true, true, true
+				}
+			}
+		}
+		if command == "pane send" || command == "pane run" {
+			return m.sendQuickReplyBroadcastWithDelay(scope, text, shortcutDelay(shortcut)), true, true, true
+		}
+		return NewWarningCmd("Unsupported slash shortcut"), true, false, false
+	}
+	return nil, false, false, false
+}
+
+func shortcutDelay(shortcut spec.SlashShortcut) time.Duration {
+	if raw, ok := shortcut.Flags["delay"]; ok {
+		if value, ok := raw.(string); ok {
+			if d, err := time.ParseDuration(value); err == nil {
+				return d
+			}
+		}
+	}
+	return 0
+}
+
+func parseQuickReplyScope(value string) quickReplyScope {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "project":
+		return quickReplyScopeProject
+	case "all":
+		return quickReplyScopeAll
+	default:
+		return quickReplyScopeSession
+	}
+}
+
+func (m *Model) sendQuickReplyBroadcastWithDelay(scope quickReplyScope, text string, delay time.Duration) tea.Cmd {
+	cmd := m.sendQuickReplyBroadcast(scope, text)
+	if delay <= 0 {
+		return cmd
+	}
+	return func() tea.Msg {
+		time.Sleep(delay)
+		if cmd == nil {
+			return nil
+		}
+		return cmd()
+	}
+}
+
+func (m *Model) sendQuickReplySingle(pane PaneItem, text string, delay time.Duration) tea.Cmd {
+	if strings.TrimSpace(text) == "" {
+		return NewInfoCmd("Nothing to send")
+	}
+	return func() tea.Msg {
+		if delay > 0 {
+			time.Sleep(delay)
+		}
+		result := quickReplySendResult{ScopeLabel: pane.Title, Total: 1}
+		target := quickReplyTarget{Pane: pane}
+		targetResult := m.sendQuickReplyToTarget(target, text)
+		applyQuickReplyTargetResult(&result, targetResult)
+		return quickReplySendMsg{Result: result}
+	}
 }

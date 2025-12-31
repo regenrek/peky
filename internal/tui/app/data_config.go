@@ -2,15 +2,13 @@ package app
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/regenrek/peakypanes/internal/layout"
-	"github.com/regenrek/peakypanes/internal/userpath"
-	"gopkg.in/yaml.v3"
+	"github.com/regenrek/peakypanes/internal/workspace"
 )
 
 const (
@@ -166,11 +164,7 @@ func resolveQuitBehavior(value string) (string, error) {
 }
 
 func resolveProjectRoots(roots []string) []string {
-	projectRoots := normalizeProjectRoots(roots)
-	if len(projectRoots) == 0 {
-		return defaultProjectRoots()
-	}
-	return projectRoots
+	return workspace.ResolveProjectRoots(roots)
 }
 
 func normalizeAttachBehavior(value string) (string, bool) {
@@ -221,110 +215,27 @@ func normalizeQuitBehavior(value string) (string, bool) {
 }
 
 func defaultProjectRoots() []string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil
-	}
-	return []string{filepath.Join(home, "projects")}
+	return workspace.DefaultProjectRoots()
 }
 
 func normalizeProjectPath(path string) string {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return ""
-	}
-	path = userpath.ExpandUser(path)
-	path = filepath.Clean(path)
-	if filepath.IsAbs(path) {
-		return path
-	}
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return path
-	}
-	return abs
+	return workspace.NormalizeProjectPath(path)
 }
 
 func normalizeProjectRoots(roots []string) []string {
-	if len(roots) == 0 {
-		return nil
-	}
-	seen := make(map[string]struct{})
-	var out []string
-	for _, root := range roots {
-		root = strings.TrimSpace(root)
-		if root == "" {
-			continue
-		}
-		root = normalizeProjectPath(root)
-		if _, ok := seen[root]; ok {
-			continue
-		}
-		seen[root] = struct{}{}
-		out = append(out, root)
-	}
-	return out
+	return workspace.NormalizeProjectRoots(roots)
 }
 
 func normalizeHiddenProjects(entries []layout.HiddenProjectConfig) []layout.HiddenProjectConfig {
-	if len(entries) == 0 {
-		return nil
-	}
-	seen := make(map[string]struct{})
-	out := make([]layout.HiddenProjectConfig, 0, len(entries))
-	for _, entry := range entries {
-		entry.Name = strings.TrimSpace(entry.Name)
-		entry.Path = normalizeProjectPath(entry.Path)
-		key := normalizeProjectKey(entry.Path, entry.Name)
-		if key == "" {
-			continue
-		}
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-		out = append(out, entry)
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
+	return workspace.NormalizeHiddenProjects(entries)
 }
 
 func hiddenProjectKeySet(entries []layout.HiddenProjectConfig) map[string]struct{} {
-	if len(entries) == 0 {
-		return nil
-	}
-	keys := make(map[string]struct{})
-	for _, entry := range entries {
-		name := strings.TrimSpace(entry.Name)
-		path := normalizeProjectPath(entry.Path)
-		if path != "" {
-			keys[strings.ToLower(path)] = struct{}{}
-		}
-		if name != "" {
-			keys[strings.ToLower(name)] = struct{}{}
-		}
-	}
-	if len(keys) == 0 {
-		return nil
-	}
-	return keys
+	return workspace.HiddenProjectKeySet(entries)
 }
 
 func loadConfig(path string) (*layout.Config, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return &layout.Config{}, nil
-		}
-		return nil, err
-	}
-	var cfg layout.Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, err
-	}
-	return &cfg, nil
+	return workspace.LoadConfig(path)
 }
 
 func normalizeProjectConfig(pc *layout.ProjectConfig) (name, session, path string) {

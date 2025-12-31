@@ -1,0 +1,915 @@
+version: 1
+app:
+  name: peakypanes
+  summary: CLI-first agent control surface
+  default_command: dashboard
+  allow_layout_shorthand: true
+global_flags:
+  - name: json
+    type: bool
+    description: Emit JSON output.
+  - name: timeout
+    type: duration
+    description: Command timeout (overrides defaults).
+  - name: "yes"
+    aliases: [y]
+    type: bool
+    description: Skip confirmations for side-effect commands.
+slash_shortcuts:
+  - name: all
+    summary: Broadcast to all panes
+    command: pane send
+    flags:
+      scope: all
+  - name: session
+    summary: Broadcast to session panes
+    command: pane send
+    flags:
+      scope: session
+  - name: project
+    summary: Broadcast to project panes
+    command: pane send
+    flags:
+      scope: project
+commands:
+  - name: dashboard
+    id: dashboard
+    aliases: [ui]
+    summary: Open dashboard UI
+    side_effects: false
+    json:
+      supported: false
+  - name: start
+    id: start
+    aliases: [open, o]
+    summary: Start a session and open dashboard
+    side_effects: true
+    confirm: true
+    flags:
+      - name: layout
+        aliases: [l]
+        type: string
+        description: Layout name.
+      - name: session
+        aliases: [s]
+        type: string
+        description: Session name.
+      - name: path
+        aliases: [p]
+        type: path
+        description: Working directory to start in.
+    json:
+      supported: true
+      schema_ref: "#/$defs/ActionResponse"
+  - name: daemon
+    id: daemon
+    summary: Daemon lifecycle
+    json:
+      supported: false
+    subcommands:
+      - name: restart
+        id: daemon.restart
+        summary: Restart the daemon
+        side_effects: true
+        confirm: true
+        flags:
+          - name: "yes"
+            aliases: [y]
+            type: bool
+            description: Skip confirmation.
+        json:
+          supported: true
+          schema_ref: "#/$defs/ActionResponse"
+  - name: init
+    id: init
+    summary: Bootstrap config
+    side_effects: true
+    confirm: true
+    flags:
+      - name: local
+        aliases: [l]
+        type: bool
+        description: Write a local .peakypanes.yml.
+      - name: layout
+        type: string
+        description: Default layout name.
+      - name: force
+        aliases: [f]
+        type: bool
+        description: Overwrite existing config.
+    json:
+      supported: true
+      schema_ref: "#/$defs/ActionResponse"
+  - name: layouts
+    id: layouts.list
+    summary: List layouts
+    json:
+      supported: true
+      schema_ref: "#/$defs/LayoutListResponse"
+    subcommands:
+      - name: export
+        id: layouts.export
+        summary: Export a layout as YAML
+        args:
+          - name: name
+            type: string
+            required: true
+            description: Layout name.
+        json:
+          supported: true
+          schema_ref: "#/$defs/LayoutExportResponse"
+  - name: workspace
+    id: workspace.list
+    summary: Manage workspace projects
+    json:
+      supported: true
+      schema_ref: "#/$defs/WorkspaceListResponse"
+    subcommands:
+      - name: list
+        id: workspace.list
+        summary: List projects
+        json:
+          supported: true
+          schema_ref: "#/$defs/WorkspaceListResponse"
+      - name: open
+        id: workspace.open
+        summary: Unhide and open a project
+        side_effects: true
+        confirm: true
+        flags:
+          - name: name
+            type: string
+            description: Project name.
+          - name: path
+            type: path
+            description: Project path.
+          - name: id
+            type: string
+            description: Project id.
+        constraints:
+          - type: exactly_one
+            fields: [name, path, id]
+        json:
+          supported: true
+          schema_ref: "#/$defs/ActionResponse"
+      - name: close
+        id: workspace.close
+        summary: Hide a project
+        side_effects: true
+        confirm: true
+        flags:
+          - name: name
+            type: string
+            description: Project name.
+          - name: path
+            type: path
+            description: Project path.
+          - name: id
+            type: string
+            description: Project id.
+        constraints:
+          - type: exactly_one
+            fields: [name, path, id]
+        json:
+          supported: true
+          schema_ref: "#/$defs/ActionResponse"
+      - name: close-all
+        id: workspace.close-all
+        summary: Hide all projects
+        side_effects: true
+        confirm: true
+        json:
+          supported: true
+          schema_ref: "#/$defs/ActionResponse"
+  - name: clone
+    id: clone
+    aliases: [c]
+    summary: Clone a repo and start a session
+    side_effects: true
+    confirm: true
+    args:
+      - name: repo
+        type: string
+        required: true
+        description: Repository (URL or owner/name).
+    flags:
+      - name: session
+        type: string
+        description: Session name.
+      - name: layout
+        type: string
+        description: Layout name.
+      - name: path
+        type: path
+        description: Destination path.
+    json:
+      supported: true
+      schema_ref: "#/$defs/ActionResponse"
+  - name: version
+    id: version
+    aliases: [--version, -v]
+    summary: Show version
+    json:
+      supported: false
+  - name: help
+    id: help
+    aliases: [--help, -h]
+    summary: Show help
+    json:
+      supported: false
+  - name: session
+    id: session
+    summary: Session operations
+    json:
+      supported: false
+    subcommands:
+      - name: list
+        id: session.list
+        summary: List sessions
+        json:
+          supported: true
+          schema_ref: "#/$defs/SessionListResponse"
+      - name: start
+        id: session.start
+        summary: Start a session without opening the dashboard
+        side_effects: true
+        confirm: true
+        flags:
+          - name: name
+            type: string
+            description: Session name.
+          - name: path
+            type: path
+            description: Working directory.
+          - name: layout
+            type: string
+            description: Layout name.
+          - name: env
+            type: string_list
+            repeatable: true
+            description: Environment variables (KEY=VALUE).
+        json:
+          supported: true
+          schema_ref: "#/$defs/ActionResponse"
+      - name: kill
+        id: session.kill
+        summary: Kill a session
+        side_effects: true
+        confirm: true
+        flags:
+          - name: name
+            type: string
+            required: true
+            description: Session name.
+        json:
+          supported: true
+          schema_ref: "#/$defs/ActionResponse"
+      - name: rename
+        id: session.rename
+        summary: Rename a session
+        side_effects: true
+        confirm: true
+        flags:
+          - name: old
+            type: string
+            required: true
+            description: Current session name.
+          - name: new
+            type: string
+            required: true
+            description: New session name.
+        json:
+          supported: true
+          schema_ref: "#/$defs/ActionResponse"
+      - name: focus
+        id: session.focus
+        summary: Focus a session in the dashboard
+        side_effects: true
+        confirm: true
+        flags:
+          - name: name
+            type: string
+            required: true
+            description: Session name.
+        json:
+          supported: true
+          schema_ref: "#/$defs/ActionResponse"
+      - name: snapshot
+        id: session.snapshot
+        summary: Emit a dashboard snapshot
+        json:
+          supported: true
+          schema_ref: "#/$defs/SessionSnapshotResponse"
+  - name: pane
+    id: pane
+    summary: Pane operations
+    json:
+      supported: false
+    subcommands:
+      - name: list
+        id: pane.list
+        summary: List panes
+        flags:
+          - name: session
+            type: string
+            description: Filter by session name.
+        json:
+          supported: true
+          schema_ref: "#/$defs/PaneListResponse"
+      - name: rename
+        id: pane.rename
+        summary: Rename a pane
+        side_effects: true
+        confirm: true
+        flags:
+          - name: session
+            type: string
+            description: Session name.
+          - name: index
+            type: int
+            description: Pane index.
+          - name: pane-id
+            type: string
+            description: Pane id.
+          - name: name
+            type: string
+            required: true
+            description: New pane name.
+        constraints:
+          - type: exactly_one
+            fields: [pane-id, session]
+          - type: requires
+            fields: [session, index]
+        json:
+          supported: true
+          schema_ref: "#/$defs/ActionResponse"
+      - name: split
+        id: pane.split
+        summary: Split a pane
+        side_effects: true
+        confirm: true
+        flags:
+          - name: session
+            type: string
+            required: true
+            description: Session name.
+          - name: index
+            type: int
+            required: true
+            description: Pane index.
+          - name: orientation
+            type: enum
+            enum: [vertical, horizontal]
+            required: true
+            description: Split direction.
+          - name: percent
+            type: int
+            description: Size percentage for the new pane.
+        json:
+          supported: true
+          schema_ref: "#/$defs/ActionResponse"
+      - name: close
+        id: pane.close
+        summary: Close a pane
+        side_effects: true
+        confirm: true
+        flags:
+          - name: session
+            type: string
+            description: Session name.
+          - name: index
+            type: int
+            description: Pane index.
+          - name: pane-id
+            type: string
+            description: Pane id.
+        constraints:
+          - type: exactly_one
+            fields: [pane-id, session]
+          - type: requires
+            fields: [session, index]
+        json:
+          supported: true
+          schema_ref: "#/$defs/ActionResponse"
+      - name: swap
+        id: pane.swap
+        summary: Swap two panes
+        side_effects: true
+        confirm: true
+        flags:
+          - name: session
+            type: string
+            required: true
+            description: Session name.
+          - name: a
+            type: int
+            required: true
+            description: First pane index.
+          - name: b
+            type: int
+            required: true
+            description: Second pane index.
+        json:
+          supported: true
+          schema_ref: "#/$defs/ActionResponse"
+      - name: resize
+        id: pane.resize
+        summary: Resize a pane
+        side_effects: true
+        confirm: true
+        flags:
+          - name: pane-id
+            type: string
+            required: true
+            description: Pane id.
+          - name: cols
+            type: int
+            description: Columns to resize to.
+          - name: rows
+            type: int
+            description: Rows to resize to.
+        json:
+          supported: true
+          schema_ref: "#/$defs/ActionResponse"
+      - name: send
+        id: pane.send
+        summary: Send raw input to a pane or scope
+        side_effects: true
+        confirm: true
+        flags:
+          - name: pane-id
+            type: string
+            description: Pane id.
+          - name: scope
+            type: enum
+            enum: [session, project, all]
+            description: Broadcast scope.
+          - name: text
+            type: string
+            description: Raw text to send.
+          - name: stdin
+            type: bool
+            description: Read payload from stdin.
+          - name: file
+            type: path
+            description: Read payload from file.
+          - name: delay
+            type: duration
+            description: Delay before sending payload.
+          - name: submit-delay
+            type: duration
+            description: Delay before submitting newline bytes.
+        constraints:
+          - type: exactly_one
+            fields: [pane-id, scope]
+          - type: exactly_one
+            fields: [text, stdin, file]
+        json:
+          supported: true
+          schema_ref: "#/$defs/ActionResponse"
+      - name: run
+        id: pane.run
+        summary: Run a command in a pane
+        side_effects: true
+        confirm: true
+        flags:
+          - name: pane-id
+            type: string
+            description: Pane id.
+          - name: scope
+            type: enum
+            enum: [session, project, all]
+            description: Broadcast scope.
+          - name: command
+            type: string
+            description: Command string to run.
+          - name: stdin
+            type: bool
+            description: Read command from stdin.
+          - name: file
+            type: path
+            description: Read command from file.
+          - name: delay
+            type: duration
+            description: Delay before sending payload.
+          - name: submit-delay
+            type: duration
+            description: Delay before submitting newline bytes.
+          - name: confirm
+            type: bool
+            description: Require explicit confirmation for this run.
+          - name: require-ack
+            type: bool
+            description: Require a follow-up ack before execution.
+        constraints:
+          - type: exactly_one
+            fields: [pane-id, scope]
+          - type: exactly_one
+            fields: [command, stdin, file]
+        json:
+          supported: true
+          schema_ref: "#/$defs/ActionResponse"
+      - name: view
+        id: pane.view
+        summary: Render a pane view
+        flags:
+          - name: pane-id
+            type: string
+            required: true
+            description: Pane id.
+          - name: rows
+            type: int
+            description: Rows to render.
+          - name: cols
+            type: int
+            description: Columns to render.
+          - name: mode
+            type: enum
+            enum: [ansi, lipgloss, plain]
+            description: Rendering mode.
+        json:
+          supported: true
+          schema_ref: "#/$defs/PaneViewResponse"
+      - name: tail
+        id: pane.tail
+        summary: Stream pane output
+        flags:
+          - name: pane-id
+            type: string
+            required: true
+            description: Pane id.
+          - name: follow
+            type: bool
+            description: Follow output (default true).
+          - name: lines
+            type: int
+            description: Number of lines to emit before following.
+          - name: grep
+            type: string
+            description: Filter output by regex.
+          - name: since
+            type: string
+            description: Start time (RFC3339 or duration).
+          - name: until
+            type: string
+            description: End time (RFC3339 or duration).
+        json:
+          supported: true
+          schema_ref: "#/$defs/PaneTailFrameResponse"
+          stream: true
+      - name: snapshot
+        id: pane.snapshot
+        summary: Snapshot pane scrollback
+        flags:
+          - name: pane-id
+            type: string
+            required: true
+            description: Pane id.
+          - name: rows
+            type: int
+            description: Number of rows to capture.
+        json:
+          supported: true
+          schema_ref: "#/$defs/PaneSnapshotResponse"
+      - name: history
+        id: pane.history
+        summary: Show pane action history
+        flags:
+          - name: pane-id
+            type: string
+            required: true
+            description: Pane id.
+          - name: limit
+            type: int
+            description: Max entries.
+          - name: since
+            type: string
+            description: Start time (RFC3339).
+        json:
+          supported: true
+          schema_ref: "#/$defs/PaneHistoryResponse"
+      - name: wait
+        id: pane.wait
+        summary: Wait for pane output to match a pattern
+        flags:
+          - name: pane-id
+            type: string
+            required: true
+            description: Pane id.
+          - name: for
+            type: string
+            required: true
+            description: Regex pattern to match.
+          - name: timeout
+            type: duration
+            description: Max time to wait.
+        json:
+          supported: true
+          schema_ref: "#/$defs/PaneWaitResponse"
+      - name: tag
+        id: pane.tag
+        summary: Manage pane tags
+        json:
+          supported: false
+        subcommands:
+          - name: add
+            id: pane.tag.add
+            summary: Add tags to a pane
+            side_effects: true
+            confirm: true
+            flags:
+              - name: pane-id
+                type: string
+                required: true
+                description: Pane id.
+              - name: tag
+                type: string_list
+                repeatable: true
+                required: true
+                description: Tag values.
+            json:
+              supported: true
+              schema_ref: "#/$defs/ActionResponse"
+          - name: remove
+            id: pane.tag.remove
+            summary: Remove tags from a pane
+            side_effects: true
+            confirm: true
+            flags:
+              - name: pane-id
+                type: string
+                required: true
+                description: Pane id.
+              - name: tag
+                type: string_list
+                repeatable: true
+                required: true
+                description: Tag values.
+            json:
+              supported: true
+              schema_ref: "#/$defs/ActionResponse"
+          - name: list
+            id: pane.tag.list
+            summary: List tags for a pane
+            flags:
+              - name: pane-id
+                type: string
+                required: true
+                description: Pane id.
+            json:
+              supported: true
+              schema_ref: "#/$defs/PaneTagListResponse"
+      - name: action
+        id: pane.action
+        summary: Trigger a pane scrollback/copy action
+        side_effects: true
+        confirm: true
+        flags:
+          - name: pane-id
+            type: string
+            required: true
+            description: Pane id.
+          - name: action
+            type: string
+            required: true
+            description: Action name.
+          - name: count
+            type: int
+            description: Optional repeat count.
+          - name: lines
+            type: int
+            description: Lines to scroll for scroll actions.
+          - name: delta-x
+            type: int
+            description: Horizontal delta for copy move actions.
+          - name: delta-y
+            type: int
+            description: Vertical delta for copy move actions.
+        json:
+          supported: true
+          schema_ref: "#/$defs/ActionResponse"
+      - name: key
+        id: pane.key
+        summary: Send a key event to a pane
+        side_effects: true
+        confirm: true
+        flags:
+          - name: pane-id
+            type: string
+            required: true
+            description: Pane id.
+          - name: key
+            type: string
+            required: true
+            description: Key identifier.
+          - name: mods
+            type: string_list
+            repeatable: true
+            description: Modifier keys (ctrl, alt, shift, meta).
+          - name: scrollback-toggle
+            type: bool
+            description: Toggle scrollback mode before handling the key.
+          - name: copy-toggle
+            type: bool
+            description: Toggle copy mode before handling the key.
+        json:
+          supported: true
+          schema_ref: "#/$defs/ActionResponse"
+      - name: signal
+        id: pane.signal
+        summary: Send a signal to a pane process
+        side_effects: true
+        confirm: true
+        flags:
+          - name: pane-id
+            type: string
+            required: true
+            description: Pane id.
+          - name: signal
+            type: string
+            description: Signal name (INT, TERM, KILL).
+        json:
+          supported: true
+          schema_ref: "#/$defs/ActionResponse"
+      - name: focus
+        id: pane.focus
+        summary: Focus a pane in the dashboard
+        side_effects: true
+        confirm: true
+        flags:
+          - name: pane-id
+            type: string
+            required: true
+            description: Pane id.
+        json:
+          supported: true
+          schema_ref: "#/$defs/ActionResponse"
+  - name: relay
+    id: relay
+    summary: Manage pane relays
+    json:
+      supported: false
+    subcommands:
+      - name: create
+        id: relay.create
+        summary: Create a pane relay
+        side_effects: true
+        confirm: true
+        flags:
+          - name: from
+            type: string
+            required: true
+            description: Source pane id.
+          - name: to
+            type: string_list
+            repeatable: true
+            description: Destination pane id(s).
+          - name: scope
+            type: enum
+            enum: [session, project, all]
+            description: Broadcast scope for destinations.
+          - name: mode
+            type: enum
+            enum: [line, raw]
+            description: Relay mode.
+          - name: delay
+            type: duration
+            description: Delay between sends.
+          - name: prefix
+            type: string
+            description: Prefix for each line.
+          - name: ttl
+            type: duration
+            description: Auto-stop after duration.
+        constraints:
+          - type: exactly_one
+            fields: [to, scope]
+        json:
+          supported: true
+          schema_ref: "#/$defs/RelayCreateResponse"
+      - name: list
+        id: relay.list
+        summary: List relays
+        json:
+          supported: true
+          schema_ref: "#/$defs/RelayListResponse"
+      - name: stop
+        id: relay.stop
+        summary: Stop a relay
+        side_effects: true
+        confirm: true
+        flags:
+          - name: id
+            type: string
+            required: true
+            description: Relay id.
+        json:
+          supported: true
+          schema_ref: "#/$defs/ActionResponse"
+      - name: stop-all
+        id: relay.stop-all
+        summary: Stop all relays
+        side_effects: true
+        confirm: true
+        json:
+          supported: true
+          schema_ref: "#/$defs/ActionResponse"
+  - name: events
+    id: events
+    summary: Event streaming
+    json:
+      supported: false
+    subcommands:
+      - name: watch
+        id: events.watch
+        summary: Watch daemon events
+        flags:
+          - name: types
+            type: string_list
+            repeatable: true
+            description: Filter event types.
+        json:
+          supported: true
+          schema_ref: "#/$defs/EventsWatchFrameResponse"
+          stream: true
+      - name: replay
+        id: events.replay
+        summary: Replay recent events
+        flags:
+          - name: since
+            type: string
+            description: Start time (RFC3339).
+          - name: until
+            type: string
+            description: End time (RFC3339).
+          - name: limit
+            type: int
+            description: Max events to return.
+          - name: types
+            type: string_list
+            repeatable: true
+            description: Filter event types.
+        json:
+          supported: true
+          schema_ref: "#/$defs/EventsReplayResponse"
+  - name: context
+    id: context
+    summary: Context helpers
+    json:
+      supported: false
+    subcommands:
+      - name: pack
+        id: context.pack
+        summary: Build a JSON context pack
+        flags:
+          - name: include
+            type: string_list
+            repeatable: true
+            description: Sections to include (panes, git, errors).
+          - name: max-bytes
+            type: int
+            description: Max size for the pack.
+        json:
+          supported: true
+          schema_ref: "#/$defs/ContextPackResponse"
+  - name: nl
+    id: nl
+    summary: Natural language planning
+    json:
+      supported: false
+    subcommands:
+      - name: plan
+        id: nl.plan
+        summary: Translate natural language to a CLI plan
+        args:
+          - name: prompt
+            type: string
+            required: true
+            variadic: true
+            description: Natural language prompt.
+        flags:
+          - name: stdin
+            type: bool
+            description: Read prompt from stdin.
+        json:
+          supported: true
+          schema_ref: "#/$defs/NLPlanResponse"
+      - name: run
+        id: nl.run
+        summary: Execute a natural language plan
+        args:
+          - name: prompt
+            type: string
+            required: true
+            variadic: true
+            description: Natural language prompt.
+        flags:
+          - name: stdin
+            type: bool
+            description: Read prompt from stdin.
+          - name: confirm
+            type: bool
+            description: Require explicit confirmation of the plan.
+        json:
+          supported: true
+          schema_ref: "#/$defs/NLRunResponse"

@@ -92,11 +92,7 @@ func (m *Manager) KillSession(name string) error {
 	m.mu.Unlock()
 
 	m.dropPreviewCache(paneIDs...)
-	for _, pane := range session.Panes {
-		if pane.window != nil {
-			_ = pane.window.Close()
-		}
-	}
+	m.closePanes(session.Panes)
 	for _, id := range paneIDs {
 		m.notifyPane(id)
 	}
@@ -263,6 +259,14 @@ func (m *Manager) snapshotSessions() ([]SessionSnapshot, []panePreviewRef, []str
 		out[si].Panes = make([]PaneSnapshot, len(panes))
 		for pi, pane := range panes {
 			title := paneSnapshotTitle(pane, paneTitles)
+			cwd := ""
+			bytesIn := uint64(0)
+			bytesOut := uint64(0)
+			if pane.window != nil {
+				cwd = pane.window.Cwd()
+				bytesIn = pane.window.BytesIn()
+				bytesOut = pane.window.BytesOut()
+			}
 			out[si].Panes[pi] = PaneSnapshot{
 				ID:            pane.ID,
 				Index:         pane.Index,
@@ -280,6 +284,10 @@ func (m *Manager) snapshotSessions() ([]SessionSnapshot, []panePreviewRef, []str
 				LastActive:    pane.LastActive,
 				RestoreFailed: pane.RestoreFailed,
 				RestoreError:  pane.RestoreError,
+				Cwd:           cwd,
+				Tags:          append([]string(nil), pane.Tags...),
+				BytesIn:       bytesIn,
+				BytesOut:      bytesOut,
 			}
 			seq := uint64(0)
 			if pane.window != nil {
@@ -406,6 +414,7 @@ type PaneSnapshot struct {
 	Title         string
 	Command       string
 	StartCommand  string
+	Cwd           string
 	PID           int
 	Active        bool
 	Left          int
@@ -418,4 +427,7 @@ type PaneSnapshot struct {
 	Preview       []string
 	RestoreFailed bool
 	RestoreError  string
+	Tags          []string
+	BytesIn       uint64
+	BytesOut      uint64
 }

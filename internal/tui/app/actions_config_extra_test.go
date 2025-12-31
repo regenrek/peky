@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/workspace"
 )
 
 func TestStartSessionNativeAndClosePaneErrors(t *testing.T) {
@@ -65,9 +66,9 @@ func TestUnhideProjectInConfigAndLabels(t *testing.T) {
 	if label == "" {
 		t.Fatalf("expected hidden project label")
 	}
-	keys := hiddenProjectKeysFrom(layout.HiddenProjectConfig{Name: "Alpha"})
-	if keys.empty() || !keys.matches(layout.HiddenProjectConfig{Name: "Alpha"}) {
-		t.Fatalf("expected hidden project key match")
+	keys := workspace.HiddenProjectKeySet([]layout.HiddenProjectConfig{{Name: "Alpha"}})
+	if len(keys) == 0 {
+		t.Fatalf("expected hidden project key set")
 	}
 }
 

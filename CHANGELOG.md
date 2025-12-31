@@ -5,6 +5,17 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Added
+- Canonical CLI command spec (`internal/cli/spec/commands.yaml`) with validated JSON output schema (`docs/schemas/cli.schema.json`).
+- Agent-grade CLI commands for sessions, panes, workspace projects, relays, events, context packs, and NL plan/run.
+- Pane broadcast scopes (`session|project|all`) with delay/submit-delay controls and per-pane action history.
+- Daemon-side relay, event, and action logging plus output snapshots for pane history/tail.
+- Shared policy packages for session/path validation and workspace/project operations.
+
+### Changed
+- CLI now runs entirely on `urfave/cli/v3` with spec-driven help and slash command shortcuts.
+- TUI quick-reply slash commands are derived from the CLI spec for single-source-of-truth behavior.
+
 ## 0.0.8 - 2025-12-31
 
 ### Fixed

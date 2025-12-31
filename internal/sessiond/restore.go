@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/regenrek/peakypanes/internal/native"
+	"github.com/regenrek/peakypanes/internal/sessionpolicy"
 	"github.com/regenrek/peakypanes/internal/sessiond/state"
 )
 
@@ -78,7 +79,7 @@ func (d *Daemon) restoreSessionEntry(session state.Session, seen map[string]stru
 }
 
 func restoreSessionName(raw string, seen map[string]struct{}) (string, bool) {
-	name, err := validateSessionName(raw)
+	name, err := sessionpolicy.ValidateSessionName(raw)
 	if err != nil {
 		log.Printf("sessiond: restore skipped invalid session %q: %v", raw, err)
 		return "", false
@@ -92,7 +93,7 @@ func restoreSessionPath(name, raw string) string {
 	if path == "" {
 		return ""
 	}
-	if _, err := validatePath(path); err != nil {
+	if _, err := sessionpolicy.ValidatePath(path); err != nil {
 		log.Printf("sessiond: restore session %q invalid path %q: %v", name, path, err)
 		return ""
 	}

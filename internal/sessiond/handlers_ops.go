@@ -12,6 +12,7 @@ import (
 
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/native"
+	"github.com/regenrek/peakypanes/internal/sessionpolicy"
 )
 
 func (d *Daemon) requireManager() (sessionManager, error) {
@@ -50,7 +51,13 @@ func (d *Daemon) handleSnapshot(payload []byte) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
 	defer cancel()
 	sessions := manager.Snapshot(ctx, req.PreviewLines)
-	resp := SnapshotResponse{Version: manager.Version(), Sessions: sessions}
+	focusedSession, focusedPane := d.focusState()
+	resp := SnapshotResponse{
+		Version:        manager.Version(),
+		Sessions:       sessions,
+		FocusedSession: focusedSession,
+		FocusedPaneID:  focusedPane,
+	}
 	return encodePayload(resp)
 }
 
@@ -73,7 +80,7 @@ func (d *Daemon) handleKillSession(payload []byte) ([]byte, error) {
 	if err := decodePayload(payload, &req); err != nil {
 		return nil, err
 	}
-	name, err := validateSessionName(req.Name)
+	name, err := sessionpolicy.ValidateSessionName(req.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -94,11 +101,11 @@ func (d *Daemon) handleRenameSession(payload []byte) ([]byte, error) {
 	if err := decodePayload(payload, &req); err != nil {
 		return nil, err
 	}
-	oldName, err := validateSessionName(req.OldName)
+	oldName, err := sessionpolicy.ValidateSessionName(req.OldName)
 	if err != nil {
 		return nil, err
 	}
-	newName, err := validateSessionName(req.NewName)
+	newName, err := sessionpolicy.ValidateSessionName(req.NewName)
 	if err != nil {
 		return nil, err
 	}
@@ -119,19 +126,27 @@ func (d *Daemon) handleRenamePane(payload []byte) ([]byte, error) {
 	if err := decodePayload(payload, &req); err != nil {
 		return nil, err
 	}
-	sessionName, err := validateSessionName(req.SessionName)
-	if err != nil {
-		return nil, err
-	}
-	paneIndex, err := validatePaneIndex(req.PaneIndex)
-	if err != nil {
-		return nil, err
-	}
 	newTitle := strings.TrimSpace(req.NewTitle)
 	if newTitle == "" {
 		return nil, errors.New("sessiond: pane title is required")
 	}
 	manager, err := d.requireManager()
+	if err != nil {
+		return nil, err
+	}
+	sessionName := strings.TrimSpace(req.SessionName)
+	paneIndex := strings.TrimSpace(req.PaneIndex)
+	if paneID := strings.TrimSpace(req.PaneID); paneID != "" {
+		sessionName, paneIndex, err = resolvePaneTargetByID(manager, paneID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	sessionName, err = sessionpolicy.ValidateSessionName(sessionName)
+	if err != nil {
+		return nil, err
+	}
+	paneIndex, err = sessionpolicy.ValidatePaneIndex(paneIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -147,11 +162,11 @@ func (d *Daemon) handleSplitPane(payload []byte) ([]byte, error) {
 	if err := decodePayload(payload, &req); err != nil {
 		return nil, err
 	}
-	sessionName, err := validateSessionName(req.SessionName)
+	sessionName, err := sessionpolicy.ValidateSessionName(req.SessionName)
 	if err != nil {
 		return nil, err
 	}
-	paneIndex, err := validatePaneIndex(req.PaneIndex)
+	paneIndex, err := sessionpolicy.ValidatePaneIndex(req.PaneIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -174,15 +189,23 @@ func (d *Daemon) handleClosePane(payload []byte) ([]byte, error) {
 	if err := decodePayload(payload, &req); err != nil {
 		return nil, err
 	}
-	sessionName, err := validateSessionName(req.SessionName)
-	if err != nil {
-		return nil, err
-	}
-	paneIndex, err := validatePaneIndex(req.PaneIndex)
-	if err != nil {
-		return nil, err
-	}
 	manager, err := d.requireManager()
+	if err != nil {
+		return nil, err
+	}
+	sessionName := strings.TrimSpace(req.SessionName)
+	paneIndex := strings.TrimSpace(req.PaneIndex)
+	if paneID := strings.TrimSpace(req.PaneID); paneID != "" {
+		sessionName, paneIndex, err = resolvePaneTargetByID(manager, paneID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	sessionName, err = sessionpolicy.ValidateSessionName(sessionName)
+	if err != nil {
+		return nil, err
+	}
+	paneIndex, err = sessionpolicy.ValidatePaneIndex(paneIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -200,15 +223,15 @@ func (d *Daemon) handleSwapPanes(payload []byte) ([]byte, error) {
 	if err := decodePayload(payload, &req); err != nil {
 		return nil, err
 	}
-	sessionName, err := validateSessionName(req.SessionName)
+	sessionName, err := sessionpolicy.ValidateSessionName(req.SessionName)
 	if err != nil {
 		return nil, err
 	}
-	paneA, err := validatePaneIndex(req.PaneA)
+	paneA, err := sessionpolicy.ValidatePaneIndex(req.PaneA)
 	if err != nil {
 		return nil, err
 	}
-	paneB, err := validatePaneIndex(req.PaneB)
+	paneB, err := sessionpolicy.ValidatePaneIndex(req.PaneB)
 	if err != nil {
 		return nil, err
 	}
@@ -228,18 +251,63 @@ func (d *Daemon) handleSendInput(payload []byte) ([]byte, error) {
 	if err := decodePayload(payload, &req); err != nil {
 		return nil, err
 	}
-	paneID, err := requirePaneID(req.PaneID)
-	if err != nil {
-		return nil, err
-	}
 	manager, err := d.requireManager()
 	if err != nil {
 		return nil, err
 	}
-	if err := manager.SendInput(paneID, req.Input); err != nil {
+	paneID := strings.TrimSpace(req.PaneID)
+	scope := strings.TrimSpace(req.Scope)
+	if paneID != "" && scope != "" {
+		return nil, errors.New("sessiond: pane id and scope are mutually exclusive")
+	}
+	if paneID == "" && scope == "" {
+		return nil, errors.New("sessiond: pane id or scope is required")
+	}
+	if paneID != "" {
+		paneID, err = requirePaneID(paneID)
+		if err != nil {
+			return nil, err
+		}
+		if err := manager.SendInput(paneID, req.Input); err != nil {
+			return nil, err
+		}
+		if req.RecordAction {
+			action := strings.TrimSpace(req.Action)
+			if action == "" {
+				action = "send"
+			}
+			d.recordPaneAction(paneID, action, req.Summary, "", "ok")
+		}
+		return encodePayload(SendInputResponse{
+			Results: []SendInputResult{{PaneID: paneID, Status: "ok"}},
+		})
+	}
+	targets, err := d.resolveScopeTargets(scope)
+	if err != nil {
 		return nil, err
 	}
-	return nil, nil
+	results := make([]SendInputResult, 0, len(targets))
+	action := strings.TrimSpace(req.Action)
+	if action == "" {
+		action = "send"
+	}
+	for _, target := range targets {
+		status := "ok"
+		message := ""
+		if err := manager.SendInput(target, req.Input); err != nil {
+			status = "failed"
+			message = err.Error()
+		}
+		if req.RecordAction {
+			d.recordPaneAction(target, action, req.Summary, "", status)
+		}
+		results = append(results, SendInputResult{
+			PaneID:  target,
+			Status:  status,
+			Message: message,
+		})
+	}
+	return encodePayload(SendInputResponse{Results: results})
 }
 
 func (d *Daemon) handleSendMouse(payload []byte) ([]byte, error) {
@@ -331,15 +399,40 @@ func normalizeDimensions(cols, rows int) (int, int) {
 	return cols, rows
 }
 
+func resolvePaneTargetByID(manager sessionManager, paneID string) (string, string, error) {
+	if manager == nil {
+		return "", "", errors.New("sessiond: manager unavailable")
+	}
+	paneID = strings.TrimSpace(paneID)
+	if paneID == "" {
+		return "", "", errors.New("sessiond: pane id is required")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
+	defer cancel()
+	sessions := manager.Snapshot(ctx, 0)
+	for _, session := range sessions {
+		for _, pane := range session.Panes {
+			if pane.ID == paneID {
+				return session.Name, pane.Index, nil
+			}
+		}
+	}
+	return "", "", fmt.Errorf("sessiond: pane %q not found", paneID)
+}
+
 func (d *Daemon) startSession(req StartSessionRequest) (StartSessionResponse, error) {
 	if d.manager == nil {
 		return StartSessionResponse{}, errors.New("sessiond: manager unavailable")
 	}
-	path, err := validatePath(req.Path)
+	path, err := sessionpolicy.ValidatePath(req.Path)
 	if err != nil {
 		return StartSessionResponse{}, err
 	}
-	nameOverride, err := validateOptionalSessionName(req.Name)
+	nameOverride, err := sessionpolicy.ValidateOptionalSessionName(req.Name)
+	if err != nil {
+		return StartSessionResponse{}, err
+	}
+	env, err := sessionpolicy.ValidateEnvList(req.Env)
 	if err != nil {
 		return StartSessionResponse{}, err
 	}
@@ -356,7 +449,7 @@ func (d *Daemon) startSession(req StartSessionRequest) (StartSessionResponse, er
 	if sessionName == "" {
 		return StartSessionResponse{}, errors.New("sessiond: session name is required")
 	}
-	if _, err := validateSessionName(sessionName); err != nil {
+	if _, err := sessionpolicy.ValidateSessionName(sessionName); err != nil {
 		return StartSessionResponse{}, err
 	}
 
@@ -393,6 +486,7 @@ func (d *Daemon) startSession(req StartSessionRequest) (StartSessionResponse, er
 		Path:       path,
 		Layout:     expanded,
 		LayoutName: selectedLayout.Name,
+		Env:        env,
 	})
 	if err != nil {
 		return StartSessionResponse{}, err

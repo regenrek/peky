@@ -201,6 +201,14 @@ func (e *Emulator) IsAltScreen() bool {
 	return e.scr == &e.scrs[1]
 }
 
+// Cwd returns the last reported working directory (OSC 7), if any.
+func (e *Emulator) Cwd() string {
+	if e == nil {
+		return ""
+	}
+	return e.cwd
+}
+
 // WidthMethod returns the width method used by the terminal.
 func (e *Emulator) WidthMethod() uv.WidthMethod {
 	if e.isModeSet(ansi.ModeUnicodeCore) {

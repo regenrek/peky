@@ -81,6 +81,21 @@ func (m *fakeManager) Window(paneID string) paneWindow {
 	}
 	return m.window
 }
+func (m *fakeManager) PaneTags(string) ([]string, error)                        { return nil, nil }
+func (m *fakeManager) AddPaneTags(string, []string) ([]string, error)            { return nil, nil }
+func (m *fakeManager) RemovePaneTags(string, []string) ([]string, error)         { return nil, nil }
+func (m *fakeManager) OutputSnapshot(string, int) ([]native.OutputLine, error)   { return nil, nil }
+func (m *fakeManager) OutputLinesSince(string, uint64) ([]native.OutputLine, uint64, bool, error) {
+	return nil, 0, false, nil
+}
+func (m *fakeManager) WaitForOutput(context.Context, string) bool { return false }
+func (m *fakeManager) SubscribeRawOutput(string, int) (<-chan native.OutputChunk, func(), error) {
+	ch := make(chan native.OutputChunk)
+	close(ch)
+	return ch, func() {}, nil
+}
+func (m *fakeManager) PaneScrollbackSnapshot(string, int) (string, bool, error) { return "", false, nil }
+func (m *fakeManager) SignalPane(string, string) error                          { return nil }
 func (m *fakeManager) Events() <-chan native.PaneEvent {
 	return m.events
 }

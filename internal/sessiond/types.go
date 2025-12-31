@@ -1,6 +1,8 @@
 package sessiond
 
 import (
+	"time"
+
 	"github.com/muesli/termenv"
 
 	"github.com/regenrek/peakypanes/internal/native"
@@ -16,6 +18,7 @@ const (
 	OpStartSession   Op = "start_session"
 	OpKillSession    Op = "kill_session"
 	OpRenameSession  Op = "rename_session"
+	OpSessionFocus   Op = "session_focus"
 	OpRenamePane     Op = "rename_pane"
 	OpSplitPane      Op = "split_pane"
 	OpClosePane      Op = "close_pane"
@@ -24,6 +27,20 @@ const (
 	OpSendMouse      Op = "send_mouse"
 	OpResizePane     Op = "resize_pane"
 	OpPaneView       Op = "pane_view"
+	OpPaneOutput     Op = "pane_output"
+	OpPaneSnapshot   Op = "pane_snapshot"
+	OpPaneHistory    Op = "pane_history"
+	OpPaneWait       Op = "pane_wait"
+	OpPaneTagAdd     Op = "pane_tag_add"
+	OpPaneTagRemove  Op = "pane_tag_remove"
+	OpPaneTagList    Op = "pane_tag_list"
+	OpPaneFocus      Op = "pane_focus"
+	OpPaneSignal     Op = "pane_signal"
+	OpRelayCreate    Op = "relay_create"
+	OpRelayList      Op = "relay_list"
+	OpRelayStop      Op = "relay_stop"
+	OpRelayStopAll   Op = "relay_stop_all"
+	OpEventsReplay   Op = "events_replay"
 	OpTerminalAction Op = "terminal_action"
 	OpHandleKey      Op = "handle_key"
 )
@@ -35,16 +52,22 @@ const (
 	EventPaneUpdated    EventType = "pane_updated"
 	EventSessionChanged EventType = "session_changed"
 	EventToast          EventType = "toast"
+	EventFocus          EventType = "focus"
+	EventPaneOutput     EventType = "pane_output"
+	EventRelay          EventType = "relay"
 )
 
 // Event is broadcast from daemon to clients.
 type Event struct {
+	ID            string
 	Type          EventType
+	TS            time.Time
 	PaneID        string
 	PaneUpdateSeq uint64
 	Session       string
 	Toast         string
 	ToastKind     ToastLevel
+	Payload       map[string]any
 }
 
 // HelloRequest begins a connection handshake.
@@ -73,6 +96,8 @@ type SnapshotRequest struct {
 type SnapshotResponse struct {
 	Version  uint64
 	Sessions []native.SessionSnapshot
+	FocusedSession string
+	FocusedPaneID  string
 }
 
 // StartSessionRequest starts a new session.
@@ -80,6 +105,7 @@ type StartSessionRequest struct {
 	Name       string
 	Path       string
 	LayoutName string
+	Env        []string
 }
 
 // StartSessionResponse confirms session creation.
@@ -105,8 +131,14 @@ type RenameSessionResponse struct {
 	NewName string
 }
 
+// FocusSessionRequest updates the focused session in the daemon.
+type FocusSessionRequest struct {
+	Name string
+}
+
 // RenamePaneRequest updates a pane title.
 type RenamePaneRequest struct {
+	PaneID      string
 	SessionName string
 	PaneIndex   string
 	NewTitle    string
@@ -127,6 +159,7 @@ type SplitPaneResponse struct {
 
 // ClosePaneRequest closes a pane.
 type ClosePaneRequest struct {
+	PaneID      string
 	SessionName string
 	PaneIndex   string
 }
@@ -140,8 +173,24 @@ type SwapPanesRequest struct {
 
 // SendInputRequest forwards raw input.
 type SendInputRequest struct {
-	PaneID string
-	Input  []byte
+	PaneID       string
+	Scope        string
+	Input        []byte
+	RecordAction bool
+	Action       string
+	Summary      string
+}
+
+// SendInputResult captures a send attempt result.
+type SendInputResult struct {
+	PaneID  string
+	Status  string
+	Message string
+}
+
+// SendInputResponse returns send results (for scoped sends).
+type SendInputResponse struct {
+	Results []SendInputResult
 }
 
 // MouseAction is a mouse action type.
@@ -224,6 +273,180 @@ type PaneViewResponse struct {
 	View         string
 	HasMouse     bool
 	AllowMotion  bool
+}
+
+// PaneOutputRequest asks for output lines since a sequence.
+type PaneOutputRequest struct {
+	PaneID   string
+	SinceSeq uint64
+	Limit    int
+	Wait     bool
+}
+
+// PaneOutputResponse returns output lines and the next sequence.
+type PaneOutputResponse struct {
+	PaneID    string
+	Lines     []native.OutputLine
+	NextSeq   uint64
+	Truncated bool
+}
+
+// PaneSnapshotRequest asks for scrollback snapshot.
+type PaneSnapshotRequest struct {
+	PaneID string
+	Rows   int
+}
+
+// PaneSnapshotResponse returns scrollback snapshot.
+type PaneSnapshotResponse struct {
+	PaneID    string
+	Rows      int
+	Content   string
+	Truncated bool
+}
+
+// PaneHistoryRequest requests pane action history.
+type PaneHistoryRequest struct {
+	PaneID string
+	Limit  int
+	Since  time.Time
+}
+
+// PaneHistoryEntry is a single action log entry.
+type PaneHistoryEntry struct {
+	TS      time.Time
+	Action  string
+	Summary string
+	Command string
+	Status  string
+}
+
+// PaneHistoryResponse returns pane action history.
+type PaneHistoryResponse struct {
+	PaneID  string
+	Entries []PaneHistoryEntry
+}
+
+// PaneWaitRequest waits for output match.
+type PaneWaitRequest struct {
+	PaneID  string
+	Pattern string
+	Timeout time.Duration
+}
+
+// PaneWaitResponse returns wait result.
+type PaneWaitResponse struct {
+	PaneID  string
+	Pattern string
+	Matched bool
+	Match   string
+	Elapsed time.Duration
+}
+
+// PaneTagRequest adds/removes tags.
+type PaneTagRequest struct {
+	PaneID string
+	Tags   []string
+}
+
+// PaneTagListResponse returns tags.
+type PaneTagListResponse struct {
+	PaneID string
+	Tags   []string
+}
+
+// PaneFocusRequest sets focused pane.
+type PaneFocusRequest struct {
+	PaneID string
+}
+
+// PaneSignalRequest sends a signal to a pane process.
+type PaneSignalRequest struct {
+	PaneID string
+	Signal string
+}
+
+// RelayMode describes relay behavior.
+type RelayMode string
+
+const (
+	RelayModeLine RelayMode = "line"
+	RelayModeRaw  RelayMode = "raw"
+)
+
+// RelayStatus describes relay state.
+type RelayStatus string
+
+const (
+	RelayStatusRunning RelayStatus = "running"
+	RelayStatusStopped RelayStatus = "stopped"
+	RelayStatusFailed  RelayStatus = "failed"
+)
+
+// RelayConfig describes a relay creation request.
+type RelayConfig struct {
+	FromPaneID string
+	ToPaneIDs  []string
+	Scope      string
+	Mode       RelayMode
+	Delay      time.Duration
+	Prefix     string
+	TTL        time.Duration
+}
+
+// RelayStats captures relay statistics.
+type RelayStats struct {
+	Lines        uint64
+	Bytes        uint64
+	LastActivity time.Time
+}
+
+// RelayInfo describes a relay.
+type RelayInfo struct {
+	ID        string
+	FromPane  string
+	ToPanes   []string
+	Scope     string
+	Mode      RelayMode
+	Status    RelayStatus
+	Delay     time.Duration
+	Prefix    string
+	TTL       time.Duration
+	CreatedAt time.Time
+	Stats     RelayStats
+}
+
+// RelayCreateRequest requests a new relay.
+type RelayCreateRequest struct {
+	Config RelayConfig
+}
+
+// RelayCreateResponse returns created relay.
+type RelayCreateResponse struct {
+	Relay RelayInfo
+}
+
+// RelayListResponse returns relays.
+type RelayListResponse struct {
+	Relays []RelayInfo
+}
+
+// RelayStopRequest stops a relay by id.
+type RelayStopRequest struct {
+	ID string
+}
+
+// EventsReplayRequest requests recent events.
+type EventsReplayRequest struct {
+	Since time.Time
+	Until time.Time
+	Limit int
+	Types []EventType
+}
+
+// EventsReplayResponse returns replayed events.
+type EventsReplayResponse struct {
+	Events []Event
 }
 
 // TerminalAction identifies scrollback/copy-mode actions.

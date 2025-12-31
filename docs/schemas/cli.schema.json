@@ -1,0 +1,900 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://peakypanes.dev/schemas/cli/1.0.0.json",
+  "title": "PeakyPanes CLI JSON Output Schema",
+  "description": "Canonical JSON output schema for peakypanes CLI commands.",
+  "type": "object",
+  "oneOf": [
+    {"$ref": "#/$defs/ErrorEnvelope"},
+    {"$ref": "#/$defs/ActionResponse"},
+    {"$ref": "#/$defs/SessionListResponse"},
+    {"$ref": "#/$defs/SessionSnapshotResponse"},
+    {"$ref": "#/$defs/PaneListResponse"},
+    {"$ref": "#/$defs/PaneViewResponse"},
+    {"$ref": "#/$defs/PaneSnapshotResponse"},
+    {"$ref": "#/$defs/PaneTailFrameResponse"},
+    {"$ref": "#/$defs/PaneHistoryResponse"},
+    {"$ref": "#/$defs/PaneWaitResponse"},
+    {"$ref": "#/$defs/PaneTagListResponse"},
+    {"$ref": "#/$defs/RelayListResponse"},
+    {"$ref": "#/$defs/RelayCreateResponse"},
+    {"$ref": "#/$defs/EventsWatchFrameResponse"},
+    {"$ref": "#/$defs/EventsReplayResponse"},
+    {"$ref": "#/$defs/ContextPackResponse"},
+    {"$ref": "#/$defs/WorkspaceListResponse"},
+    {"$ref": "#/$defs/LayoutListResponse"},
+    {"$ref": "#/$defs/LayoutExportResponse"},
+    {"$ref": "#/$defs/NLPlanResponse"},
+    {"$ref": "#/$defs/NLRunResponse"}
+  ],
+  "$defs": {
+    "Timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "Duration": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ID": {
+      "type": "string",
+      "minLength": 1
+    },
+    "Meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command", "schema_version", "ts"],
+      "properties": {
+        "command": {"type": "string", "minLength": 1},
+        "schema_version": {"const": "1.0.0"},
+        "version": {"type": "string"},
+        "request_id": {"type": "string"},
+        "duration_ms": {"type": "number", "minimum": 0},
+        "ts": {"$ref": "#/$defs/Timestamp"},
+        "stream": {"type": "boolean"},
+        "seq": {"type": "integer", "minimum": 0},
+        "eof": {"type": "boolean"}
+      }
+    },
+    "Error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1},
+        "message": {"type": "string", "minLength": 1},
+        "details": {"type": "object", "additionalProperties": true}
+      }
+    },
+    "SuccessEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ok", "data", "meta"],
+      "properties": {
+        "ok": {"const": true},
+        "data": {},
+        "meta": {"$ref": "#/$defs/Meta"}
+      }
+    },
+    "ErrorEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ok", "error", "meta"],
+      "properties": {
+        "ok": {"const": false},
+        "error": {"$ref": "#/$defs/Error"},
+        "meta": {"$ref": "#/$defs/Meta"}
+      }
+    },
+    "TargetRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["pane", "session", "project", "workspace", "relay"]
+        },
+        "id": {"$ref": "#/$defs/ID"}
+      }
+    },
+    "TargetResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "status"],
+      "properties": {
+        "target": {"$ref": "#/$defs/TargetRef"},
+        "status": {
+          "type": "string",
+          "enum": ["ok", "skipped", "failed", "closed"]
+        },
+        "message": {"type": "string"}
+      }
+    },
+    "ActionResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "status"],
+      "properties": {
+        "action": {"type": "string", "minLength": 1},
+        "status": {"type": "string", "enum": ["ok", "partial", "failed"]},
+        "message": {"type": "string"},
+        "targets": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/TargetRef"}
+        },
+        "results": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/TargetResult"}
+        },
+        "warnings": {"type": "array", "items": {"type": "string"}},
+        "details": {"type": "object", "additionalProperties": true}
+      }
+    },
+    "ActionResponse": {
+      "allOf": [
+        {"$ref": "#/$defs/SuccessEnvelope"},
+        {
+          "type": "object",
+          "properties": {
+            "data": {"$ref": "#/$defs/ActionResult"},
+            "meta": {
+              "allOf": [
+                {"$ref": "#/$defs/Meta"},
+                {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string",
+                      "enum": [
+                        "start",
+                        "daemon.restart",
+                        "init",
+                        "clone",
+                        "session.start",
+                        "session.kill",
+                        "session.rename",
+                        "session.focus",
+                        "pane.rename",
+                        "pane.split",
+                        "pane.close",
+                        "pane.swap",
+                        "pane.resize",
+                        "pane.send",
+                        "pane.run",
+                        "pane.action",
+                        "pane.key",
+                        "pane.signal",
+                        "pane.focus",
+                        "pane.tag.add",
+                        "pane.tag.remove",
+                        "relay.stop",
+                        "relay.stop-all",
+                        "workspace.open",
+                        "workspace.close",
+                        "workspace.close-all"
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "LayoutSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {"type": "string"},
+        "path": {"type": "string"},
+        "source": {"type": "string"}
+      }
+    },
+    "PaneSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "index"],
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "index": {"type": "integer", "minimum": 0},
+        "title": {"type": "string"},
+        "command": {"type": "string"},
+        "start_command": {"type": "string"},
+        "cwd": {"type": "string"},
+        "dead": {"type": "boolean"},
+        "tags": {"type": "array", "items": {"type": "string"}},
+        "last_activity": {"$ref": "#/$defs/Timestamp"},
+        "bytes_in": {"type": "integer", "minimum": 0},
+        "bytes_out": {"type": "integer", "minimum": 0}
+      }
+    },
+    "PaneSummaryWithContext": {
+      "allOf": [
+        {"$ref": "#/$defs/PaneSummary"},
+        {
+          "type": "object",
+          "properties": {
+            "session_name": {"type": "string"},
+            "project_id": {"$ref": "#/$defs/ID"},
+            "project_name": {"type": "string"}
+          }
+        }
+      ]
+    },
+    "SessionSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {"type": "string"},
+        "layout": {"type": "string"},
+        "cwd": {"type": "string"},
+        "pane_count": {"type": "integer", "minimum": 0},
+        "created_at": {"$ref": "#/$defs/Timestamp"},
+        "last_activity": {"$ref": "#/$defs/Timestamp"}
+      }
+    },
+    "SessionSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "panes"],
+      "properties": {
+        "name": {"type": "string"},
+        "layout": {"type": "string"},
+        "cwd": {"type": "string"},
+        "panes": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/PaneSummary"}
+        }
+      }
+    },
+    "ProjectSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "path", "hidden"],
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "name": {"type": "string"},
+        "path": {"type": "string"},
+        "hidden": {"type": "boolean"},
+        "last_opened": {"$ref": "#/$defs/Timestamp"},
+        "session_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "ProjectSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "path", "hidden", "sessions"],
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "name": {"type": "string"},
+        "path": {"type": "string"},
+        "hidden": {"type": "boolean"},
+        "sessions": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/SessionSnapshot"}
+        }
+      }
+    },
+    "Snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["projects", "generated_at"],
+      "properties": {
+        "projects": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/ProjectSnapshot"}
+        },
+        "selected_project_id": {"$ref": "#/$defs/ID"},
+        "selected_session_name": {"type": "string"},
+        "selected_pane_id": {"$ref": "#/$defs/ID"},
+        "generated_at": {"$ref": "#/$defs/Timestamp"}
+      }
+    },
+    "RelayStats": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lines": {"type": "integer", "minimum": 0},
+        "bytes": {"type": "integer", "minimum": 0},
+        "last_activity": {"$ref": "#/$defs/Timestamp"}
+      }
+    },
+    "Relay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "from_pane_id", "mode", "status"],
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "from_pane_id": {"$ref": "#/$defs/ID"},
+        "to_pane_ids": {"type": "array", "items": {"$ref": "#/$defs/ID"}},
+        "scope": {"type": "string", "enum": ["session", "project", "all"]},
+        "mode": {"type": "string", "enum": ["line", "raw"]},
+        "status": {"type": "string", "enum": ["running", "stopped", "failed"]},
+        "delay": {"$ref": "#/$defs/Duration"},
+        "prefix": {"type": "string"},
+        "ttl": {"$ref": "#/$defs/Duration"},
+        "created_at": {"$ref": "#/$defs/Timestamp"},
+        "stats": {"$ref": "#/$defs/RelayStats"}
+      }
+    },
+    "Event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "ts"],
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "type": {"type": "string"},
+        "ts": {"$ref": "#/$defs/Timestamp"},
+        "payload": {"type": "object", "additionalProperties": true}
+      }
+    },
+    "GitContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "root": {"type": "string"},
+        "branch": {"type": "string"},
+        "head": {"type": "string"},
+        "dirty": {"type": "boolean"},
+        "ahead": {"type": "integer", "minimum": 0},
+        "behind": {"type": "integer", "minimum": 0}
+      }
+    },
+    "ContextPack": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "snapshot": {"$ref": "#/$defs/Snapshot"},
+        "git": {"$ref": "#/$defs/GitContext"},
+        "errors": {"type": "array", "items": {"type": "string"}},
+        "max_bytes": {"type": "integer", "minimum": 0},
+        "truncated": {"type": "boolean"}
+      }
+    },
+    "PaneView": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pane_id", "mode", "rows", "cols", "content"],
+      "properties": {
+        "pane_id": {"$ref": "#/$defs/ID"},
+        "mode": {"type": "string", "enum": ["ansi", "lipgloss", "plain"]},
+        "rows": {"type": "integer", "minimum": 1},
+        "cols": {"type": "integer", "minimum": 1},
+        "content": {"type": "string"},
+        "truncated": {"type": "boolean"}
+      }
+    },
+    "PaneSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pane_id", "rows", "content"],
+      "properties": {
+        "pane_id": {"$ref": "#/$defs/ID"},
+        "rows": {"type": "integer", "minimum": 1},
+        "content": {"type": "string"},
+        "truncated": {"type": "boolean"}
+      }
+    },
+    "PaneTailFrame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pane_id", "chunk"],
+      "properties": {
+        "pane_id": {"$ref": "#/$defs/ID"},
+        "chunk": {"type": "string"},
+        "encoding": {"type": "string", "enum": ["utf-8"]},
+        "truncated": {"type": "boolean"}
+      }
+    },
+    "PaneHistoryEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ts", "action"],
+      "properties": {
+        "ts": {"$ref": "#/$defs/Timestamp"},
+        "action": {"type": "string"},
+        "summary": {"type": "string"},
+        "command": {"type": "string"},
+        "status": {"type": "string"}
+      }
+    },
+    "PlannedCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "command"],
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "command": {"type": "string"},
+        "args": {"type": "array", "items": {"type": "string"}},
+        "flags": {"type": "object", "additionalProperties": true},
+        "summary": {"type": "string"},
+        "side_effects": {"type": "boolean"},
+        "requires_confirm": {"type": "boolean"}
+      }
+    },
+    "ExecutionStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "command", "status"],
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "command": {"type": "string"},
+        "status": {"type": "string", "enum": ["pending", "running", "ok", "failed", "skipped"]},
+        "started_at": {"$ref": "#/$defs/Timestamp"},
+        "finished_at": {"$ref": "#/$defs/Timestamp"},
+        "result": {"$ref": "#/$defs/ActionResult"}
+      }
+    },
+    "SessionListResponse": {
+      "allOf": [
+        {"$ref": "#/$defs/SuccessEnvelope"},
+        {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["sessions"],
+              "properties": {
+                "sessions": {"type": "array", "items": {"$ref": "#/$defs/SessionSummary"}},
+                "total": {"type": "integer", "minimum": 0}
+              }
+            },
+            "meta": {
+              "allOf": [
+                {"$ref": "#/$defs/Meta"},
+                {"type": "object", "properties": {"command": {"const": "session.list"}}}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "SessionSnapshotResponse": {
+      "allOf": [
+        {"$ref": "#/$defs/SuccessEnvelope"},
+        {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["snapshot"],
+              "properties": {
+                "snapshot": {"$ref": "#/$defs/Snapshot"}
+              }
+            },
+            "meta": {
+              "allOf": [
+                {"$ref": "#/$defs/Meta"},
+                {"type": "object", "properties": {"command": {"const": "session.snapshot"}}}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "PaneListResponse": {
+      "allOf": [
+        {"$ref": "#/$defs/SuccessEnvelope"},
+        {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["panes"],
+              "properties": {
+                "panes": {"type": "array", "items": {"$ref": "#/$defs/PaneSummaryWithContext"}},
+                "total": {"type": "integer", "minimum": 0}
+              }
+            },
+            "meta": {
+              "allOf": [
+                {"$ref": "#/$defs/Meta"},
+                {"type": "object", "properties": {"command": {"const": "pane.list"}}}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "PaneViewResponse": {
+      "allOf": [
+        {"$ref": "#/$defs/SuccessEnvelope"},
+        {
+          "type": "object",
+          "properties": {
+            "data": {"$ref": "#/$defs/PaneView"},
+            "meta": {
+              "allOf": [
+                {"$ref": "#/$defs/Meta"},
+                {"type": "object", "properties": {"command": {"const": "pane.view"}}}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "PaneSnapshotResponse": {
+      "allOf": [
+        {"$ref": "#/$defs/SuccessEnvelope"},
+        {
+          "type": "object",
+          "properties": {
+            "data": {"$ref": "#/$defs/PaneSnapshot"},
+            "meta": {
+              "allOf": [
+                {"$ref": "#/$defs/Meta"},
+                {"type": "object", "properties": {"command": {"const": "pane.snapshot"}}}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "PaneTailFrameResponse": {
+      "allOf": [
+        {"$ref": "#/$defs/SuccessEnvelope"},
+        {
+          "type": "object",
+          "properties": {
+            "data": {"$ref": "#/$defs/PaneTailFrame"},
+            "meta": {
+              "allOf": [
+                {"$ref": "#/$defs/Meta"},
+                {
+                  "type": "object",
+                  "properties": {
+                    "command": {"const": "pane.tail"},
+                    "stream": {"const": true}
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "PaneHistoryResponse": {
+      "allOf": [
+        {"$ref": "#/$defs/SuccessEnvelope"},
+        {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["pane_id", "entries"],
+              "properties": {
+                "pane_id": {"$ref": "#/$defs/ID"},
+                "entries": {"type": "array", "items": {"$ref": "#/$defs/PaneHistoryEntry"}}
+              }
+            },
+            "meta": {
+              "allOf": [
+                {"$ref": "#/$defs/Meta"},
+                {"type": "object", "properties": {"command": {"const": "pane.history"}}}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "PaneWaitResponse": {
+      "allOf": [
+        {"$ref": "#/$defs/SuccessEnvelope"},
+        {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["pane_id", "pattern", "matched"],
+              "properties": {
+                "pane_id": {"$ref": "#/$defs/ID"},
+                "pattern": {"type": "string"},
+                "matched": {"type": "boolean"},
+                "match": {"type": "string"},
+                "elapsed_ms": {"type": "integer", "minimum": 0}
+              }
+            },
+            "meta": {
+              "allOf": [
+                {"$ref": "#/$defs/Meta"},
+                {"type": "object", "properties": {"command": {"const": "pane.wait"}}}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "PaneTagListResponse": {
+      "allOf": [
+        {"$ref": "#/$defs/SuccessEnvelope"},
+        {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["pane_id", "tags"],
+              "properties": {
+                "pane_id": {"$ref": "#/$defs/ID"},
+                "tags": {"type": "array", "items": {"type": "string"}}
+              }
+            },
+            "meta": {
+              "allOf": [
+                {"$ref": "#/$defs/Meta"},
+                {"type": "object", "properties": {"command": {"const": "pane.tag.list"}}}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "RelayListResponse": {
+      "allOf": [
+        {"$ref": "#/$defs/SuccessEnvelope"},
+        {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["relays"],
+              "properties": {
+                "relays": {"type": "array", "items": {"$ref": "#/$defs/Relay"}},
+                "total": {"type": "integer", "minimum": 0}
+              }
+            },
+            "meta": {
+              "allOf": [
+                {"$ref": "#/$defs/Meta"},
+                {"type": "object", "properties": {"command": {"const": "relay.list"}}}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "RelayCreateResponse": {
+      "allOf": [
+        {"$ref": "#/$defs/SuccessEnvelope"},
+        {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["relay"],
+              "properties": {
+                "relay": {"$ref": "#/$defs/Relay"}
+              }
+            },
+            "meta": {
+              "allOf": [
+                {"$ref": "#/$defs/Meta"},
+                {"type": "object", "properties": {"command": {"const": "relay.create"}}}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "EventsWatchFrameResponse": {
+      "allOf": [
+        {"$ref": "#/$defs/SuccessEnvelope"},
+        {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["event"],
+              "properties": {
+                "event": {"$ref": "#/$defs/Event"}
+              }
+            },
+            "meta": {
+              "allOf": [
+                {"$ref": "#/$defs/Meta"},
+                {"type": "object", "properties": {"command": {"const": "events.watch"}, "stream": {"const": true}}}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "EventsReplayResponse": {
+      "allOf": [
+        {"$ref": "#/$defs/SuccessEnvelope"},
+        {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["events"],
+              "properties": {
+                "events": {"type": "array", "items": {"$ref": "#/$defs/Event"}},
+                "total": {"type": "integer", "minimum": 0}
+              }
+            },
+            "meta": {
+              "allOf": [
+                {"$ref": "#/$defs/Meta"},
+                {"type": "object", "properties": {"command": {"const": "events.replay"}}}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "ContextPackResponse": {
+      "allOf": [
+        {"$ref": "#/$defs/SuccessEnvelope"},
+        {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["pack"],
+              "properties": {
+                "pack": {"$ref": "#/$defs/ContextPack"}
+              }
+            },
+            "meta": {
+              "allOf": [
+                {"$ref": "#/$defs/Meta"},
+                {"type": "object", "properties": {"command": {"const": "context.pack"}}}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "WorkspaceListResponse": {
+      "allOf": [
+        {"$ref": "#/$defs/SuccessEnvelope"},
+        {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["projects"],
+              "properties": {
+                "projects": {"type": "array", "items": {"$ref": "#/$defs/ProjectSummary"}},
+                "roots": {"type": "array", "items": {"type": "string"}},
+                "total": {"type": "integer", "minimum": 0}
+              }
+            },
+            "meta": {
+              "allOf": [
+                {"$ref": "#/$defs/Meta"},
+                {"type": "object", "properties": {"command": {"const": "workspace.list"}}}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "LayoutListResponse": {
+      "allOf": [
+        {"$ref": "#/$defs/SuccessEnvelope"},
+        {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["layouts"],
+              "properties": {
+                "layouts": {"type": "array", "items": {"$ref": "#/$defs/LayoutSummary"}},
+                "total": {"type": "integer", "minimum": 0}
+              }
+            },
+            "meta": {
+              "allOf": [
+                {"$ref": "#/$defs/Meta"},
+                {"type": "object", "properties": {"command": {"const": "layouts.list"}}}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "LayoutExportResponse": {
+      "allOf": [
+        {"$ref": "#/$defs/SuccessEnvelope"},
+        {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["layout"],
+              "properties": {
+                "layout": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["name", "content"],
+                  "properties": {
+                    "name": {"type": "string"},
+                    "content": {"type": "string"}
+                  }
+                }
+              }
+            },
+            "meta": {
+              "allOf": [
+                {"$ref": "#/$defs/Meta"},
+                {"type": "object", "properties": {"command": {"const": "layouts.export"}}}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "NLPlanResponse": {
+      "allOf": [
+        {"$ref": "#/$defs/SuccessEnvelope"},
+        {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["plan_id", "commands"],
+              "properties": {
+                "plan_id": {"$ref": "#/$defs/ID"},
+                "rationale": {"type": "string"},
+                "commands": {"type": "array", "items": {"$ref": "#/$defs/PlannedCommand"}},
+                "requires_confirmations": {"type": "array", "items": {"type": "string"}}
+              }
+            },
+            "meta": {
+              "allOf": [
+                {"$ref": "#/$defs/Meta"},
+                {"type": "object", "properties": {"command": {"const": "nl.plan"}}}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "NLRunResponse": {
+      "allOf": [
+        {"$ref": "#/$defs/SuccessEnvelope"},
+        {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["execution_id", "plan_id", "steps"],
+              "properties": {
+                "execution_id": {"$ref": "#/$defs/ID"},
+                "plan_id": {"$ref": "#/$defs/ID"},
+                "steps": {"type": "array", "items": {"$ref": "#/$defs/ExecutionStep"}}
+              }
+            },
+            "meta": {
+              "allOf": [
+                {"$ref": "#/$defs/Meta"},
+                {"type": "object", "properties": {"command": {"const": "nl.run"}}}
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

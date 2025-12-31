@@ -63,6 +63,15 @@ type sessionManager interface {
 	SendInput(paneID string, input []byte) error
 	SendMouse(paneID string, event uv.MouseEvent) error
 	Window(paneID string) paneWindow
+	PaneTags(paneID string) ([]string, error)
+	AddPaneTags(paneID string, tags []string) ([]string, error)
+	RemovePaneTags(paneID string, tags []string) ([]string, error)
+	OutputSnapshot(paneID string, limit int) ([]native.OutputLine, error)
+	OutputLinesSince(paneID string, seq uint64) ([]native.OutputLine, uint64, bool, error)
+	WaitForOutput(ctx context.Context, paneID string) bool
+	SubscribeRawOutput(paneID string, buffer int) (<-chan native.OutputChunk, func(), error)
+	PaneScrollbackSnapshot(paneID string, rows int) (string, bool, error)
+	SignalPane(paneID string, signalName string) error
 	Events() <-chan native.PaneEvent
 	Close()
 }

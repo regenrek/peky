@@ -33,7 +33,9 @@ type Pane struct {
 	RestoreFailed bool
 	RestoreError  string
 	LastActive    time.Time
+	Tags          []string
 	window        *terminal.Window
+	output        *outputLog
 }
 
 // Window returns the terminal window for a pane ID.
@@ -144,6 +146,9 @@ func (m *Manager) removePaneFromSession(sessionName, paneIndex string) (*termina
 	session.Panes = append(session.Panes[:paneIdx], session.Panes[paneIdx+1:]...)
 	delete(m.panes, pane.ID)
 	m.dropPreviewCache(pane.ID)
+	if pane.output != nil {
+		pane.output.disable()
+	}
 	paneWindow := pane.window
 
 	if len(session.Panes) == 0 {

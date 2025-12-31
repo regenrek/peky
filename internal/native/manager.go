@@ -83,6 +83,9 @@ func (m *Manager) Close() {
 	m.mu.Lock()
 	for _, session := range m.sessions {
 		for _, pane := range session.Panes {
+			if pane != nil && pane.output != nil {
+				pane.output.disable()
+			}
 			if pane.window != nil {
 				_ = pane.window.Close()
 			}
@@ -188,6 +191,9 @@ func (m *Manager) notifyPane(id string) {
 
 func (m *Manager) closePanes(panes []*Pane) {
 	for _, pane := range panes {
+		if pane != nil && pane.output != nil {
+			pane.output.disable()
+		}
 		if pane.window != nil {
 			_ = pane.window.Close()
 		}

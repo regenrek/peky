@@ -2,8 +2,6 @@ package app
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -11,50 +9,28 @@ import (
 
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/userpath"
+	"github.com/regenrek/peakypanes/internal/workspace"
 )
 
 // ===== Project visibility in config =====
 
 func (m *Model) hideProjectInConfig(project ProjectGroup) (bool, error) {
-	key := normalizeProjectKey(project.Path, project.Name)
-	if key == "" {
-		return false, fmt.Errorf("invalid project key")
-	}
 	cfg, err := loadConfig(m.configPath)
 	if err != nil {
 		return false, fmt.Errorf("load config: %w", err)
 	}
-	existing := hiddenProjectKeySet(cfg.Dashboard.HiddenProjects)
-	if _, ok := existing[key]; ok {
-		return false, nil
-	}
-	nameKey := strings.ToLower(strings.TrimSpace(project.Name))
-	if nameKey != "" {
-		if _, ok := existing[nameKey]; ok {
-			return false, nil
-		}
-	}
-	pathKey := strings.ToLower(normalizeProjectPath(project.Path))
-	if pathKey != "" {
-		if _, ok := existing[pathKey]; ok {
-			return false, nil
-		}
-	}
-	entry := layout.HiddenProjectConfig{
-		Name: strings.TrimSpace(project.Name),
-		Path: normalizeProjectPath(project.Path),
-	}
-	cfg.Dashboard.HiddenProjects = append(cfg.Dashboard.HiddenProjects, entry)
-	cfg.Dashboard.HiddenProjects = normalizeHiddenProjects(cfg.Dashboard.HiddenProjects)
-	if err := os.MkdirAll(filepath.Dir(m.configPath), 0o755); err != nil {
-		return false, fmt.Errorf("create config dir: %w", err)
-	}
-	if err := layout.SaveConfig(m.configPath, cfg); err != nil {
+	changed, err := workspace.HideProject(cfg, workspace.ProjectRef{Name: project.Name, Path: project.Path})
+	if err != nil {
 		return false, err
+	}
+	if changed {
+		if err := workspace.SaveConfig(m.configPath, cfg); err != nil {
+			return false, err
+		}
 	}
 	m.config = cfg
 	m.settings.HiddenProjects = hiddenProjectKeySet(cfg.Dashboard.HiddenProjects)
-	return true, nil
+	return changed, nil
 }
 
 func (m *Model) hideAllProjectsInConfig(projects []ProjectGroup) (int, error) {
@@ -65,131 +41,45 @@ func (m *Model) hideAllProjectsInConfig(projects []ProjectGroup) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("load config: %w", err)
 	}
-	existing := hiddenProjectKeySet(cfg.Dashboard.HiddenProjects)
-	if existing == nil {
-		existing = make(map[string]struct{})
-	}
-	added := 0
+	list := make([]workspace.Project, 0, len(projects))
 	for _, project := range projects {
-		if appendHiddenProject(cfg, project, existing) {
-			added++
-		}
+		list = append(list, workspace.Project{
+			ID:   workspace.ProjectID(project.Path, project.Name),
+			Name: project.Name,
+			Path: project.Path,
+		})
 	}
-	if added == 0 {
-		return 0, nil
-	}
-	cfg.Dashboard.HiddenProjects = normalizeHiddenProjects(cfg.Dashboard.HiddenProjects)
-	if err := os.MkdirAll(filepath.Dir(m.configPath), 0o755); err != nil {
-		return 0, fmt.Errorf("create config dir: %w", err)
-	}
-	if err := layout.SaveConfig(m.configPath, cfg); err != nil {
+	added, err := workspace.HideAllProjects(cfg, list)
+	if err != nil {
 		return 0, err
+	}
+	if added > 0 {
+		if err := workspace.SaveConfig(m.configPath, cfg); err != nil {
+			return 0, err
+		}
 	}
 	m.config = cfg
 	m.settings.HiddenProjects = hiddenProjectKeySet(cfg.Dashboard.HiddenProjects)
 	return added, nil
 }
 
-func appendHiddenProject(cfg *layout.Config, project ProjectGroup, existing map[string]struct{}) bool {
-	key := normalizeProjectKey(project.Path, project.Name)
-	if key == "" {
-		return false
-	}
-	if _, ok := existing[key]; ok {
-		return false
-	}
-	name := strings.TrimSpace(project.Name)
-	nameKey := strings.ToLower(name)
-	if nameKey != "" {
-		if _, ok := existing[nameKey]; ok {
-			return false
-		}
-	}
-	path := normalizeProjectPath(project.Path)
-	pathKey := strings.ToLower(path)
-	if pathKey != "" {
-		if _, ok := existing[pathKey]; ok {
-			return false
-		}
-	}
-	entry := layout.HiddenProjectConfig{
-		Name: name,
-		Path: path,
-	}
-	cfg.Dashboard.HiddenProjects = append(cfg.Dashboard.HiddenProjects, entry)
-	if nameKey != "" {
-		existing[nameKey] = struct{}{}
-	}
-	if pathKey != "" {
-		existing[pathKey] = struct{}{}
-	}
-	return true
-}
-
 func (m *Model) unhideProjectInConfig(entry layout.HiddenProjectConfig) (bool, error) {
-	target := hiddenProjectKeysFrom(entry)
-	if target.empty() {
-		return false, nil
-	}
 	cfg, err := loadConfig(m.configPath)
 	if err != nil {
 		return false, fmt.Errorf("load config: %w", err)
 	}
-	if len(cfg.Dashboard.HiddenProjects) == 0 {
-		return false, nil
-	}
-	kept := make([]layout.HiddenProjectConfig, 0, len(cfg.Dashboard.HiddenProjects))
-	removed := 0
-	for _, existing := range cfg.Dashboard.HiddenProjects {
-		if target.matches(existing) {
-			removed++
-			continue
-		}
-		kept = append(kept, existing)
-	}
-	if removed == 0 {
-		return false, nil
-	}
-	cfg.Dashboard.HiddenProjects = normalizeHiddenProjects(kept)
-	if err := os.MkdirAll(filepath.Dir(m.configPath), 0o755); err != nil {
-		return false, fmt.Errorf("create config dir: %w", err)
-	}
-	if err := layout.SaveConfig(m.configPath, cfg); err != nil {
+	changed, err := workspace.UnhideProject(cfg, workspace.ProjectRef{Name: entry.Name, Path: entry.Path})
+	if err != nil {
 		return false, err
+	}
+	if changed {
+		if err := workspace.SaveConfig(m.configPath, cfg); err != nil {
+			return false, err
+		}
 	}
 	m.config = cfg
 	m.settings.HiddenProjects = hiddenProjectKeySet(cfg.Dashboard.HiddenProjects)
-	return true, nil
-}
-
-type hiddenProjectKeys struct {
-	pathKey string
-	nameKey string
-}
-
-func hiddenProjectKeysFrom(entry layout.HiddenProjectConfig) hiddenProjectKeys {
-	return hiddenProjectKeys{
-		pathKey: strings.ToLower(normalizeProjectPath(entry.Path)),
-		nameKey: strings.ToLower(strings.TrimSpace(entry.Name)),
-	}
-}
-
-func (keys hiddenProjectKeys) empty() bool {
-	return keys.pathKey == "" && keys.nameKey == ""
-}
-
-func (keys hiddenProjectKeys) matches(entry layout.HiddenProjectConfig) bool {
-	existing := hiddenProjectKeysFrom(entry)
-	if keys.pathKey != "" && existing.pathKey != "" {
-		return existing.pathKey == keys.pathKey
-	}
-	if keys.nameKey == "" || existing.nameKey == "" {
-		return false
-	}
-	if existing.pathKey == "" || keys.pathKey == "" {
-		return existing.nameKey == keys.nameKey
-	}
-	return false
+	return changed, nil
 }
 
 func (m *Model) hiddenProjectEntries() []layout.HiddenProjectConfig {

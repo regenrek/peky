@@ -3,7 +3,6 @@ package app
 import (
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -11,6 +10,7 @@ import (
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/tui/picker"
 	"github.com/regenrek/peakypanes/internal/userpath"
+	"github.com/regenrek/peakypanes/internal/workspace"
 )
 
 // ===== Project picker =====
@@ -29,73 +29,14 @@ func (m *Model) openProjectPicker() {
 func (m *Model) scanGitProjects() {
 	m.gitProjects = nil
 
-	for _, root := range projectRoots(m.settings.ProjectRoots) {
-		m.scanGitProjectsInRoot(root)
+	roots := resolveProjectRoots(m.settings.ProjectRoots)
+	for _, project := range workspace.ScanGitProjects(roots) {
+		m.gitProjects = append(m.gitProjects, picker.ProjectItem{
+			Name:        project.Name,
+			Path:        project.Path,
+			DisplayPath: userpath.ShortenUser(project.Path),
+		})
 	}
-}
-
-func projectRoots(roots []string) []string {
-	if len(roots) == 0 {
-		return defaultProjectRoots()
-	}
-	return roots
-}
-
-func (m *Model) scanGitProjectsInRoot(root string) {
-	root = strings.TrimSpace(root)
-	if root == "" {
-		return
-	}
-	if _, err := os.Stat(root); os.IsNotExist(err) {
-		return
-	}
-	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if shouldSkipGitScanDir(d) {
-			return filepath.SkipDir
-		}
-		if isGitProjectDir(path, d) {
-			m.appendGitProject(root, path)
-			return filepath.SkipDir
-		}
-		return nil
-	})
-}
-
-func shouldSkipGitScanDir(d os.DirEntry) bool {
-	if !d.IsDir() {
-		return false
-	}
-	name := d.Name()
-	if strings.HasPrefix(name, ".") {
-		return true
-	}
-	switch name {
-	case "node_modules", "vendor", "__pycache__", ".venv", "venv":
-		return true
-	default:
-		return false
-	}
-}
-
-func isGitProjectDir(path string, d os.DirEntry) bool {
-	if !d.IsDir() || d.Name() == ".git" {
-		return false
-	}
-	gitPath := filepath.Join(path, ".git")
-	_, err := os.Stat(gitPath)
-	return err == nil
-}
-
-func (m *Model) appendGitProject(root, path string) {
-	relPath, _ := filepath.Rel(root, path)
-	m.gitProjects = append(m.gitProjects, picker.ProjectItem{
-		Name:        relPath,
-		Path:        path,
-		DisplayPath: userpath.ShortenUser(path),
-	})
 }
 
 func (m *Model) gitProjectsToItems() []list.Item {

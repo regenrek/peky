@@ -130,8 +130,14 @@ func (m *Manager) createPane(ctx context.Context, path, title, command string, e
 		Dir:   strings.TrimSpace(path),
 		Env:   env,
 	}
+	output := newOutputLog(0)
 	opts.OnToast = func(message string) {
 		m.notifyToast(id, message)
+	}
+	opts.OnOutput = func(payload []byte) {
+		if output != nil {
+			output.append(payload)
+		}
 	}
 	startCommand := strings.TrimSpace(command)
 	if startCommand == "" {
@@ -163,6 +169,7 @@ func (m *Manager) createPane(ctx context.Context, path, title, command string, e
 		StartCommand: startCommand,
 		window:       win,
 		LastActive:   time.Now(),
+		output:       output,
 	}
 	if win != nil && win.Exited() {
 		pane.Dead = true

@@ -40,6 +40,7 @@ type vtEmulator interface {
 	Height() int
 	Width() int
 	IsAltScreen() bool
+	Cwd() string
 	ScrollbackLen() int
 	ScrollbackLine(index int) []uv.Cell
 	ClearScrollback()
@@ -63,6 +64,9 @@ type Options struct {
 
 	// OnToast is called for terminal-originated toast messages.
 	OnToast func(message string)
+
+	// OnOutput receives raw output bytes from the pane.
+	OnOutput func(payload []byte)
 }
 
 // Window is a single interactive terminal pane:
@@ -125,10 +129,14 @@ type Window struct {
 	mouseSelection         bool
 
 	toastFn func(string)
+	outputFn func([]byte)
 
 	lastUpdate atomic.Int64 // unix nanos
 
 	updateSeq atomic.Uint64
+
+	bytesIn  atomic.Uint64
+	bytesOut atomic.Uint64
 }
 
 // NewWindow starts a new process attached to a PTY and backed by a VT emulator.
@@ -211,6 +219,7 @@ func NewWindow(opts Options) (*Window, error) {
 		cancel:     cancel,
 		cacheDirty: true,
 		toastFn:    opts.OnToast,
+		outputFn:   opts.OnOutput,
 	}
 	w.title.Store(opts.Title)
 	w.cursorVisible.Store(true)
@@ -374,8 +383,35 @@ func (w *Window) PID() int {
 	return w.cmd.Process.Pid
 }
 
+func (w *Window) Cwd() string {
+	if w == nil {
+		return ""
+	}
+	w.termMu.Lock()
+	term := w.term
+	w.termMu.Unlock()
+	if term == nil {
+		return ""
+	}
+	return term.Cwd()
+}
+
 func (w *Window) Cols() int { return w.cols }
 func (w *Window) Rows() int { return w.rows }
+
+func (w *Window) BytesIn() uint64 {
+	if w == nil {
+		return 0
+	}
+	return w.bytesIn.Load()
+}
+
+func (w *Window) BytesOut() uint64 {
+	if w == nil {
+		return 0
+	}
+	return w.bytesOut.Load()
+}
 
 // Updates returns a coalesced signal channel.
 // Read from this in Bubble Tea to know when to re-render.

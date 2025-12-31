@@ -60,6 +60,20 @@ type Daemon struct {
 	clientsMu sync.RWMutex
 	clientSeq atomic.Uint64
 
+	actionMu   sync.RWMutex
+	actionLogs map[string]*actionLog
+
+	eventMu  sync.RWMutex
+	eventLog *eventLog
+
+	focusMu        sync.RWMutex
+	focusedSession string
+	focusedPane    string
+
+	relays *relayManager
+
+	eventSeq atomic.Uint64
+
 	closing atomic.Bool
 	wg      sync.WaitGroup
 }
@@ -105,6 +119,9 @@ func NewDaemon(cfg DaemonConfig) (*Daemon, error) {
 		ctx:         ctx,
 		cancel:      cancel,
 		clients:     make(map[uint64]*clientConn),
+		actionLogs:  make(map[string]*actionLog),
+		eventLog:    newEventLog(0),
+		relays:      newRelayManager(),
 	}
 	if cfg.HandleSignals {
 		d.handleSignals()
