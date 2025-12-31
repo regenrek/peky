@@ -55,9 +55,9 @@ func TestExpandLayoutVars(t *testing.T) {
 		},
 		Titles: []string{"${PROJECT_PATH}"},
 		Panes: []PaneDef{
-			{Title: "${BAR}", Cmd: "${EXTRA}", Setup: []string{"${FOO}"}, DirectSend: []SendAction{{Text: "${FOO} ${PROJECT_NAME}", Submit: true, SubmitDelayMS: &submitDelay}}},
+			{Title: "${BAR}", Cmd: "${EXTRA}", Setup: []string{"${FOO}"}, DirectSend: []SendAction{{Text: "${FOO} ${PROJECT_NAME}", Submit: true, SubmitDelayMS: &submitDelay, WaitForOutput: true}}},
 		},
-		BroadcastSend: []SendAction{{Text: "${BAR} ${PROJECT_PATH}", Submit: true}},
+		BroadcastSend: []SendAction{{Text: "${BAR} ${PROJECT_PATH}", Submit: true, WaitForOutput: true}},
 	}
 
 	extra := map[string]string{
@@ -102,11 +102,17 @@ func TestExpandLayoutVars(t *testing.T) {
 	if !expanded.Panes[0].DirectSend[0].Submit || expanded.Panes[0].DirectSend[0].SubmitDelayMS == nil || *expanded.Panes[0].DirectSend[0].SubmitDelayMS != submitDelay {
 		t.Fatalf("expanded.Panes[0].DirectSend submit = %#v", expanded.Panes[0].DirectSend[0])
 	}
+	if !expanded.Panes[0].DirectSend[0].WaitForOutput {
+		t.Fatalf("expanded.Panes[0].DirectSend wait_for_output = %#v", expanded.Panes[0].DirectSend[0])
+	}
 	if len(expanded.BroadcastSend) != 1 || expanded.BroadcastSend[0].Text != "two /work/app" {
 		t.Fatalf("expanded.BroadcastSend = %#v", expanded.BroadcastSend)
 	}
 	if !expanded.BroadcastSend[0].Submit {
 		t.Fatalf("expanded.BroadcastSend submit = %#v", expanded.BroadcastSend[0])
+	}
+	if !expanded.BroadcastSend[0].WaitForOutput {
+		t.Fatalf("expanded.BroadcastSend wait_for_output = %#v", expanded.BroadcastSend[0])
 	}
 }
 

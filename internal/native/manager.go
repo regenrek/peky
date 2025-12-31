@@ -47,6 +47,10 @@ type Manager struct {
 
 	perfMu     sync.Mutex
 	perfLogged map[string]uint8
+
+	outputMu    sync.Mutex
+	outputReady map[string]chan struct{}
+	outputSeen  map[string]bool
 }
 
 // NewManager creates a new native session manager.
@@ -100,6 +104,16 @@ func (m *Manager) Close() {
 	m.previewCursor = 0
 	m.previewMu.Unlock()
 
+	m.outputMu.Lock()
+	if m.outputReady != nil {
+		for _, ch := range m.outputReady {
+			close(ch)
+		}
+	}
+	m.outputReady = nil
+	m.outputSeen = nil
+	m.outputMu.Unlock()
+
 	m.eventsMu.Lock()
 	if !m.eventsClosed {
 		m.eventsClosed = true
@@ -140,6 +154,9 @@ func (m *Manager) markActive(id string) {
 	m.mu.Unlock()
 	if pane != nil {
 		m.logPanePerf(pane)
+		if pane.window != nil && !pane.window.FirstReadAt().IsZero() {
+			m.markPaneOutputReady(pane.ID)
+		}
 	}
 	m.notify(id, seq)
 }

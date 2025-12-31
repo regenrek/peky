@@ -202,7 +202,7 @@ When you need many panes, prefer a `grid:` layout for predictable sizing.
 
 ## Automation Sends
 
-Use `broadcast_send` to send input to every pane after it starts, or `direct_send` to send input to a specific pane. Each action can specify a `send_delay_ms` (default: 750ms). A trailing newline is added automatically unless you set `submit: true`, which sends Enter separately (optionally delayed via `submit_delay_ms`).
+Use `broadcast_send` to send input to every pane after it starts, or `direct_send` to send input to a specific pane. Each action can specify a `send_delay_ms` (default: 750ms). A trailing newline is added automatically unless you set `submit: true`, which sends Enter separately (optionally delayed via `submit_delay_ms`). When `wait_for_output: true`, the send waits for the pane’s first output and uses `send_delay_ms` as a fallback timeout.
 
 ```yaml
 layout:
@@ -210,6 +210,7 @@ layout:
   broadcast_send:
     - text: "give me a bubble sort in typescript and rust and go"
       send_delay_ms: 750
+      wait_for_output: true
       submit: true
       submit_delay_ms: 250
 
@@ -219,6 +220,7 @@ layout:
       direct_send:
         - text: "pane-specific follow-up"
           send_delay_ms: 1000
+          wait_for_output: true
 ```
 
 ---

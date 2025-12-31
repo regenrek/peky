@@ -28,6 +28,7 @@ layout:
   # broadcast_send:
   #   - text: "claude"
   #     send_delay_ms: 750
+  #     wait_for_output: true
   #     submit: true
   #     submit_delay_ms: 250
 
@@ -58,6 +59,7 @@ layout:
 #       direct_send:
 #         - text: "give me a bubble sort in typescript and rust and go"
 #           send_delay_ms: 750
+#           wait_for_output: true
 #           submit: true
 #           submit_delay_ms: 250
 

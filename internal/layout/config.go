@@ -50,6 +50,7 @@ type SendAction struct {
 	SendDelayMS   *int   `yaml:"send_delay_ms,omitempty"`
 	Submit        bool   `yaml:"submit,omitempty"`
 	SubmitDelayMS *int   `yaml:"submit_delay_ms,omitempty"`
+	WaitForOutput bool   `yaml:"wait_for_output,omitempty"`
 }
 
 // ProjectConfig represents a project entry in the config file.
@@ -334,6 +335,7 @@ func ExpandLayoutVars(layout *LayoutConfig, extraVars map[string]string, project
 			SendDelayMS:   action.SendDelayMS,
 			Submit:        action.Submit,
 			SubmitDelayMS: action.SubmitDelayMS,
+			WaitForOutput: action.WaitForOutput,
 		})
 	}
 
@@ -354,6 +356,7 @@ func ExpandLayoutVars(layout *LayoutConfig, extraVars map[string]string, project
 				SendDelayMS:   action.SendDelayMS,
 				Submit:        action.Submit,
 				SubmitDelayMS: action.SubmitDelayMS,
+				WaitForOutput: action.WaitForOutput,
 			})
 		}
 		expanded.Panes = append(expanded.Panes, expandedPane)

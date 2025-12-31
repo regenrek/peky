@@ -13,11 +13,11 @@ func TestBuildPaneSendQueues(t *testing.T) {
 	submitDelay := 250
 	cfg := &layout.LayoutConfig{
 		BroadcastSend: []layout.SendAction{
-			{Text: "first"},
+			{Text: "first", WaitForOutput: true},
 			{Text: "second", SendDelayMS: &delayZero},
 		},
 		Panes: []layout.PaneDef{
-			{DirectSend: []layout.SendAction{{Text: "pane0", SendDelayMS: &delayDirect, Submit: true, SubmitDelayMS: &submitDelay}}},
+			{DirectSend: []layout.SendAction{{Text: "pane0", SendDelayMS: &delayDirect, Submit: true, SubmitDelayMS: &submitDelay, WaitForOutput: true}}},
 			{DirectSend: []layout.SendAction{{Text: "pane1"}}},
 		},
 	}
@@ -34,13 +34,13 @@ func TestBuildPaneSendQueues(t *testing.T) {
 	if len(queue0) != 3 {
 		t.Fatalf("expected 3 actions for pane 0, got %d", len(queue0))
 	}
-	if queue0[0].text != "first" || queue0[0].delay != defaultSendDelay {
+	if queue0[0].text != "first" || queue0[0].delay != defaultSendDelay || !queue0[0].waitOutput {
 		t.Fatalf("pane0 action0 = %#v", queue0[0])
 	}
 	if queue0[1].text != "second" || queue0[1].delay != 0 {
 		t.Fatalf("pane0 action1 = %#v", queue0[1])
 	}
-	if queue0[2].text != "pane0" || queue0[2].delay != 100*time.Millisecond || !queue0[2].submit || queue0[2].submitDelay != 250*time.Millisecond {
+	if queue0[2].text != "pane0" || queue0[2].delay != 100*time.Millisecond || !queue0[2].submit || queue0[2].submitDelay != 250*time.Millisecond || !queue0[2].waitOutput {
 		t.Fatalf("pane0 action2 = %#v", queue0[2])
 	}
 	queue1 := queues["p-2"]

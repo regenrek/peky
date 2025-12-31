@@ -93,6 +93,7 @@ func (m *Manager) KillSession(name string) error {
 	m.mu.Unlock()
 
 	m.dropPreviewCache(paneIDs...)
+	m.clearOutputWaiters(paneIDs...)
 	for _, pane := range session.Panes {
 		if pane.window != nil {
 			_ = pane.window.Close()

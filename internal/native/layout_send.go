@@ -20,6 +20,7 @@ type paneSendAction struct {
 	delay       time.Duration
 	submit      bool
 	submitDelay time.Duration
+	waitOutput  bool
 }
 
 func (m *Manager) dispatchLayoutSends(session *Session, layoutCfg *layout.LayoutConfig) {
@@ -119,6 +120,7 @@ func normalizeSendAction(action layout.SendAction) (paneSendAction, bool) {
 		delay:       delay,
 		submit:      action.Submit,
 		submitDelay: submitDelay,
+		waitOutput:  action.WaitForOutput,
 	}, true
 }
 
@@ -141,7 +143,9 @@ func (m *Manager) runPaneSendQueue(paneID string, actions []paneSendAction) {
 		if m.closed.Load() {
 			return
 		}
-		if action.delay > 0 {
+		if action.waitOutput {
+			m.waitForPaneOutput(paneID, action.delay)
+		} else if action.delay > 0 {
 			time.Sleep(action.delay)
 		}
 		payload, ok := buildSendPayload(action.text, !action.submit)
