@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -58,12 +59,35 @@ func (m *Model) sendQuickReplyBroadcast(scope quickReplyScope, text string) tea.
 				result.ClosedPaneIDs = append(result.ClosedPaneIDs, paneID)
 				continue
 			}
-			payload := quickReplyInputBytes(target.Pane, message)
-			logQuickReplySendAttempt(target.Pane, payload)
+			payload := quickReplyTextBytes(target.Pane, message)
+			submit := quickReplySubmitBytes(target.Pane)
 			ctx, cancel := context.WithTimeout(context.Background(), terminalActionTimeout)
+			if quickReplyTargetCombineSubmit(target.Pane) && len(submit) > 0 {
+				combined := make([]byte, 0, len(payload)+len(submit))
+				combined = append(combined, payload...)
+				combined = append(combined, submit...)
+				logQuickReplySendAttempt(target.Pane, combined)
+				err := m.client.SendInput(ctx, paneID, combined)
+				cancel()
+				if err != nil {
+					logQuickReplySendError(paneID, err)
+					if isPaneClosedError(err) {
+						result.ClosedPaneIDs = append(result.ClosedPaneIDs, paneID)
+						continue
+					}
+					result.Failed++
+					if result.FirstError == "" {
+						result.FirstError = err.Error()
+					}
+					continue
+				}
+				result.Sent++
+				continue
+			}
+			logQuickReplySendAttempt(target.Pane, payload)
 			err := m.client.SendInput(ctx, paneID, payload)
-			cancel()
 			if err != nil {
+				cancel()
 				logQuickReplySendError(paneID, err)
 				if isPaneClosedError(err) {
 					result.ClosedPaneIDs = append(result.ClosedPaneIDs, paneID)
@@ -75,6 +99,29 @@ func (m *Model) sendQuickReplyBroadcast(scope quickReplyScope, text string) tea.
 				}
 				continue
 			}
+			if len(submit) > 0 {
+				if delay := quickReplySubmitDelay(target.Pane); delay > 0 {
+					time.Sleep(delay)
+				}
+				logQuickReplySendAttempt(target.Pane, submit)
+				err = m.client.SendInput(ctx, paneID, submit)
+				cancel()
+				if err != nil {
+					logQuickReplySendError(paneID, err)
+					if isPaneClosedError(err) {
+						result.ClosedPaneIDs = append(result.ClosedPaneIDs, paneID)
+						continue
+					}
+					result.Failed++
+					if result.FirstError == "" {
+						result.FirstError = err.Error()
+					}
+					continue
+				}
+				result.Sent++
+				continue
+			}
+			cancel()
 			result.Sent++
 		}
 		return quickReplySendMsg{Result: result}
