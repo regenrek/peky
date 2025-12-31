@@ -11,6 +11,7 @@ This format is based on Keep a Changelog.
 - Pane broadcast scopes (`session|project|all`) with delay/submit-delay controls and per-pane action history.
 - Daemon-side relay, event, and action logging plus output snapshots for pane history/tail.
 - Shared policy packages for session/path validation and workspace/project operations.
+- Daemon lifecycle subcommands (`daemon start|stop`).
 
 ### Changed
 - CLI now runs entirely on `urfave/cli/v3` with spec-driven help and slash command shortcuts.

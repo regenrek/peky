@@ -3,6 +3,9 @@ package daemon
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/regenrek/peakypanes/internal/cli/output"
@@ -13,8 +16,13 @@ import (
 // Register registers daemon handlers.
 func Register(reg *root.Registry) {
 	reg.Register("daemon", runDaemon)
+	reg.Register("daemon.start", runDaemon)
+	reg.Register("daemon.stop", runStop)
 	reg.Register("daemon.restart", runRestart)
 }
+
+var stopDaemon = sessiond.StopDaemon
+var restartDaemon = sessiond.RestartDaemon
 
 func runDaemon(ctx root.CommandContext) error {
 	daemon, err := sessiond.NewDaemon(sessiond.DaemonConfig{
@@ -25,8 +33,35 @@ func runDaemon(ctx root.CommandContext) error {
 	if err != nil {
 		return fmt.Errorf("failed to create daemon: %w", err)
 	}
+	sigCtx, stop := signal.NotifyContext(ctx.Context, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	go func() {
+		<-sigCtx.Done()
+		_ = daemon.Stop()
+	}()
 	if err := daemon.Run(); err != nil {
 		return fmt.Errorf("daemon failed: %w", err)
+	}
+	return nil
+}
+
+func runStop(ctx root.CommandContext) error {
+	start := time.Now()
+	meta := output.NewMeta("daemon.stop", ctx.Deps.Version)
+	ctxTimeout, cancel := context.WithTimeout(ctx.Context, 15*time.Second)
+	defer cancel()
+	if err := stopDaemon(ctxTimeout, ctx.Deps.Version); err != nil {
+		return fmt.Errorf("failed to stop daemon: %w", err)
+	}
+	if ctx.JSON {
+		meta = output.WithDuration(meta, start)
+		return output.WriteSuccess(ctx.Out, meta, output.ActionResult{
+			Action: "daemon.stop",
+			Status: "ok",
+		})
+	}
+	if _, err := fmt.Fprintln(ctx.ErrOut, "Daemon stopped."); err != nil {
+		return err
 	}
 	return nil
 }
@@ -36,7 +71,7 @@ func runRestart(ctx root.CommandContext) error {
 	meta := output.NewMeta("daemon.restart", ctx.Deps.Version)
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, 15*time.Second)
 	defer cancel()
-	if err := sessiond.RestartDaemon(ctxTimeout, ctx.Deps.Version); err != nil {
+	if err := restartDaemon(ctxTimeout, ctx.Deps.Version); err != nil {
 		return fmt.Errorf("failed to restart daemon: %w", err)
 	}
 	if ctx.JSON {

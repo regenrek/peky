@@ -30,7 +30,7 @@ Global flags (all commands):
 peakypanes
   dashboard|ui
   start|open|o
-  daemon [restart]
+  daemon [start|stop|restart]
   init
   layouts [export]
   workspace [list|open|close|close-all]
@@ -58,6 +58,8 @@ peakypanes clone USER/REPO --session NAME --layout LAYOUT --path ./dest
 
 ```bash
 peakypanes daemon               # Run daemon in foreground
+peakypanes daemon start          # Same as `daemon`
+peakypanes daemon stop           # Stop daemon (use --yes to skip confirmation)
 peakypanes daemon restart        # Restart daemon (use --yes to skip confirmation)
 
 peakypanes session list

@@ -31,6 +31,12 @@ func TestAllCommandsAndFindByID(t *testing.T) {
 	if cmd.Name == "" {
 		t.Fatalf("expected command name")
 	}
+	if specDoc.FindByID("daemon.start") == nil {
+		t.Fatalf("expected daemon.start command")
+	}
+	if specDoc.FindByID("daemon.stop") == nil {
+		t.Fatalf("expected daemon.stop command")
+	}
 }
 
 func TestSlashCommandsFiltersDisabled(t *testing.T) {

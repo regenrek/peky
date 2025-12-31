@@ -67,6 +67,24 @@ commands:
     json:
       supported: false
     subcommands:
+      - name: start
+        id: daemon.start
+        summary: Start the daemon in the foreground
+        json:
+          supported: false
+      - name: stop
+        id: daemon.stop
+        summary: Stop the daemon
+        side_effects: true
+        confirm: true
+        flags:
+          - name: "yes"
+            aliases: [y]
+            type: bool
+            description: Skip confirmation.
+        json:
+          supported: true
+          schema_ref: "#/$defs/ActionResponse"
       - name: restart
         id: daemon.restart
         summary: Restart the daemon
