@@ -95,8 +95,9 @@ func normalizeSendAction(action layout.SendAction) (paneSendAction, bool) {
 	if strings.TrimSpace(action.Text) == "" {
 		return paneSendAction{}, false
 	}
+	explicitDelay := action.SendDelayMS != nil
 	delay := defaultSendDelay
-	if action.SendDelayMS != nil {
+	if explicitDelay {
 		delay = normalizeSendDelay(*action.SendDelayMS)
 	}
 	if delay > maxSendDelay {
@@ -115,12 +116,16 @@ func normalizeSendAction(action layout.SendAction) (paneSendAction, bool) {
 	if submitDelay < 0 {
 		submitDelay = 0
 	}
+	waitOutput := action.WaitForOutput
+	if !explicitDelay {
+		waitOutput = true
+	}
 	return paneSendAction{
 		text:        action.Text,
 		delay:       delay,
 		submit:      action.Submit,
 		submitDelay: submitDelay,
-		waitOutput:  action.WaitForOutput,
+		waitOutput:  waitOutput,
 	}, true
 }
 

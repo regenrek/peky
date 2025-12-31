@@ -17,6 +17,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 	xpty "github.com/charmbracelet/x/xpty"
+	"github.com/regenrek/peakypanes/internal/limits"
 	"github.com/regenrek/peakypanes/internal/vt"
 )
 
@@ -152,6 +153,7 @@ func NewWindow(opts Options) (*Window, error) {
 	if rows <= 0 {
 		rows = 24
 	}
+	cols, rows = limits.Clamp(cols, rows)
 
 	cmdName := strings.TrimSpace(opts.Command)
 	args := opts.Args

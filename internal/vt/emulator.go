@@ -3,13 +3,25 @@ package vt
 import (
 	"image/color"
 	"io"
+	"os"
+	"strconv"
+	"strings"
 	"sync/atomic"
 
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/ultraviolet/screen"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/ansi/parser"
+	"github.com/regenrek/peakypanes/internal/limits"
 )
+
+const (
+	defaultParserDataSize = 64 * 1024
+	maxParserDataSize     = 4 * 1024 * 1024
+	parserDataSizeEnv     = "PEAKYPANES_VT_PARSER_DATA_SIZE"
+)
+
+var parserDataSize = resolveParserDataSize(os.Getenv(parserDataSizeEnv))
 
 // Logger represents a logger interface.
 type Logger interface {
@@ -78,6 +90,21 @@ type Emulator struct {
 
 var _ Terminal = (*Emulator)(nil)
 
+func resolveParserDataSize(raw string) int {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return defaultParserDataSize
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 1 {
+		return defaultParserDataSize
+	}
+	if n > maxParserDataSize {
+		return maxParserDataSize
+	}
+	return n
+}
+
 // NewEmulator creates a new virtual terminal emulator.
 func NewEmulator(w, h int) *Emulator {
 	t := new(Emulator)
@@ -90,7 +117,7 @@ func NewEmulator(w, h int) *Emulator {
 	t.scrs[1].cb = &t.cb
 	t.parser = ansi.NewParser()
 	t.parser.SetParamsSize(parser.MaxParamsSize)
-	t.parser.SetDataSize(1024 * 1024 * 4) // 4MB data buffer
+	t.parser.SetDataSize(parserDataSize)
 	t.parser.SetHandler(ansi.Handler{
 		Print:     t.handlePrint,
 		Execute:   t.handleControl,
@@ -257,6 +284,7 @@ func (e *Emulator) CursorPosition() uv.Position {
 
 // Resize resizes the terminal.
 func (e *Emulator) Resize(width int, height int) {
+	width, height = limits.Clamp(width, height)
 	oldHeight := e.Height()
 	x, y := e.scr.CursorPosition()
 	if e.atPhantom {

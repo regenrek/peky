@@ -202,7 +202,7 @@ When you need many panes, prefer a `grid:` layout for predictable sizing.
 
 ## Automation Sends
 
-Use `broadcast_send` to send input to every pane after it starts, or `direct_send` to send input to a specific pane. Each action can specify a `send_delay_ms` (default: 750ms). A trailing newline is added automatically unless you set `submit: true`, which sends Enter separately (optionally delayed via `submit_delay_ms`). When `wait_for_output: true`, the send waits for the pane’s first output and uses `send_delay_ms` as a fallback timeout.
+Use `broadcast_send` to send input to every pane after it starts, or `direct_send` to send input to a specific pane. Each action can specify a `send_delay_ms` (default: 750ms). If `send_delay_ms` is omitted, the send waits for the pane’s first output (up to the default delay). A trailing newline is added automatically unless you set `submit: true`, which sends Enter separately (optionally delayed via `submit_delay_ms`). When `wait_for_output: true`, the send waits for the pane’s first output and uses `send_delay_ms` as a fallback timeout.
 
 ```yaml
 layout:

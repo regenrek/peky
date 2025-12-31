@@ -10,12 +10,16 @@ This folder contains the canonical layouts used for baseline performance runs.
 - `peakypanes-perf10.yml`
   - 10 panes, runs `claude` in each pane and sends a single prompt.
   - Use this to measure Claude startup and steady-state updates.
+- `peakypanes-perf10-wait-for-output.yml`
+  - Same as `perf10`, but waits for first output before sending.
+  - Use this to validate event-driven sends vs fixed delays.
 
 ## Recommended baseline runs
 
 ```bash
 ./scripts/perf-profiler --layout testdata/performance-tests/peakypanes-perf10-control.yml --secs 30 --fgprof 30 --trace 10 --gops --start-timeout 20s
 ./scripts/perf-profiler --layout testdata/performance-tests/peakypanes-perf10.yml --secs 30 --fgprof 30 --trace 10 --gops --start-timeout 20s
+./scripts/perf-profiler --layout testdata/performance-tests/peakypanes-perf10-wait-for-output.yml --secs 30 --fgprof 30 --trace 10 --gops --start-timeout 20s
 ```
 
 Each run writes outputs under `.bench/profiler-12/<timestamp>/` (already gitignored).

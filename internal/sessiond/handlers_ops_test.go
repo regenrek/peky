@@ -9,6 +9,7 @@ import (
 
 	"github.com/muesli/termenv"
 
+	"github.com/regenrek/peakypanes/internal/limits"
 	"github.com/regenrek/peakypanes/internal/native"
 )
 
@@ -76,6 +77,10 @@ func TestNormalizeDimensions(t *testing.T) {
 	cols, rows = normalizeDimensions(5, -2)
 	if cols != 5 || rows != 1 {
 		t.Fatalf("expected 5x1, got %dx%d", cols, rows)
+	}
+	cols, rows = normalizeDimensions(limits.PaneMaxCols+10, limits.PaneMaxRows+10)
+	if cols != limits.PaneMaxCols || rows != limits.PaneMaxRows {
+		t.Fatalf("expected clamp to %dx%d, got %dx%d", limits.PaneMaxCols, limits.PaneMaxRows, cols, rows)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -15,6 +16,9 @@ const (
 	paneViewDeadlineSlack    = 50 * time.Millisecond
 	paneViewStarvationWindow = 750 * time.Millisecond
 	paneViewSlowThreshold    = 50 * time.Millisecond
+
+	paneViewCacheTTL        = 30 * time.Second
+	paneViewCacheMaxEntries = 100
 )
 
 func paneViewEffectiveSeq(win paneViewWindow, renderMode PaneViewMode) uint64 {
@@ -265,25 +269,82 @@ func (c *clientConn) paneViewCacheGet(key paneViewCacheKey) (PaneViewResponse, b
 	if c == nil {
 		return PaneViewResponse{}, false
 	}
-	c.paneViewCacheMu.Lock()
-	entry, ok := c.paneViewCache[key]
-	c.paneViewCacheMu.Unlock()
+	entry, ok := c.paneViewCacheGetEntry(key)
 	if !ok {
 		return PaneViewResponse{}, false
 	}
 	return entry.resp, true
 }
 
+func (c *clientConn) paneViewCacheGetEntry(key paneViewCacheKey) (cachedPaneView, bool) {
+	if c == nil {
+		return cachedPaneView{}, false
+	}
+	now := time.Now()
+
+	c.paneViewCacheMu.Lock()
+	if c.paneViewCache == nil {
+		c.paneViewCacheMu.Unlock()
+		return cachedPaneView{}, false
+	}
+	entry, ok := c.paneViewCache[key]
+	if ok {
+		if paneViewCacheTTL > 0 && now.Sub(entry.renderedAt) > paneViewCacheTTL {
+			delete(c.paneViewCache, key)
+			ok = false
+		} else {
+			entry.renderedAt = now
+			c.paneViewCache[key] = entry
+		}
+	}
+	c.paneViewCacheMu.Unlock()
+	return entry, ok
+}
+
 func (c *clientConn) paneViewCachePut(key paneViewCacheKey, resp PaneViewResponse) {
 	if c == nil {
 		return
 	}
+	now := time.Now()
 	c.paneViewCacheMu.Lock()
 	if c.paneViewCache == nil {
 		c.paneViewCache = make(map[paneViewCacheKey]cachedPaneView)
 	}
-	c.paneViewCache[key] = cachedPaneView{resp: resp, renderedAt: time.Now(), updateSeq: resp.UpdateSeq}
+	c.paneViewCache[key] = cachedPaneView{resp: resp, renderedAt: now, updateSeq: resp.UpdateSeq}
+	c.paneViewCachePruneLocked(now)
 	c.paneViewCacheMu.Unlock()
+}
+
+func (c *clientConn) paneViewCachePruneLocked(now time.Time) {
+	if c == nil || c.paneViewCache == nil {
+		return
+	}
+	if paneViewCacheTTL > 0 {
+		for k, e := range c.paneViewCache {
+			if now.Sub(e.renderedAt) > paneViewCacheTTL {
+				delete(c.paneViewCache, k)
+			}
+		}
+	}
+	if paneViewCacheMaxEntries < 1 || len(c.paneViewCache) <= paneViewCacheMaxEntries {
+		return
+	}
+
+	type evictItem struct {
+		key paneViewCacheKey
+		at  time.Time
+	}
+	items := make([]evictItem, 0, len(c.paneViewCache))
+	for k, e := range c.paneViewCache {
+		items = append(items, evictItem{key: k, at: e.renderedAt})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].at.Before(items[j].at)
+	})
+	extra := len(items) - paneViewCacheMaxEntries
+	for i := 0; i < extra; i++ {
+		delete(c.paneViewCache, items[i].key)
+	}
 }
 
 func (d *Daemon) startPaneViewWorkers(client *clientConn) {
@@ -512,9 +573,7 @@ func paneViewCachedHit(
 	if client == nil {
 		return PaneViewResponse{}, false
 	}
-	client.paneViewCacheMu.Lock()
-	entry, ok := client.paneViewCache[info.key]
-	client.paneViewCacheMu.Unlock()
+	entry, ok := client.paneViewCacheGetEntry(info.key)
 	if !ok || entry.updateSeq != currentSeq {
 		return PaneViewResponse{}, false
 	}

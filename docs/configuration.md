@@ -28,6 +28,7 @@ layout:
   # broadcast_send:
   #   - text: "claude"
   #     send_delay_ms: 750
+  #     # If send_delay_ms is omitted, waits for first output (default 750ms timeout).
   #     wait_for_output: true
   #     submit: true
   #     submit_delay_ms: 250

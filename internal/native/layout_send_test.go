@@ -13,7 +13,7 @@ func TestBuildPaneSendQueues(t *testing.T) {
 	submitDelay := 250
 	cfg := &layout.LayoutConfig{
 		BroadcastSend: []layout.SendAction{
-			{Text: "first", WaitForOutput: true},
+			{Text: "first"},
 			{Text: "second", SendDelayMS: &delayZero},
 		},
 		Panes: []layout.PaneDef{

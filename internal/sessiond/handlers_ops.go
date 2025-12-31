@@ -11,6 +11,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 
 	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/limits"
 	"github.com/regenrek/peakypanes/internal/native"
 )
 
@@ -323,13 +324,7 @@ func requirePaneID(value string) (string, error) {
 }
 
 func normalizeDimensions(cols, rows int) (int, int) {
-	if cols < 1 {
-		cols = 1
-	}
-	if rows < 1 {
-		rows = 1
-	}
-	return cols, rows
+	return limits.Clamp(cols, rows)
 }
 
 func (d *Daemon) startSession(req StartSessionRequest) (StartSessionResponse, error) {
