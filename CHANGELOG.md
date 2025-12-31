@@ -5,6 +5,8 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.0.8 - 2025-12-31
+
 ### Fixed
 - Claude quick reply submission now sends text and submit separately with a short delay so Enter triggers send instead of inserting a newline.
 
