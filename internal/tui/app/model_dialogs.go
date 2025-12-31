@@ -379,7 +379,7 @@ func (m *Model) quickReplyPlan() (quickReplyPlan, tea.Cmd, bool) {
 	if pane.Dead {
 		return quickReplyPlan{}, func() tea.Msg { return newPaneClosedMsg(paneID, nil) }, false
 	}
-	payload := quickReplyInputBytes(*pane, text)
+	payload := quickReplyTextBytes(*pane, text)
 	label := strings.TrimSpace(pane.Title)
 	if label == "" {
 		label = fmt.Sprintf("pane %s", pane.Index)
@@ -398,11 +398,31 @@ func (m *Model) sendQuickReplyToPane(plan quickReplyPlan) tea.Msg {
 	if pane == nil || pane.Dead {
 		return newPaneClosedMsg(plan.paneID, nil)
 	}
-	logQuickReplySendAttempt(*pane, plan.payload)
 	ctx, cancel := context.WithTimeout(context.Background(), terminalActionTimeout)
 	defer cancel()
-	if msg := sendPaneInput(ctx, m.client, plan.paneID, plan.payload); msg != nil {
-		return msg
+	submit := quickReplySubmitBytes(*pane)
+	if quickReplyTargetCombineSubmit(*pane) && len(submit) > 0 {
+		combined := make([]byte, 0, len(plan.payload)+len(submit))
+		combined = append(combined, plan.payload...)
+		combined = append(combined, submit...)
+		logQuickReplySendAttempt(*pane, combined)
+		if msg := sendPaneInput(ctx, m.client, plan.paneID, combined); msg != nil {
+			return msg
+		}
+	} else {
+		logQuickReplySendAttempt(*pane, plan.payload)
+		if msg := sendPaneInput(ctx, m.client, plan.paneID, plan.payload); msg != nil {
+			return msg
+		}
+		if len(submit) > 0 {
+			if delay := quickReplySubmitDelay(*pane); delay > 0 {
+				time.Sleep(delay)
+			}
+			logQuickReplySendAttempt(*pane, submit)
+			if msg := sendPaneInput(ctx, m.client, plan.paneID, submit); msg != nil {
+				return msg
+			}
+		}
 	}
 	if plan.label != "" {
 		return SuccessMsg{Message: "Sent to " + plan.label}

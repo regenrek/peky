@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -78,19 +79,45 @@ func (m *Model) sendQuickReplyToTarget(target quickReplyTarget, message string) 
 	if pane := m.paneByID(paneID); pane == nil || pane.Dead {
 		return quickReplyTargetResult{Status: quickReplyTargetClosed, PaneID: paneID}
 	}
-	payload := quickReplyInputBytes(target.Pane, message)
-	logQuickReplySendAttempt(target.Pane, payload)
+	payload := quickReplyTextBytes(target.Pane, message)
+	submit := quickReplySubmitBytes(target.Pane)
 	ctx, cancel := context.WithTimeout(context.Background(), terminalActionTimeout)
-	err := m.client.SendInput(ctx, paneID, payload)
-	cancel()
-	if err != nil {
-		logQuickReplySendError(paneID, err)
-		if isPaneClosedError(err) {
-			return quickReplyTargetResult{Status: quickReplyTargetClosed, PaneID: paneID, Err: err}
+	defer cancel()
+	if quickReplyTargetCombineSubmit(target.Pane) && len(submit) > 0 {
+		combined := make([]byte, 0, len(payload)+len(submit))
+		combined = append(combined, payload...)
+		combined = append(combined, submit...)
+		if err := m.sendQuickReplyPayload(ctx, target.Pane, paneID, combined); err != nil {
+			return quickReplyResultForSendError(paneID, err)
 		}
-		return quickReplyTargetResult{Status: quickReplyTargetFailed, PaneID: paneID, Err: err}
+		return quickReplyTargetResult{Status: quickReplyTargetSent, PaneID: paneID}
+	}
+	if err := m.sendQuickReplyPayload(ctx, target.Pane, paneID, payload); err != nil {
+		return quickReplyResultForSendError(paneID, err)
+	}
+	if len(submit) == 0 {
+		return quickReplyTargetResult{Status: quickReplyTargetSent, PaneID: paneID}
+	}
+	if delay := quickReplySubmitDelay(target.Pane); delay > 0 {
+		time.Sleep(delay)
+	}
+	if err := m.sendQuickReplyPayload(ctx, target.Pane, paneID, submit); err != nil {
+		return quickReplyResultForSendError(paneID, err)
 	}
 	return quickReplyTargetResult{Status: quickReplyTargetSent, PaneID: paneID}
+}
+
+func (m *Model) sendQuickReplyPayload(ctx context.Context, pane PaneItem, paneID string, payload []byte) error {
+	logQuickReplySendAttempt(pane, payload)
+	return m.client.SendInput(ctx, paneID, payload)
+}
+
+func quickReplyResultForSendError(paneID string, err error) quickReplyTargetResult {
+	logQuickReplySendError(paneID, err)
+	if isPaneClosedError(err) {
+		return quickReplyTargetResult{Status: quickReplyTargetClosed, PaneID: paneID, Err: err}
+	}
+	return quickReplyTargetResult{Status: quickReplyTargetFailed, PaneID: paneID, Err: err}
 }
 
 func applyQuickReplyTargetResult(result *quickReplySendResult, targetResult quickReplyTargetResult) {

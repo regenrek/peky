@@ -1,4 +1,4 @@
-# 🎩 Peaky Panes
+# Peaky Panes
 
 ```
 ████    █████    ███    █   █   █   █    ████      ███    █   █    █████    ████
@@ -7,6 +7,12 @@
 ```
 
 **Multi-project orchestration in a single TUI for AI agents and dev environments.**
+
+[![npm](https://img.shields.io/npm/v/peakypanes?logo=npm)](https://www.npmjs.com/package/peakypanes)
+[![homebrew](https://img.shields.io/badge/homebrew-regenrek%2Ftap%2Fpeakypanes-2e933c?logo=homebrew)](https://github.com/regenrek/homebrew-tap)
+[![DeepWiki](https://img.shields.io/badge/DeepWiki-regenrek%2Fpeakypanes-blue.svg?logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACwAAAAyCAYAAAAnWDnqAAAAAXNSR0IArs4c6QAAA05JREFUaEPtmUtyEzEQhtWTQyQLHNak2AB7ZnyXZMEjXMGeK/AIi+QuHrMnbChYY7MIh8g01fJoopFb0uhhEqqcbWTp06/uv1saEDv4O3n3dV60RfP947Mm9/SQc0ICFQgzfc4CYZoTPAswgSJCCUJUnAAoRHOAUOcATwbmVLWdGoH//PB8mnKqScAhsD0kYP3j/Yt5LPQe2KvcXmGvRHcDnpxfL2zOYJ1mFwrryWTz0advv1Ut4CJgf5uhDuDj5eUcAUoahrdY/56ebRWeraTjMt/00Sh3UDtjgHtQNHwcRGOC98BJEAEymycmYcWwOprTgcB6VZ5JK5TAJ+fXGLBm3FDAmn6oPPjR4rKCAoJCal2eAiQp2x0vxTPB3ALO2CRkwmDy5WohzBDwSEFKRwPbknEggCPB/imwrycgxX2NzoMCHhPkDwqYMr9tRcP5qNrMZHkVnOjRMWwLCcr8ohBVb1OMjxLwGCvjTikrsBOiA6fNyCrm8V1rP93iVPpwaE+gO0SsWmPiXB+jikdf6SizrT5qKasx5j8ABbHpFTx+vFXp9EnYQmLx02h1QTTrl6eDqxLnGjporxl3NL3agEvXdT0WmEost648sQOYAeJS9Q7bfUVoMGnjo4AZdUMQku50McDcMWcBPvr0SzbTAFDfvJqwLzgxwATnCgnp4wDl6Aa+Ax283gghmj+vj7feE2KBBRMW3FzOpLOADl0Isb5587h/U4gGvkt5v60Z1VLG8BhYjbzRwyQZemwAd6cCR5/XFWLYZRIMpX39AR0tjaGGiGzLVyhse5C9RKC6ai42ppWPKiBagOvaYk8lO7DajerabOZP46Lby5wKjw1HCRx7p9sVMOWGzb/vA1hwiWc6jm3MvQDTogQkiqIhJV0nBQBTU+3okKCFDy9WwferkHjtxib7t3xIUQtHxnIwtx4mpg26/HfwVNVDb4oI9RHmx5WGelRVlrtiw43zboCLaxv46AZeB3IlTkwouebTr1y2NjSpHz68WNFjHvupy3q8TFn3Hos2IAk4Ju5dCo8B3wP7VPr/FGaKiG+T+v+TQqIrOqMTL1VdWV1DdmcbO8KXBz6esmYWYKPwDL5b5FA1a0hwapHiom0r/cKaoqr+27/XcrS5UwSMbQAAAABJRU5ErkJggg==)](https://deepwiki.com/regenrek/peakypanes)
+[![pkg.go.dev](https://pkg.go.dev/badge/github.com/regenrek/peakypanes/cmd/devwatch.svg)](https://pkg.go.dev/github.com/regenrek/peakypanes/cmd/devwatch)
+
 
 ![Peaky Panes Preview](assets/preview-peakypanes-v2.jpg)
 
@@ -59,23 +65,11 @@ Using Go
 go install github.com/regenrek/peakypanes/cmd/peakypanes@latest
 ```
 
-**Hot reload (from repo)**
-
-```bash
-scripts/dev-watch -- --layout dev-3
-```
-
 ### Usage
 
 **Start a session (auto-detect layout):**
 ```bash
 peakypanes start
-```
-
-**Use a specific layout:**
-```bash
-peakypanes start --layout dev-3
-peakypanes start --layout fullstack
 ```
 
 **Create project-local config (recommended for teams):**
@@ -86,322 +80,45 @@ peakypanes init --local
 git add .peakypanes.yml  # Share with team
 ```
 
-**Run the daemon in the foreground (optional):**
-```bash
-peakypanes daemon
-```
+## Documentation
 
-## Configuration
+- [Configuration & layouts](docs/configuration.md)
+- [Layout builder guide](docs/layout-builder.md)
+- [Dashboard & keybindings](docs/dashboard.md)
+- [CLI reference](docs/cli.md)
+- [Testing](docs/testing.md)
+- [Daemon & troubleshooting](docs/troubleshooting.md)
+- [Release process](RELEASE-DOCS.md)
 
-> 📖 **[Layout Builder Guide](docs/layout-builder.md)** - Detailed documentation on creating custom layouts, pane arrangements, and configuration.
+## Configuration (quick look)
 
-### Project-Local (`.peakypanes.yml`)
-
-Create in your project root for team-shared layouts:
+Project-local config lives in `.peakypanes.yml`, and global config lives in `~/.config/peakypanes/config.yml`.
+See the full schema, built-in layouts, and variable expansion in [docs/configuration.md](docs/configuration.md).
 
 ```yaml
-# .peakypanes.yml
 session: my-project
 
 layout:
   panes:
     - title: editor
       cmd: "${EDITOR:-}"
-      size: "60%"
     - title: server
       cmd: "npm run dev"
       split: horizontal
-    - title: shell
-      cmd: ""
-      split: vertical
-    - title: docker
-      cmd: "docker compose logs -f"
-
-# Or use exact grids
-# layout:
-#   grid: 2x3
-#   commands:
-#     - "${SHELL:-bash}"
-#     - "codex"
-#     - "codex"
-#     - "codex"
-#     - "codex"
-#     - "codex"
-#   titles:
-#     - shell
-#     - codex-1
-#     - codex-2
-#     - codex-3
-#     - codex-4
-#     - codex-5
-
-# Optional per-project dashboard overrides
-# dashboard:
-#   sidebar:
-#     hidden: true
 ```
 
-### Global Config (`~/.config/peakypanes/config.yml`)
+## Dashboard
 
-For personal layouts and multi-project management:
+The dashboard shows projects, sessions, live previews, and a quick-reply bar for slash commands and broadcasts.
+See [docs/dashboard.md](docs/dashboard.md) for keybindings, slash command behavior, and dashboard configuration.
 
-```yaml
-# Dashboard UI settings (optional)
-# dashboard:
-#   project_roots:
-#     - ~/projects
-#     - ~/code
+## CLI
 
-# Custom layouts
-layouts:
-  my-custom:
-    panes:
-      - title: code
-        cmd: nvim
-      - title: term
-        cmd: ""
-
-# Projects for quick switching
-projects:
-  - name: webapp
-    session: webapp
-    path: ~/projects/webapp
-    layout: fullstack
-```
-
-## Variable Expansion
-
-Use variables in your layouts:
-
-| Variable | Description |
-|----------|-------------|
-| `${PROJECT_PATH}` | Absolute path to project |
-| `${PROJECT_NAME}` | Directory name |
-| `${EDITOR}` | Your $EDITOR |
-| `${VAR:-default}` | Env var with default |
-
-```yaml
-layout:
-  vars:
-    log_file: "${HOME}/logs/${PROJECT_NAME}.log"
-  panes:
-    - cmd: "tail -f ${log_file}"
-```
-
-## Commands
-
-```bash
-peakypanes                     # Open dashboard (direct)
-peakypanes dashboard           # Open dashboard (direct)
-peakypanes open                # Start session and open dashboard
-peakypanes start               # Same as open
-peakypanes start --layout X    # Use specific layout
-peakypanes init                # Create global config
-peakypanes init --local        # Create .peakypanes.yml
-peakypanes layouts             # List available layouts
-peakypanes layouts export X    # Export layout YAML
-peakypanes clone user/repo     # Clone from GitHub and start session
-peakypanes version             # Show version
-```
-
-## Troubleshooting: daemon stuck / restart
-
-The daemon owns sessions and PTYs. If it becomes unresponsive, the only recovery
-today is a manual restart, which **will terminate all running sessions**.
-
-**Manual restart (macOS default path):**
-```bash
-kill "$(cat "$HOME/Library/Application Support/peakypanes/daemon.pid")"
-```
-
-**Manual restart (Linux default path):**
-```bash
-kill "$(cat "$HOME/.config/peakypanes/daemon.pid")"
-```
-
-You can also set `PEAKYPANES_DAEMON_PID` to control the pid file location.
-
-### Proposed UX (future)
-If the app detects a hung daemon, it should show a dialog like:
-**“Restart daemon? This will stop all running sessions and close their PTYs.”**
-This makes the data-loss tradeoff explicit before taking action.
-
-## Built-in Layouts
-
-Core (general) layouts:
-- `auto` (default): no layout flag; auto-detects `.peakypanes.yml` or falls back to `dev-3`
-- `simple`: single pane
-- `split-v`: two vertical panes (left/right)
-- `split-h`: two horizontal panes (top/bottom)
-- `2x2`: 4‑pane grid
-- `3x4`: 12‑pane grid
-- `codex-dev`: 2x3 grid (shell + 5 codex)
-
-Additional built-ins (specialized):
-- `dev-2`: editor + shell
-- `dev-3`: editor + server + shell (default fallback)
-- `fullstack`: editor + server + shell + logs
-- `go-dev`: code/run/test + git
-- `codex-grid`: 2x4 grid running codex in every pane
-
-```bash
-# List all layouts
-peakypanes layouts
-
-# Export a layout to customize
-peakypanes layouts export codex-dev > .peakypanes.yml
-```
-
-## Dashboard UI
-
-Running `peakypanes` with no subcommand opens the dashboard UI in the current terminal.
-
-The dashboard shows:
-- Projects on top (tabs)
-- Sessions on the left (with pane counts and expandable panes)
-- Live pane preview on the right (native panes are fully interactive)
-- Input bar (always visible) and target pane highlight for follow-ups
-
-Navigation (always visible):
-- `ctrl+q/ctrl+e` project, `ctrl+w/ctrl+s` session/panes, `alt+w/alt+s` session only, `ctrl+a/ctrl+d` pane, `ctrl+g` help
-
-Key bindings (also shown in the help view):
-Keymap overrides are available in the global config (`~/.config/peakypanes/config.yml`).
-
-Project
-- `ctrl+o` open project picker (creates session detached; stay in dashboard)
-- `ctrl+b` toggle sidebar (show/hide sessions list)
-- `alt+c` close project (hides from tabs; sessions keep running; press k in the dialog to kill)
-
-Session
-- `enter` attach/start session (when reply is empty)
-- `ctrl+n` new session (pick layout)
-- `ctrl+x` kill session
-- rename session via command palette (`ctrl+p`)
-
-Window
-Pane list
-- `ctrl+u` toggle pane list
-
-Pane
-- rename pane via command palette (`ctrl+p`)
-- `ctrl+y` peek selected pane in new terminal
-- `ctrl+\` toggle terminal focus (native only; configurable via `dashboard.keymap.terminal_focus`)
-- mouse: single-click selects a pane; double-click toggles terminal focus (native only); `esc` exits focus
-- `f7` scrollback mode (native only; configurable via `dashboard.keymap.scrollback`)
-- `f8` copy mode (native only; configurable via `dashboard.keymap.copy_mode`)
-
-Other
-- `ctrl+p` command palette
-- `ctrl+r` refresh, `ctrl+,` edit config, `ctrl+f` filter, `ctrl+c` quit
-
-Input details: the input is always active—type and press `enter` to send to the highlighted pane. Use `esc` to clear. Type `/` to see slash commands and press `tab` to autocomplete. Toggle terminal focus to send raw keystrokes into the pane. Use scrollback (`f7`) to navigate output and copy mode (`f8`) to select/yank (`v` select, `y` yank, `esc/q` exit).
-
-### Dashboard Config (optional)
-
-```yaml
-dashboard:
-  refresh_ms: 2000
-  preview_lines: 12
-  preview_compact: true
-  idle_seconds: 20
-  preview_mode: grid  # grid | layout
-  sidebar:
-    hidden: false
-  attach_behavior: current  # current | detached
-  pane_navigation_mode: spatial  # spatial | memory
-  quit_behavior: prompt  # prompt | keep | stop
-  keymap:
-    project_left: ["ctrl+q"]
-    project_right: ["ctrl+e"]
-    session_up: ["ctrl+w"]
-    session_down: ["ctrl+s"]
-    session_only_up: ["alt+w"]
-    session_only_down: ["alt+s"]
-    pane_next: ["ctrl+d"]
-    pane_prev: ["ctrl+a"]
-    terminal_focus: ["ctrl+\\"]
-    scrollback: ["f7"]
-    copy_mode: ["f8"]
-    toggle_panes: ["ctrl+u"]
-    toggle_sidebar: ["ctrl+b"]
-    close_project: ["alt+c"]
-    command_palette: ["ctrl+p"]
-    edit_config: ["ctrl+,"]
-    help: ["ctrl+g"]
-    quit: ["ctrl+c"]
-  status_regex:
-    success: "(?i)done|finished|success|completed|✅"
-    error: "(?i)error|failed|panic|❌"
-    running: "(?i)running|in progress|building|installing|▶"
-  agent_detection:
-    codex: true
-    claude: true
-```
-
-`attach_behavior` controls what the “attach/start” action does (default `current`): `current` focuses the selected session in the dashboard, and `detached` creates the session without switching focus.
-`pane_navigation_mode` controls left/right navigation across projects and dashboard columns: `spatial` keeps the same row when moving between projects, and `memory` restores the last selection per project.
-`quit_behavior` controls what happens on quit when panes are still running: `prompt` (default) shows a quit dialog, `keep` exits immediately and leaves sessions running, and `stop` stops the daemon (killing all panes).
-
-### Agent Status Detection (Codex & Claude Code)
-
-PeakyPanes can read per-pane JSON state files to show accurate running/idle/done status for Codex CLI and Claude Code TUI sessions. This is **on by default** and falls back to regex/idle detection if no state file is present. You can disable it via `dashboard.agent_detection`.
-
-State files are written under `${XDG_RUNTIME_DIR:-/tmp}/peakypanes/agent-state` and keyed by `PEAKYPANES_PANE_ID` (override with `PEAKYPANES_AGENT_STATE_DIR`).
-
-**Codex CLI (TUI)**
-
-Add a `notify` command in your Codex config to call the PeakyPanes hook script (Codex passes one JSON arg):
-
-```toml
-# ~/.codex/config.toml
-notify = ["python3", "/absolute/path/to/peakypanes/scripts/agent-state/codex-notify.py"]
-```
-
-Tip: with `npm i -g peakypanes`, the scripts live under `$(npm root -g)/peakypanes/scripts/agent-state/`.
-Note: Codex `notify` only fires on turn completion, so running state still relies on regex/idle detection between turns.
-
-**Claude Code (TUI)**
-
-Configure hooks to run the PeakyPanes hook script (Claude passes JSON on stdin). Recommended events:
-`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `Stop`, `SessionEnd`.
-
-Example hook command (wire it to each event above in Claude Code):
-
-```bash
-python3 /absolute/path/to/peakypanes/scripts/agent-state/claude-hook.py
-```
-
-## How Layout Detection Works
-
-1. `--layout` flag (highest priority)
-2. `.peakypanes.yml` in current directory
-3. Project entry in `~/.config/peakypanes/config.yml`
-4. Built-in `dev-3` layout (fallback)
+See [docs/cli.md](docs/cli.md) for the full command list and examples.
 
 ## Testing
 
-Run the unit tests with coverage:
-
-```bash
-go test ./... -coverprofile /tmp/peakypanes.cover
-go tool cover -func /tmp/peakypanes.cover | tail -n 1
-```
-
-Race tests:
-
-```bash
-go test ./... -race
-```
-
-Manual npm smoke run (fresh HOME/XDG config):
-
-```bash
-scripts/fresh-run
-scripts/fresh-run 0.0.6 --with-project
-```
-
-GitHub Actions runs gofmt checks, go vet, go test with coverage, and race on Linux.
+See [docs/testing.md](docs/testing.md) for the full test matrix and CI notes.
 
 ## Release
 
