@@ -51,6 +51,8 @@ type Daemon struct {
 	skipRestore bool
 	profileStop func()
 	startMu     sync.Mutex
+	started     chan struct{}
+	startOnce   sync.Once
 	spawnMu     sync.Mutex
 	shutdownMu  sync.Mutex
 	shutdownErr error
@@ -115,6 +117,7 @@ func NewDaemon(cfg DaemonConfig) (*Daemon, error) {
 		ctx:         ctx,
 		cancel:      cancel,
 		clients:     make(map[uint64]*clientConn),
+		started:     make(chan struct{}),
 	}
 	if cfg.HandleSignals {
 		d.handleSignals()
@@ -129,6 +132,7 @@ func (d *Daemon) Start() error {
 	}
 	d.startMu.Lock()
 	defer d.startMu.Unlock()
+	defer d.signalStarted()
 	if d.closing.Load() {
 		return errors.New("sessiond: daemon is shutting down")
 	}
@@ -251,6 +255,17 @@ func (d *Daemon) setListener(listener net.Listener) {
 	d.listenerMu.Lock()
 	d.listener = listener
 	d.listenerMu.Unlock()
+}
+
+func (d *Daemon) signalStarted() {
+	if d == nil {
+		return
+	}
+	d.startOnce.Do(func() {
+		if d.started != nil {
+			close(d.started)
+		}
+	})
 }
 
 func (d *Daemon) listenerValue() net.Listener {

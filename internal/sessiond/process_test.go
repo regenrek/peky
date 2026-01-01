@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -212,11 +211,13 @@ func TestRunStop(t *testing.T) {
 
 func waitForListener(t *testing.T, d *Daemon) {
 	t.Helper()
-	for i := 0; i < 20000; i++ {
-		if d.listenerValue() != nil {
-			return
-		}
-		runtime.Gosched()
+	if d == nil {
+		t.Fatalf("daemon is nil")
 	}
-	t.Fatalf("listener not set")
+	if d.started != nil {
+		<-d.started
+	}
+	if d.listenerValue() == nil {
+		t.Fatalf("listener not set")
+	}
 }
