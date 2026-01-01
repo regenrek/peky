@@ -42,4 +42,10 @@ For a live TUI viewer, use `pproftui` against the daemon:
 pproftui -refresh 2s http://127.0.0.1:6060/debug/pprof/profile
 ```
 
+tmux comparison (run from Ghostty for a 10-pane baseline):
+
+```bash
+./scripts/perf-tmux --panes 10
+```
+
 GitHub Actions runs gofmt checks, go vet, go test with coverage, and race on Linux.

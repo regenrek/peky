@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+panes=10
+poll_ms=50
+startup_timeout_ms=30000
+ping_timeout_ms=30000
+keep_session=0
+session_name=""
+shell_cmd="${SHELL:-/bin/zsh}"
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/perf-tmux [options]
+
+Options:
+  --panes <n>                 Number of panes (default: 10)
+  --poll-ms <ms>              Poll interval for capture (default: 50)
+  --startup-timeout-ms <ms>   Timeout waiting for BOOT line (default: 30000)
+  --ping-timeout-ms <ms>      Timeout waiting for PING line (default: 30000)
+  --shell <path>              Shell to launch in panes (default: $SHELL)
+  --keep                      Leave tmux session running
+  -h, --help                  Show help
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --panes)
+      panes="${2:-}"
+      shift 2
+      ;;
+    --poll-ms)
+      poll_ms="${2:-}"
+      shift 2
+      ;;
+    --startup-timeout-ms)
+      startup_timeout_ms="${2:-}"
+      shift 2
+      ;;
+    --ping-timeout-ms)
+      ping_timeout_ms="${2:-}"
+      shift 2
+      ;;
+    --shell)
+      shell_cmd="${2:-}"
+      shift 2
+      ;;
+    --keep)
+      keep_session=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "unknown option: $1" >&2
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+if ! command -v tmux >/dev/null 2>&1; then
+  echo "tmux is required" >&2
+  exit 1
+fi
+
+if [[ -z "${panes}" || "${panes}" -lt 1 ]]; then
+  echo "panes must be >= 1" >&2
+  exit 1
+fi
+
+now_ms() {
+  date +%s%3N
+}
+
+sleep_secs() {
+  local ms="$1"
+  awk -v ms="$ms" 'BEGIN { printf "%.3f\n", ms/1000 }'
+}
+
+session_name="ghostty-perf-$(date +%Y%m%d-%H%M%S)"
+outdir=".bench/tmux-${session_name}"
+mkdir -p "${outdir}"
+
+pane_cmd="${shell_cmd} -lc 'echo BOOT \$(date +%s%3N); exec ${shell_cmd}'"
+
+cleanup() {
+  if [[ "${keep_session}" -eq 0 ]]; then
+    tmux kill-session -t "${session_name}" >/dev/null 2>&1 || true
+  else
+    echo "tmux session kept: ${session_name}"
+  fi
+}
+trap cleanup EXIT
+
+tmux new-session -d -s "${session_name}" "${pane_cmd}"
+for ((i=2; i<=panes; i++)); do
+  tmux split-window -t "${session_name}" -h "${pane_cmd}"
+  tmux select-layout -t "${session_name}" tiled >/dev/null
+done
+tmux select-layout -t "${session_name}" tiled >/dev/null
+
+pane_ids=()
+while IFS= read -r pane_id; do
+  pane_ids+=("${pane_id}")
+done < <(tmux list-panes -t "${session_name}" -F "#{pane_id}")
+
+start_ms=$(now_ms)
+
+boot_csv="${outdir}/boot.csv"
+ping_csv="${outdir}/ping.csv"
+report_txt="${outdir}/report.txt"
+
+echo "pane_id,boot_ts,boot_latency_ms" > "${boot_csv}"
+for pane_id in "${pane_ids[@]}"; do
+  deadline=$(( $(now_ms) + startup_timeout_ms ))
+  boot_ts=""
+  while [[ $(now_ms) -lt "${deadline}" ]]; do
+    line=$(tmux capture-pane -p -t "${pane_id}" -S -200 | awk '/^BOOT / {print $2; exit}')
+    if [[ -n "${line}" ]]; then
+      boot_ts="${line}"
+      break
+    fi
+    sleep "$(sleep_secs "${poll_ms}")"
+  done
+  if [[ -z "${boot_ts}" ]]; then
+    echo "${pane_id},,timeout" >> "${boot_csv}"
+    continue
+  fi
+  boot_latency=$(( boot_ts - start_ms ))
+  echo "${pane_id},${boot_ts},${boot_latency}" >> "${boot_csv}"
+done
+
+echo "pane_id,send_ts,ping_ts,latency_ms,detect_ms" > "${ping_csv}"
+for pane_id in "${pane_ids[@]}"; do
+  send_ts=$(now_ms)
+  tmux send-keys -t "${pane_id}" "printf 'PING ${pane_id} %s\\n' \"\$(date +%s%3N)\"" C-m
+  deadline=$(( $(now_ms) + ping_timeout_ms ))
+  ping_ts=""
+  detect_ms=""
+  while [[ $(now_ms) -lt "${deadline}" ]]; do
+    line=$(tmux capture-pane -p -t "${pane_id}" -S -200 | awk -v pid="${pane_id}" '$1=="PING" && $2==pid {print $3; exit}')
+    if [[ -n "${line}" ]]; then
+      ping_ts="${line}"
+      detect_ms=$(now_ms)
+      break
+    fi
+    sleep "$(sleep_secs "${poll_ms}")"
+  done
+  if [[ -z "${ping_ts}" ]]; then
+    echo "${pane_id},${send_ts},,timeout," >> "${ping_csv}"
+    continue
+  fi
+  latency=$(( ping_ts - send_ts ))
+  echo "${pane_id},${send_ts},${ping_ts},${latency},${detect_ms}" >> "${ping_csv}"
+done
+
+{
+  echo "# tmux perf report"
+  echo "date: ${session_name}"
+  echo "panes: ${#pane_ids[@]}"
+  echo "shell: ${shell_cmd}"
+  echo "poll_ms: ${poll_ms}"
+  echo "startup_timeout_ms: ${startup_timeout_ms}"
+  echo "ping_timeout_ms: ${ping_timeout_ms}"
+  echo "out: ${outdir}"
+  echo ""
+  echo "boot.csv: ${boot_csv}"
+  echo "ping.csv: ${ping_csv}"
+  echo ""
+  echo "boot_latency_ms_summary:"
+  awk -F',' 'NR>1 && $3!="timeout" {count++; min=(min==""||$3+0<min)?$3+0:min; max=(max==""||$3+0>max)?$3+0:max; sum+=$3}
+    END { if (count>0) printf "  count=%d min=%.3f max=%.3f avg=%.3f\n", count, min, max, sum/count; else print "  count=0" }' "${boot_csv}"
+  echo "ping_latency_ms_summary:"
+  awk -F',' 'NR>1 && $4!="timeout" {count++; min=(min==""||$4+0<min)?$4+0:min; max=(max==""||$4+0>max)?$4+0:max; sum+=$4}
+    END { if (count>0) printf "  count=%d min=%.3f max=%.3f avg=%.3f\n", count, min, max, sum/count; else print "  count=0" }' "${ping_csv}"
+} | tee "${report_txt}"
