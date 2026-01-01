@@ -1,8 +1,8 @@
 package app
 
 import (
-	"github.com/regenrek/peakypanes/internal/cli/spec"
 	"github.com/regenrek/peakypanes/internal/cli/root"
+	"github.com/regenrek/peakypanes/internal/cli/spec"
 )
 
 // NewRunner builds the CLI runner from the embedded spec.

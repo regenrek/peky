@@ -45,10 +45,10 @@ func PaneList(sessions []native.SessionSnapshot, ws workspace.Workspace, filterS
 		project := projectByPath[workspace.NormalizeProjectPath(session.Path)]
 		for _, pane := range session.Panes {
 			out = append(out, output.PaneSummaryWithContext{
-				PaneSummary:  paneSummaryFromNative(pane),
-				SessionName:  session.Name,
-				ProjectID:    project.ID,
-				ProjectName:  project.Name,
+				PaneSummary: paneSummaryFromNative(pane),
+				SessionName: session.Name,
+				ProjectID:   project.ID,
+				ProjectName: project.Name,
 			})
 		}
 	}

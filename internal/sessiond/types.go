@@ -94,8 +94,8 @@ type SnapshotRequest struct {
 
 // SnapshotResponse returns dashboard snapshots.
 type SnapshotResponse struct {
-	Version  uint64
-	Sessions []native.SessionSnapshot
+	Version        uint64
+	Sessions       []native.SessionSnapshot
 	FocusedSession string
 	FocusedPaneID  string
 }

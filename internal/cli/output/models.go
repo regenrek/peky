@@ -14,13 +14,13 @@ type TargetResult struct {
 }
 
 type ActionResult struct {
-	Action   string                 `json:"action"`
-	Status   string                 `json:"status"`
-	Message  string                 `json:"message,omitempty"`
-	Targets  []TargetRef            `json:"targets,omitempty"`
-	Results  []TargetResult         `json:"results,omitempty"`
-	Warnings []string               `json:"warnings,omitempty"`
-	Details  map[string]any         `json:"details,omitempty"`
+	Action   string         `json:"action"`
+	Status   string         `json:"status"`
+	Message  string         `json:"message,omitempty"`
+	Targets  []TargetRef    `json:"targets,omitempty"`
+	Results  []TargetResult `json:"results,omitempty"`
+	Warnings []string       `json:"warnings,omitempty"`
+	Details  map[string]any `json:"details,omitempty"`
 }
 
 type SessionSummary struct {
@@ -33,17 +33,17 @@ type SessionSummary struct {
 }
 
 type PaneSummary struct {
-	ID          string    `json:"id"`
-	Index       int       `json:"index"`
-	Title       string    `json:"title,omitempty"`
-	Command     string    `json:"command,omitempty"`
-	StartCmd    string    `json:"start_command,omitempty"`
-	Cwd         string    `json:"cwd,omitempty"`
-	Dead        bool      `json:"dead,omitempty"`
-	Tags        []string  `json:"tags,omitempty"`
+	ID           string    `json:"id"`
+	Index        int       `json:"index"`
+	Title        string    `json:"title,omitempty"`
+	Command      string    `json:"command,omitempty"`
+	StartCmd     string    `json:"start_command,omitempty"`
+	Cwd          string    `json:"cwd,omitempty"`
+	Dead         bool      `json:"dead,omitempty"`
+	Tags         []string  `json:"tags,omitempty"`
 	LastActivity time.Time `json:"last_activity,omitempty"`
-	BytesIn     uint64    `json:"bytes_in,omitempty"`
-	BytesOut    uint64    `json:"bytes_out,omitempty"`
+	BytesIn      uint64    `json:"bytes_in,omitempty"`
+	BytesOut     uint64    `json:"bytes_out,omitempty"`
 }
 
 type PaneSummaryWithContext struct {
@@ -70,19 +70,19 @@ type ProjectSummary struct {
 }
 
 type ProjectSnapshot struct {
-	ID       string           `json:"id"`
-	Name     string           `json:"name"`
-	Path     string           `json:"path"`
-	Hidden   bool             `json:"hidden"`
+	ID       string            `json:"id"`
+	Name     string            `json:"name"`
+	Path     string            `json:"path"`
+	Hidden   bool              `json:"hidden"`
 	Sessions []SessionSnapshot `json:"sessions"`
 }
 
 type Snapshot struct {
-	Projects         []ProjectSnapshot `json:"projects"`
-	SelectedProject  string            `json:"selected_project_id,omitempty"`
-	SelectedSession  string            `json:"selected_session_name,omitempty"`
-	SelectedPaneID   string            `json:"selected_pane_id,omitempty"`
-	GeneratedAt      time.Time         `json:"generated_at,omitempty"`
+	Projects        []ProjectSnapshot `json:"projects"`
+	SelectedProject string            `json:"selected_project_id,omitempty"`
+	SelectedSession string            `json:"selected_session_name,omitempty"`
+	SelectedPaneID  string            `json:"selected_pane_id,omitempty"`
+	GeneratedAt     time.Time         `json:"generated_at,omitempty"`
 }
 
 type LayoutSummary struct {
@@ -211,10 +211,10 @@ type NLPlannedCommand struct {
 }
 
 type NLPlan struct {
-	PlanID               string            `json:"plan_id"`
-	Rationale            string            `json:"rationale,omitempty"`
-	Commands             []NLPlannedCommand `json:"commands"`
-	RequiresConfirmations []string          `json:"requires_confirmations,omitempty"`
+	PlanID                string             `json:"plan_id"`
+	Rationale             string             `json:"rationale,omitempty"`
+	Commands              []NLPlannedCommand `json:"commands"`
+	RequiresConfirmations []string           `json:"requires_confirmations,omitempty"`
 }
 
 type NLExecutionStep struct {
@@ -227,7 +227,7 @@ type NLExecutionStep struct {
 }
 
 type NLExecution struct {
-	ExecutionID string             `json:"execution_id"`
-	PlanID      string             `json:"plan_id"`
+	ExecutionID string            `json:"execution_id"`
+	PlanID      string            `json:"plan_id"`
 	Steps       []NLExecutionStep `json:"steps"`
 }

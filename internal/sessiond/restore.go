@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/regenrek/peakypanes/internal/native"
-	"github.com/regenrek/peakypanes/internal/sessionpolicy"
 	"github.com/regenrek/peakypanes/internal/sessiond/state"
+	"github.com/regenrek/peakypanes/internal/sessionpolicy"
 )
 
 func (d *Daemon) restorePersistedState() error {

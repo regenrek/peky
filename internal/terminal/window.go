@@ -128,7 +128,7 @@ type Window struct {
 	mouseSelectMoved       bool
 	mouseSelection         bool
 
-	toastFn func(string)
+	toastFn  func(string)
 	outputFn func([]byte)
 
 	lastUpdate atomic.Int64 // unix nanos
