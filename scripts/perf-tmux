@@ -8,17 +8,31 @@ ping_timeout_ms=30000
 keep_session=0
 session_name=""
 shell_cmd="${SHELL:-/bin/zsh}"
+layout_path=""
+command=""
+send_text=""
+send_delay_ms=0
+submit_delay_ms=0
+submit_send=0
+emit_boot=1
 
 usage() {
   cat <<'EOF'
 Usage: scripts/perf-tmux [options]
 
 Options:
+  --layout <path>             Use a peakypanes layout (command + broadcast_send)
   --panes <n>                 Number of panes (default: 10)
   --poll-ms <ms>              Poll interval for capture (default: 50)
   --startup-timeout-ms <ms>   Timeout waiting for BOOT line (default: 30000)
   --ping-timeout-ms <ms>      Timeout waiting for PING line (default: 30000)
   --shell <path>              Shell to launch in panes (default: $SHELL)
+  --command <cmd>             Command to exec in each pane
+  --send <text>               Text to send to all panes
+  --send-delay-ms <ms>        Delay before sending text (default: 0)
+  --submit                    Send Enter after text
+  --submit-delay-ms <ms>      Delay before Enter (default: 0)
+  --no-boot                   Skip BOOT marker emission
   --keep                      Leave tmux session running
   -h, --help                  Show help
 EOF
@@ -26,6 +40,10 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --layout)
+      layout_path="${2:-}"
+      shift 2
+      ;;
     --panes)
       panes="${2:-}"
       shift 2
@@ -45,6 +63,30 @@ while [[ $# -gt 0 ]]; do
     --shell)
       shell_cmd="${2:-}"
       shift 2
+      ;;
+    --command)
+      command="${2:-}"
+      shift 2
+      ;;
+    --send)
+      send_text="${2:-}"
+      shift 2
+      ;;
+    --send-delay-ms)
+      send_delay_ms="${2:-}"
+      shift 2
+      ;;
+    --submit)
+      submit_send=1
+      shift
+      ;;
+    --submit-delay-ms)
+      submit_delay_ms="${2:-}"
+      shift 2
+      ;;
+    --no-boot)
+      emit_boot=0
+      shift
       ;;
     --keep)
       keep_session=1
@@ -72,6 +114,47 @@ if [[ -z "${panes}" || "${panes}" -lt 1 ]]; then
   exit 1
 fi
 
+parse_layout() {
+  if [[ -z "${layout_path}" ]]; then
+    return 0
+  fi
+  if [[ ! -f "${layout_path}" ]]; then
+    echo "layout not found: ${layout_path}" >&2
+    exit 1
+  fi
+  if ! command -v ruby >/dev/null 2>&1; then
+    echo "ruby is required to parse layout YAML (or pass --command/--send flags)" >&2
+    exit 1
+  fi
+
+  local parsed
+  parsed=$(ruby -ryaml -e 'cfg=YAML.load_file(ARGV[0])||{}; layout=cfg["layout"]||{}; send=layout["broadcast_send"]; send=send.is_a?(Array)&&send[0].is_a?(Hash) ? send[0] : {}; puts [layout["command"], send["text"], send["send_delay_ms"], send["submit"], send["submit_delay_ms"]].map{|v| v.nil? ? "" : v}.join("\n")' "${layout_path}")
+  local cmd_line send_line delay_line submit_line submit_delay_line
+  cmd_line=$(echo "${parsed}" | sed -n '1p')
+  send_line=$(echo "${parsed}" | sed -n '2p')
+  delay_line=$(echo "${parsed}" | sed -n '3p')
+  submit_line=$(echo "${parsed}" | sed -n '4p')
+  submit_delay_line=$(echo "${parsed}" | sed -n '5p')
+
+  if [[ -z "${command}" && -n "${cmd_line}" ]]; then
+    command="${cmd_line}"
+  fi
+  if [[ -z "${send_text}" && -n "${send_line}" ]]; then
+    send_text="${send_line}"
+  fi
+  if [[ "${send_delay_ms}" -eq 0 && -n "${delay_line}" ]]; then
+    send_delay_ms="${delay_line}"
+  fi
+  if [[ "${submit_send}" -eq 0 && -n "${submit_line}" ]]; then
+    if [[ "${submit_line}" == "true" || "${submit_line}" == "1" ]]; then
+      submit_send=1
+    fi
+  fi
+  if [[ "${submit_delay_ms}" -eq 0 && -n "${submit_delay_line}" ]]; then
+    submit_delay_ms="${submit_delay_line}"
+  fi
+}
+
 now_ms() {
   date +%s%3N
 }
@@ -85,7 +168,22 @@ session_name="ghostty-perf-$(date +%Y%m%d-%H%M%S)"
 outdir=".bench/tmux-${session_name}"
 mkdir -p "${outdir}"
 
-pane_cmd="${shell_cmd} -lc 'echo BOOT \$(date +%s%3N); exec ${shell_cmd}'"
+parse_layout
+
+pane_cmd=""
+if [[ -n "${command}" ]]; then
+  if [[ "${emit_boot}" -eq 1 ]]; then
+    pane_cmd="${shell_cmd} -lc 'echo BOOT \$(date +%s%3N); exec ${command}'"
+  else
+    pane_cmd="${command}"
+  fi
+else
+  if [[ "${emit_boot}" -eq 1 ]]; then
+    pane_cmd="${shell_cmd} -lc 'echo BOOT \$(date +%s%3N); exec ${shell_cmd}'"
+  else
+    pane_cmd="${shell_cmd}"
+  fi
+fi
 
 cleanup() {
   if [[ "${keep_session}" -eq 0 ]]; then
@@ -116,6 +214,10 @@ report_txt="${outdir}/report.txt"
 
 echo "pane_id,boot_ts,boot_latency_ms" > "${boot_csv}"
 for pane_id in "${pane_ids[@]}"; do
+  if [[ "${emit_boot}" -eq 0 ]]; then
+    echo "${pane_id},,skipped" >> "${boot_csv}"
+    continue
+  fi
   deadline=$(( $(now_ms) + startup_timeout_ms ))
   boot_ts=""
   while [[ $(now_ms) -lt "${deadline}" ]]; do
@@ -133,6 +235,23 @@ for pane_id in "${pane_ids[@]}"; do
   boot_latency=$(( boot_ts - start_ms ))
   echo "${pane_id},${boot_ts},${boot_latency}" >> "${boot_csv}"
 done
+
+if [[ "${send_delay_ms}" -gt 0 ]]; then
+  sleep "$(sleep_secs "${send_delay_ms}")"
+fi
+if [[ -n "${send_text}" ]]; then
+  for pane_id in "${pane_ids[@]}"; do
+    tmux send-keys -t "${pane_id}" "${send_text}"
+  done
+  if [[ "${submit_send}" -eq 1 ]]; then
+    if [[ "${submit_delay_ms}" -gt 0 ]]; then
+      sleep "$(sleep_secs "${submit_delay_ms}")"
+    fi
+    for pane_id in "${pane_ids[@]}"; do
+      tmux send-keys -t "${pane_id}" C-m
+    done
+  fi
+fi
 
 echo "pane_id,send_ts,ping_ts,latency_ms,detect_ms" > "${ping_csv}"
 for pane_id in "${pane_ids[@]}"; do
@@ -163,6 +282,19 @@ done
   echo "date: ${session_name}"
   echo "panes: ${#pane_ids[@]}"
   echo "shell: ${shell_cmd}"
+  if [[ -n "${layout_path}" ]]; then
+    echo "layout: ${layout_path}"
+  fi
+  if [[ -n "${command}" ]]; then
+    echo "command: ${command}"
+  fi
+  if [[ -n "${send_text}" ]]; then
+    echo "send_text: ${send_text}"
+    echo "send_delay_ms: ${send_delay_ms}"
+    echo "submit: ${submit_send}"
+    echo "submit_delay_ms: ${submit_delay_ms}"
+  fi
+  echo "emit_boot: ${emit_boot}"
   echo "poll_ms: ${poll_ms}"
   echo "startup_timeout_ms: ${startup_timeout_ms}"
   echo "ping_timeout_ms: ${ping_timeout_ms}"
