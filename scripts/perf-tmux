@@ -15,6 +15,7 @@ send_delay_ms=0
 submit_delay_ms=0
 submit_send=0
 emit_boot=1
+mode="ping"
 
 usage() {
   cat <<'EOF'
@@ -32,6 +33,8 @@ Options:
   --send-delay-ms <ms>        Delay before sending text (default: 0)
   --submit                    Send Enter after text
   --submit-delay-ms <ms>      Delay before Enter (default: 0)
+  --mode <ping|output-change> Measure input->output with ping or output change (default: ping)
+  --output-change             Alias for --mode output-change
   --no-boot                   Skip BOOT marker emission
   --keep                      Leave tmux session running
   -h, --help                  Show help
@@ -83,6 +86,14 @@ while [[ $# -gt 0 ]]; do
     --submit-delay-ms)
       submit_delay_ms="${2:-}"
       shift 2
+      ;;
+    --mode)
+      mode="${2:-}"
+      shift 2
+      ;;
+    --output-change)
+      mode="output-change"
+      shift
       ;;
     --no-boot)
       emit_boot=0
@@ -202,6 +213,46 @@ else
   fi
 fi
 
+shell_base="$(basename "${shell_cmd}")"
+command_base=""
+if [[ -n "${command}" ]]; then
+  command_base="${command%% *}"
+fi
+case "${command_base}" in
+  bash|zsh|sh|fish)
+    mode="${mode:-ping}"
+    ;;
+  "")
+    mode="${mode:-ping}"
+    ;;
+  *)
+    if [[ "${mode}" == "ping" && -n "${send_text}" ]]; then
+      mode="output-change"
+    fi
+    ;;
+esac
+
+if [[ "${mode}" == "output-change" && -z "${send_text}" ]]; then
+  echo "output-change mode requires --send text" >&2
+  exit 1
+fi
+
+hash_cmd() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 | awk '{print $1}'
+    return
+  fi
+  if command -v md5 >/dev/null 2>&1; then
+    md5 -q
+    return
+  fi
+  cksum | awk '{print $1}'
+}
+
+capture_hash() {
+  tmux capture-pane -p -t "$1" -S -200 | hash_cmd
+}
+
 cleanup() {
   if [[ "${keep_session}" -eq 0 ]]; then
     tmux kill-session -t "${session_name}" >/dev/null 2>&1 || true
@@ -271,18 +322,35 @@ if [[ -n "${send_text}" ]]; then
 fi
 
 echo "pane_id,send_ts,ping_ts,latency_ms,detect_ms" > "${ping_csv}"
+declare -A pre_hashes
+if [[ "${mode}" == "output-change" ]]; then
+  for pane_id in "${pane_ids[@]}"; do
+    pre_hashes["${pane_id}"]="$(capture_hash "${pane_id}")"
+  done
+fi
 for pane_id in "${pane_ids[@]}"; do
   send_ts=$(now_ms)
-  tmux send-keys -t "${pane_id}" "printf 'PING ${pane_id} %s\\n' \"\$(${time_cmd})\"" C-m
+  if [[ "${mode}" == "ping" ]]; then
+    tmux send-keys -t "${pane_id}" "printf 'PING ${pane_id} %s\\n' \"\$(${time_cmd})\"" C-m
+  fi
   deadline=$(( $(now_ms) + ping_timeout_ms ))
   ping_ts=""
   detect_ms=""
   while [[ $(now_ms) -lt "${deadline}" ]]; do
-    line=$(tmux capture-pane -p -t "${pane_id}" -S -200 | awk -v pid="${pane_id}" '$1=="PING" && $2==pid {print $3; exit}')
-    if [[ -n "${line}" ]]; then
-      ping_ts="${line}"
-      detect_ms=$(now_ms)
-      break
+    if [[ "${mode}" == "output-change" ]]; then
+      cur_hash=$(capture_hash "${pane_id}")
+      if [[ "${cur_hash}" != "${pre_hashes[${pane_id}]}" ]]; then
+        detect_ms=$(now_ms)
+        ping_ts="${detect_ms}"
+        break
+      fi
+    else
+      line=$(tmux capture-pane -p -t "${pane_id}" -S -200 | awk -v pid="${pane_id}" '$1=="PING" && $2==pid {print $3; exit}')
+      if [[ -n "${line}" ]]; then
+        ping_ts="${line}"
+        detect_ms=$(now_ms)
+        break
+      fi
     fi
     sleep "$(sleep_secs "${poll_ms}")"
   done
@@ -315,6 +383,7 @@ done
   echo "poll_ms: ${poll_ms}"
   echo "startup_timeout_ms: ${startup_timeout_ms}"
   echo "ping_timeout_ms: ${ping_timeout_ms}"
+  echo "mode: ${mode}"
   echo "out: ${outdir}"
   echo ""
   echo "boot.csv: ${boot_csv}"
