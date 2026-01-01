@@ -81,7 +81,7 @@ This format is based on Keep a Changelog.
 ### Added
 - Native multiplexer manager with PTY/VT panes and full-screen TUI support.
 - Live pane rendering in the dashboard and project views for native sessions.
-- Terminal focus toggle for native panes (default `ctrl+\`, configurable).
+- Terminal focus toggle for native panes (default `ctrl+k`, configurable).
 - Native mouse support in the dashboard: single-click selects panes, double-click toggles terminal focus, and motion forwarding is throttled to avoid CPU spikes.
 - Mouse wheel scrollback for native panes with shift/ctrl modifiers and drag-to-select copy mode in terminal focus.
 - Mouse drag selection now auto-copies to the clipboard and shows a success toast.

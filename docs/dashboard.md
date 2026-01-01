@@ -44,7 +44,7 @@ Pane list
 Pane
 - rename pane via command palette (ctrl+p)
 - ctrl+y peek selected pane in new terminal
-- ctrl+\ toggle terminal focus (native only; configurable via dashboard.keymap.terminal_focus)
+- ctrl+k toggle terminal focus (native only; configurable via dashboard.keymap.terminal_focus)
 - mouse: single-click selects a pane; double-click toggles terminal focus (native only); esc exits focus
 - f7 scrollback mode (native only; configurable via dashboard.keymap.scrollback)
 - f8 copy mode (native only; configurable via dashboard.keymap.copy_mode)
@@ -76,7 +76,7 @@ dashboard:
     session_only_down: ["alt+s"]
     pane_next: ["ctrl+d"]
     pane_prev: ["ctrl+a"]
-    terminal_focus: ["ctrl+\\"]
+    terminal_focus: ["ctrl+k"]
     scrollback: ["f7"]
     copy_mode: ["f8"]
     toggle_panes: ["ctrl+u"]
