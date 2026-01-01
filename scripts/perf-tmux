@@ -322,13 +322,15 @@ if [[ -n "${send_text}" ]]; then
 fi
 
 echo "pane_id,send_ts,ping_ts,latency_ms,detect_ms" > "${ping_csv}"
-declare -A pre_hashes
+pre_hashes=()
 if [[ "${mode}" == "output-change" ]]; then
-  for pane_id in "${pane_ids[@]}"; do
-    pre_hashes["${pane_id}"]="$(capture_hash "${pane_id}")"
+  for idx in "${!pane_ids[@]}"; do
+    pane_id="${pane_ids[${idx}]}"
+    pre_hashes[${idx}]="$(capture_hash "${pane_id}")"
   done
 fi
-for pane_id in "${pane_ids[@]}"; do
+for idx in "${!pane_ids[@]}"; do
+  pane_id="${pane_ids[${idx}]}"
   send_ts=$(now_ms)
   if [[ "${mode}" == "ping" ]]; then
     tmux send-keys -t "${pane_id}" "printf 'PING ${pane_id} %s\\n' \"\$(${time_cmd})\"" C-m
@@ -339,7 +341,7 @@ for pane_id in "${pane_ids[@]}"; do
   while [[ $(now_ms) -lt "${deadline}" ]]; do
     if [[ "${mode}" == "output-change" ]]; then
       cur_hash=$(capture_hash "${pane_id}")
-      if [[ "${cur_hash}" != "${pre_hashes[${pane_id}]}" ]]; then
+      if [[ "${cur_hash}" != "${pre_hashes[${idx}]:-}" ]]; then
         detect_ms=$(now_ms)
         ping_ts="${detect_ms}"
         break
