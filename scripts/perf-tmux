@@ -213,7 +213,6 @@ else
   fi
 fi
 
-shell_base="$(basename "${shell_cmd}")"
 command_base=""
 if [[ -n "${command}" ]]; then
   command_base="${command%% *}"
@@ -326,7 +325,7 @@ pre_hashes=()
 if [[ "${mode}" == "output-change" ]]; then
   for idx in "${!pane_ids[@]}"; do
     pane_id="${pane_ids[${idx}]}"
-    pre_hashes[${idx}]="$(capture_hash "${pane_id}")"
+    pre_hashes[idx]="$(capture_hash "${pane_id}")"
   done
 fi
 for idx in "${!pane_ids[@]}"; do
@@ -341,7 +340,7 @@ for idx in "${!pane_ids[@]}"; do
   while [[ $(now_ms) -lt "${deadline}" ]]; do
     if [[ "${mode}" == "output-change" ]]; then
       cur_hash=$(capture_hash "${pane_id}")
-      if [[ "${cur_hash}" != "${pre_hashes[${idx}]:-}" ]]; then
+      if [[ "${cur_hash}" != "${pre_hashes[idx]:-}" ]]; then
         detect_ms=$(now_ms)
         ping_ts="${detect_ms}"
         break
