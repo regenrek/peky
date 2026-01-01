@@ -213,6 +213,8 @@ else
   fi
 fi
 
+spawn_start_ms=$(now_ms)
+
 command_base=""
 if [[ -n "${command}" ]]; then
   command_base="${command%% *}"
@@ -273,7 +275,7 @@ while IFS= read -r pane_id; do
   pane_ids+=("${pane_id}")
 done < <(tmux list-panes -t "${session_name}" -F "#{pane_id}")
 
-start_ms=$(now_ms)
+start_ms="${spawn_start_ms}"
 
 boot_csv="${outdir}/boot.csv"
 ping_csv="${outdir}/ping.csv"
@@ -386,6 +388,7 @@ done
   echo "ping_timeout_ms: ${ping_timeout_ms}"
   echo "mode: ${mode}"
   echo "out: ${outdir}"
+  echo "spawn_start_ms: ${start_ms}"
   echo ""
   echo "boot.csv: ${boot_csv}"
   echo "ping.csv: ${ping_csv}"
