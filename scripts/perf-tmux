@@ -156,7 +156,15 @@ parse_layout() {
 }
 
 now_ms() {
-  date +%s%3N
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import time; print(int(time.time()*1000))'
+    return
+  fi
+  if command -v perl >/dev/null 2>&1; then
+    perl -MTime::HiRes -e 'printf("%.0f", Time::HiRes::time()*1000)'
+    return
+  fi
+  date +%s
 }
 
 sleep_secs() {
@@ -170,16 +178,25 @@ mkdir -p "${outdir}"
 
 parse_layout
 
+time_cmd=""
+if command -v python3 >/dev/null 2>&1; then
+  time_cmd="python3 -c 'import time; print(int(time.time()*1000))'"
+elif command -v perl >/dev/null 2>&1; then
+  time_cmd="perl -MTime::HiRes -e 'printf(\"%.0f\", Time::HiRes::time()*1000)'"
+else
+  time_cmd="date +%s"
+fi
+
 pane_cmd=""
 if [[ -n "${command}" ]]; then
   if [[ "${emit_boot}" -eq 1 ]]; then
-    pane_cmd="${shell_cmd} -lc 'echo BOOT \$(date +%s%3N); exec ${command}'"
+    pane_cmd="${shell_cmd} -lc \"echo BOOT \$(${time_cmd}); exec ${command}\""
   else
     pane_cmd="${command}"
   fi
 else
   if [[ "${emit_boot}" -eq 1 ]]; then
-    pane_cmd="${shell_cmd} -lc 'echo BOOT \$(date +%s%3N); exec ${shell_cmd}'"
+    pane_cmd="${shell_cmd} -lc \"echo BOOT \$(${time_cmd}); exec ${shell_cmd}\""
   else
     pane_cmd="${shell_cmd}"
   fi
@@ -256,7 +273,7 @@ fi
 echo "pane_id,send_ts,ping_ts,latency_ms,detect_ms" > "${ping_csv}"
 for pane_id in "${pane_ids[@]}"; do
   send_ts=$(now_ms)
-  tmux send-keys -t "${pane_id}" "printf 'PING ${pane_id} %s\\n' \"\$(date +%s%3N)\"" C-m
+  tmux send-keys -t "${pane_id}" "printf 'PING ${pane_id} %s\\n' \"\$(${time_cmd})\"" C-m
   deadline=$(( $(now_ms) + ping_timeout_ms ))
   ping_ts=""
   detect_ms=""
