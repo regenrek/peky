@@ -26,26 +26,31 @@ func runPack(ctx root.CommandContext) error {
 	meta := output.NewMeta("context.pack", ctx.Deps.Version)
 	include := normalizeIncludes(ctx.Cmd.StringSlice("include"))
 	maxBytes := ctx.Cmd.Int("max-bytes")
+	pack, errors, err := buildContextPack(ctx, include, maxBytes)
+	if err != nil {
+		return err
+	}
+	if include["errors"] && len(errors) > 0 {
+		pack.Errors = errors
+	}
+	if ctx.JSON {
+		meta = output.WithDuration(meta, start)
+		return output.WriteSuccess(ctx.Out, meta, struct {
+			Pack output.ContextPack `json:"pack"`
+		}{Pack: pack})
+	}
+	return writeContextPackText(ctx, pack)
+}
+
+func buildContextPack(ctx root.CommandContext, include map[string]bool, maxBytes int) (output.ContextPack, []string, error) {
 	pack := output.ContextPack{MaxBytes: maxBytes}
 	errors := []string{}
-	if include["panes"] || include["snapshot"] {
-		client, cleanup, err := connect(ctx)
+	if includeSnapshot(include) {
+		snapshot, err := loadContextSnapshot(ctx)
 		if err != nil {
-			return err
+			return output.ContextPack{}, nil, err
 		}
-		defer cleanup()
-		ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
-		resp, err := client.SnapshotState(ctxTimeout, 0)
-		cancel()
-		if err != nil {
-			return err
-		}
-		ws, err := transform.LoadWorkspace()
-		if err != nil {
-			return err
-		}
-		snapshot := transform.BuildSnapshot(resp.Sessions, ws, resp.FocusedSession, resp.FocusedPaneID)
-		pack.Snapshot = &snapshot
+		pack.Snapshot = snapshot
 	}
 	if include["git"] {
 		git, err := gitContext(ctx)
@@ -55,18 +60,37 @@ func runPack(ctx root.CommandContext) error {
 			pack.Git = git
 		}
 	}
-	if include["errors"] && len(errors) > 0 {
-		pack.Errors = errors
-	}
 	if maxBytes > 0 {
 		pack = shrinkToFit(pack)
 	}
-	if ctx.JSON {
-		meta = output.WithDuration(meta, start)
-		return output.WriteSuccess(ctx.Out, meta, struct {
-			Pack output.ContextPack `json:"pack"`
-		}{Pack: pack})
+	return pack, errors, nil
+}
+
+func includeSnapshot(include map[string]bool) bool {
+	return include["panes"] || include["snapshot"]
+}
+
+func loadContextSnapshot(ctx root.CommandContext) (*output.Snapshot, error) {
+	client, cleanup, err := connect(ctx)
+	if err != nil {
+		return nil, err
 	}
+	defer cleanup()
+	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
+	resp, err := client.SnapshotState(ctxTimeout, 0)
+	cancel()
+	if err != nil {
+		return nil, err
+	}
+	ws, err := transform.LoadWorkspace()
+	if err != nil {
+		return nil, err
+	}
+	snapshot := transform.BuildSnapshot(resp.Sessions, ws, resp.FocusedSession, resp.FocusedPaneID)
+	return &snapshot, nil
+}
+
+func writeContextPackText(ctx root.CommandContext, pack output.ContextPack) error {
 	if pack.Snapshot != nil {
 		if _, err := fmt.Fprintf(ctx.Out, "snapshot projects: %d\n", len(pack.Snapshot.Projects)); err != nil {
 			return err

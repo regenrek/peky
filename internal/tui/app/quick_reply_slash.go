@@ -144,50 +144,84 @@ func tokensMatch(left, right []string) bool {
 }
 
 func (m *Model) runSlashShortcut(body string) (tea.Cmd, bool, bool, bool) {
+	parts, ok := parseSlashShortcutParts(body)
+	if !ok {
+		return nil, false, false, false
+	}
+	shortcut, ok := loadSlashShortcut(parts[0])
+	if !ok {
+		return nil, false, false, false
+	}
+	text := strings.TrimSpace(strings.Join(parts[1:], " "))
+	return m.executeSlashShortcut(shortcut, text)
+}
+
+func parseSlashShortcutParts(body string) ([]string, bool) {
 	body = strings.TrimSpace(body)
 	if body == "" {
-		return nil, false, false, false
+		return nil, false
 	}
 	parts, err := shellquote.Split(body)
 	if err != nil || len(parts) == 0 {
-		return nil, false, false, false
+		return nil, false
 	}
-	name := strings.ToLower(parts[0])
+	return parts, true
+}
+
+func loadSlashShortcut(name string) (spec.SlashShortcut, bool) {
 	doc, err := spec.LoadDefault()
 	if err != nil || doc == nil {
-		return nil, false, false, false
+		return spec.SlashShortcut{}, false
 	}
+	name = strings.ToLower(name)
 	for _, shortcut := range doc.SlashShortcuts {
-		if strings.ToLower(shortcut.Name) != name {
-			continue
+		if strings.ToLower(shortcut.Name) == name {
+			return shortcut, true
 		}
-		command := strings.TrimSpace(shortcut.Command)
-		if command == "" {
-			return NewWarningCmd("Unknown command"), true, true, false
-		}
-		text := strings.TrimSpace(strings.Join(parts[1:], " "))
-		if text == "" {
-			return NewInfoCmd("Nothing to send"), true, false, false
-		}
-		scope := quickReplyScopeSession
-		if raw, ok := shortcut.Flags["scope"]; ok {
-			if value, ok := raw.(string); ok {
-				scope = parseQuickReplyScope(value)
-			}
-		}
-		if raw, ok := shortcut.Flags["pane-id"]; ok {
-			if id, ok := raw.(string); ok && id != "" {
-				if pane := m.paneByID(id); pane != nil {
-					return m.sendQuickReplySingle(*pane, text, shortcutDelay(shortcut)), true, true, true
-				}
-			}
-		}
-		if command == "pane send" || command == "pane run" {
-			return m.sendQuickReplyBroadcastWithDelay(scope, text, shortcutDelay(shortcut)), true, true, true
-		}
-		return NewWarningCmd("Unsupported slash shortcut"), true, false, false
 	}
-	return nil, false, false, false
+	return spec.SlashShortcut{}, false
+}
+
+func (m *Model) executeSlashShortcut(shortcut spec.SlashShortcut, text string) (tea.Cmd, bool, bool, bool) {
+	command := strings.TrimSpace(shortcut.Command)
+	if command == "" {
+		return NewWarningCmd("Unknown command"), true, true, false
+	}
+	if text == "" {
+		return NewInfoCmd("Nothing to send"), true, false, false
+	}
+	scope := shortcutScope(shortcut)
+	if paneID, ok := shortcutPaneID(shortcut); ok {
+		if pane := m.paneByID(paneID); pane != nil {
+			return m.sendQuickReplySingle(*pane, text, shortcutDelay(shortcut)), true, true, true
+		}
+	}
+	if command == "pane send" || command == "pane run" {
+		return m.sendQuickReplyBroadcastWithDelay(scope, text, shortcutDelay(shortcut)), true, true, true
+	}
+	return NewWarningCmd("Unsupported slash shortcut"), true, false, false
+}
+
+func shortcutScope(shortcut spec.SlashShortcut) quickReplyScope {
+	scope := quickReplyScopeSession
+	if raw, ok := shortcut.Flags["scope"]; ok {
+		if value, ok := raw.(string); ok {
+			scope = parseQuickReplyScope(value)
+		}
+	}
+	return scope
+}
+
+func shortcutPaneID(shortcut spec.SlashShortcut) (string, bool) {
+	raw, ok := shortcut.Flags["pane-id"]
+	if !ok {
+		return "", false
+	}
+	id, ok := raw.(string)
+	if !ok || strings.TrimSpace(id) == "" {
+		return "", false
+	}
+	return id, true
 }
 
 func shortcutDelay(shortcut spec.SlashShortcut) time.Duration {

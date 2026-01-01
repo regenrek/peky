@@ -52,48 +52,80 @@ func (d *Daemon) handlePaneOutput(payload []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	req = normalizePaneOutputRequest(req)
+	return d.pollPaneOutput(manager, paneID, req)
+}
+
+func normalizePaneOutputRequest(req PaneOutputRequest) PaneOutputRequest {
 	if req.Limit < 0 {
 		req.Limit = 0
 	}
+	return req
+}
+
+func (d *Daemon) pollPaneOutput(manager sessionManager, paneID string, req PaneOutputRequest) ([]byte, error) {
 	for {
-		var lines []native.OutputLine
-		var next uint64
-		var truncated bool
-		if req.SinceSeq == 0 && req.Limit > 0 && !req.Wait {
-			lines, err = manager.OutputSnapshot(paneID, req.Limit)
-			if err != nil {
-				return nil, err
-			}
-			if len(lines) > 0 {
-				next = lines[len(lines)-1].Seq
-			}
-		} else {
-			lines, next, truncated, err = manager.OutputLinesSince(paneID, req.SinceSeq)
-			if err != nil {
-				return nil, err
-			}
+		resp, hasLines, err := readPaneOutput(manager, paneID, req)
+		if err != nil {
+			return nil, err
 		}
-		if req.Limit > 0 && len(lines) > req.Limit {
-			lines = lines[len(lines)-req.Limit:]
-			truncated = true
-		}
-		if len(lines) > 0 || !req.Wait {
-			resp := PaneOutputResponse{
-				PaneID:    paneID,
-				Lines:     lines,
-				NextSeq:   next,
-				Truncated: truncated,
-			}
+		if hasLines || !req.Wait {
 			return encodePayload(resp)
 		}
-		waitCtx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
-		ok := manager.WaitForOutput(waitCtx, paneID)
-		cancel()
-		if !ok {
-			resp := PaneOutputResponse{PaneID: paneID, Lines: nil, NextSeq: req.SinceSeq, Truncated: truncated}
+		if !waitForPaneOutput(manager, paneID) {
+			resp.NextSeq = req.SinceSeq
 			return encodePayload(resp)
 		}
 	}
+}
+
+func readPaneOutput(manager sessionManager, paneID string, req PaneOutputRequest) (PaneOutputResponse, bool, error) {
+	lines, next, truncated, err := fetchPaneOutputLines(manager, paneID, req)
+	if err != nil {
+		return PaneOutputResponse{}, false, err
+	}
+	resp := PaneOutputResponse{
+		PaneID:    paneID,
+		Lines:     lines,
+		NextSeq:   next,
+		Truncated: truncated,
+	}
+	return resp, len(lines) > 0, nil
+}
+
+func fetchPaneOutputLines(manager sessionManager, paneID string, req PaneOutputRequest) ([]native.OutputLine, uint64, bool, error) {
+	var (
+		lines     []native.OutputLine
+		next      uint64
+		truncated bool
+		err       error
+	)
+	if req.SinceSeq == 0 && req.Limit > 0 && !req.Wait {
+		lines, err = manager.OutputSnapshot(paneID, req.Limit)
+		if err != nil {
+			return nil, 0, false, err
+		}
+		if len(lines) > 0 {
+			next = lines[len(lines)-1].Seq
+		}
+	} else {
+		lines, next, truncated, err = manager.OutputLinesSince(paneID, req.SinceSeq)
+		if err != nil {
+			return nil, 0, false, err
+		}
+	}
+	if req.Limit > 0 && len(lines) > req.Limit {
+		lines = lines[len(lines)-req.Limit:]
+		truncated = true
+	}
+	return lines, next, truncated, nil
+}
+
+func waitForPaneOutput(manager sessionManager, paneID string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
+	ok := manager.WaitForOutput(ctx, paneID)
+	cancel()
+	return ok
 }
 
 func (d *Daemon) handlePaneSnapshot(payload []byte) ([]byte, error) {

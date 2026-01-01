@@ -258,13 +258,8 @@ func runRun(ctx root.CommandContext) error {
 
 func runSendLike(ctx root.CommandContext, withNewline bool) error {
 	start := time.Now()
-	cmdID := "pane.send"
-	action := "send"
-	if withNewline {
-		cmdID = "pane.run"
-		action = "run"
-	}
-	meta := output.NewMeta(cmdID, ctx.Deps.Version)
+	cmd := sendCommandMeta(withNewline)
+	meta := output.NewMeta(cmd.ID, ctx.Deps.Version)
 	client, cleanup, err := connect(ctx)
 	if err != nil {
 		return err
@@ -274,56 +269,111 @@ func runSendLike(ctx root.CommandContext, withNewline bool) error {
 	if err != nil {
 		return err
 	}
+	proceed, err := confirmSendLike(ctx, withNewline)
+	if err != nil {
+		return err
+	}
+	if !proceed {
+		return nil
+	}
+	applySendDelay(ctx)
+	target, err := resolveSendTarget(ctx)
+	if err != nil {
+		return err
+	}
+	results, warnings, err := sendPayloadToTarget(ctx, client, target, payload, cmd.Action, withNewline)
+	if err != nil {
+		return err
+	}
+	return writeSendLikeOutput(ctx, meta, start, cmd.ID, results, warnings)
+}
+
+type sendCommand struct {
+	ID     string
+	Action string
+}
+
+func sendCommandMeta(withNewline bool) sendCommand {
 	if withNewline {
-		if ctx.Cmd.Bool("confirm") {
-			ok, err := root.PromptConfirm(ctx.Stdin, ctx.ErrOut, "Confirm pane.run")
-			if err != nil {
-				return err
-			}
-			if !ok {
-				return nil
-			}
+		return sendCommand{ID: "pane.run", Action: "run"}
+	}
+	return sendCommand{ID: "pane.send", Action: "send"}
+}
+
+func confirmSendLike(ctx root.CommandContext, withNewline bool) (bool, error) {
+	if !withNewline {
+		return true, nil
+	}
+	if ctx.Cmd.Bool("confirm") {
+		ok, err := root.PromptConfirm(ctx.Stdin, ctx.ErrOut, "Confirm pane.run")
+		if err != nil {
+			return false, err
 		}
-		if ctx.Cmd.Bool("require-ack") {
-			if err := requireAck(ctx.Stdin, ctx.ErrOut); err != nil {
-				return err
-			}
+		if !ok {
+			return false, nil
 		}
 	}
+	if ctx.Cmd.Bool("require-ack") {
+		if err := requireAck(ctx.Stdin, ctx.ErrOut); err != nil {
+			return false, err
+		}
+	}
+	return true, nil
+}
+
+func applySendDelay(ctx root.CommandContext) {
 	if delay := ctx.Cmd.Duration("delay"); delay > 0 {
 		time.Sleep(delay)
 	}
+}
+
+type sendTarget struct {
+	PaneID string
+	Scope  string
+}
+
+func resolveSendTarget(ctx root.CommandContext) (sendTarget, error) {
 	paneID := strings.TrimSpace(ctx.Cmd.String("pane-id"))
 	scope := strings.TrimSpace(ctx.Cmd.String("scope"))
-	submitDelay := ctx.Cmd.Duration("submit-delay")
-	var results []output.TargetResult
-	warnings := []string{}
 	if paneID == "" && scope == "" {
-		return fmt.Errorf("pane-id or scope is required")
+		return sendTarget{}, fmt.Errorf("pane-id or scope is required")
 	}
 	if paneID != "" {
-		results = []output.TargetResult{{Target: output.TargetRef{Type: "pane", ID: paneID}, Status: "ok"}}
-		ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
-		err := sendPayload(ctxTimeout, client, paneID, payload.Data, payload.Summary, action, withNewline, submitDelay)
-		cancel()
-		if err != nil {
-			return err
-		}
-		if withNewline && submitDelay > 0 {
-			warnings = append(warnings, "submit_delay_applied")
-		}
-	} else {
-		ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
-		resp, err := sendPayloadScope(ctxTimeout, client, scope, payload.Data, payload.Summary, action, withNewline, submitDelay)
-		cancel()
-		if err != nil {
-			return err
-		}
-		results = mapSendResults(resp)
-		if withNewline && submitDelay > 0 {
-			warnings = append(warnings, "submit_delay_applied")
-		}
+		return sendTarget{PaneID: paneID}, nil
 	}
+	return sendTarget{Scope: scope}, nil
+}
+
+func sendPayloadToTarget(ctx root.CommandContext, client *sessiond.Client, target sendTarget, payload payloadData, action string, withNewline bool) ([]output.TargetResult, []string, error) {
+	submitDelay := ctx.Cmd.Duration("submit-delay")
+	if target.PaneID != "" {
+		results := []output.TargetResult{{Target: output.TargetRef{Type: "pane", ID: target.PaneID}, Status: "ok"}}
+		ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
+		err := sendPayload(ctxTimeout, client, target.PaneID, payload.Data, payload.Summary, action, withNewline, submitDelay)
+		cancel()
+		if err != nil {
+			return nil, nil, err
+		}
+		return results, sendWarnings(withNewline, submitDelay), nil
+	}
+	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
+	resp, err := sendPayloadScope(ctxTimeout, client, target.Scope, payload.Data, payload.Summary, action, withNewline, submitDelay)
+	cancel()
+	if err != nil {
+		return nil, nil, err
+	}
+	results := mapSendResults(resp)
+	return results, sendWarnings(withNewline, submitDelay), nil
+}
+
+func sendWarnings(withNewline bool, submitDelay time.Duration) []string {
+	if withNewline && submitDelay > 0 {
+		return []string{"submit_delay_applied"}
+	}
+	return nil
+}
+
+func writeSendLikeOutput(ctx root.CommandContext, meta output.Meta, start time.Time, cmdID string, results []output.TargetResult, warnings []string) error {
 	status := actionStatus(results)
 	if ctx.JSON {
 		meta = output.WithDuration(meta, start)
@@ -400,88 +450,134 @@ func runTail(ctx root.CommandContext) error {
 		return err
 	}
 	defer cleanup()
-	paneID := ctx.Cmd.String("pane-id")
+	opts, err := parseTailOptions(ctx)
+	if err != nil {
+		return err
+	}
+	if err := tailLoop(ctx, client, opts); err != nil {
+		return err
+	}
+	if ctx.JSON {
+		_ = output.WithDuration(meta, start)
+	}
+	return nil
+}
+
+type tailOptions struct {
+	PaneID string
+	Follow bool
+	Limit  int
+	Regex  *regexp.Regexp
+	Since  time.Time
+	Until  time.Time
+}
+
+func parseTailOptions(ctx root.CommandContext) (tailOptions, error) {
 	follow := ctx.Cmd.Bool("follow")
 	if !ctx.Cmd.IsSet("follow") {
 		follow = true
 	}
-	limit := ctx.Cmd.Int("lines")
-	grep := strings.TrimSpace(ctx.Cmd.String("grep"))
-	var re *regexp.Regexp
-	if grep != "" {
-		re, err = regexp.Compile(grep)
-		if err != nil {
-			return err
-		}
+	re, err := parseTailRegex(ctx.Cmd.String("grep"))
+	if err != nil {
+		return tailOptions{}, err
 	}
 	now := time.Now().UTC()
 	since, err := parseTimeOrDuration(ctx.Cmd.String("since"), now, false)
 	if err != nil {
-		return err
+		return tailOptions{}, err
 	}
 	until, err := parseTimeOrDuration(ctx.Cmd.String("until"), now, true)
 	if err != nil {
-		return err
+		return tailOptions{}, err
 	}
+	return tailOptions{
+		PaneID: ctx.Cmd.String("pane-id"),
+		Follow: follow,
+		Limit:  ctx.Cmd.Int("lines"),
+		Regex:  re,
+		Since:  since,
+		Until:  until,
+	}, nil
+}
+
+func parseTailRegex(value string) (*regexp.Regexp, error) {
+	grep := strings.TrimSpace(value)
+	if grep == "" {
+		return nil, nil
+	}
+	return regexp.Compile(grep)
+}
+
+func tailLoop(ctx root.CommandContext, client *sessiond.Client, opts tailOptions) error {
 	seq := uint64(0)
 	streamSeq := int64(0)
 	for {
-		if !until.IsZero() && time.Now().UTC().After(until) {
-			follow = false
-		}
-		ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
-		resp, err := client.PaneOutput(ctxTimeout, sessiond.PaneOutputRequest{PaneID: paneID, SinceSeq: seq, Limit: limit, Wait: follow})
-		cancel()
+		opts = stopTailIfUntilReached(opts)
+		resp, err := fetchPaneOutput(ctx, client, opts, seq)
 		if err != nil {
 			return err
 		}
 		seq = resp.NextSeq
-		filtered := filterOutputLines(resp.Lines, since, until, re)
+		filtered := filterOutputLines(resp.Lines, opts.Since, opts.Until, opts.Regex)
 		if ctx.JSON {
-			emitted := false
-			for i, line := range filtered {
-				frame := output.PaneTailFrame{
-					PaneID:    paneID,
-					Chunk:     line.Text + "\n",
-					Encoding:  "utf-8",
-					Truncated: resp.Truncated && i == 0,
-				}
-				streamSeq++
-				metaFrame := output.NewStreamMeta("pane.tail", ctx.Deps.Version, streamSeq, false)
-				if err := output.WriteSuccess(ctx.Out, metaFrame, frame); err != nil {
-					return err
-				}
-				emitted = true
+			if err := emitTailJSON(ctx, opts.PaneID, filtered, resp.Truncated, opts.Follow, &streamSeq); err != nil {
+				return err
 			}
-			if !follow {
-				if !emitted {
-					streamSeq++
-					metaFrame := output.NewStreamMeta("pane.tail", ctx.Deps.Version, streamSeq, true)
-					if err := output.WriteSuccess(ctx.Out, metaFrame, output.PaneTailFrame{PaneID: paneID, Chunk: "", Encoding: "utf-8"}); err != nil {
-						return err
-					}
-				} else {
-					streamSeq++
-					metaFrame := output.NewStreamMeta("pane.tail", ctx.Deps.Version, streamSeq, true)
-					if err := output.WriteSuccess(ctx.Out, metaFrame, output.PaneTailFrame{PaneID: paneID, Chunk: "", Encoding: "utf-8"}); err != nil {
-						return err
-					}
-				}
-				break
-			}
-		} else {
-			for _, line := range filtered {
-				if err := writeLine(ctx.Out, line.Text); err != nil {
-					return err
-				}
-			}
-			if !follow {
-				break
-			}
+		} else if err := emitTailText(ctx, filtered); err != nil {
+			return err
+		}
+		if !opts.Follow {
+			return nil
 		}
 	}
-	if ctx.JSON {
-		_ = output.WithDuration(meta, start)
+}
+
+func stopTailIfUntilReached(opts tailOptions) tailOptions {
+	if !opts.Until.IsZero() && time.Now().UTC().After(opts.Until) {
+		opts.Follow = false
+	}
+	return opts
+}
+
+func fetchPaneOutput(ctx root.CommandContext, client *sessiond.Client, opts tailOptions, seq uint64) (sessiond.PaneOutputResponse, error) {
+	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
+	resp, err := client.PaneOutput(ctxTimeout, sessiond.PaneOutputRequest{
+		PaneID:   opts.PaneID,
+		SinceSeq: seq,
+		Limit:    opts.Limit,
+		Wait:     opts.Follow,
+	})
+	cancel()
+	return resp, err
+}
+
+func emitTailJSON(ctx root.CommandContext, paneID string, lines []native.OutputLine, truncated bool, follow bool, streamSeq *int64) error {
+	for i, line := range lines {
+		frame := output.PaneTailFrame{
+			PaneID:    paneID,
+			Chunk:     line.Text + "\n",
+			Encoding:  "utf-8",
+			Truncated: truncated && i == 0,
+		}
+		*streamSeq++
+		metaFrame := output.NewStreamMeta("pane.tail", ctx.Deps.Version, *streamSeq, false)
+		if err := output.WriteSuccess(ctx.Out, metaFrame, frame); err != nil {
+			return err
+		}
+	}
+	if follow {
+		return nil
+	}
+	*streamSeq++
+	metaFrame := output.NewStreamMeta("pane.tail", ctx.Deps.Version, *streamSeq, true)
+	return output.WriteSuccess(ctx.Out, metaFrame, output.PaneTailFrame{PaneID: paneID, Chunk: "", Encoding: "utf-8"})
+}
+
+func emitTailText(ctx root.CommandContext, lines []native.OutputLine) error {
+	for _, line := range lines {
+		if err := writeLine(ctx.Out, line.Text); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -683,6 +779,43 @@ func runAction(ctx root.CommandContext) error {
 	if err != nil {
 		return err
 	}
+	input := parseTerminalActionInput(ctx, action)
+	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
+	defer cancel()
+	resp, err := client.TerminalAction(ctxTimeout, sessiond.TerminalActionRequest{
+		PaneID: paneID,
+		Action: action,
+		Lines:  input.Lines,
+		DeltaX: input.DeltaX,
+		DeltaY: input.DeltaY,
+	})
+	if err != nil {
+		return err
+	}
+	if ctx.JSON {
+		meta = output.WithDuration(meta, start)
+		return output.WriteSuccess(ctx.Out, meta, output.ActionResult{
+			Action:  "pane.action",
+			Status:  "ok",
+			Targets: []output.TargetRef{{Type: "pane", ID: paneID}},
+			Details: buildTerminalActionDetails(actionName, input, resp.Text),
+		})
+	}
+	if resp.Text != "" {
+		if err := writeLine(ctx.Out, resp.Text); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type terminalActionInput struct {
+	Lines  int
+	DeltaX int
+	DeltaY int
+}
+
+func parseTerminalActionInput(ctx root.CommandContext, action sessiond.TerminalAction) terminalActionInput {
 	lines := ctx.Cmd.Int("lines")
 	if lines == 0 {
 		lines = ctx.Cmd.Int("count")
@@ -692,49 +825,31 @@ func runAction(ctx root.CommandContext) error {
 	if deltaX == 0 && deltaY == 0 && action == sessiond.TerminalCopyMove && lines != 0 {
 		deltaY = lines
 	}
-	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
-	defer cancel()
 	lines = defaultActionLines(action, lines)
-	resp, err := client.TerminalAction(ctxTimeout, sessiond.TerminalActionRequest{
-		PaneID: paneID,
-		Action: action,
+	return terminalActionInput{
 		Lines:  lines,
 		DeltaX: deltaX,
 		DeltaY: deltaY,
-	})
-	if err != nil {
-		return err
 	}
-	if ctx.JSON {
-		meta = output.WithDuration(meta, start)
-		details := map[string]any{
-			"action": actionName,
-		}
-		if lines != 0 {
-			details["lines"] = lines
-		}
-		if deltaX != 0 {
-			details["delta_x"] = deltaX
-		}
-		if deltaY != 0 {
-			details["delta_y"] = deltaY
-		}
-		if resp.Text != "" {
-			details["text"] = resp.Text
-		}
-		return output.WriteSuccess(ctx.Out, meta, output.ActionResult{
-			Action:  "pane.action",
-			Status:  "ok",
-			Targets: []output.TargetRef{{Type: "pane", ID: paneID}},
-			Details: details,
-		})
+}
+
+func buildTerminalActionDetails(actionName string, input terminalActionInput, text string) map[string]any {
+	details := map[string]any{
+		"action": actionName,
 	}
-	if resp.Text != "" {
-		if err := writeLine(ctx.Out, resp.Text); err != nil {
-			return err
-		}
+	if input.Lines != 0 {
+		details["lines"] = input.Lines
 	}
-	return nil
+	if input.DeltaX != 0 {
+		details["delta_x"] = input.DeltaX
+	}
+	if input.DeltaY != 0 {
+		details["delta_y"] = input.DeltaY
+	}
+	if text != "" {
+		details["text"] = text
+	}
+	return details
 }
 
 func runKey(ctx root.CommandContext) error {
@@ -1050,46 +1165,55 @@ func filterOutputLines(lines []native.OutputLine, since, until time.Time, re *re
 }
 
 func parseTerminalAction(value string) (sessiond.TerminalAction, error) {
-	normalized := strings.ToLower(strings.TrimSpace(value))
-	normalized = strings.ReplaceAll(normalized, "-", "_")
-	normalized = strings.ReplaceAll(normalized, " ", "_")
+	normalized := normalizeTerminalAction(value)
 	if normalized == "" {
 		return sessiond.TerminalActionUnknown, errors.New("action is required")
 	}
-	switch normalized {
-	case "enter_scrollback", "enter_scrollback_mode":
-		return sessiond.TerminalEnterScrollback, nil
-	case "exit_scrollback", "exit_scrollback_mode":
-		return sessiond.TerminalExitScrollback, nil
-	case "scroll_up", "scrollup":
-		return sessiond.TerminalScrollUp, nil
-	case "scroll_down", "scrolldown":
-		return sessiond.TerminalScrollDown, nil
-	case "page_up", "pageup":
-		return sessiond.TerminalPageUp, nil
-	case "page_down", "pagedown":
-		return sessiond.TerminalPageDown, nil
-	case "scroll_top", "scrolltop":
-		return sessiond.TerminalScrollTop, nil
-	case "scroll_bottom", "scrollbottom":
-		return sessiond.TerminalScrollBottom, nil
-	case "enter_copy", "enter_copy_mode", "copy_mode":
-		return sessiond.TerminalEnterCopyMode, nil
-	case "exit_copy", "exit_copy_mode":
-		return sessiond.TerminalExitCopyMode, nil
-	case "copy_move", "copy_move_cursor":
-		return sessiond.TerminalCopyMove, nil
-	case "copy_page_up", "copy_pageup":
-		return sessiond.TerminalCopyPageUp, nil
-	case "copy_page_down", "copy_pagedown":
-		return sessiond.TerminalCopyPageDown, nil
-	case "copy_toggle_select", "copy_toggle":
-		return sessiond.TerminalCopyToggleSelect, nil
-	case "copy_yank", "copy":
-		return sessiond.TerminalCopyYank, nil
-	default:
-		return sessiond.TerminalActionUnknown, fmt.Errorf("unknown action %q", value)
+	if action, ok := terminalActionAliases[normalized]; ok {
+		return action, nil
 	}
+	return sessiond.TerminalActionUnknown, fmt.Errorf("unknown action %q", value)
+}
+
+func normalizeTerminalAction(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	normalized = strings.ReplaceAll(normalized, "-", "_")
+	normalized = strings.ReplaceAll(normalized, " ", "_")
+	return normalized
+}
+
+var terminalActionAliases = map[string]sessiond.TerminalAction{
+	"enter_scrollback":      sessiond.TerminalEnterScrollback,
+	"enter_scrollback_mode": sessiond.TerminalEnterScrollback,
+	"exit_scrollback":       sessiond.TerminalExitScrollback,
+	"exit_scrollback_mode":  sessiond.TerminalExitScrollback,
+	"scroll_up":             sessiond.TerminalScrollUp,
+	"scrollup":              sessiond.TerminalScrollUp,
+	"scroll_down":           sessiond.TerminalScrollDown,
+	"scrolldown":            sessiond.TerminalScrollDown,
+	"page_up":               sessiond.TerminalPageUp,
+	"pageup":                sessiond.TerminalPageUp,
+	"page_down":             sessiond.TerminalPageDown,
+	"pagedown":              sessiond.TerminalPageDown,
+	"scroll_top":            sessiond.TerminalScrollTop,
+	"scrolltop":             sessiond.TerminalScrollTop,
+	"scroll_bottom":         sessiond.TerminalScrollBottom,
+	"scrollbottom":          sessiond.TerminalScrollBottom,
+	"enter_copy":            sessiond.TerminalEnterCopyMode,
+	"enter_copy_mode":       sessiond.TerminalEnterCopyMode,
+	"copy_mode":             sessiond.TerminalEnterCopyMode,
+	"exit_copy":             sessiond.TerminalExitCopyMode,
+	"exit_copy_mode":        sessiond.TerminalExitCopyMode,
+	"copy_move":             sessiond.TerminalCopyMove,
+	"copy_move_cursor":      sessiond.TerminalCopyMove,
+	"copy_page_up":          sessiond.TerminalCopyPageUp,
+	"copy_pageup":           sessiond.TerminalCopyPageUp,
+	"copy_page_down":        sessiond.TerminalCopyPageDown,
+	"copy_pagedown":         sessiond.TerminalCopyPageDown,
+	"copy_toggle_select":    sessiond.TerminalCopyToggleSelect,
+	"copy_toggle":           sessiond.TerminalCopyToggleSelect,
+	"copy_yank":             sessiond.TerminalCopyYank,
+	"copy":                  sessiond.TerminalCopyYank,
 }
 
 func defaultActionLines(action sessiond.TerminalAction, value int) int {

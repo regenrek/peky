@@ -255,49 +255,56 @@ func (d *Daemon) handleSendInput(payload []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	target, err := resolveSendInputTarget(req)
+	if err != nil {
+		return nil, err
+	}
+	if target.PaneID != "" {
+		return d.sendInputToPane(manager, req, target.PaneID)
+	}
+	return d.sendInputToScope(manager, req, target.Scope)
+}
+
+type sendInputTarget struct {
+	PaneID string
+	Scope  string
+}
+
+func resolveSendInputTarget(req SendInputRequest) (sendInputTarget, error) {
 	paneID := strings.TrimSpace(req.PaneID)
 	scope := strings.TrimSpace(req.Scope)
 	if paneID != "" && scope != "" {
-		return nil, errors.New("sessiond: pane id and scope are mutually exclusive")
+		return sendInputTarget{}, errors.New("sessiond: pane id and scope are mutually exclusive")
 	}
 	if paneID == "" && scope == "" {
-		return nil, errors.New("sessiond: pane id or scope is required")
+		return sendInputTarget{}, errors.New("sessiond: pane id or scope is required")
 	}
-	if paneID != "" {
-		paneID, err = requirePaneID(paneID)
-		if err != nil {
-			return nil, err
-		}
-		if err := manager.SendInput(paneID, req.Input); err != nil {
-			return nil, err
-		}
-		if req.RecordAction {
-			action := strings.TrimSpace(req.Action)
-			if action == "" {
-				action = "send"
-			}
-			d.recordPaneAction(paneID, action, req.Summary, "", "ok")
-		}
-		return encodePayload(SendInputResponse{
-			Results: []SendInputResult{{PaneID: paneID, Status: "ok"}},
-		})
+	return sendInputTarget{PaneID: paneID, Scope: scope}, nil
+}
+
+func (d *Daemon) sendInputToPane(manager sessionManager, req SendInputRequest, paneID string) ([]byte, error) {
+	paneID, err := requirePaneID(paneID)
+	if err != nil {
+		return nil, err
 	}
+	if err := manager.SendInput(paneID, req.Input); err != nil {
+		return nil, err
+	}
+	d.recordSendInputAction(paneID, req, "ok")
+	return encodePayload(SendInputResponse{
+		Results: []SendInputResult{{PaneID: paneID, Status: "ok"}},
+	})
+}
+
+func (d *Daemon) sendInputToScope(manager sessionManager, req SendInputRequest, scope string) ([]byte, error) {
 	targets, err := d.resolveScopeTargets(scope)
 	if err != nil {
 		return nil, err
 	}
 	results := make([]SendInputResult, 0, len(targets))
-	action := strings.TrimSpace(req.Action)
-	if action == "" {
-		action = "send"
-	}
+	action := resolveSendInputAction(req.Action)
 	for _, target := range targets {
-		status := "ok"
-		message := ""
-		if err := manager.SendInput(target, req.Input); err != nil {
-			status = "failed"
-			message = err.Error()
-		}
+		status, message := sendInputToTarget(manager, target, req.Input)
 		if req.RecordAction {
 			d.recordPaneAction(target, action, req.Summary, "", status)
 		}
@@ -308,6 +315,29 @@ func (d *Daemon) handleSendInput(payload []byte) ([]byte, error) {
 		})
 	}
 	return encodePayload(SendInputResponse{Results: results})
+}
+
+func sendInputToTarget(manager sessionManager, paneID string, input []byte) (string, string) {
+	if err := manager.SendInput(paneID, input); err != nil {
+		return "failed", err.Error()
+	}
+	return "ok", ""
+}
+
+func (d *Daemon) recordSendInputAction(paneID string, req SendInputRequest, status string) {
+	if !req.RecordAction {
+		return
+	}
+	action := resolveSendInputAction(req.Action)
+	d.recordPaneAction(paneID, action, req.Summary, "", status)
+}
+
+func resolveSendInputAction(action string) string {
+	action = strings.TrimSpace(action)
+	if action == "" {
+		return "send"
+	}
+	return action
 }
 
 func (d *Daemon) handleSendMouse(payload []byte) ([]byte, error) {
@@ -424,74 +454,110 @@ func (d *Daemon) startSession(req StartSessionRequest) (StartSessionResponse, er
 	if d.manager == nil {
 		return StartSessionResponse{}, errors.New("sessiond: manager unavailable")
 	}
-	path, err := sessionpolicy.ValidatePath(req.Path)
+	path, nameOverride, env, err := validateStartSessionRequest(req)
 	if err != nil {
 		return StartSessionResponse{}, err
+	}
+	loader, err := loadStartSessionLayouts(path)
+	if err != nil {
+		return StartSessionResponse{}, err
+	}
+	sessionName, err := resolveStartSessionName(path, nameOverride, loader)
+	if err != nil {
+		return StartSessionResponse{}, err
+	}
+	selectedLayout, err := selectStartSessionLayout(loader, strings.TrimSpace(req.LayoutName))
+	if err != nil {
+		return StartSessionResponse{}, err
+	}
+	expanded := expandStartSessionLayout(selectedLayout, loader, path)
+	if err := d.startSessionWithLayout(sessionName, path, selectedLayout.Name, expanded, env); err != nil {
+		return StartSessionResponse{}, err
+	}
+	return StartSessionResponse{Name: sessionName, Path: path, LayoutName: selectedLayout.Name}, nil
+}
+
+func validateStartSessionRequest(req StartSessionRequest) (string, string, []string, error) {
+	path, err := sessionpolicy.ValidatePath(req.Path)
+	if err != nil {
+		return "", "", nil, err
 	}
 	nameOverride, err := sessionpolicy.ValidateOptionalSessionName(req.Name)
 	if err != nil {
-		return StartSessionResponse{}, err
+		return "", "", nil, err
 	}
 	env, err := sessionpolicy.ValidateEnvList(req.Env)
 	if err != nil {
-		return StartSessionResponse{}, err
+		return "", "", nil, err
 	}
+	return path, nameOverride, env, nil
+}
+
+func loadStartSessionLayouts(path string) (*layout.Loader, error) {
 	loader, err := layout.NewLoader()
 	if err != nil {
-		return StartSessionResponse{}, err
+		return nil, err
 	}
 	loader.SetProjectDir(path)
 	if err := loader.LoadAll(); err != nil {
-		return StartSessionResponse{}, err
+		return nil, err
 	}
+	return loader, nil
+}
+
+func resolveStartSessionName(path, nameOverride string, loader *layout.Loader) (string, error) {
 	sessionName := layout.ResolveSessionName(path, nameOverride, loader.GetProjectConfig())
 	sessionName = strings.TrimSpace(sessionName)
 	if sessionName == "" {
-		return StartSessionResponse{}, errors.New("sessiond: session name is required")
+		return "", errors.New("sessiond: session name is required")
 	}
 	if _, err := sessionpolicy.ValidateSessionName(sessionName); err != nil {
-		return StartSessionResponse{}, err
+		return "", err
 	}
+	return sessionName, nil
+}
 
-	layoutName := strings.TrimSpace(req.LayoutName)
-	var selectedLayout *layout.LayoutConfig
+func selectStartSessionLayout(loader *layout.Loader, layoutName string) (*layout.LayoutConfig, error) {
 	if layoutName != "" {
-		selectedLayout, _, err = loader.GetLayout(layoutName)
+		selectedLayout, _, err := loader.GetLayout(layoutName)
 		if err != nil {
-			return StartSessionResponse{}, err
+			return nil, err
 		}
-	} else if loader.HasProjectConfig() {
-		selectedLayout = loader.GetProjectLayout()
-		if selectedLayout == nil {
-			selectedLayout, _, _ = loader.GetLayout("dev-3")
-		}
-	} else {
-		selectedLayout, _, _ = loader.GetLayout("dev-3")
+		return selectedLayout, nil
 	}
+	if loader.HasProjectConfig() {
+		selectedLayout := loader.GetProjectLayout()
+		if selectedLayout != nil {
+			return selectedLayout, nil
+		}
+	}
+	selectedLayout, _, _ := loader.GetLayout("dev-3")
 	if selectedLayout == nil {
-		return StartSessionResponse{}, errors.New("sessiond: no layout found")
+		return nil, errors.New("sessiond: no layout found")
 	}
+	return selectedLayout, nil
+}
 
+func expandStartSessionLayout(selectedLayout *layout.LayoutConfig, loader *layout.Loader, path string) *layout.LayoutConfig {
 	projectName := filepath.Base(path)
 	var projectVars map[string]string
 	if loader.GetProjectConfig() != nil {
 		projectVars = loader.GetProjectConfig().Vars
 	}
-	expanded := layout.ExpandLayoutVars(selectedLayout, projectVars, path, projectName)
+	return layout.ExpandLayoutVars(selectedLayout, projectVars, path, projectName)
+}
 
+func (d *Daemon) startSessionWithLayout(name, path, layoutName string, layoutConfig *layout.LayoutConfig, env []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
 	defer cancel()
-	_, err = d.manager.StartSession(ctx, native.SessionSpec{
-		Name:       sessionName,
+	_, err := d.manager.StartSession(ctx, native.SessionSpec{
+		Name:       name,
 		Path:       path,
-		Layout:     expanded,
-		LayoutName: selectedLayout.Name,
+		Layout:     layoutConfig,
+		LayoutName: layoutName,
 		Env:        env,
 	})
-	if err != nil {
-		return StartSessionResponse{}, err
-	}
-	return StartSessionResponse{Name: sessionName, Path: path, LayoutName: selectedLayout.Name}, nil
+	return err
 }
 
 func mousePayloadToEvent(payload MouseEventPayload) (uv.MouseEvent, bool) {
