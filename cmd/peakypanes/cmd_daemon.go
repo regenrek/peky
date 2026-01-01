@@ -18,20 +18,18 @@ func runDaemon(args []string) {
 		return
 	}
 
-	showHelp := false
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "-h", "--help":
-			showHelp = true
-		}
-	}
-	if showHelp {
+	flags, err := parseDaemonFlags(args)
+	if err != nil {
+		fmt.Fprintf(stderr, "peakypanes: %v\n", err)
 		fmt.Print(daemonHelpText)
 		return
 	}
-	if len(args) > 0 {
+	if flags.showHelp {
 		fmt.Print(daemonHelpText)
 		return
+	}
+	if flags.pprofAddr != "" && !pprofSupported() {
+		fatal("pprof requires a profiler build (rebuild with -tags profiler)")
 	}
 
 	daemon, err := sessiond.NewDaemon(sessiond.DaemonConfig{
@@ -40,6 +38,7 @@ func runDaemon(args []string) {
 		HandleSignals:           true,
 		SkipRestore:             runenv.FreshConfigEnabled(),
 		DisableStatePersistence: runenv.FreshConfigEnabled(),
+		PprofAddr:               flags.pprofAddr,
 	})
 	if err != nil {
 		fatal("failed to create daemon: %v", err)
@@ -47,6 +46,47 @@ func runDaemon(args []string) {
 	if err := daemon.Run(); err != nil {
 		fatal("daemon failed: %v", err)
 	}
+}
+
+const defaultPprofAddr = "127.0.0.1:6060"
+
+type daemonFlags struct {
+	showHelp  bool
+	pprofAddr string
+}
+
+func parseDaemonFlags(args []string) (daemonFlags, error) {
+	var flags daemonFlags
+	for i := 0; i < len(args); i++ {
+		arg := strings.TrimSpace(args[i])
+		switch {
+		case arg == "-h" || arg == "--help":
+			flags.showHelp = true
+		case arg == "--pprof":
+			if flags.pprofAddr == "" {
+				flags.pprofAddr = defaultPprofAddr
+			}
+		case strings.HasPrefix(arg, "--pprof-addr="):
+			addr := strings.TrimSpace(strings.TrimPrefix(arg, "--pprof-addr="))
+			if addr == "" {
+				return flags, fmt.Errorf("pprof address is required")
+			}
+			flags.pprofAddr = addr
+		case arg == "--pprof-addr":
+			if i+1 >= len(args) {
+				return flags, fmt.Errorf("pprof address is required")
+			}
+			i++
+			addr := strings.TrimSpace(args[i])
+			if addr == "" {
+				return flags, fmt.Errorf("pprof address is required")
+			}
+			flags.pprofAddr = addr
+		default:
+			return flags, fmt.Errorf("unknown option %q", arg)
+		}
+	}
+	return flags, nil
 }
 
 func runDaemonRestart(args []string) {

@@ -64,7 +64,7 @@ Examples:
   peakypanes init --local --layout tauri-debug
 `
 
-const daemonHelpText = `Run the Peaky Panes session daemon.
+var daemonHelpText = `Run the Peaky Panes session daemon.
 
 Usage:
   peakypanes daemon [subcommand] [options]
@@ -75,6 +75,7 @@ Subcommands:
 
 Options:
   -h, --help           Show this help
+` + daemonHelpTextExtra + `
 
 Examples:
   peakypanes daemon

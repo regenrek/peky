@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -36,27 +37,35 @@ type DaemonConfig struct {
 	HandleSignals           bool
 	SkipRestore             bool
 	DisableStatePersistence bool
+	PprofAddr               string
+}
+
+type pprofServer interface {
+	Shutdown(context.Context) error
 }
 
 // Daemon owns persistent sessions and serves clients over a local socket.
 type Daemon struct {
-	manager     sessionManager
-	listener    net.Listener
-	listenerMu  sync.RWMutex
-	socketPath  string
-	pidPath     string
-	statePath   string
-	stateWriter *state.Writer
-	version     string
-	skipRestore bool
-	profileStop func()
-	startMu     sync.Mutex
-	started     chan struct{}
-	startOnce   sync.Once
-	spawnMu     sync.Mutex
-	shutdownMu  sync.Mutex
-	shutdownErr error
-	shutdownOne sync.Once
+	manager       sessionManager
+	listener      net.Listener
+	listenerMu    sync.RWMutex
+	socketPath    string
+	pidPath       string
+	statePath     string
+	pprofAddr     string
+	pprofServer   pprofServer
+	pprofListener net.Listener
+	stateWriter   *state.Writer
+	version       string
+	skipRestore   bool
+	profileStop   func()
+	startMu       sync.Mutex
+	started       chan struct{}
+	startOnce     sync.Once
+	spawnMu       sync.Mutex
+	shutdownMu    sync.Mutex
+	shutdownErr   error
+	shutdownOne   sync.Once
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -111,6 +120,7 @@ func NewDaemon(cfg DaemonConfig) (*Daemon, error) {
 		socketPath:  socketPath,
 		pidPath:     pidPath,
 		statePath:   statePath,
+		pprofAddr:   strings.TrimSpace(cfg.PprofAddr),
 		stateWriter: stateWriter,
 		version:     cfg.Version,
 		skipRestore: cfg.SkipRestore,
@@ -158,6 +168,13 @@ func (d *Daemon) Start() error {
 		_ = listener.Close()
 		return err
 	}
+	if err := d.startPprofServer(); err != nil {
+		if l := d.clearListener(); l != nil {
+			_ = l.Close()
+		}
+		_ = os.Remove(d.pidPath)
+		return err
+	}
 	if !d.skipRestore {
 		if err := d.restorePersistedState(); err != nil {
 			log.Printf("sessiond: restore state: %v", err)
@@ -202,6 +219,7 @@ func (d *Daemon) shutdown() error {
 	if listener := d.clearListener(); listener != nil {
 		_ = listener.Close()
 	}
+	d.stopPprofServer()
 
 	d.spawnMu.Lock()
 	_ = d.closing.Load()

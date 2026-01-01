@@ -19,3 +19,19 @@ func TestNewDaemonDefaults(t *testing.T) {
 	}
 	_ = d.Stop()
 }
+
+func TestNewDaemonPprofAddr(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("HOME", dir)
+
+	addr := "127.0.0.1:6061"
+	d, err := NewDaemon(DaemonConfig{Version: "test", PprofAddr: addr})
+	if err != nil {
+		t.Fatalf("NewDaemon: %v", err)
+	}
+	if d.pprofAddr != addr {
+		t.Fatalf("pprof addr = %q", d.pprofAddr)
+	}
+	_ = d.Stop()
+}
