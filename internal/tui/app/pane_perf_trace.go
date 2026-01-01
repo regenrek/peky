@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/regenrek/peakypanes/internal/sessiond"
@@ -111,7 +112,9 @@ func (m *Model) perfNotePaneViewRequest(req sessiond.PaneViewRequest, now time.T
 	}
 	if !trace.pendingAt.IsZero() {
 		delay := now.Sub(trace.pendingAt)
-		if delay >= perfSlowPaneEventToReq {
+		if perfTraceAllEnabled() {
+			log.Printf("tui: pane view request issued pane=%s event_to_req=%s pending_count=%d last_seq=%d cols=%d rows=%d mode=%v", req.PaneID, delay, trace.pendingCount, trace.pendingLastSeq, req.Cols, req.Rows, req.Mode)
+		} else if delay >= perfSlowPaneEventToReq {
 			logPerfEvery("tui.paneviews.req."+req.PaneID, perfLogInterval, "tui: pane view req slow pane=%s delay_event_to_req=%s pending_count=%d last_seq=%d cols=%d rows=%d mode=%v", req.PaneID, delay, trace.pendingCount, trace.pendingLastSeq, req.Cols, req.Rows, req.Mode)
 		}
 		trace.lastReqPendingAt = trace.pendingAt
@@ -143,8 +146,10 @@ func (m *Model) perfNotePaneViewResponse(view sessiond.PaneViewResponse, now tim
 
 	if !trace.lastReqAt.IsZero() && !trace.lastReqPendingAt.IsZero() {
 		eventToResp := now.Sub(trace.lastReqPendingAt)
-		if eventToResp >= perfSlowPaneEventToResp {
-			reqToResp := now.Sub(trace.lastReqAt)
+		reqToResp := now.Sub(trace.lastReqAt)
+		if perfTraceAllEnabled() {
+			log.Printf("tui: pane view response pane=%s event_to_resp=%s req_dur=%s resp_seq=%d last_event_seq=%d", view.PaneID, eventToResp, reqToResp, view.UpdateSeq, trace.lastEventSeq)
+		} else if eventToResp >= perfSlowPaneEventToResp {
 			logPerfEvery("tui.paneviews.resp."+view.PaneID, perfLogInterval, "tui: pane view resp slow pane=%s delay_event_to_resp=%s delay_req_to_resp=%s resp_seq=%d last_event_seq=%d", view.PaneID, eventToResp, reqToResp, view.UpdateSeq, trace.lastEventSeq)
 		}
 	}

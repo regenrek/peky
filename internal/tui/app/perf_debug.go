@@ -10,6 +10,7 @@ import (
 
 const perfDebugEnv = "PEAKYPANES_PERF_DEBUG"
 const perfPaneViewAllEnv = "PEAKYPANES_PERF_PANEVIEWS_ALL"
+const perfTraceAllEnv = "PEAKYPANES_PERF_TRACE_ALL"
 
 const (
 	perfLogInterval              = 2 * time.Second
@@ -29,6 +30,8 @@ var (
 	perfLastByKey       = map[string]time.Time{}
 	perfPaneViewAllOnce sync.Once
 	perfPaneViewAll     bool
+	perfTraceAllOnce    sync.Once
+	perfTraceAll        bool
 )
 
 func perfDebugEnabled() bool {
@@ -62,6 +65,26 @@ func perfPaneViewAllEnabled() bool {
 		}
 	})
 	return perfPaneViewAll
+}
+
+func perfTraceAllEnabled() bool {
+	if !perfDebugEnabled() {
+		return false
+	}
+	perfTraceAllOnce.Do(func() {
+		value := strings.TrimSpace(os.Getenv(perfTraceAllEnv))
+		if value == "" {
+			perfTraceAll = false
+			return
+		}
+		switch strings.ToLower(value) {
+		case "1", "true", "yes", "on":
+			perfTraceAll = true
+		default:
+			perfTraceAll = false
+		}
+	})
+	return perfTraceAll
 }
 
 func logPerfEvery(key string, interval time.Duration, format string, args ...any) {

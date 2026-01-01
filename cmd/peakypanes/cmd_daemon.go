@@ -20,7 +20,9 @@ func runDaemon(args []string) {
 
 	flags, err := parseDaemonFlags(args)
 	if err != nil {
-		fmt.Fprintf(stderr, "peakypanes: %v\n", err)
+		if _, writeErr := fmt.Fprintf(stderr, "peakypanes: %v\n", err); writeErr != nil {
+			return
+		}
 		fmt.Print(daemonHelpText)
 		return
 	}

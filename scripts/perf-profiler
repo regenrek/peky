@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 usage() {
   cat <<'USAGE'
-Usage: scripts/perf-profiler [--layout <file>] [--secs <n>] [--fgprof <n>] [--trace <n>] [--block] [--block-rate <duration>] [--mutex] [--mutex-fraction <n>] [--start-delay <n|duration>] [--align-with-send] [--start-on-send] [--trigger-timeout <n|duration>] [--start-timeout <n|duration>] [--gops] [--no-tmux] [--no-ghostty]
+Usage: scripts/perf-profiler [--layout <file>] [--secs <n>] [--fgprof <n>] [--trace <n>] [--block] [--block-rate <duration>] [--mutex] [--mutex-fraction <n>] [--start-delay <n|duration>] [--align-with-send] [--start-on-send] [--trigger-timeout <n|duration>] [--start-timeout <n|duration>] [--gops] [--trace-all] [--paneviews-all] [--no-tmux] [--no-ghostty]
 
 Runs a fresh perf session with the profiler build tag enabled and captures
 CPU/heap profiles plus a summary report under .bench.
@@ -25,6 +25,8 @@ Options:
   --trigger-timeout Timeout waiting for the first send (seconds or Go duration)
   --start-timeout   Timeout for StartSession RPC (seconds or Go duration)
   --gops            Enable gops agent (config lives under the run output)
+  --trace-all       Log all pane view request/response timings (PEAKYPANES_PERF_TRACE_ALL=1)
+  --paneviews-all   Render all panes live during profiling (PEAKYPANES_PERF_PANEVIEWS_ALL=1)
   --no-tmux         Skip the tmux monitor dashboard (tail + htop)
   --no-ghostty      Run peakypanes in the current terminal (no Ghostty)
   -h, --help        Show this help
@@ -42,10 +44,12 @@ Environment:
   PROFILE_TRIGGER_TIMEOUT Same as --trigger-timeout
   PROFILE_START_TIMEOUT Same as --start-timeout
   PROFILE_GOPS      Same as --gops (set to 1)
+  PROFILE_TRACE_ALL Same as --trace-all (set to 1)
+  PROFILE_PANEVIEWS_ALL Same as --paneviews-all (set to 1)
 
 Notes:
   - This is dev-only and uses a profiler build tag.
-  - The run uses --temporary-run to avoid user config/state.
+  - The run uses --fresh-config to avoid user config/state.
 USAGE
 }
 
@@ -53,6 +57,8 @@ layout_file="$ROOT/testdata/performance-tests/peakypanes-perf12.yml"
 profile_secs="${PROFILE_SECS:-30}"
 fgprof_secs="${PROFILE_FGPROF:-}"
 trace_secs="${PROFILE_TRACE:-}"
+trace_all="${PROFILE_TRACE_ALL:-}"
+paneviews_all="${PROFILE_PANEVIEWS_ALL:-}"
 block_rate="${PROFILE_BLOCK_RATE:-}"
 mutex_fraction="${PROFILE_MUTEX_FRACTION:-}"
 start_delay="${PROFILE_START_DELAY:-}"
@@ -182,6 +188,14 @@ while [[ $# -gt 0 ]]; do
       enable_gops=true
       shift
       ;;
+    --trace-all)
+      trace_all=1
+      shift
+      ;;
+    --paneviews-all)
+      paneviews_all=1
+      shift
+      ;;
     --no-ghostty)
       use_ghostty=false
       shift
@@ -283,7 +297,11 @@ fi
 stamp="$(date +%Y%m%d-%H%M%S)"
 out_root="$ROOT/.bench/profiler-12/$stamp"
 run_dir="$out_root/run"
-mkdir -p "$run_dir"
+tmp_root="/tmp/peakypanes-prof-$stamp"
+runtime_dir="$tmp_root/runtime"
+config_dir="$run_dir/config"
+pid_file="$runtime_dir/daemon.pid"
+mkdir -p "$run_dir" "$runtime_dir" "$config_dir/layouts"
 
 cp "$layout_file" "$run_dir/.peakypanes.yml"
 
@@ -299,6 +317,10 @@ export PEAKYPANES_CPU_PROFILE_SECS="$profile_secs"
 export PEAKYPANES_DAEMON_LOG="$out_root/daemon.log"
 export PEAKYPANES_PROFILE_DONE="$out_root/DONE"
 export PEAKYPANES_PERF_DEBUG="1"
+export PEAKYPANES_RUNTIME_DIR="$runtime_dir"
+export PEAKYPANES_CONFIG_DIR="$config_dir"
+export PEAKYPANES_FRESH_CONFIG="1"
+export PEAKYPANES_DAEMON_PID="$pid_file"
 if [[ "$enable_block" == true ]]; then
   export PEAKYPANES_BLOCK_PROFILE="$out_root/block.pprof"
   if [[ -n "$block_rate" ]]; then
@@ -327,6 +349,12 @@ fi
 if [[ -n "$trace_secs" ]]; then
   export PEAKYPANES_TRACE="$out_root/trace.out"
   export PEAKYPANES_TRACE_SECS="$trace_secs"
+fi
+if [[ -n "$trace_all" ]]; then
+  export PEAKYPANES_PERF_TRACE_ALL="1"
+fi
+if [[ -n "$paneviews_all" ]]; then
+  export PEAKYPANES_PERF_PANEVIEWS_ALL="1"
 fi
 if [[ -n "$start_timeout" ]]; then
   export PEAKYPANES_START_TIMEOUT="$start_timeout"
@@ -371,6 +399,15 @@ touch "$run_log" "$daemon_log"
     echo "trace_secs: $trace_secs"
     echo "trace: $out_root/trace.out"
   fi
+  if [[ -n "$trace_all" ]]; then
+    echo "trace_all: enabled"
+  fi
+  if [[ -n "$paneviews_all" ]]; then
+    echo "paneviews_all: enabled"
+  fi
+  if [[ -n "$paneviews_all" ]]; then
+    echo "paneviews_all: enabled"
+  fi
   if [[ "$enable_block" == true ]]; then
     echo "block_profile: $out_root/block.pprof"
     if [[ -n "$block_rate" ]]; then
@@ -390,6 +427,8 @@ touch "$run_log" "$daemon_log"
   echo "go: $(go version)"
   echo "bin: $bin_path"
   echo "out: $out_root"
+  echo "runtime_dir: $runtime_dir"
+  echo "config_dir: $config_dir"
   echo "done: $done_marker"
   echo
 } > "$report"
@@ -427,7 +466,7 @@ if [[ "\$max" -lt 1 ]]; then
 fi
 
 while true; do
-  $(printf %q "$bin_path") start --temporary-run --path $(printf %q "$run_dir")
+  $(printf %q "$bin_path") start --fresh-config --path $(printf %q "$run_dir")
   code=\$?
   if [[ "\$code" -eq 0 ]]; then
     exit 0
@@ -443,6 +482,34 @@ done
 EOF
 chmod +x "$start_wrapper"
 
+cleanup_after_done() {
+  if [[ ! -f "$done_marker" ]]; then
+    return
+  fi
+  if [[ -f "$pid_file" ]]; then
+    pid="$(cat "$pid_file" 2>/dev/null || true)"
+    if [[ "$pid" =~ ^[0-9]+$ ]]; then
+      kill "$pid" >/dev/null 2>&1 || true
+    fi
+  fi
+  pkill -f "$bin_path daemon" >/dev/null 2>&1 || true
+  pkill -f "$start_wrapper" >/dev/null 2>&1 || true
+  pkill -f "$bin_path start --fresh-config --path $run_dir" >/dev/null 2>&1 || true
+  if [[ -n "$monitor_session" ]]; then
+    tmux kill-session -t "$monitor_session" >/dev/null 2>&1 || true
+  fi
+  if [[ -n "$tmp_root" ]]; then
+    rm -rf "$tmp_root" >/dev/null 2>&1 || true
+  fi
+}
+
+(
+  while [[ ! -f "$done_marker" ]]; do
+    sleep 1
+  done
+  cleanup_after_done
+) &
+
 if command -v script >/dev/null 2>&1; then
   run_cmd="script -q $(printf %q "$run_log") $(printf %q "$start_wrapper")"
 else
@@ -452,6 +519,13 @@ fi
 if [[ "$use_ghostty" == true ]]; then
   if [[ "$(uname -s)" == "Darwin" && -d "/Applications/Ghostty.app" ]]; then
     env_exports=$(printf 'export PEAKYPANES_CPU_PROFILE=%q; export PEAKYPANES_MEM_PROFILE=%q; export PEAKYPANES_CPU_PROFILE_SECS=%q; export PEAKYPANES_DAEMON_LOG=%q; export PEAKYPANES_PROFILE_DONE=%q; export PEAKYPANES_PERF_DEBUG=%q; ' "$PEAKYPANES_CPU_PROFILE" "$PEAKYPANES_MEM_PROFILE" "$PEAKYPANES_CPU_PROFILE_SECS" "$PEAKYPANES_DAEMON_LOG" "$PEAKYPANES_PROFILE_DONE" "$PEAKYPANES_PERF_DEBUG")
+    if [[ -n "$trace_all" ]]; then
+      env_exports+=$(printf 'export PEAKYPANES_PERF_TRACE_ALL=%q; ' "1")
+    fi
+    if [[ -n "$paneviews_all" ]]; then
+      env_exports+=$(printf 'export PEAKYPANES_PERF_PANEVIEWS_ALL=%q; ' "1")
+    fi
+    env_exports+=$(printf 'export PEAKYPANES_RUNTIME_DIR=%q; export PEAKYPANES_CONFIG_DIR=%q; export PEAKYPANES_FRESH_CONFIG=%q; export PEAKYPANES_DAEMON_PID=%q; ' "$PEAKYPANES_RUNTIME_DIR" "$PEAKYPANES_CONFIG_DIR" "$PEAKYPANES_FRESH_CONFIG" "$PEAKYPANES_DAEMON_PID")
     if [[ -n "$start_delay" ]]; then
       env_exports+=$(printf 'export PEAKYPANES_PROFILE_START_DELAY=%q; ' "$start_delay")
     fi
@@ -515,6 +589,9 @@ if [[ "$use_ghostty" == false ]]; then
   fi
   if [[ -n "$trace_secs" ]]; then
     echo "trace: $out_root/trace.out"
+  fi
+  if [[ -n "$trace_all" ]]; then
+    echo "trace_all: enabled"
   fi
   if [[ "$enable_block" == true ]]; then
     echo "block: $out_root/block.pprof"
@@ -762,6 +839,28 @@ if [[ -f "$daemon_log" ]]; then
     cat "$timings_summary"
   } >> "$report"
 
+  input_output_out="$out_root/timings.input_output.txt"
+  awk -F '\t' '
+  function upd(val, minv, maxv, sumv, cntv) {
+    if (val == "" || val == "-") { return minv "\t" maxv "\t" sumv "\t" cntv }
+    v = val + 0
+    if (cntv == 0 || v < minv) { minv = v }
+    if (cntv == 0 || v > maxv) { maxv = v }
+    sumv += v
+    cntv += 1
+    return minv "\t" maxv "\t" sumv "\t" cntv
+  }
+  NR == 1 { next }
+  {
+    split(upd($25, min_foai, max_foai, sum_foai, cnt_foai), a, "\t"); min_foai=a[1]; max_foai=a[2]; sum_foai=a[3]; cnt_foai=a[4]
+    split(upd($26, min_si, max_si, sum_si, cnt_si), a, "\t"); min_si=a[1]; max_si=a[2]; sum_si=a[3]; cnt_si=a[4]
+  }
+  END {
+    print "input_to_output_ms:"
+    if (cnt_foai > 0) { printf "  first_output_after_input: count=%d min=%.3f max=%.3f avg=%.3f\n", cnt_foai, min_foai, max_foai, sum_foai/cnt_foai } else { print "  first_output_after_input: no data" }
+    if (cnt_si > 0) { printf "  since_input: count=%d min=%.3f max=%.3f avg=%.3f\n", cnt_si, min_si, max_si, sum_si/cnt_si } else { print "  since_input: no data" }
+  }' "$timings_out" > "$input_output_out"
+
   coverage_out="$out_root/timings.coverage.txt"
   expected_panes="$(awk '/native: session / && /panes=/ { for (i=1;i<=NF;i++) if ($i ~ /^panes=/) { print substr($i,7); exit } }' "$daemon_log")"
   awk -F '\t' -v expected="$expected_panes" '
@@ -832,16 +931,134 @@ if [[ -f "$daemon_log" ]]; then
     }' "$run_log" > "$tui_skips"
   fi
 
+  tui_perf="$out_root/timings.tui_perf.txt"
+  if [[ -f "$run_log" ]]; then
+    use_req_issued=0
+    use_resp_issued=0
+    if grep -q "tui: pane view request issued" "$run_log"; then
+      use_req_issued=1
+    fi
+    if grep -q "tui: pane view response " "$run_log"; then
+      use_resp_issued=1
+    fi
+    awk -v use_req_issued="$use_req_issued" -v use_resp_issued="$use_resp_issued" '
+    function dur_ms(s) {
+      if (s == "" || s == "-") { return "" }
+      if (s ~ /µs$/) { sub(/µs$/, "", s); return (s + 0) / 1000 }
+      if (s ~ /us$/) { sub(/us$/, "", s); return (s + 0) / 1000 }
+      if (s ~ /ms$/) { sub(/ms$/, "", s); return s + 0 }
+      if (s ~ /s$/) { sub(/s$/, "", s); return (s + 0) * 1000 }
+      return s + 0
+    }
+    function upd(val, minv, maxv, sumv, cntv) {
+      if (val == "" || val == "-") { return minv "\t" maxv "\t" sumv "\t" cntv }
+      v = val + 0
+      if (cntv == 0 || v < minv) { minv = v }
+      if (cntv == 0 || v > maxv) { maxv = v }
+      sumv += v
+      cntv += 1
+      return minv "\t" maxv "\t" sumv "\t" cntv
+    }
+    function strip_esc(s) {
+      gsub(/\x1b\[[0-9;]*[A-Za-z]/, "", s)
+      return s
+    }
+    {
+      line = strip_esc($0)
+      if (use_req_issued == 1) {
+        if (line ~ /tui: pane view request issued/) {
+          val=""
+          for (i=1;i<=NF;i++) {
+            if ($i ~ /^event_to_req=/) { val=substr($i,14) }
+            if ($i ~ /^delay_event_to_req=/) { val=substr($i,20) }
+          }
+          ms = dur_ms(val)
+          if (ms != "") {
+            split(upd(ms, min_event_req, max_event_req, sum_event_req, cnt_event_req), a, "\t")
+            min_event_req=a[1]; max_event_req=a[2]; sum_event_req=a[3]; cnt_event_req=a[4]
+          }
+        }
+      } else if (line ~ /tui: pane view req slow/) {
+        val=""
+        for (i=1;i<=NF;i++) {
+          if ($i ~ /^delay_event_to_req=/) { val=substr($i,20) }
+        }
+        ms = dur_ms(val)
+        if (ms != "") {
+          split(upd(ms, min_event_req, max_event_req, sum_event_req, cnt_event_req), a, "\t")
+          min_event_req=a[1]; max_event_req=a[2]; sum_event_req=a[3]; cnt_event_req=a[4]
+        }
+      }
+
+      if (use_resp_issued == 1) {
+        if (line ~ /tui: pane view response /) {
+          val_resp=""; val_req=""
+          for (i=1;i<=NF;i++) {
+            if ($i ~ /^event_to_resp=/) { val_resp=substr($i,15) }
+            if ($i ~ /^delay_event_to_resp=/) { val_resp=substr($i,21) }
+            if ($i ~ /^req_dur=/) { val_req=substr($i,9) }
+          }
+          msr = dur_ms(val_resp)
+          if (msr != "") {
+            split(upd(msr, min_event_resp, max_event_resp, sum_event_resp, cnt_event_resp), a, "\t")
+            min_event_resp=a[1]; max_event_resp=a[2]; sum_event_resp=a[3]; cnt_event_resp=a[4]
+          }
+          msq = dur_ms(val_req)
+          if (msq != "") {
+            split(upd(msq, min_req_resp, max_req_resp, sum_req_resp, cnt_req_resp), a, "\t")
+            min_req_resp=a[1]; max_req_resp=a[2]; sum_req_resp=a[3]; cnt_req_resp=a[4]
+          }
+        }
+      } else if (line ~ /tui: pane view resp slow/) {
+        val_resp=""; val_req=""
+        for (i=1;i<=NF;i++) {
+          if ($i ~ /^delay_event_to_resp=/) { val_resp=substr($i,21) }
+          if ($i ~ /^delay_req_to_resp=/) { val_req=substr($i,19) }
+        }
+        msr = dur_ms(val_resp)
+        if (msr != "") {
+          split(upd(msr, min_event_resp, max_event_resp, sum_event_resp, cnt_event_resp), a, "\t")
+          min_event_resp=a[1]; max_event_resp=a[2]; sum_event_resp=a[3]; cnt_event_resp=a[4]
+        }
+        msq = dur_ms(val_req)
+        if (msq != "") {
+          split(upd(msq, min_req_resp, max_req_resp, sum_req_resp, cnt_req_resp), a, "\t")
+          min_req_resp=a[1]; max_req_resp=a[2]; sum_req_resp=a[3]; cnt_req_resp=a[4]
+        }
+      }
+    }
+    END {
+      print "tui_paneview_latency_ms:"
+      src_req = (use_req_issued == 1 ? "request_issued" : "slow_only")
+      src_resp = (use_resp_issued == 1 ? "response" : "slow_only")
+      printf "  source_event_to_req: %s\n", src_req
+      printf "  source_req_to_resp: %s\n", src_resp
+      if (cnt_event_req > 0) { printf "  event_to_req: count=%d min=%.3f max=%.3f avg=%.3f\n", cnt_event_req, min_event_req, max_event_req, sum_event_req/cnt_event_req } else { print "  event_to_req: no data" }
+      if (cnt_event_resp > 0) { printf "  event_to_resp: count=%d min=%.3f max=%.3f avg=%.3f\n", cnt_event_resp, min_event_resp, max_event_resp, sum_event_resp/cnt_event_resp } else { print "  event_to_resp: no data" }
+      if (cnt_req_resp > 0) { printf "  req_to_resp: count=%d min=%.3f max=%.3f avg=%.3f\n", cnt_req_resp, min_req_resp, max_req_resp, sum_req_resp/cnt_req_resp } else { print "  req_to_resp: no data" }
+    }' "$run_log" > "$tui_perf"
+  fi
+
   {
     echo
     echo "timings_coverage: $coverage_out"
     cat "$coverage_out"
+    if [[ -f "$input_output_out" ]]; then
+      echo
+      echo "timings_input_output: $input_output_out"
+      cat "$input_output_out"
+    fi
     echo
     echo "timings_top_slow: $top_slow"
     if [[ -f "$tui_skips" ]]; then
       echo
       echo "timings_tui_skips: $tui_skips"
       cat "$tui_skips"
+    fi
+    if [[ -f "$tui_perf" ]]; then
+      echo
+      echo "timings_tui_perf: $tui_perf"
+      cat "$tui_perf"
     fi
   } >> "$report"
 fi

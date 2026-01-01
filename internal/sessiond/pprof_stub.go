@@ -23,4 +23,6 @@ func (d *Daemon) stopPprofServer() {
 		return
 	}
 	_ = d.pprofAddr
+	d.pprofServer = nil
+	d.pprofListener = nil
 }
