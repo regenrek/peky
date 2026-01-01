@@ -12,7 +12,10 @@ var (
 	bracketedPasteEnd   = [...]byte{0x1b, '[', '2', '0', '1', '~'}
 )
 
-const quickReplyClaudeSubmitDelay = 30 * time.Millisecond
+const (
+	quickReplyClaudeSubmitDelay = 30 * time.Millisecond
+	quickReplyCodexSubmitDelay  = 30 * time.Millisecond
+)
 
 func quickReplyTextBytes(pane PaneItem, text string) []byte {
 	if quickReplyTargetIsCodex(pane) {
@@ -52,12 +55,15 @@ func quickReplyTargetIsClaude(pane PaneItem) bool {
 }
 
 func quickReplyTargetCombineSubmit(pane PaneItem) bool {
-	return quickReplyTargetIsCodex(pane)
+	return false
 }
 
 func quickReplySubmitDelay(pane PaneItem) time.Duration {
 	if quickReplyTargetIsClaude(pane) {
 		return quickReplyClaudeSubmitDelay
+	}
+	if quickReplyTargetIsCodex(pane) {
+		return quickReplyCodexSubmitDelay
 	}
 	return 0
 }

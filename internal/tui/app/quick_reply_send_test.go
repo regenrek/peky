@@ -32,7 +32,7 @@ func TestQuickReplyInputBytes_CodexAppendsSubmit(t *testing.T) {
 
 	pane := PaneItem{StartCommand: "codex tui"}
 	got := quickReplyInputBytes(pane, "hello")
-	want := []byte("\x1b[200~hello\x1b[201~\r")
+	want := []byte("\x1b[200~hello\x1b[201~")
 	if !bytes.Equal(got, want) {
 		t.Fatalf("quickReplyInputBytes() = %q want %q", string(got), string(want))
 	}
