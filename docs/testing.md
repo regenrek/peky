@@ -23,16 +23,19 @@ scripts/fresh-run X.Y.Z --with-project
 Profiling (dev-only):
 
 ```bash
-# Build with profiler tag to enable pprof HTTP server + fgprof.
+# Baseline run (10 panes, fresh config).
+./scripts/perf-profiler \
+  --layout testdata/performance-tests/peakypanes-perf10.yml \
+  --secs 30 --fgprof 30 --trace 10 --gops --start-timeout 20s
+
+# Full trace + all panes live (tmux-like).
+./scripts/perf-profiler \
+  --layout testdata/performance-tests/peakypanes-perf10.yml \
+  --secs 30 --fgprof 30 --trace 10 --gops --start-timeout 20s \
+  --trace-all --paneviews-all
+
+# Live pprof server (dev-only; requires profiler build tag).
 go build -tags profiler ./cmd/peakypanes
-
-# Baseline run (10 panes).
-./scripts/perf-profiler --layout testdata/performance-tests/peakypanes-perf10.yml --secs 30 --fgprof 30 --trace 10 --gops --start-timeout 20s
-
-# Render all panes (dev-only; requires perf debug).
-PEAKYPANES_PERF_PANEVIEWS_ALL=1 PEAKYPANES_PERF_DEBUG=1 ./scripts/perf-profiler --layout testdata/performance-tests/peakypanes-perf10.yml --secs 30 --fgprof 30 --trace 10 --gops --start-timeout 20s
-
-# Live pprof server (dev-only).
 ./peakypanes daemon --pprof
 ```
 
@@ -47,5 +50,18 @@ tmux comparison (run from Ghostty for a 10-pane baseline):
 ```bash
 ./scripts/perf-tmux --panes 10
 ```
+
+Perf-profiler outputs (per run under `.bench/profiler-12/<timestamp>/`):
+
+- `report.txt`: run metadata + summaries
+- `timings.tui_perf.txt`: event→req/resp and req→resp (UI pipeline)
+- `timings.input_output.txt`: input→output (end-to-end)
+- `timings.summary.txt`: staged startup timeline
+
+When to use which mode:
+
+- **Baseline** (default): visible panes only; measure realistic dashboard behavior.
+- **`--paneviews-all`**: forces all panes live (tmux-like) to compare apples‑to‑apples.
+- **`--trace-all`**: logs every pane view timing to compute accurate averages.
 
 GitHub Actions runs gofmt checks, go vet, go test with coverage, and race on Linux.
