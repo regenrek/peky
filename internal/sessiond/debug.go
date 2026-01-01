@@ -145,58 +145,80 @@ func (d *Daemon) logPaneViewFirstAfterOutput(paneID string, requestAt, computeSt
 	if d == nil || !perfDebugEnabled() {
 		return
 	}
-	if paneID == "" || renderedAt.IsZero() || computeStart.IsZero() || resp.NotModified {
+	if !paneViewAfterOutputReady(paneID, requestAt, computeStart, renderedAt, resp) {
 		return
 	}
 	created, firstRead, ok := d.paneTimingSnapshot(paneID)
 	if !ok || firstRead.IsZero() {
 		return
 	}
-	if requestAt.IsZero() {
-		requestAt = renderedAt
+	requestAt = normalizePaneViewRequestAt(requestAt, renderedAt)
+	if !d.markPerfPaneViewOnce(paneID, perfPaneViewFirstAfterOutput) {
+		return
 	}
+	timing := buildPaneViewAfterOutputTiming(created, firstRead, requestAt, computeStart, renderedAt)
+	log.Printf("sessiond: pane view first render after output pane=%s mode=%v view_bytes=%d cols=%d rows=%d since_start=%s output_to_view_req=%s view_req_to_render=%s output_to_render=%s queue_wait=%s compute=%s",
+		paneID, resp.Mode, len(resp.View), resp.Cols, resp.Rows, timing.sinceStart, timing.outputToViewReq, timing.viewReqToRender, timing.outputToRender, timing.queueWait, timing.computeDur)
+}
 
+func paneViewAfterOutputReady(paneID string, requestAt, computeStart, renderedAt time.Time, resp PaneViewResponse) bool {
+	if paneID == "" || renderedAt.IsZero() || computeStart.IsZero() || resp.NotModified {
+		return false
+	}
+	return true
+}
+
+func normalizePaneViewRequestAt(requestAt, renderedAt time.Time) time.Time {
+	if requestAt.IsZero() {
+		return renderedAt
+	}
+	return requestAt
+}
+
+func (d *Daemon) markPerfPaneViewOnce(paneID string, flag uint8) bool {
 	d.perfPaneViewMu.Lock()
+	defer d.perfPaneViewMu.Unlock()
 	if d.perfPaneView == nil {
 		d.perfPaneView = make(map[string]uint8)
 	}
 	flags := d.perfPaneView[paneID]
-	if flags&perfPaneViewFirstAfterOutput != 0 {
-		d.perfPaneViewMu.Unlock()
-		return
+	if flags&flag != 0 {
+		return false
 	}
-	flags |= perfPaneViewFirstAfterOutput
+	flags |= flag
 	d.perfPaneView[paneID] = flags
-	d.perfPaneViewMu.Unlock()
+	return true
+}
 
+type paneViewAfterOutputTiming struct {
+	sinceStart      string
+	outputToViewReq time.Duration
+	viewReqToRender time.Duration
+	outputToRender  time.Duration
+	queueWait       time.Duration
+	computeDur      time.Duration
+}
+
+func buildPaneViewAfterOutputTiming(created, firstRead, requestAt, computeStart, renderedAt time.Time) paneViewAfterOutputTiming {
 	sinceStart := "n/a"
 	if !created.IsZero() {
 		sinceStart = renderedAt.Sub(created).String()
 	}
+	return paneViewAfterOutputTiming{
+		sinceStart:      sinceStart,
+		outputToViewReq: clampDuration(requestAt.Sub(firstRead)),
+		viewReqToRender: clampDuration(renderedAt.Sub(requestAt)),
+		outputToRender:  clampDuration(renderedAt.Sub(firstRead)),
+		queueWait:       clampDuration(computeStart.Sub(requestAt)),
+		computeDur:      clampDuration(renderedAt.Sub(computeStart)),
+	}
+}
 
-	outputToViewReq := requestAt.Sub(firstRead)
-	if outputToViewReq < 0 {
-		outputToViewReq = 0
+func clampDuration(d time.Duration) time.Duration {
+	if d < 0 {
+		return 0
 	}
-	viewReqToRender := renderedAt.Sub(requestAt)
-	if viewReqToRender < 0 {
-		viewReqToRender = 0
-	}
-	outputToRender := renderedAt.Sub(firstRead)
-	if outputToRender < 0 {
-		outputToRender = 0
-	}
-	queueWait := computeStart.Sub(requestAt)
-	if queueWait < 0 {
-		queueWait = 0
-	}
-	computeDur := renderedAt.Sub(computeStart)
-	if computeDur < 0 {
-		computeDur = 0
-	}
-
-	log.Printf("sessiond: pane view first render after output pane=%s mode=%v view_bytes=%d cols=%d rows=%d since_start=%s output_to_view_req=%s view_req_to_render=%s output_to_render=%s queue_wait=%s compute=%s",
-		paneID, resp.Mode, len(resp.View), resp.Cols, resp.Rows, sinceStart, outputToViewReq, viewReqToRender, outputToRender, queueWait, computeDur)
+	return d
 }
 
 func (d *Daemon) logPaneViewFirst(win paneViewWindow, paneID string, mode PaneViewMode, viewLen, cols, rows int) {

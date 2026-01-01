@@ -124,56 +124,52 @@ func (m *Model) paneHits() []mouse.PaneHit {
 }
 
 func (m *Model) projectPaneHits() []mouse.PaneHit {
+	body, project, session, ok := m.projectPaneHitsContext()
+	if !ok {
+		return nil
+	}
+	if len(session.Panes) == 0 {
+		m.logProjectPaneHitsSkip("no_panes", m.paneViewSkipContext(), "tui.panehits.project.empty")
+		return nil
+	}
+	preview, ok := m.projectPaneHitsPreview(body, project)
+	if !ok {
+		return nil
+	}
+	return m.projectPaneHitsForPreview(project, session, preview)
+}
+
+func (m *Model) projectPaneHitsContext() (mouse.Rect, *ProjectGroup, *SessionItem, bool) {
 	body, ok := m.dashboardBodyRect()
 	if !ok {
-		m.logPaneViewSkipGlobal("body_rect_unavailable", m.paneViewSkipContext())
-		if perfDebugEnabled() {
-			logPerfEvery("tui.panehits.project.body", perfLogInterval,
-				"tui: pane hits project skip reason=body_rect_unavailable %s", m.paneViewSkipContext())
-		}
-		return nil
+		m.logProjectPaneHitsSkip("body_rect_unavailable", m.paneViewSkipContext(), "tui.panehits.project.body")
+		return mouse.Rect{}, nil, nil, false
 	}
 	project := m.selectedProject()
 	session := m.selectedSession()
 	if project == nil || session == nil {
-		m.logPaneViewSkipGlobal("missing_selection", m.paneViewSkipContext())
-		if perfDebugEnabled() {
-			logPerfEvery("tui.panehits.project.selection", perfLogInterval,
-				"tui: pane hits project skip reason=missing_selection %s", m.paneViewSkipContext())
-		}
-		return nil
+		m.logProjectPaneHitsSkip("missing_selection", m.paneViewSkipContext(), "tui.panehits.project.selection")
+		return mouse.Rect{}, nil, nil, false
 	}
-	if len(session.Panes) == 0 {
-		m.logPaneViewSkipGlobal("no_panes", m.paneViewSkipContext())
-		if perfDebugEnabled() {
-			logPerfEvery("tui.panehits.project.empty", perfLogInterval,
-				"tui: pane hits project skip reason=no_panes %s", m.paneViewSkipContext())
-		}
-		return nil
-	}
+	return body, project, session, true
+}
 
+func (m *Model) projectPaneHitsPreview(body mouse.Rect, project *ProjectGroup) (mouse.Rect, bool) {
 	if m.sidebarHidden(project) {
-		preview := mouse.Rect{
-			X: body.X,
-			Y: body.Y,
-			W: body.W,
-			H: body.H,
+		preview := mouse.Rect{X: body.X, Y: body.Y, W: body.W, H: body.H}
+		if !m.validateProjectPreviewRect(preview, "tui.panehits.project.preview.full") {
+			return mouse.Rect{}, false
 		}
-		if preview.W <= 0 || preview.H <= 0 {
-			m.logPaneViewSkipGlobal("preview_invalid", fmt.Sprintf("w=%d h=%d %s", preview.W, preview.H, m.paneViewSkipContext()))
-			if perfDebugEnabled() {
-				logPerfEvery("tui.panehits.project.preview.full", perfLogInterval,
-					"tui: pane hits project skip reason=preview_invalid w=%d h=%d %s", preview.W, preview.H, m.paneViewSkipContext())
-			}
-			return nil
-		}
-		mode := m.settings.PreviewMode
-		if mode == "layout" {
-			return projectPaneLayoutHits(project, session, session.Panes, preview)
-		}
-		return projectPaneTileHits(project, session, session.Panes, preview)
+		return preview, true
 	}
+	preview := m.projectSidebarPreviewRect(body)
+	if !m.validateProjectPreviewRect(preview, "tui.panehits.project.preview") {
+		return mouse.Rect{}, false
+	}
+	return preview, true
+}
 
+func (m *Model) projectSidebarPreviewRect(body mouse.Rect) mouse.Rect {
 	base := body.W / 3
 	leftWidth := clamp(base-(body.W/30), 22, 36)
 	if leftWidth > body.W-10 {
@@ -184,28 +180,35 @@ func (m *Model) projectPaneHits() []mouse.PaneHit {
 		leftWidth = clamp(body.W/2, 12, body.W-10)
 		rightWidth = body.W - leftWidth - 1
 	}
-
-	preview := mouse.Rect{
+	return mouse.Rect{
 		X: body.X + leftWidth,
 		Y: body.Y,
 		W: rightWidth,
 		H: body.H,
 	}
+}
 
-	if preview.W <= 0 || preview.H <= 0 {
-		m.logPaneViewSkipGlobal("preview_invalid", fmt.Sprintf("w=%d h=%d %s", preview.W, preview.H, m.paneViewSkipContext()))
-		if perfDebugEnabled() {
-			logPerfEvery("tui.panehits.project.preview", perfLogInterval,
-				"tui: pane hits project skip reason=preview_invalid w=%d h=%d %s", preview.W, preview.H, m.paneViewSkipContext())
-		}
-		return nil
+func (m *Model) validateProjectPreviewRect(preview mouse.Rect, perfKey string) bool {
+	if preview.W > 0 && preview.H > 0 {
+		return true
 	}
+	m.logProjectPaneHitsSkip("preview_invalid", fmt.Sprintf("w=%d h=%d %s", preview.W, preview.H, m.paneViewSkipContext()), perfKey)
+	return false
+}
 
-	mode := m.settings.PreviewMode
-	if mode == "layout" {
+func (m *Model) projectPaneHitsForPreview(project *ProjectGroup, session *SessionItem, preview mouse.Rect) []mouse.PaneHit {
+	if m.settings.PreviewMode == "layout" {
 		return projectPaneLayoutHits(project, session, session.Panes, preview)
 	}
 	return projectPaneTileHits(project, session, session.Panes, preview)
+}
+
+func (m *Model) logProjectPaneHitsSkip(reason, detail, perfKey string) {
+	m.logPaneViewSkipGlobal(reason, detail)
+	if !perfDebugEnabled() || perfKey == "" {
+		return
+	}
+	logPerfEvery(perfKey, perfLogInterval, "tui: pane hits project skip reason=%s %s", reason, detail)
 }
 
 func projectPaneLayoutHits(project *ProjectGroup, session *SessionItem, panes []PaneItem, preview mouse.Rect) []mouse.PaneHit {

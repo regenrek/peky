@@ -212,40 +212,59 @@ func (m *Model) handleSelectionRefresh(msg selectionRefreshMsg) tea.Cmd {
 func (m *Model) handleDashboardSnapshot(msg dashboardSnapshotMsg) tea.Cmd {
 	m.endRefresh()
 	diag.LogEvery("tui.snapshot.recv", 2*time.Second, "tui: snapshot recv seq=%d err=%v in_flight=%d", msg.Result.RefreshSeq, msg.Result.Err, m.refreshInFlight)
-	if perfDebugEnabled() && msg.Result.RefreshSeq != 0 {
-		if m.refreshStarted != nil {
-			if started, ok := m.refreshStarted[msg.Result.RefreshSeq]; ok {
-				delete(m.refreshStarted, msg.Result.RefreshSeq)
-				dur := time.Since(started)
-				if dur > perfSlowRefreshTotal {
-					logPerfEvery("tui.refresh.total", perfLogInterval, "tui: refresh slow seq=%d dur=%s err=%v", msg.Result.RefreshSeq, dur, msg.Result.Err)
-				}
-			}
-		}
-	}
-	if msg.Result.RefreshSeq > 0 && msg.Result.RefreshSeq < m.refreshSeq {
-		if m.refreshQueued {
-			m.refreshQueued = false
-			return m.startRefreshCmd()
-		}
-		return nil
-	}
-	if msg.Result.RefreshSeq < m.lastAppliedSeq {
-		if m.refreshQueued {
-			m.refreshQueued = false
-			return m.startRefreshCmd()
-		}
-		return nil
-	}
-	if msg.Result.Err != nil {
-		m.setToast("Refresh failed: "+msg.Result.Err.Error(), toastError)
-		cmd := m.refreshPaneViewsCmd()
-		if m.refreshQueued {
-			m.refreshQueued = false
-			return tea.Batch(cmd, m.startRefreshCmd())
-		}
+	m.noteRefreshTiming(msg)
+	if cmd, handled := m.handleSnapshotStale(msg); handled {
 		return cmd
 	}
+	if msg.Result.Err != nil {
+		return m.handleSnapshotError(msg)
+	}
+	m.applySnapshotState(msg)
+	return m.handleSnapshotPostApply()
+}
+
+func (m *Model) noteRefreshTiming(msg dashboardSnapshotMsg) {
+	if !perfDebugEnabled() || msg.Result.RefreshSeq == 0 {
+		return
+	}
+	if m.refreshStarted == nil {
+		return
+	}
+	started, ok := m.refreshStarted[msg.Result.RefreshSeq]
+	if !ok {
+		return
+	}
+	delete(m.refreshStarted, msg.Result.RefreshSeq)
+	dur := time.Since(started)
+	if dur > perfSlowRefreshTotal {
+		logPerfEvery("tui.refresh.total", perfLogInterval, "tui: refresh slow seq=%d dur=%s err=%v", msg.Result.RefreshSeq, dur, msg.Result.Err)
+	}
+}
+
+func (m *Model) handleSnapshotStale(msg dashboardSnapshotMsg) (tea.Cmd, bool) {
+	if msg.Result.RefreshSeq > 0 && msg.Result.RefreshSeq < m.refreshSeq {
+		return m.finishQueuedRefresh(), true
+	}
+	if msg.Result.RefreshSeq < m.lastAppliedSeq {
+		return m.finishQueuedRefresh(), true
+	}
+	return nil, false
+}
+
+func (m *Model) finishQueuedRefresh() tea.Cmd {
+	if !m.refreshQueued {
+		return nil
+	}
+	m.refreshQueued = false
+	return m.startRefreshCmd()
+}
+
+func (m *Model) handleSnapshotError(msg dashboardSnapshotMsg) tea.Cmd {
+	m.setToast("Refresh failed: "+msg.Result.Err.Error(), toastError)
+	return m.appendQueuedRefresh(m.refreshPaneViewsCmd())
+}
+
+func (m *Model) applySnapshotState(msg dashboardSnapshotMsg) {
 	m.lastAppliedSeq = msg.Result.RefreshSeq
 	if msg.Result.Warning != "" {
 		m.setToast("Dashboard config: "+msg.Result.Warning, toastWarning)
@@ -266,25 +285,44 @@ func (m *Model) handleDashboardSnapshot(msg dashboardSnapshotMsg) tea.Cmd {
 	if m.refreshSelectionForProjectConfig() {
 		m.setToast("Project config changed: selection refreshed", toastInfo)
 	}
-	var cmd tea.Cmd
-	if len(m.paneViewQueuedIDs) > 0 {
-		if pumpCmd := m.schedulePaneViewPump("snapshot_pending", 0); pumpCmd != nil {
-			cmd = pumpCmd
-		}
+}
+
+func (m *Model) handleSnapshotPostApply() tea.Cmd {
+	cmds := make([]tea.Cmd, 0, 2)
+	if pumpCmd := m.snapshotPumpCmd(); pumpCmd != nil {
+		cmds = append(cmds, pumpCmd)
 	}
-	refreshCmd := m.refreshPaneViewsCmd()
-	if refreshCmd != nil {
-		if cmd != nil {
-			cmd = tea.Batch(cmd, refreshCmd)
-		} else {
-			cmd = refreshCmd
-		}
+	if refreshCmd := m.refreshPaneViewsCmd(); refreshCmd != nil {
+		cmds = append(cmds, refreshCmd)
 	}
-	if m.refreshQueued {
-		m.refreshQueued = false
-		cmd = tea.Batch(cmd, m.startRefreshCmd())
+	if cmd := m.appendQueuedRefresh(nil); cmd != nil {
+		cmds = append(cmds, cmd)
 	}
-	return cmd
+	if len(cmds) == 0 {
+		return nil
+	}
+	if len(cmds) == 1 {
+		return cmds[0]
+	}
+	return tea.Batch(cmds...)
+}
+
+func (m *Model) snapshotPumpCmd() tea.Cmd {
+	if len(m.paneViewQueuedIDs) == 0 {
+		return nil
+	}
+	return m.schedulePaneViewPump("snapshot_pending", 0)
+}
+
+func (m *Model) appendQueuedRefresh(cmd tea.Cmd) tea.Cmd {
+	if !m.refreshQueued {
+		return cmd
+	}
+	m.refreshQueued = false
+	if cmd == nil {
+		return m.startRefreshCmd()
+	}
+	return tea.Batch(cmd, m.startRefreshCmd())
 }
 
 func (m *Model) handlePaneClosed(msg PaneClosedMsg) tea.Cmd {

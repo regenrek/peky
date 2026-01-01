@@ -46,7 +46,20 @@ func buildPaneSendQueues(layoutCfg *layout.LayoutConfig, panes []*Pane) map[stri
 		return nil
 	}
 	queues := make(map[string][]paneSendAction)
-	for _, action := range layoutCfg.BroadcastSend {
+	appendBroadcastSendQueues(queues, layoutCfg.BroadcastSend, panes)
+	indexToID := paneIndexToID(panes)
+	appendDirectSendQueues(queues, layoutCfg.Panes, indexToID)
+	if len(queues) == 0 {
+		return nil
+	}
+	return queues
+}
+
+func appendBroadcastSendQueues(queues map[string][]paneSendAction, actions []layout.SendAction, panes []*Pane) {
+	if len(actions) == 0 || len(panes) == 0 {
+		return
+	}
+	for _, action := range actions {
 		normalized, ok := normalizeSendAction(action)
 		if !ok {
 			continue
@@ -58,6 +71,9 @@ func buildPaneSendQueues(layoutCfg *layout.LayoutConfig, panes []*Pane) map[stri
 			queues[pane.ID] = append(queues[pane.ID], normalized)
 		}
 	}
+}
+
+func paneIndexToID(panes []*Pane) map[string]string {
 	indexToID := make(map[string]string, len(panes))
 	for _, pane := range panes {
 		if pane == nil {
@@ -69,7 +85,14 @@ func buildPaneSendQueues(layoutCfg *layout.LayoutConfig, panes []*Pane) map[stri
 		}
 		indexToID[index] = pane.ID
 	}
-	for i, paneDef := range layoutCfg.Panes {
+	return indexToID
+}
+
+func appendDirectSendQueues(queues map[string][]paneSendAction, paneDefs []layout.PaneDef, indexToID map[string]string) {
+	if len(paneDefs) == 0 || len(indexToID) == 0 {
+		return
+	}
+	for i, paneDef := range paneDefs {
 		if len(paneDef.DirectSend) == 0 {
 			continue
 		}
@@ -85,10 +108,6 @@ func buildPaneSendQueues(layoutCfg *layout.LayoutConfig, panes []*Pane) map[stri
 			queues[paneID] = append(queues[paneID], normalized)
 		}
 	}
-	if len(queues) == 0 {
-		return nil
-	}
-	return queues
 }
 
 func normalizeSendAction(action layout.SendAction) (paneSendAction, bool) {

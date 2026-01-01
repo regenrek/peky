@@ -123,52 +123,78 @@ func (p *daemonProfiler) startProfiles(ctx context.Context) {
 	if p == nil {
 		return
 	}
+	durations := p.resolveProfileDurations()
+	startOnSend := envBool(profileStartOnSend)
+	p.stopOnContext(ctx)
+	go p.runProfileSchedule(ctx, durations, startOnSend)
+}
+
+type profileDurations struct {
+	cpuDur     time.Duration
+	fgDur      time.Duration
+	traceDur   time.Duration
+	startDelay time.Duration
+	waitFor    time.Duration
+}
+
+func (p *daemonProfiler) resolveProfileDurations() profileDurations {
 	p.cpuDur = profileDuration()
 	p.fgDur = profileDurationFromEnv(fgprofProfileSecs, p.cpuDur)
 	p.traceDur = profileDurationFromEnv(traceProfileSecs, p.cpuDur)
 	p.startDelay = profileDurationFromEnv(profileStartDelay, 0)
-	startOnSend := envBool(profileStartOnSend)
-	triggerTimeout := profileDurationFromEnv(profileTriggerWait, 0)
+	return profileDurations{
+		cpuDur:     p.cpuDur,
+		fgDur:      p.fgDur,
+		traceDur:   p.traceDur,
+		startDelay: p.startDelay,
+		waitFor:    profileDurationFromEnv(profileTriggerWait, 0),
+	}
+}
 
-	p.stopOnContext(ctx)
-	go func() {
-		if startOnSend {
-			if !profiling.Wait(ctx, triggerTimeout) {
-				log.Printf("sessiond: profiler trigger timeout; starting anyway")
-			}
+func (p *daemonProfiler) runProfileSchedule(ctx context.Context, d profileDurations, startOnSend bool) {
+	if startOnSend {
+		if !profiling.Wait(ctx, d.waitFor) {
+			log.Printf("sessiond: profiler trigger timeout; starting anyway")
 		}
-		total := time.Duration(0)
-		if p.startDelay > 0 {
-			total += p.startDelay
-		}
-		if p.cpuPath != "" && p.cpuDur > 0 {
-			total += p.cpuDur
-		}
-		if p.fgPath != "" && p.fgDur > 0 {
-			total += p.fgDur
-		}
-		if p.tracePath != "" && p.traceDur > 0 {
-			total += p.traceDur
-		}
+	}
+	total := p.profileTotalDuration(d)
+	p.startCPU(ctx, d.cpuDur, d.startDelay)
+	offset := p.profileOffsets(d)
+	if p.fgPath != "" && d.fgDur > 0 {
+		p.startFgprof(ctx, d.fgDur, offset)
+		offset += d.fgDur
+	}
+	if p.tracePath != "" && d.traceDur > 0 {
+		p.startTrace(ctx, d.traceDur, offset)
+	}
+	if total > 0 {
+		p.stopAfter(ctx, total)
+	}
+}
 
-		p.startCPU(ctx, p.cpuDur, p.startDelay)
+func (p *daemonProfiler) profileTotalDuration(d profileDurations) time.Duration {
+	total := time.Duration(0)
+	if d.startDelay > 0 {
+		total += d.startDelay
+	}
+	if p.cpuPath != "" && d.cpuDur > 0 {
+		total += d.cpuDur
+	}
+	if p.fgPath != "" && d.fgDur > 0 {
+		total += d.fgDur
+	}
+	if p.tracePath != "" && d.traceDur > 0 {
+		total += d.traceDur
+	}
+	return total
+}
 
-		offset := p.startDelay
-		if p.cpuPath != "" && p.cpuDur > 0 {
-			offset += p.cpuDur
-		}
-		if p.fgPath != "" && p.fgDur > 0 {
-			p.startFgprof(ctx, p.fgDur, offset)
-			offset += p.fgDur
-		}
-		if p.tracePath != "" && p.traceDur > 0 {
-			p.startTrace(ctx, p.traceDur, offset)
-		}
-
-		if total > 0 {
-			p.stopAfter(ctx, total)
-		}
-	}()
+func (p *daemonProfiler) profileOffsets(d profileDurations) time.Duration {
+	offset := d.startDelay
+	if p.cpuPath != "" && d.cpuDur > 0 {
+		offset += d.cpuDur
+	}
+	return offset
 }
 
 func (p *daemonProfiler) startCPU(ctx context.Context, duration, delay time.Duration) {

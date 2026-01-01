@@ -297,11 +297,19 @@ func (m *Model) handlePaneViewPump(msg paneViewPumpMsg) tea.Cmd {
 		m.paneViewPumpBackoff = 0
 		return nil
 	}
-	if m.paneViewInFlight >= paneViewMaxInFlightBatches && !perfPaneViewAllEnabled() {
-		m.paneViewPumpBackoff = nextPaneViewPumpBackoff(m.paneViewPumpBackoff)
-		return m.schedulePaneViewPump("in_flight", m.paneViewPumpBackoff)
+	if m.shouldDelayPaneViewPump() {
+		return m.schedulePaneViewPumpWithBackoff("in_flight")
 	}
+	reqs, remaining, needsRefresh := m.buildPaneViewRequestsForPending(m.paneViewPumpMaxReqs())
+	m.paneViewQueuedIDs = remaining
+	return m.finishPaneViewPump(reqs, needsRefresh)
+}
 
+func (m *Model) shouldDelayPaneViewPump() bool {
+	return m.paneViewInFlight >= paneViewMaxInFlightBatches && !perfPaneViewAllEnabled()
+}
+
+func (m *Model) paneViewPumpMaxReqs() int {
 	maxBatches := paneViewMaxInFlightBatches - m.paneViewInFlight
 	if maxBatches < 1 {
 		maxBatches = 1
@@ -316,10 +324,15 @@ func (m *Model) handlePaneViewPump(msg paneViewPumpMsg) tea.Cmd {
 	if maxReqs < 1 {
 		maxReqs = paneViewMaxBatch
 	}
+	return maxReqs
+}
 
-	reqs, remaining, needsRefresh := m.buildPaneViewRequestsForPending(maxReqs)
-	m.paneViewQueuedIDs = remaining
+func (m *Model) schedulePaneViewPumpWithBackoff(reason string) tea.Cmd {
+	m.paneViewPumpBackoff = nextPaneViewPumpBackoff(m.paneViewPumpBackoff)
+	return m.schedulePaneViewPump(reason, m.paneViewPumpBackoff)
+}
 
+func (m *Model) finishPaneViewPump(reqs []sessiond.PaneViewRequest, needsRefresh bool) tea.Cmd {
 	cmds := make([]tea.Cmd, 0, 3)
 	if len(reqs) > 0 {
 		if cmd := m.startPaneViewFetch(reqs); cmd != nil {
@@ -331,19 +344,7 @@ func (m *Model) handlePaneViewPump(msg paneViewPumpMsg) tea.Cmd {
 			cmds = append(cmds, cmd)
 		}
 	}
-	if len(m.paneViewQueuedIDs) > 0 {
-		if m.paneViewInFlight >= paneViewMaxInFlightBatches && !perfPaneViewAllEnabled() {
-			m.paneViewPumpBackoff = nextPaneViewPumpBackoff(m.paneViewPumpBackoff)
-		} else {
-			m.paneViewPumpBackoff = 0
-		}
-		if cmd := m.schedulePaneViewPump("pending", m.paneViewPumpBackoff); cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-	} else {
-		m.paneViewPumpBackoff = 0
-	}
-
+	cmds = m.appendPaneViewPumpFollowup(cmds)
 	if len(cmds) == 0 {
 		return nil
 	}
@@ -353,94 +354,174 @@ func (m *Model) handlePaneViewPump(msg paneViewPumpMsg) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
+func (m *Model) appendPaneViewPumpFollowup(cmds []tea.Cmd) []tea.Cmd {
+	if len(m.paneViewQueuedIDs) == 0 {
+		m.paneViewPumpBackoff = 0
+		return cmds
+	}
+	if m.shouldDelayPaneViewPump() {
+		m.paneViewPumpBackoff = nextPaneViewPumpBackoff(m.paneViewPumpBackoff)
+	} else {
+		m.paneViewPumpBackoff = 0
+	}
+	if cmd := m.schedulePaneViewPump("pending", m.paneViewPumpBackoff); cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+	return cmds
+}
+
 func (m *Model) buildPaneViewRequestsForPending(maxReqs int) ([]sessiond.PaneViewRequest, map[string]struct{}, bool) {
 	if m == nil || len(m.paneViewQueuedIDs) == 0 {
 		return nil, nil, false
 	}
-	now := time.Now()
-	remaining := make(map[string]struct{})
-	seen := make(map[paneViewKey]struct{})
-	reqs := make([]sessiond.PaneViewRequest, 0, len(m.paneViewQueuedIDs))
-	needsRefresh := false
-
+	builder := newPaneViewPendingBuild(time.Now(), maxReqs, len(m.paneViewQueuedIDs))
 	if !m.paneViewDataReady() {
-		for paneID := range m.paneViewQueuedIDs {
-			if maxReqs > 0 && len(reqs) >= maxReqs {
-				remaining[paneID] = struct{}{}
-				continue
-			}
-			if m.isPaneViewInFlight(paneID) {
-				remaining[paneID] = struct{}{}
-				continue
-			}
-			if fallback := m.buildFallbackRequest(paneID, seen, now); fallback != nil {
-				reqs = append(reqs, *fallback)
-			}
-			remaining[paneID] = struct{}{}
-			m.perfNotePaneQueued(paneID, "snapshot_empty", now)
-		}
-		return reqs, remaining, true
+		m.buildPendingRequestsNoSnapshot(builder)
+		return builder.reqs, builder.remaining, true
 	}
-
 	for paneID := range m.paneViewQueuedIDs {
-		if maxReqs > 0 && len(reqs) >= maxReqs {
-			remaining[paneID] = struct{}{}
-			continue
-		}
-		if m.isPaneViewInFlight(paneID) {
-			remaining[paneID] = struct{}{}
-			continue
-		}
-		if !m.paneExistsInSnapshot(paneID) {
-			if fallback := m.buildFallbackRequest(paneID, seen, now); fallback != nil {
-				reqs = append(reqs, *fallback)
-			}
-			remaining[paneID] = struct{}{}
-			needsRefresh = true
-			m.perfNotePaneQueued(paneID, "pane_not_in_snapshot", now)
-			continue
-		}
-		if hit, ok := m.paneHitFor(paneID); ok {
-			req := m.paneViewRequestForHit(hit)
-			if req != nil {
-				key := paneViewKey{
-					PaneID:       req.PaneID,
-					Cols:         req.Cols,
-					Rows:         req.Rows,
-					Mode:         req.Mode,
-					ShowCursor:   req.ShowCursor,
-					ColorProfile: req.ColorProfile,
-				}
-				if _, ok := seen[key]; ok {
-					continue
-				}
-				seen[key] = struct{}{}
-				minInterval := paneViewMinIntervalFor(*req)
-				force := m.paneViewQueuedAge(paneID) >= paneViewForceAfter
-				if !m.hasPaneViewFirst(paneID) {
-					minInterval = 0
-					force = true
-				}
-				if perfPaneViewAllEnabled() {
-					minInterval = 0
-					force = true
-				}
-				if !m.allowPaneViewRequest(key, minInterval, force) {
-					remaining[paneID] = struct{}{}
-					continue
-				}
-				reqs = append(reqs, *req)
-				continue
-			}
-		}
-
-		if fallback := m.buildFallbackRequest(paneID, seen, now); fallback != nil {
-			reqs = append(reqs, *fallback)
-		}
-		remaining[paneID] = struct{}{}
-		m.perfNotePaneQueued(paneID, "hit_not_found", now)
+		m.buildPendingRequestForPane(paneID, builder)
 	}
-	return reqs, remaining, needsRefresh
+	return builder.reqs, builder.remaining, builder.needsRefresh
+}
+
+type paneViewPendingBuild struct {
+	now          time.Time
+	maxReqs      int
+	reqs         []sessiond.PaneViewRequest
+	remaining    map[string]struct{}
+	seen         map[paneViewKey]struct{}
+	needsRefresh bool
+}
+
+func newPaneViewPendingBuild(now time.Time, maxReqs int, queued int) *paneViewPendingBuild {
+	if queued < 1 {
+		queued = 1
+	}
+	return &paneViewPendingBuild{
+		now:       now,
+		maxReqs:   maxReqs,
+		reqs:      make([]sessiond.PaneViewRequest, 0, queued),
+		remaining: make(map[string]struct{}),
+		seen:      make(map[paneViewKey]struct{}),
+	}
+}
+
+func (b *paneViewPendingBuild) atLimit() bool {
+	return b.maxReqs > 0 && len(b.reqs) >= b.maxReqs
+}
+
+func (b *paneViewPendingBuild) markRemaining(paneID string) {
+	if paneID == "" {
+		return
+	}
+	b.remaining[paneID] = struct{}{}
+}
+
+func (b *paneViewPendingBuild) addRequest(req sessiond.PaneViewRequest, key paneViewKey) bool {
+	if _, ok := b.seen[key]; ok {
+		return false
+	}
+	b.seen[key] = struct{}{}
+	b.reqs = append(b.reqs, req)
+	return true
+}
+
+func (m *Model) buildPendingRequestsNoSnapshot(b *paneViewPendingBuild) {
+	for paneID := range m.paneViewQueuedIDs {
+		if b.atLimit() || m.isPaneViewInFlight(paneID) {
+			b.markRemaining(paneID)
+			continue
+		}
+		if fallback := m.buildFallbackRequest(paneID, b.seen, b.now); fallback != nil {
+			key := paneViewKey{
+				PaneID:       fallback.PaneID,
+				Cols:         fallback.Cols,
+				Rows:         fallback.Rows,
+				Mode:         fallback.Mode,
+				ShowCursor:   fallback.ShowCursor,
+				ColorProfile: fallback.ColorProfile,
+			}
+			b.addRequest(*fallback, key)
+		}
+		b.markRemaining(paneID)
+		m.perfNotePaneQueued(paneID, "snapshot_empty", b.now)
+	}
+}
+
+func (m *Model) buildPendingRequestForPane(paneID string, b *paneViewPendingBuild) {
+	if b.atLimit() || m.isPaneViewInFlight(paneID) {
+		b.markRemaining(paneID)
+		return
+	}
+	if !m.paneExistsInSnapshot(paneID) {
+		m.queueFallbackAndNote(paneID, b, "pane_not_in_snapshot")
+		b.needsRefresh = true
+		return
+	}
+	if handled := m.tryAddPaneViewRequest(paneID, b); handled {
+		return
+	}
+	m.queueFallbackAndNote(paneID, b, "hit_not_found")
+}
+
+func (m *Model) queueFallbackAndNote(paneID string, b *paneViewPendingBuild, reason string) {
+	if fallback := m.buildFallbackRequest(paneID, b.seen, b.now); fallback != nil {
+		key := paneViewKey{
+			PaneID:       fallback.PaneID,
+			Cols:         fallback.Cols,
+			Rows:         fallback.Rows,
+			Mode:         fallback.Mode,
+			ShowCursor:   fallback.ShowCursor,
+			ColorProfile: fallback.ColorProfile,
+		}
+		b.addRequest(*fallback, key)
+	}
+	b.markRemaining(paneID)
+	m.perfNotePaneQueued(paneID, reason, b.now)
+}
+
+func (m *Model) tryAddPaneViewRequest(paneID string, b *paneViewPendingBuild) bool {
+	hit, ok := m.paneHitFor(paneID)
+	if !ok {
+		return false
+	}
+	req := m.paneViewRequestForHit(hit)
+	if req == nil {
+		return false
+	}
+	key := paneViewKey{
+		PaneID:       req.PaneID,
+		Cols:         req.Cols,
+		Rows:         req.Rows,
+		Mode:         req.Mode,
+		ShowCursor:   req.ShowCursor,
+		ColorProfile: req.ColorProfile,
+	}
+	if _, seen := b.seen[key]; seen {
+		return true
+	}
+	minInterval, force := m.paneViewRequestPolicy(paneID, *req)
+	if !m.allowPaneViewRequest(key, minInterval, force) {
+		b.markRemaining(paneID)
+		return true
+	}
+	b.addRequest(*req, key)
+	return true
+}
+
+func (m *Model) paneViewRequestPolicy(paneID string, req sessiond.PaneViewRequest) (time.Duration, bool) {
+	minInterval := paneViewMinIntervalFor(req)
+	force := m.paneViewQueuedAge(paneID) >= paneViewForceAfter
+	if !m.hasPaneViewFirst(paneID) {
+		minInterval = 0
+		force = true
+	}
+	if perfPaneViewAllEnabled() {
+		minInterval = 0
+		force = true
+	}
+	return minInterval, force
 }
 
 func (m *Model) buildFallbackRequest(paneID string, seen map[paneViewKey]struct{}, now time.Time) *sessiond.PaneViewRequest {

@@ -140,19 +140,51 @@ func (m *Manager) StartSession(ctx context.Context, spec SessionSpec) (*Session,
 	if m.closed.Load() {
 		return nil, errors.New("native: manager closed")
 	}
+	normalized, err := m.normalizeSessionSpec(spec)
+	if err != nil {
+		return nil, err
+	}
+	session := newSessionFromSpec(normalized)
+	panes, err := m.buildPanes(ctx, normalized)
+	if err != nil {
+		m.closePanes(panes)
+		return nil, err
+	}
+	session.Panes = panes
+	if perfDebugEnabled() {
+		log.Printf("native: session %s panes=%d layout=%s", session.Name, len(panes), session.LayoutName)
+	}
+
+	if err := m.registerSession(session, panes); err != nil {
+		m.closePanes(panes)
+		return nil, err
+	}
+	m.forwardPaneUpdates(panes)
+	m.seedPaneUpdates(panes)
+	m.version.Add(1)
+
+	m.dispatchLayoutSends(session, normalized.Layout)
+
+	return session, nil
+}
+
+func (m *Manager) normalizeSessionSpec(spec SessionSpec) (SessionSpec, error) {
 	if strings.TrimSpace(spec.Name) == "" {
-		return nil, errors.New("native: session name is required")
+		return SessionSpec{}, errors.New("native: session name is required")
 	}
 	if spec.Layout == nil {
-		return nil, errors.New("native: layout is required")
+		return SessionSpec{}, errors.New("native: layout is required")
 	}
 	if strings.TrimSpace(spec.Path) != "" {
 		if err := validatePath(spec.Path); err != nil {
-			return nil, err
+			return SessionSpec{}, err
 		}
 		spec.Path = filepath.Clean(spec.Path)
 	}
+	return spec, nil
+}
 
+func newSessionFromSpec(spec SessionSpec) *Session {
 	session := &Session{
 		Name:       spec.Name,
 		Path:       spec.Path,
@@ -165,42 +197,33 @@ func (m *Manager) StartSession(ctx context.Context, spec SessionSpec) (*Session,
 	if len(spec.Env) > 0 {
 		session.Env = append([]string(nil), spec.Env...)
 	}
+	return session
+}
 
-	panes, err := m.buildPanes(ctx, spec)
-	if err != nil {
-		m.closePanes(panes)
-		return nil, err
-	}
-	session.Panes = panes
-	if perfDebugEnabled() {
-		log.Printf("native: session %s panes=%d layout=%s", session.Name, len(panes), session.LayoutName)
-	}
-
+func (m *Manager) registerSession(session *Session, panes []*Pane) error {
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	if _, ok := m.sessions[session.Name]; ok {
-		m.mu.Unlock()
-		m.closePanes(panes)
-		return nil, fmt.Errorf("native: session %q already exists", session.Name)
+		return fmt.Errorf("native: session %q already exists", session.Name)
 	}
 	m.sessions[session.Name] = session
 	for _, pane := range panes {
 		m.panes[pane.ID] = pane
 	}
-	m.mu.Unlock()
+	return nil
+}
 
+func (m *Manager) forwardPaneUpdates(panes []*Pane) {
 	for _, pane := range panes {
 		m.forwardUpdates(pane)
 	}
+}
 
+func (m *Manager) seedPaneUpdates(panes []*Pane) {
 	// Seed an update to render initial output.
 	for _, pane := range panes {
 		m.notifyPane(pane.ID)
 	}
-	m.version.Add(1)
-
-	m.dispatchLayoutSends(session, spec.Layout)
-
-	return session, nil
 }
 
 // Snapshot returns a copy of sessions with preview lines computed.

@@ -66,53 +66,62 @@ func TestExpandLayoutVars(t *testing.T) {
 	}
 
 	expanded := ExpandLayoutVars(layout, extra, "/work/app", "myapp")
-	if expanded.Vars["FOO"] != "override" {
-		t.Fatalf("expanded.Vars[FOO] = %q", expanded.Vars["FOO"])
-	}
-	if expanded.Vars["BAR"] != "two" {
-		t.Fatalf("expanded.Vars[BAR] = %q", expanded.Vars["BAR"])
-	}
-	if expanded.Vars["EXTRA"] != "extra" {
-		t.Fatalf("expanded.Vars[EXTRA] = %q", expanded.Vars["EXTRA"])
-	}
-	if expanded.Grid != "override" {
-		t.Fatalf("expanded.Grid = %q", expanded.Grid)
-	}
-	if expanded.Command != "extra" {
-		t.Fatalf("expanded.Command = %q", expanded.Command)
-	}
-	if !reflect.DeepEqual(expanded.Commands, []string{"override", "two"}) {
-		t.Fatalf("expanded.Commands = %#v", expanded.Commands)
-	}
-	if !reflect.DeepEqual(expanded.Titles, []string{"/work/app"}) {
-		t.Fatalf("expanded.Titles = %#v", expanded.Titles)
-	}
-	if len(expanded.Panes) != 1 || expanded.Panes[0].Title != "two" {
+	assertEqual(t, "expanded.Vars[FOO]", expanded.Vars["FOO"], "override")
+	assertEqual(t, "expanded.Vars[BAR]", expanded.Vars["BAR"], "two")
+	assertEqual(t, "expanded.Vars[EXTRA]", expanded.Vars["EXTRA"], "extra")
+	assertEqual(t, "expanded.Grid", expanded.Grid, "override")
+	assertEqual(t, "expanded.Command", expanded.Command, "extra")
+	assertDeepEqual(t, "expanded.Commands", expanded.Commands, []string{"override", "two"})
+	assertDeepEqual(t, "expanded.Titles", expanded.Titles, []string{"/work/app"})
+	if len(expanded.Panes) != 1 {
 		t.Fatalf("expanded.Panes = %#v", expanded.Panes)
 	}
-	if expanded.Panes[0].Cmd != "extra" {
-		t.Fatalf("expanded.Panes[0].Cmd = %q", expanded.Panes[0].Cmd)
+	assertEqual(t, "expanded.Panes[0].Title", expanded.Panes[0].Title, "two")
+	assertEqual(t, "expanded.Panes[0].Cmd", expanded.Panes[0].Cmd, "extra")
+	assertDeepEqual(t, "expanded.Panes[0].Setup", expanded.Panes[0].Setup, []string{"override"})
+	assertSendActions(t, expanded.Panes[0].DirectSend, "override myapp", &submitDelay, true, true)
+	assertSendActions(t, expanded.BroadcastSend, "two /work/app", nil, true, true)
+}
+
+func assertEqual[T comparable](t *testing.T, label string, got, want T) {
+	t.Helper()
+	if got != want {
+		t.Fatalf("%s = %v", label, got)
 	}
-	if !reflect.DeepEqual(expanded.Panes[0].Setup, []string{"override"}) {
-		t.Fatalf("expanded.Panes[0].Setup = %#v", expanded.Panes[0].Setup)
+}
+
+func assertDeepEqual(t *testing.T, label string, got, want any) {
+	t.Helper()
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("%s = %#v", label, got)
 	}
-	if len(expanded.Panes[0].DirectSend) != 1 || expanded.Panes[0].DirectSend[0].Text != "override myapp" {
-		t.Fatalf("expanded.Panes[0].DirectSend = %#v", expanded.Panes[0].DirectSend)
+}
+
+func assertSendActions(t *testing.T, actions []SendAction, text string, submitDelay *int, submit bool, waitForOutput bool) {
+	t.Helper()
+	if len(actions) != 1 {
+		t.Fatalf("send actions = %#v", actions)
 	}
-	if !expanded.Panes[0].DirectSend[0].Submit || expanded.Panes[0].DirectSend[0].SubmitDelayMS == nil || *expanded.Panes[0].DirectSend[0].SubmitDelayMS != submitDelay {
-		t.Fatalf("expanded.Panes[0].DirectSend submit = %#v", expanded.Panes[0].DirectSend[0])
+	action := actions[0]
+	if action.Text != text {
+		t.Fatalf("send action text = %q", action.Text)
 	}
-	if !expanded.Panes[0].DirectSend[0].WaitForOutput {
-		t.Fatalf("expanded.Panes[0].DirectSend wait_for_output = %#v", expanded.Panes[0].DirectSend[0])
+	if action.Submit != submit {
+		t.Fatalf("send action submit = %v", action.Submit)
 	}
-	if len(expanded.BroadcastSend) != 1 || expanded.BroadcastSend[0].Text != "two /work/app" {
-		t.Fatalf("expanded.BroadcastSend = %#v", expanded.BroadcastSend)
+	if action.WaitForOutput != waitForOutput {
+		t.Fatalf("send action wait_for_output = %v", action.WaitForOutput)
 	}
-	if !expanded.BroadcastSend[0].Submit {
-		t.Fatalf("expanded.BroadcastSend submit = %#v", expanded.BroadcastSend[0])
-	}
-	if !expanded.BroadcastSend[0].WaitForOutput {
-		t.Fatalf("expanded.BroadcastSend wait_for_output = %#v", expanded.BroadcastSend[0])
+	if submit {
+		if submitDelay == nil {
+			if action.SubmitDelayMS != nil {
+				t.Fatalf("send action submit_delay = %#v", action.SubmitDelayMS)
+			}
+			return
+		}
+		if action.SubmitDelayMS == nil || *action.SubmitDelayMS != *submitDelay {
+			t.Fatalf("send action submit_delay = %#v", action.SubmitDelayMS)
+		}
 	}
 }
 
