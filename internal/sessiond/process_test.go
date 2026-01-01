@@ -6,9 +6,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestEnsureDaemonRunningProbeShortCircuit(t *testing.T) {
@@ -212,11 +212,12 @@ func TestRunStop(t *testing.T) {
 
 func waitForListener(t *testing.T, d *Daemon) {
 	t.Helper()
-	for i := 0; i < 20000; i++ {
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
 		if d.listenerValue() != nil {
 			return
 		}
-		runtime.Gosched()
+		time.Sleep(1 * time.Millisecond)
 	}
 	t.Fatalf("listener not set")
 }
