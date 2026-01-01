@@ -17,6 +17,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 	xpty "github.com/charmbracelet/x/xpty"
+	"github.com/kballard/go-shellquote"
 	"github.com/regenrek/peakypanes/internal/limits"
 	"github.com/regenrek/peakypanes/internal/vt"
 )
@@ -24,6 +25,7 @@ import (
 const (
 	ansiRenderDebounce    = 50 * time.Millisecond
 	ansiRenderMaxInterval = 250 * time.Millisecond
+	ansiDemandDefaultTTL  = 2 * time.Second
 )
 
 // vtEmulator is the subset of the VT emulator API Window depends on.
@@ -64,6 +66,8 @@ type Options struct {
 
 	// OnToast is called for terminal-originated toast messages.
 	OnToast func(message string)
+	// OnFirstRead is called once when the pane receives its first output.
+	OnFirstRead func()
 }
 
 // Window is a single interactive terminal pane:
@@ -73,6 +77,10 @@ type Window struct {
 	title atomic.Value // string
 
 	createdAt time.Time
+	// Stage timing probes (unix nanos).
+	ptyCreatedAt     atomic.Int64
+	processStartedAt atomic.Int64
+	ioStartedAt      atomic.Int64
 
 	cmd *exec.Cmd
 	pty xpty.Pty
@@ -127,7 +135,8 @@ type Window struct {
 	mouseSelectMoved       bool
 	mouseSelection         bool
 
-	toastFn func(string)
+	toastFn     func(string)
+	onFirstRead func()
 
 	lastUpdate atomic.Int64 // unix nanos
 
@@ -137,6 +146,9 @@ type Window struct {
 	firstWriteAt          atomic.Int64
 	firstReadAfterWriteAt atomic.Int64
 	lastWriteAt           atomic.Int64
+	firstUpdateAt         atomic.Int64
+
+	ansiDemandUntil atomic.Int64
 }
 
 // NewWindow starts a new process attached to a PTY and backed by a VT emulator.
@@ -144,6 +156,7 @@ func NewWindow(opts Options) (*Window, error) {
 	if strings.TrimSpace(opts.ID) == "" {
 		return nil, fmt.Errorf("terminal: window id is required")
 	}
+	startAt := time.Now()
 
 	cols := opts.Cols
 	rows := opts.Rows
@@ -158,8 +171,7 @@ func NewWindow(opts Options) (*Window, error) {
 	cmdName := strings.TrimSpace(opts.Command)
 	args := opts.Args
 	if cmdName == "" {
-		cmdName = detectShell()
-		args = nil
+		cmdName, args = detectShellCommand()
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -201,27 +213,32 @@ func NewWindow(opts Options) (*Window, error) {
 		cancel()
 		return nil, fmt.Errorf("terminal: create pty: %w", err)
 	}
+	ptyCreatedAt := time.Now()
 	if err := pty.Start(cmd); err != nil {
 		cancel()
 		_ = pty.Close()
 		return nil, fmt.Errorf("terminal: start process: %w", err)
 	}
+	processStartedAt := time.Now()
 	_ = pty.Resize(cols, rows)
 
 	w := &Window{
-		id:         opts.ID,
-		cmd:        cmd,
-		pty:        pty,
-		term:       term,
-		cols:       cols,
-		rows:       rows,
-		createdAt:  time.Now(),
-		updates:    make(chan struct{}, 1),
-		renderCh:   make(chan struct{}, 1),
-		cancel:     cancel,
-		cacheDirty: true,
-		toastFn:    opts.OnToast,
+		id:          opts.ID,
+		cmd:         cmd,
+		pty:         pty,
+		term:        term,
+		cols:        cols,
+		rows:        rows,
+		createdAt:   startAt,
+		updates:     make(chan struct{}, 1),
+		renderCh:    make(chan struct{}, 1),
+		cancel:      cancel,
+		cacheDirty:  true,
+		toastFn:     opts.OnToast,
+		onFirstRead: opts.OnFirstRead,
 	}
+	w.ptyCreatedAt.Store(ptyCreatedAt.UnixNano())
+	w.processStartedAt.Store(processStartedAt.UnixNano())
 	w.title.Store(opts.Title)
 	w.cursorVisible.Store(true)
 	w.lastUpdate.Store(time.Now().UnixNano())
@@ -398,6 +415,27 @@ func (w *Window) CreatedAt() time.Time {
 	return w.createdAt
 }
 
+func (w *Window) PtyCreatedAt() time.Time {
+	if w == nil {
+		return time.Time{}
+	}
+	return timeFromUnixNano(w.ptyCreatedAt.Load())
+}
+
+func (w *Window) ProcessStartedAt() time.Time {
+	if w == nil {
+		return time.Time{}
+	}
+	return timeFromUnixNano(w.processStartedAt.Load())
+}
+
+func (w *Window) IOStartedAt() time.Time {
+	if w == nil {
+		return time.Time{}
+	}
+	return timeFromUnixNano(w.ioStartedAt.Load())
+}
+
 func (w *Window) FirstReadAt() time.Time {
 	if w == nil {
 		return time.Time{}
@@ -417,6 +455,13 @@ func (w *Window) FirstReadAfterWriteAt() time.Time {
 		return time.Time{}
 	}
 	return timeFromUnixNano(w.firstReadAfterWriteAt.Load())
+}
+
+func (w *Window) FirstUpdateAt() time.Time {
+	if w == nil {
+		return time.Time{}
+	}
+	return timeFromUnixNano(w.firstUpdateAt.Load())
 }
 
 func timeFromUnixNano(value int64) time.Time {
@@ -519,18 +564,50 @@ func (w *Window) detachPTY() {
 func (w *Window) markDirty() {
 	w.updateSeq.Add(1)
 
-	w.lastUpdate.Store(time.Now().UnixNano())
+	now := time.Now().UnixNano()
+	w.lastUpdate.Store(now)
+	w.firstUpdateAt.CompareAndSwap(0, now)
 
 	w.cacheMu.Lock()
 	w.cacheDirty = true
 	w.cacheMu.Unlock()
-	w.RequestANSIRender()
+	if w.ansiDemandActive() {
+		w.RequestANSIRender()
+	}
 
 	// Coalesce signals.
 	select {
 	case w.updates <- struct{}{}:
 	default:
 	}
+}
+
+// TouchANSIDemand keeps the ANSI cache renderer active for a short window.
+func (w *Window) TouchANSIDemand(ttl time.Duration) {
+	if w == nil || w.closed.Load() {
+		return
+	}
+	if ttl <= 0 {
+		ttl = ansiDemandDefaultTTL
+	}
+	until := time.Now().Add(ttl).UnixNano()
+	for {
+		cur := w.ansiDemandUntil.Load()
+		if until <= cur {
+			return
+		}
+		if w.ansiDemandUntil.CompareAndSwap(cur, until) {
+			return
+		}
+	}
+}
+
+func (w *Window) ansiDemandActive() bool {
+	if w == nil {
+		return false
+	}
+	until := w.ansiDemandUntil.Load()
+	return until > 0 && time.Now().UnixNano() <= until
 }
 
 func (w *Window) notifyToast(message string) {
@@ -559,6 +636,16 @@ func detectShell() string {
 		}
 	}
 	return "/bin/sh"
+}
+
+func detectShellCommand() (string, []string) {
+	if raw := strings.TrimSpace(os.Getenv("PEAKYPANES_DEFAULT_SHELL_CMD")); raw != "" {
+		parts, err := shellquote.Split(raw)
+		if err == nil && len(parts) > 0 {
+			return parts[0], parts[1:]
+		}
+	}
+	return detectShell(), nil
 }
 
 // runtimeGOOS exists to keep detectShell testable if you ever want to.

@@ -144,13 +144,25 @@ type Model struct {
 	paneMouseMotion   map[string]bool
 	paneInputDisabled map[string]struct{}
 
-	paneViewSeq     map[paneViewKey]uint64
-	paneViewLastReq map[paneViewKey]time.Time
-	paneViewFirst   map[string]struct{}
+	paneViewSeq           map[paneViewKey]uint64
+	paneViewLastReq       map[paneViewKey]time.Time
+	paneViewFirst         map[string]struct{}
+	paneViewSkipLog       map[string]struct{}
+	paneViewPerfBurstDone bool
 
-	paneViewInFlight  int
-	paneViewQueued    bool
-	paneViewQueuedIDs map[string]struct{}
+	paneViewInFlight       int
+	paneViewQueuedIDs      map[string]struct{}
+	paneViewInFlightByPane map[string]struct{}
+	paneViewPumpScheduled  bool
+	paneViewPumpBackoff    time.Duration
+	paneLastSize           map[string]paneSize
+	paneLastFallback       map[string]time.Time
+
+	paneUpdatePerf    map[string]*paneUpdatePerf
+	paneViewQueuedAt  map[string]time.Time
+	panePerfLastPrune time.Time
+
+	lastUrgentRefreshAt time.Time
 }
 
 // NewModel creates a new peakypanes TUI model.
@@ -182,9 +194,13 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 		paneViewProfile:    detectPaneViewProfile(),
 		paneInputDisabled:  make(map[string]struct{}),
 
-		paneViewSeq:     make(map[paneViewKey]uint64),
-		paneViewLastReq: make(map[paneViewKey]time.Time),
-		paneViewFirst:   make(map[string]struct{}),
+		paneViewSeq:            make(map[paneViewKey]uint64),
+		paneViewLastReq:        make(map[paneViewKey]time.Time),
+		paneViewFirst:          make(map[string]struct{}),
+		paneViewSkipLog:        make(map[string]struct{}),
+		paneViewInFlightByPane: make(map[string]struct{}),
+		paneLastSize:           make(map[string]paneSize),
+		paneLastFallback:       make(map[string]time.Time),
 	}
 
 	m.filterInput = textinput.New()

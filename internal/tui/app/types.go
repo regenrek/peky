@@ -224,8 +224,13 @@ type daemonEventMsg struct {
 
 // paneViewsMsg carries pane view updates from the daemon.
 type paneViewsMsg struct {
-	Views []sessiond.PaneViewResponse
-	Err   error
+	Views   []sessiond.PaneViewResponse
+	Err     error
+	PaneIDs []string
+}
+
+type paneViewPumpMsg struct {
+	Reason string
 }
 
 type daemonRestartMsg struct {

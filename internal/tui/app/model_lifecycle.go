@@ -175,9 +175,32 @@ func (m *Model) requestRefreshCmd() tea.Cmd {
 	if m == nil {
 		return nil
 	}
+	return m.requestRefreshCmdReason("", false)
+}
+
+func (m *Model) requestRefreshCmdReason(reason string, force bool) tea.Cmd {
+	if m == nil {
+		return nil
+	}
 	if m.refreshInFlight > 0 {
 		m.refreshQueued = true
+		if perfDebugEnabled() && reason != "" {
+			logPerfEvery("tui.refresh.request."+reason, perfLogInterval, "tui: refresh request action=queue reason=%s in_flight=%d", reason, m.refreshInFlight)
+		}
 		return nil
+	}
+	if force {
+		now := time.Now()
+		if !m.lastUrgentRefreshAt.IsZero() && now.Sub(m.lastUrgentRefreshAt) < perfUrgentRefreshMinInterval {
+			if perfDebugEnabled() && reason != "" {
+				logPerfEvery("tui.refresh.request."+reason, perfLogInterval, "tui: refresh request action=debounce reason=%s", reason)
+			}
+			return nil
+		}
+		m.lastUrgentRefreshAt = now
+	}
+	if perfDebugEnabled() && reason != "" {
+		logPerfEvery("tui.refresh.request."+reason, perfLogInterval, "tui: refresh request action=start reason=%s", reason)
 	}
 	return m.startRefreshCmd()
 }

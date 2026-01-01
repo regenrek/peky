@@ -22,6 +22,7 @@ func (m *Manager) markPaneOutputReady(id string) {
 		}
 	}
 	m.outputMu.Unlock()
+	m.notifyPane(id)
 }
 
 func (m *Manager) paneOutputWaiter(id string) (<-chan struct{}, bool) {

@@ -22,6 +22,15 @@ This folder contains the canonical layouts used for baseline performance runs.
 ./scripts/perf-profiler --layout testdata/performance-tests/peakypanes-perf10-wait-for-output.yml --secs 30 --fgprof 30 --trace 10 --gops --start-timeout 20s
 ```
 
+## All panes live (dev-only)
+
+The dashboard normally renders only the visible panes. For stress tests that should render
+all panes like a full tmux grid, enable the dev-only flag below (requires perf debug).
+
+```bash
+PEAKYPANES_PERF_PANEVIEWS_ALL=1 PEAKYPANES_PERF_DEBUG=1 ./scripts/perf-profiler --layout testdata/performance-tests/peakypanes-perf10.yml --secs 30 --fgprof 30 --trace 10 --gops --start-timeout 20s
+```
+
 Each run writes outputs under `.bench/profiler-12/<timestamp>/` (already gitignored).
 Key artifacts:
 - `report.txt` (run metadata + timing summary)

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 const (
 	paneViewTimeout               = 2 * time.Second
 	paneViewMaxConcurrency        = 4
+	paneViewMaxInFlightBatches    = 2
 	paneViewMaxBatch              = 8
 	paneViewMinIntervalFocused    = 33 * time.Millisecond
 	paneViewMinIntervalSelected   = 100 * time.Millisecond
@@ -23,6 +25,12 @@ const (
 	paneViewTimeoutFocused        = 1500 * time.Millisecond
 	paneViewTimeoutSelected       = 1000 * time.Millisecond
 	paneViewTimeoutBackground     = 800 * time.Millisecond
+	paneViewPumpBaseDelay         = 0 * time.Millisecond
+	paneViewPumpMaxDelay          = 50 * time.Millisecond
+	paneViewForceAfter            = 250 * time.Millisecond
+	paneViewFallbackCols          = 80
+	paneViewFallbackRows          = 24
+	paneViewFallbackMinInterval   = 150 * time.Millisecond
 )
 
 type paneViewKey struct {
@@ -32,6 +40,11 @@ type paneViewKey struct {
 	Mode         sessiond.PaneViewMode
 	ShowCursor   bool
 	ColorProfile termenv.Profile
+}
+
+type paneSize struct {
+	Cols int
+	Rows int
 }
 
 func paneViewKeyFrom(view sessiond.PaneViewResponse) paneViewKey {
@@ -49,57 +62,95 @@ func (m *Model) refreshPaneViewsCmd() tea.Cmd {
 	if m == nil {
 		return nil
 	}
-	if m.paneViewInFlight > 0 {
-		m.paneViewQueued = true
-		diag.LogEvery("tui.paneviews.queue", 2*time.Second, "tui: pane views queued in_flight=%d", m.paneViewInFlight)
+	if !m.paneViewDataReady() {
+		m.logPaneViewSkipGlobal("snapshot_empty", m.dashboardColumnsDebug())
 		return nil
 	}
-	return m.startPaneViewFetch(m.paneViewRequests())
+	hits := m.paneHits()
+	if len(hits) == 0 {
+		m.logPaneViewSkipGlobal("no_hits", m.paneViewSkipContext())
+		return nil
+	}
+	for _, hit := range hits {
+		if hit.PaneID == "" {
+			continue
+		}
+		m.queuePaneViewID(hit.PaneID, "refresh")
+	}
+	return m.schedulePaneViewPump("refresh", 0)
 }
 
 func (m *Model) refreshPaneViewFor(paneID string) tea.Cmd {
 	if m == nil || paneID == "" {
 		return nil
 	}
-	if m.paneViewInFlight > 0 {
-		m.queuePaneViewID(paneID)
-		return nil
+	if !m.paneViewDataReady() {
+		m.perfNotePaneQueued(paneID, "snapshot_empty", time.Now())
+		return m.requestRefreshCmdReason("paneview_snapshot_empty", true)
 	}
 	hit, ok := m.paneHitFor(paneID)
 	if !ok {
+		if !m.paneExistsInSnapshot(paneID) {
+			m.perfNotePaneQueued(paneID, "pane_not_in_snapshot", time.Now())
+			return m.requestRefreshCmdReason("paneview_pane_missing_snapshot", true)
+		}
+		m.perfNotePaneQueued(paneID, "hit_not_visible", time.Now())
 		return nil
 	}
 	req := m.paneViewRequestForHit(hit)
 	if req == nil {
 		return nil
 	}
-
-	key := paneViewKey{
-		PaneID:       req.PaneID,
-		Cols:         req.Cols,
-		Rows:         req.Rows,
-		Mode:         req.Mode,
-		ShowCursor:   req.ShowCursor,
-		ColorProfile: req.ColorProfile,
-	}
-	if !m.allowPaneViewRequest(key, paneViewMinIntervalFor(*req)) {
-		return nil
-	}
-
-	return m.startPaneViewFetch([]sessiond.PaneViewRequest{*req})
+	m.queuePaneViewID(paneID, "event")
+	return m.schedulePaneViewPump("event", 0)
 }
 
 func (m *Model) refreshPaneViewsForIDs(ids map[string]struct{}) tea.Cmd {
 	if m == nil || len(ids) == 0 {
 		return nil
 	}
-	if m.paneViewInFlight > 0 {
-		for id := range ids {
-			m.queuePaneViewID(id)
+	if !m.paneViewDataReady() {
+		for paneID := range ids {
+			m.perfNotePaneQueued(paneID, "snapshot_empty", time.Now())
 		}
-		return nil
+		return m.requestRefreshCmdReason("paneview_snapshot_empty", true)
 	}
-	return m.startPaneViewFetch(m.paneViewRequestsForIDs(ids))
+	hits := m.paneHits()
+	hitByID := make(map[string]mouse.PaneHit, len(hits))
+	for _, hit := range hits {
+		if hit.PaneID == "" {
+			continue
+		}
+		hitByID[hit.PaneID] = hit
+	}
+	needsRefresh := false
+	for paneID := range ids {
+		if paneID == "" {
+			continue
+		}
+		if _, ok := hitByID[paneID]; ok {
+			m.queuePaneViewID(paneID, "event")
+			continue
+		}
+		if !m.paneExistsInSnapshot(paneID) {
+			needsRefresh = true
+			m.perfNotePaneQueued(paneID, "pane_not_in_snapshot", time.Now())
+			continue
+		}
+		m.perfNotePaneQueued(paneID, "hit_not_visible", time.Now())
+	}
+	cmd := m.schedulePaneViewPump("event_batch", 0)
+	if needsRefresh {
+		refreshCmd := m.requestRefreshCmdReason("paneview_pane_missing_snapshot", true)
+		if refreshCmd == nil {
+			return cmd
+		}
+		if cmd == nil {
+			return refreshCmd
+		}
+		return tea.Batch(cmd, refreshCmd)
+	}
+	return cmd
 }
 
 func (m *Model) paneHitFor(paneID string) (mouse.PaneHit, bool) {
@@ -113,8 +164,13 @@ func (m *Model) paneHitFor(paneID string) (mouse.PaneHit, bool) {
 }
 
 func (m *Model) paneViewRequests() []sessiond.PaneViewRequest {
+	if !m.paneViewDataReady() {
+		m.logPaneViewSkipGlobal("snapshot_empty", m.dashboardColumnsDebug())
+		return nil
+	}
 	hits := m.paneHits()
 	if len(hits) == 0 {
+		m.logPaneViewSkipGlobal("no_hits", m.paneViewSkipContext())
 		return nil
 	}
 	reqs := make([]sessiond.PaneViewRequest, 0, len(hits))
@@ -137,7 +193,11 @@ func (m *Model) paneViewRequests() []sessiond.PaneViewRequest {
 		}
 		seen[key] = struct{}{}
 
-		if !m.allowPaneViewRequest(key, paneViewMinIntervalFor(*req)) {
+		minInterval := paneViewMinIntervalFor(*req)
+		if perfPaneViewAllEnabled() {
+			minInterval = 0
+		}
+		if !m.allowPaneViewRequest(key, minInterval, false) {
 			continue
 		}
 
@@ -146,9 +206,353 @@ func (m *Model) paneViewRequests() []sessiond.PaneViewRequest {
 	return reqs
 }
 
+func (m *Model) recordPaneSize(paneID string, cols, rows int) {
+	if m == nil || paneID == "" {
+		return
+	}
+	if cols <= 0 || rows <= 0 {
+		return
+	}
+	if m.paneLastSize == nil {
+		m.paneLastSize = make(map[string]paneSize)
+	}
+	m.paneLastSize[paneID] = paneSize{Cols: cols, Rows: rows}
+}
+
+func (m *Model) paneSizeForFallback(paneID string) (int, int) {
+	if m == nil || paneID == "" {
+		return paneViewFallbackCols, paneViewFallbackRows
+	}
+	if m.paneLastSize == nil {
+		return paneViewFallbackCols, paneViewFallbackRows
+	}
+	if size, ok := m.paneLastSize[paneID]; ok {
+		if size.Cols > 0 && size.Rows > 0 {
+			return size.Cols, size.Rows
+		}
+	}
+	return paneViewFallbackCols, paneViewFallbackRows
+}
+
+func (m *Model) allowFallbackRequest(paneID string, now time.Time) bool {
+	if m == nil || paneID == "" {
+		return false
+	}
+	if now.IsZero() {
+		now = time.Now()
+	}
+	if m.paneLastFallback == nil {
+		m.paneLastFallback = make(map[string]time.Time)
+	}
+	last := m.paneLastFallback[paneID]
+	if !last.IsZero() && now.Sub(last) < paneViewFallbackMinInterval {
+		return false
+	}
+	m.paneLastFallback[paneID] = now
+	return true
+}
+
+func (m *Model) schedulePaneViewPump(reason string, delay time.Duration) tea.Cmd {
+	if m == nil {
+		return nil
+	}
+	if m.paneViewPumpScheduled {
+		return nil
+	}
+	if delay < 0 {
+		delay = 0
+	}
+	if delay == 0 {
+		delay = paneViewPumpBaseDelay
+	}
+	if delay > paneViewPumpMaxDelay {
+		delay = paneViewPumpMaxDelay
+	}
+	m.paneViewPumpScheduled = true
+	if perfDebugEnabled() && reason != "" {
+		logPerfEvery("tui.paneviews.pump."+reason, perfLogInterval, "tui: pane view pump scheduled reason=%s delay=%s", reason, delay)
+	}
+	return tea.Tick(delay, func(time.Time) tea.Msg {
+		return paneViewPumpMsg{Reason: reason}
+	})
+}
+
+func nextPaneViewPumpBackoff(current time.Duration) time.Duration {
+	if current <= 0 {
+		return paneViewPumpBaseDelay
+	}
+	next := current * 2
+	if next > paneViewPumpMaxDelay {
+		next = paneViewPumpMaxDelay
+	}
+	return next
+}
+
+func (m *Model) handlePaneViewPump(msg paneViewPumpMsg) tea.Cmd {
+	if m == nil {
+		return nil
+	}
+	m.paneViewPumpScheduled = false
+	if len(m.paneViewQueuedIDs) == 0 {
+		m.paneViewPumpBackoff = 0
+		return nil
+	}
+	if m.paneViewInFlight >= paneViewMaxInFlightBatches && !perfPaneViewAllEnabled() {
+		m.paneViewPumpBackoff = nextPaneViewPumpBackoff(m.paneViewPumpBackoff)
+		return m.schedulePaneViewPump("in_flight", m.paneViewPumpBackoff)
+	}
+
+	maxBatches := paneViewMaxInFlightBatches - m.paneViewInFlight
+	if maxBatches < 1 {
+		maxBatches = 1
+	}
+	if perfPaneViewAllEnabled() {
+		maxBatches = paneViewMaxConcurrency
+		if maxBatches < 1 {
+			maxBatches = 1
+		}
+	}
+	maxReqs := maxBatches * paneViewMaxBatch
+	if maxReqs < 1 {
+		maxReqs = paneViewMaxBatch
+	}
+
+	reqs, remaining, needsRefresh := m.buildPaneViewRequestsForPending(maxReqs)
+	m.paneViewQueuedIDs = remaining
+
+	cmds := make([]tea.Cmd, 0, 3)
+	if len(reqs) > 0 {
+		if cmd := m.startPaneViewFetch(reqs); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
+	if needsRefresh {
+		if cmd := m.requestRefreshCmdReason("pane_view_pending_missing", true); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
+	if len(m.paneViewQueuedIDs) > 0 {
+		if m.paneViewInFlight >= paneViewMaxInFlightBatches && !perfPaneViewAllEnabled() {
+			m.paneViewPumpBackoff = nextPaneViewPumpBackoff(m.paneViewPumpBackoff)
+		} else {
+			m.paneViewPumpBackoff = 0
+		}
+		if cmd := m.schedulePaneViewPump("pending", m.paneViewPumpBackoff); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	} else {
+		m.paneViewPumpBackoff = 0
+	}
+
+	if len(cmds) == 0 {
+		return nil
+	}
+	if len(cmds) == 1 {
+		return cmds[0]
+	}
+	return tea.Batch(cmds...)
+}
+
+func (m *Model) buildPaneViewRequestsForPending(maxReqs int) ([]sessiond.PaneViewRequest, map[string]struct{}, bool) {
+	if m == nil || len(m.paneViewQueuedIDs) == 0 {
+		return nil, nil, false
+	}
+	now := time.Now()
+	remaining := make(map[string]struct{})
+	seen := make(map[paneViewKey]struct{})
+	reqs := make([]sessiond.PaneViewRequest, 0, len(m.paneViewQueuedIDs))
+	needsRefresh := false
+
+	if !m.paneViewDataReady() {
+		for paneID := range m.paneViewQueuedIDs {
+			if maxReqs > 0 && len(reqs) >= maxReqs {
+				remaining[paneID] = struct{}{}
+				continue
+			}
+			if m.isPaneViewInFlight(paneID) {
+				remaining[paneID] = struct{}{}
+				continue
+			}
+			if fallback := m.buildFallbackRequest(paneID, seen, now); fallback != nil {
+				reqs = append(reqs, *fallback)
+			}
+			remaining[paneID] = struct{}{}
+			m.perfNotePaneQueued(paneID, "snapshot_empty", now)
+		}
+		return reqs, remaining, true
+	}
+
+	for paneID := range m.paneViewQueuedIDs {
+		if maxReqs > 0 && len(reqs) >= maxReqs {
+			remaining[paneID] = struct{}{}
+			continue
+		}
+		if m.isPaneViewInFlight(paneID) {
+			remaining[paneID] = struct{}{}
+			continue
+		}
+		if !m.paneExistsInSnapshot(paneID) {
+			if fallback := m.buildFallbackRequest(paneID, seen, now); fallback != nil {
+				reqs = append(reqs, *fallback)
+			}
+			remaining[paneID] = struct{}{}
+			needsRefresh = true
+			m.perfNotePaneQueued(paneID, "pane_not_in_snapshot", now)
+			continue
+		}
+		if hit, ok := m.paneHitFor(paneID); ok {
+			req := m.paneViewRequestForHit(hit)
+			if req != nil {
+				key := paneViewKey{
+					PaneID:       req.PaneID,
+					Cols:         req.Cols,
+					Rows:         req.Rows,
+					Mode:         req.Mode,
+					ShowCursor:   req.ShowCursor,
+					ColorProfile: req.ColorProfile,
+				}
+				if _, ok := seen[key]; ok {
+					continue
+				}
+				seen[key] = struct{}{}
+				minInterval := paneViewMinIntervalFor(*req)
+				force := m.paneViewQueuedAge(paneID) >= paneViewForceAfter
+				if !m.hasPaneViewFirst(paneID) {
+					minInterval = 0
+					force = true
+				}
+				if perfPaneViewAllEnabled() {
+					minInterval = 0
+					force = true
+				}
+				if !m.allowPaneViewRequest(key, minInterval, force) {
+					remaining[paneID] = struct{}{}
+					continue
+				}
+				reqs = append(reqs, *req)
+				continue
+			}
+		}
+
+		if fallback := m.buildFallbackRequest(paneID, seen, now); fallback != nil {
+			reqs = append(reqs, *fallback)
+		}
+		remaining[paneID] = struct{}{}
+		m.perfNotePaneQueued(paneID, "hit_not_found", now)
+	}
+	return reqs, remaining, needsRefresh
+}
+
+func (m *Model) buildFallbackRequest(paneID string, seen map[paneViewKey]struct{}, now time.Time) *sessiond.PaneViewRequest {
+	if m == nil || paneID == "" {
+		return nil
+	}
+	if seen == nil {
+		seen = make(map[paneViewKey]struct{})
+	}
+	if !m.allowFallbackRequest(paneID, now) {
+		return nil
+	}
+	cols, rows := m.paneSizeForFallback(paneID)
+	req := sessiond.PaneViewRequest{
+		PaneID:       paneID,
+		Cols:         cols,
+		Rows:         rows,
+		Mode:         sessiond.PaneViewANSI,
+		ShowCursor:   false,
+		ColorProfile: m.paneViewProfile,
+		Priority:     sessiond.PaneViewPriorityBackground,
+	}
+	key := paneViewKey{
+		PaneID:       req.PaneID,
+		Cols:         req.Cols,
+		Rows:         req.Rows,
+		Mode:         req.Mode,
+		ShowCursor:   req.ShowCursor,
+		ColorProfile: req.ColorProfile,
+	}
+	if _, ok := seen[key]; ok {
+		return nil
+	}
+	if m.paneViewSeq != nil {
+		req.KnownSeq = m.paneViewSeq[key]
+	}
+	minInterval := paneViewMinIntervalBackground
+	force := false
+	if !m.hasPaneViewFirst(paneID) {
+		minInterval = 0
+		force = true
+	}
+	if !m.allowPaneViewRequest(key, minInterval, force) {
+		return nil
+	}
+	seen[key] = struct{}{}
+	return &req
+}
+
+func (m *Model) ensurePaneViewInFlightMap() {
+	if m == nil {
+		return
+	}
+	if m.paneViewInFlightByPane == nil {
+		m.paneViewInFlightByPane = make(map[string]struct{})
+	}
+}
+
+func (m *Model) markPaneViewInFlight(reqs []sessiond.PaneViewRequest) {
+	if m == nil || len(reqs) == 0 {
+		return
+	}
+	m.ensurePaneViewInFlightMap()
+	for _, req := range reqs {
+		if req.PaneID == "" {
+			continue
+		}
+		m.paneViewInFlightByPane[req.PaneID] = struct{}{}
+	}
+}
+
+func (m *Model) clearPaneViewInFlight(paneIDs []string) {
+	if m == nil || len(paneIDs) == 0 || m.paneViewInFlightByPane == nil {
+		return
+	}
+	for _, paneID := range paneIDs {
+		if paneID == "" {
+			continue
+		}
+		delete(m.paneViewInFlightByPane, paneID)
+	}
+}
+
+func (m *Model) isPaneViewInFlight(paneID string) bool {
+	if m == nil || paneID == "" || m.paneViewInFlightByPane == nil {
+		return false
+	}
+	_, ok := m.paneViewInFlightByPane[paneID]
+	return ok
+}
+
+func (m *Model) hasPaneViewFirst(paneID string) bool {
+	if m == nil || paneID == "" || m.paneViewFirst == nil {
+		return false
+	}
+	_, ok := m.paneViewFirst[paneID]
+	return ok
+}
+
 func (m *Model) startPaneViewFetch(reqs []sessiond.PaneViewRequest) tea.Cmd {
 	if m == nil || m.client == nil || len(reqs) == 0 {
 		return nil
+	}
+	now := time.Now()
+	for _, req := range reqs {
+		m.perfNotePaneViewRequest(req, now)
+	}
+	m.markPaneViewInFlight(reqs)
+	perfBurst := m.perfPaneViewInitialBurst()
+	if perfBurst {
+		m.paneViewPerfBurstDone = true
+		logPerfEvery("tui.paneviews.perf_burst", 0, "tui: pane views perf initial burst reqs=%d", len(reqs))
 	}
 	chunks := chunkPaneViewRequests(reqs, paneViewMaxBatch)
 	if len(chunks) == 0 {
@@ -159,7 +563,9 @@ func (m *Model) startPaneViewFetch(reqs []sessiond.PaneViewRequest) tea.Cmd {
 		if len(chunk) == 0 {
 			continue
 		}
-		m.paneViewInFlight++
+		if !perfPaneViewAllEnabled() {
+			m.paneViewInFlight++
+		}
 		cmds = append(cmds, m.fetchPaneViewsCmd(chunk))
 	}
 	if len(cmds) == 1 {
@@ -168,7 +574,7 @@ func (m *Model) startPaneViewFetch(reqs []sessiond.PaneViewRequest) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-func (m *Model) queuePaneViewID(paneID string) {
+func (m *Model) queuePaneViewID(paneID, reason string) {
 	if m == nil || paneID == "" {
 		return
 	}
@@ -176,6 +582,29 @@ func (m *Model) queuePaneViewID(paneID string) {
 		m.paneViewQueuedIDs = make(map[string]struct{})
 	}
 	m.paneViewQueuedIDs[paneID] = struct{}{}
+	if m.paneViewQueuedAt == nil {
+		m.paneViewQueuedAt = make(map[string]time.Time)
+	}
+	if _, ok := m.paneViewQueuedAt[paneID]; !ok {
+		m.paneViewQueuedAt[paneID] = time.Now()
+	}
+	if reason != "" {
+		m.perfNotePaneQueued(paneID, reason, time.Now())
+	}
+}
+
+func (m *Model) paneViewQueuedAge(paneID string) time.Duration {
+	if m == nil || paneID == "" {
+		return 0
+	}
+	if m.paneViewQueuedAt == nil {
+		return 0
+	}
+	queuedAt, ok := m.paneViewQueuedAt[paneID]
+	if !ok || queuedAt.IsZero() {
+		return 0
+	}
+	return time.Since(queuedAt)
 }
 
 func chunkPaneViewRequests(reqs []sessiond.PaneViewRequest, maxBatch int) [][]sessiond.PaneViewRequest {
@@ -196,48 +625,23 @@ func chunkPaneViewRequests(reqs []sessiond.PaneViewRequest, maxBatch int) [][]se
 	return chunks
 }
 
-func (m *Model) paneViewRequestsForIDs(ids map[string]struct{}) []sessiond.PaneViewRequest {
-	if m == nil || len(ids) == 0 {
-		return nil
-	}
-	reqs := make([]sessiond.PaneViewRequest, 0, len(ids))
-	seen := make(map[paneViewKey]struct{})
-	for paneID := range ids {
-		hit, ok := m.paneHitFor(paneID)
-		if !ok {
-			continue
-		}
-		req := m.paneViewRequestForHit(hit)
-		if req == nil {
-			continue
-		}
-		key := paneViewKey{
-			PaneID:       req.PaneID,
-			Cols:         req.Cols,
-			Rows:         req.Rows,
-			Mode:         req.Mode,
-			ShowCursor:   req.ShowCursor,
-			ColorProfile: req.ColorProfile,
-		}
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-		reqs = append(reqs, *req)
-	}
-	return reqs
-}
-
 func (m *Model) paneViewRequestForHit(hit mouse.PaneHit) *sessiond.PaneViewRequest {
 	if hit.PaneID == "" {
+		m.logPaneViewSkipGlobal("missing_pane_id", m.paneViewSkipContext())
 		return nil
 	}
 	if hit.Content.Empty() {
-		return nil
+		if perfPaneViewAllEnabled() && !hit.Outer.Empty() {
+			hit.Content = hit.Outer
+		} else {
+			m.logPaneViewSkip(hit.PaneID, "content_empty", m.paneViewSkipContext())
+			return nil
+		}
 	}
 	cols := hit.Content.W
 	rows := hit.Content.H
 	if cols <= 0 || rows <= 0 {
+		m.logPaneViewSkip(hit.PaneID, "invalid_size", fmt.Sprintf("cols=%d rows=%d %s", cols, rows, m.paneViewSkipContext()))
 		return nil
 	}
 
@@ -290,7 +694,7 @@ func (m *Model) paneViewRequestForHit(hit mouse.PaneHit) *sessiond.PaneViewReque
 	return req
 }
 
-func (m *Model) allowPaneViewRequest(key paneViewKey, minInterval time.Duration) bool {
+func (m *Model) allowPaneViewRequest(key paneViewKey, minInterval time.Duration, force bool) bool {
 	if m == nil || key.PaneID == "" {
 		return false
 	}
@@ -299,13 +703,137 @@ func (m *Model) allowPaneViewRequest(key paneViewKey, minInterval time.Duration)
 	}
 	now := time.Now()
 	if last, ok := m.paneViewLastReq[key]; ok {
-		if minInterval > 0 && now.Sub(last) < minInterval {
+		if !force && minInterval > 0 && now.Sub(last) < minInterval {
 			diag.LogEvery("tui.paneviews.throttle", 2*time.Second, "tui: pane view throttled pane=%s interval=%s", key.PaneID, minInterval)
+			m.logPaneViewSkip(key.PaneID, "throttled", fmt.Sprintf("interval=%s %s", minInterval, m.paneViewSkipContext()))
 			return false
 		}
 	}
 	m.paneViewLastReq[key] = now
 	return true
+}
+
+func (m *Model) paneViewDataReady() bool {
+	if m == nil {
+		return false
+	}
+	for _, project := range m.data.Projects {
+		for _, session := range project.Sessions {
+			if session.Status == StatusStopped {
+				continue
+			}
+			if len(session.Panes) > 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (m *Model) paneExistsInSnapshot(paneID string) bool {
+	if m == nil || paneID == "" {
+		return false
+	}
+	for _, project := range m.data.Projects {
+		for _, session := range project.Sessions {
+			if session.Status == StatusStopped {
+				continue
+			}
+			for _, pane := range session.Panes {
+				if pane.ID == paneID {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func (m *Model) perfPaneViewInitialBurst() bool {
+	if m == nil {
+		return false
+	}
+	return perfPaneViewAllEnabled() && !m.paneViewPerfBurstDone
+}
+
+func (m *Model) paneViewSkipContext() string {
+	if m == nil {
+		return ""
+	}
+	return fmt.Sprintf("state=%d tab=%d", m.state, m.tab)
+}
+
+func (m *Model) logPaneViewSkip(paneID, reason, detail string) {
+	if m == nil || !perfDebugEnabled() {
+		return
+	}
+	if paneID == "" {
+		paneID = "unknown"
+	}
+	if m.paneViewSkipLog == nil {
+		m.paneViewSkipLog = make(map[string]struct{})
+	}
+	key := paneID + "|" + reason
+	if _, ok := m.paneViewSkipLog[key]; ok {
+		return
+	}
+	m.paneViewSkipLog[key] = struct{}{}
+	msg := fmt.Sprintf("tui: pane view skip pane=%s reason=%s", paneID, reason)
+	if detail != "" {
+		msg += " " + detail
+	}
+	if perfCtx := m.panePerfContext(paneID); perfCtx != "" {
+		msg += " " + perfCtx
+	}
+	logPerfEvery("tui.paneviews.skip."+key, 0, "%s", msg)
+}
+
+func (m *Model) logPaneViewSkipGlobal(reason, detail string) {
+	if m == nil || !perfDebugEnabled() {
+		return
+	}
+	if m.paneViewSkipLog == nil {
+		m.paneViewSkipLog = make(map[string]struct{})
+	}
+	key := "global|" + reason
+	if _, ok := m.paneViewSkipLog[key]; ok {
+		return
+	}
+	m.paneViewSkipLog[key] = struct{}{}
+	msg := fmt.Sprintf("tui: pane view skip-global reason=%s", reason)
+	if detail != "" {
+		msg += " " + detail
+	}
+	logPerfEvery("tui.paneviews.skip."+key, 0, "%s", msg)
+}
+
+func (m *Model) dashboardColumnsDebug() string {
+	if m == nil {
+		return ""
+	}
+	projectCount := len(m.data.Projects)
+	sessionCount := 0
+	paneCount := 0
+	runningSessions := 0
+	for _, project := range m.data.Projects {
+		for _, session := range project.Sessions {
+			sessionCount++
+			if session.Status != StatusStopped {
+				runningSessions++
+			}
+			paneCount += len(session.Panes)
+		}
+	}
+	selectedProject := "none"
+	if proj := m.selectedProject(); proj != nil {
+		selectedProject = proj.ID
+	}
+	selectedSession := "none"
+	if sess := m.selectedSession(); sess != nil {
+		selectedSession = sess.Name
+	}
+	return fmt.Sprintf("projects=%d sessions=%d panes=%d running=%d selected_project=%s selected_session=%s state=%d tab=%d",
+		projectCount, sessionCount, paneCount, runningSessions, selectedProject, selectedSession, m.state, m.tab)
 }
 
 func paneViewMinIntervalFor(req sessiond.PaneViewRequest) time.Duration {
@@ -349,7 +877,27 @@ type paneViewResult struct {
 	err  error
 }
 
+func paneViewReqPaneIDs(reqs []sessiond.PaneViewRequest) []string {
+	if len(reqs) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	out := make([]string, 0, len(reqs))
+	for _, req := range reqs {
+		if req.PaneID == "" {
+			continue
+		}
+		if _, ok := seen[req.PaneID]; ok {
+			continue
+		}
+		seen[req.PaneID] = struct{}{}
+		out = append(out, req.PaneID)
+	}
+	return out
+}
+
 func fetchPaneViews(client *sessiond.Client, reqs []sessiond.PaneViewRequest) paneViewsMsg {
+	paneIDs := paneViewReqPaneIDs(reqs)
 	start := time.Now()
 	results := make(chan paneViewResult, len(reqs))
 	jobs := make(chan sessiond.PaneViewRequest)
@@ -378,9 +926,9 @@ func fetchPaneViews(client *sessiond.Client, reqs []sessiond.PaneViewRequest) pa
 		}
 	}
 	if len(views) == 0 && firstErr != nil {
-		return paneViewsMsg{Err: firstErr}
+		return paneViewsMsg{Err: firstErr, PaneIDs: paneIDs}
 	}
-	return paneViewsMsg{Views: views, Err: firstErr}
+	return paneViewsMsg{Views: views, Err: firstErr, PaneIDs: paneIDs}
 }
 
 func paneViewWorkerCount(reqs []sessiond.PaneViewRequest) int {

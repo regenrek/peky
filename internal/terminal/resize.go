@@ -19,7 +19,9 @@ func (w *Window) Resize(cols, rows int) error {
 		return errors.New("terminal: window closed")
 	}
 
-	changed := (cols != w.cols) || (rows != w.rows)
+	if cols == w.cols && rows == w.rows {
+		return nil
+	}
 	w.cols, w.rows = cols, rows
 
 	w.termMu.Lock()
@@ -35,9 +37,7 @@ func (w *Window) Resize(cols, rows int) error {
 		_ = pty.Resize(cols, rows)
 	}
 
-	if changed {
-		w.clampViewState()
-		w.markDirty()
-	}
+	w.clampViewState()
+	w.markDirty()
 	return nil
 }

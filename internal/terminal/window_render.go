@@ -31,6 +31,7 @@ func (w *Window) ViewANSICtx(ctx context.Context) (string, error) {
 	if w == nil {
 		return "", nil
 	}
+	w.TouchANSIDemand(0)
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -79,6 +80,7 @@ func (w *Window) ViewANSICached() (string, bool) {
 	if w == nil {
 		return "", false
 	}
+	w.TouchANSIDemand(0)
 	w.cacheMu.Lock()
 	defer w.cacheMu.Unlock()
 	return w.cacheANSI, !w.cacheDirty
@@ -150,7 +152,7 @@ func (w *Window) refreshANSICache() {
 	w.cacheDirty = endSeq != startSeq
 	w.cacheMu.Unlock()
 
-	if endSeq != startSeq {
+	if endSeq != startSeq && w.ansiDemandActive() {
 		w.RequestANSIRender()
 	}
 }

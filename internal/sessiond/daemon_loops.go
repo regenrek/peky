@@ -93,6 +93,7 @@ func (d *Daemon) readLoop(client *clientConn) {
 			var req PaneViewRequest
 			if err := decodePayload(env.Payload, &req); err == nil {
 				if paneID, err := requirePaneID(req.PaneID); err == nil {
+					d.logPaneViewRequest(paneID, req)
 					client.paneViews.enqueue(paneID, env, req)
 					continue
 				}

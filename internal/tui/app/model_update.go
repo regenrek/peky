@@ -102,6 +102,9 @@ var updateHandlers = map[reflect.Type]updateHandler{
 	reflect.TypeOf(paneViewsMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handlePaneViews(msg.(paneViewsMsg))
 	},
+	reflect.TypeOf(paneViewPumpMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handlePaneViewPump(msg.(paneViewPumpMsg))
+	},
 	reflect.TypeOf(daemonRestartMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleDaemonRestart(msg.(daemonRestartMsg))
 	},
@@ -263,7 +266,20 @@ func (m *Model) handleDashboardSnapshot(msg dashboardSnapshotMsg) tea.Cmd {
 	if m.refreshSelectionForProjectConfig() {
 		m.setToast("Project config changed: selection refreshed", toastInfo)
 	}
-	cmd := m.refreshPaneViewsCmd()
+	var cmd tea.Cmd
+	if len(m.paneViewQueuedIDs) > 0 {
+		if pumpCmd := m.schedulePaneViewPump("snapshot_pending", 0); pumpCmd != nil {
+			cmd = pumpCmd
+		}
+	}
+	refreshCmd := m.refreshPaneViewsCmd()
+	if refreshCmd != nil {
+		if cmd != nil {
+			cmd = tea.Batch(cmd, refreshCmd)
+		} else {
+			cmd = refreshCmd
+		}
+	}
 	if m.refreshQueued {
 		m.refreshQueued = false
 		cmd = tea.Batch(cmd, m.startRefreshCmd())
@@ -290,6 +306,14 @@ const daemonEventBatchMax = 64
 
 func (m *Model) handleDaemonEvent(msg daemonEventMsg) tea.Cmd {
 	events := collectDaemonEvents(m, msg.Event)
+	if perfDebugEnabled() {
+		now := time.Now()
+		for _, event := range events {
+			if event.Type == sessiond.EventPaneUpdated && event.PaneID != "" {
+				m.perfNotePaneUpdated(event.PaneID, event.PaneUpdateSeq, now)
+			}
+		}
+	}
 	paneIDs, refresh, toastMsg, toastLevel := summarizeDaemonEvents(events)
 	diag.LogEvery("tui.event", 2*time.Second, "tui: events batch=%d panes=%d refresh=%v", len(events), len(paneIDs), refresh)
 	cmds := []tea.Cmd{waitDaemonEvent(m.client)}
@@ -369,7 +393,7 @@ func toastLevelFromSessiond(level sessiond.ToastLevel) toastLevel {
 
 func (m *Model) handlePaneViews(msg paneViewsMsg) tea.Cmd {
 	var cmd tea.Cmd
-	diag.LogEvery("tui.paneviews.recv", 2*time.Second, "tui: paneViews recv count=%d err=%v in_flight=%d queued=%v queued_ids=%d", len(msg.Views), msg.Err, m.paneViewInFlight, m.paneViewQueued, len(m.paneViewQueuedIDs))
+	diag.LogEvery("tui.paneviews.recv", 2*time.Second, "tui: paneViews recv count=%d err=%v in_flight=%d pending=%d", len(msg.Views), msg.Err, m.paneViewInFlight, len(m.paneViewQueuedIDs))
 	if msg.Err != nil && len(msg.Views) == 0 && !errors.Is(msg.Err, context.DeadlineExceeded) && !errors.Is(msg.Err, context.Canceled) {
 		m.setToast("Pane view failed: "+msg.Err.Error(), toastWarning)
 	}
@@ -377,11 +401,12 @@ func (m *Model) handlePaneViews(msg paneViewsMsg) tea.Cmd {
 	for _, view := range msg.Views {
 		m.applyPaneView(view)
 	}
+	m.clearPaneViewInFlight(msg.PaneIDs)
 	if m.paneViewInFlight > 0 {
 		m.paneViewInFlight--
 	}
-	if m.paneViewInFlight == 0 {
-		cmd = m.handlePaneViewQueue()
+	if len(m.paneViewQueuedIDs) > 0 {
+		cmd = m.schedulePaneViewPump("pane_view_done", 0)
 	}
 	return cmd
 }
@@ -403,6 +428,9 @@ func (m *Model) applyPaneView(view sessiond.PaneViewResponse) {
 	if view.UpdateSeq > 0 {
 		m.paneViewSeq[key] = view.UpdateSeq
 	}
+	if view.PaneID != "" && view.Cols > 0 && view.Rows > 0 {
+		m.recordPaneSize(view.PaneID, view.Cols, view.Rows)
+	}
 	if !view.NotModified && view.View != "" {
 		m.paneViews[key] = view.View
 	}
@@ -418,20 +446,7 @@ func (m *Model) applyPaneView(view sessiond.PaneViewResponse) {
 			logPerfEvery("tui.paneview.first."+view.PaneID, 0, "tui: pane view first pane=%s mode=%v cols=%d rows=%d", view.PaneID, view.Mode, view.Cols, view.Rows)
 		}
 	}
-}
-
-func (m *Model) handlePaneViewQueue() tea.Cmd {
-	if m.paneViewQueued {
-		m.paneViewQueued = false
-		m.paneViewQueuedIDs = nil
-		return m.refreshPaneViewsCmd()
-	}
-	if len(m.paneViewQueuedIDs) > 0 {
-		queued := m.paneViewQueuedIDs
-		m.paneViewQueuedIDs = nil
-		return m.startPaneViewFetch(m.paneViewRequestsForIDs(queued))
-	}
-	return nil
+	m.perfNotePaneViewResponse(view, time.Now())
 }
 
 func (m *Model) handleSessionStarted(msg sessionStartedMsg) tea.Cmd {

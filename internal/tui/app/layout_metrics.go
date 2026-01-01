@@ -4,12 +4,14 @@ import "github.com/regenrek/peakypanes/internal/tui/mouse"
 
 func (m *Model) dashboardBodyRect() (mouse.Rect, bool) {
 	if m.width == 0 || m.height == 0 {
+		m.logPaneViewSkipGlobal("window_zero", "dashboardBodyRect")
 		return mouse.Rect{}, false
 	}
 	h, v := appStyle.GetFrameSize()
 	contentWidth := m.width - h
 	contentHeight := m.height - v
 	if contentWidth <= 10 || contentHeight <= 6 {
+		m.logPaneViewSkipGlobal("content_too_small", "dashboardBodyRect")
 		return mouse.Rect{}, false
 	}
 
@@ -25,6 +27,7 @@ func (m *Model) dashboardBodyRect() (mouse.Rect, bool) {
 		bodyHeight = contentHeight - extraLines
 	}
 	if bodyHeight <= 0 {
+		m.logPaneViewSkipGlobal("body_height_invalid", "dashboardBodyRect")
 		return mouse.Rect{}, false
 	}
 
@@ -36,17 +39,20 @@ func (m *Model) dashboardBodyRect() (mouse.Rect, bool) {
 
 func (m *Model) headerRect() (mouse.Rect, bool) {
 	if m.width == 0 || m.height == 0 {
+		m.logPaneViewSkipGlobal("window_zero", "headerRect")
 		return mouse.Rect{}, false
 	}
 	h, v := appStyle.GetFrameSize()
 	contentWidth := m.width - h
 	contentHeight := m.height - v
 	if contentWidth <= 10 || contentHeight <= 6 {
+		m.logPaneViewSkipGlobal("content_too_small", "headerRect")
 		return mouse.Rect{}, false
 	}
 
 	headerHeight := 1
 	if headerHeight <= 0 {
+		m.logPaneViewSkipGlobal("header_height_invalid", "headerRect")
 		return mouse.Rect{}, false
 	}
 

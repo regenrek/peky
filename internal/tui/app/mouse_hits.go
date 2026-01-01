@@ -1,7 +1,9 @@
 package app
 
 import (
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/regenrek/peakypanes/internal/tui/mouse"
 )
@@ -93,26 +95,60 @@ func (m *Model) headerHitRects() []headerHitRect {
 }
 
 func (m *Model) paneHits() []mouse.PaneHit {
+	var started time.Time
+	if perfDebugEnabled() {
+		started = time.Now()
+	}
 	if m.state != StateDashboard {
+		m.logPaneViewSkipGlobal("state_not_dashboard", fmt.Sprintf("state=%d tab=%d", m.state, m.tab))
+		if !started.IsZero() {
+			logPerfEvery("tui.panehits.skip.state", 500*time.Millisecond,
+				"tui: pane hits skip reason=state_not_dashboard state=%d tab=%d", m.state, m.tab)
+		}
 		return nil
 	}
 	if m.tab == TabProject {
-		return m.projectPaneHits()
+		hits := m.projectPaneHits()
+		if !started.IsZero() {
+			logPerfEvery("tui.panehits.project", 500*time.Millisecond,
+				"tui: pane hits computed scope=project count=%d dur=%s", len(hits), time.Since(started))
+		}
+		return hits
 	}
-	return m.dashboardPaneHits()
+	hits := m.dashboardPaneHits()
+	if !started.IsZero() {
+		logPerfEvery("tui.panehits.dashboard", 500*time.Millisecond,
+			"tui: pane hits computed scope=dashboard count=%d dur=%s", len(hits), time.Since(started))
+	}
+	return hits
 }
 
 func (m *Model) projectPaneHits() []mouse.PaneHit {
 	body, ok := m.dashboardBodyRect()
 	if !ok {
+		m.logPaneViewSkipGlobal("body_rect_unavailable", m.paneViewSkipContext())
+		if perfDebugEnabled() {
+			logPerfEvery("tui.panehits.project.body", perfLogInterval,
+				"tui: pane hits project skip reason=body_rect_unavailable %s", m.paneViewSkipContext())
+		}
 		return nil
 	}
 	project := m.selectedProject()
 	session := m.selectedSession()
 	if project == nil || session == nil {
+		m.logPaneViewSkipGlobal("missing_selection", m.paneViewSkipContext())
+		if perfDebugEnabled() {
+			logPerfEvery("tui.panehits.project.selection", perfLogInterval,
+				"tui: pane hits project skip reason=missing_selection %s", m.paneViewSkipContext())
+		}
 		return nil
 	}
 	if len(session.Panes) == 0 {
+		m.logPaneViewSkipGlobal("no_panes", m.paneViewSkipContext())
+		if perfDebugEnabled() {
+			logPerfEvery("tui.panehits.project.empty", perfLogInterval,
+				"tui: pane hits project skip reason=no_panes %s", m.paneViewSkipContext())
+		}
 		return nil
 	}
 
@@ -124,6 +160,11 @@ func (m *Model) projectPaneHits() []mouse.PaneHit {
 			H: body.H,
 		}
 		if preview.W <= 0 || preview.H <= 0 {
+			m.logPaneViewSkipGlobal("preview_invalid", fmt.Sprintf("w=%d h=%d %s", preview.W, preview.H, m.paneViewSkipContext()))
+			if perfDebugEnabled() {
+				logPerfEvery("tui.panehits.project.preview.full", perfLogInterval,
+					"tui: pane hits project skip reason=preview_invalid w=%d h=%d %s", preview.W, preview.H, m.paneViewSkipContext())
+			}
 			return nil
 		}
 		mode := m.settings.PreviewMode
@@ -152,6 +193,11 @@ func (m *Model) projectPaneHits() []mouse.PaneHit {
 	}
 
 	if preview.W <= 0 || preview.H <= 0 {
+		m.logPaneViewSkipGlobal("preview_invalid", fmt.Sprintf("w=%d h=%d %s", preview.W, preview.H, m.paneViewSkipContext()))
+		if perfDebugEnabled() {
+			logPerfEvery("tui.panehits.project.preview", perfLogInterval,
+				"tui: pane hits project skip reason=preview_invalid w=%d h=%d %s", preview.W, preview.H, m.paneViewSkipContext())
+		}
 		return nil
 	}
 

@@ -14,9 +14,11 @@ This format is based on Keep a Changelog.
 - Layout send actions default to waiting for first output when `send_delay_ms` is omitted.
 - Pane dimension limits now clamp across sessiond, terminal, and VT layers to prevent oversize allocations.
 - VT parser data buffer reduced from 4MB to 64KB (configurable via env override).
+- Pane view scheduling now prioritizes visible panes with per-pane in-flight tracking to reduce refresh overhead.
 
 ### Fixed
 - Pane view cache now enforces TTL + max-entry eviction to prevent unbounded growth.
+- Dashboard pane view refresh no longer churns on off-screen panes, reducing update storms under load.
 
 ## 0.0.8 - 2025-12-31
 

@@ -59,10 +59,12 @@ type Daemon struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	clients   map[uint64]*clientConn
-	clientsMu sync.RWMutex
-	clientSeq atomic.Uint64
-	debugSnap atomic.Int64
+	clients        map[uint64]*clientConn
+	clientsMu      sync.RWMutex
+	clientSeq      atomic.Uint64
+	debugSnap      atomic.Int64
+	perfPaneViewMu sync.Mutex
+	perfPaneView   map[string]uint8
 
 	closing atomic.Bool
 	wg      sync.WaitGroup

@@ -85,6 +85,7 @@ func isPTYClosedWriteError(err error) bool {
 }
 
 func (w *Window) startIO(ctx context.Context) {
+	w.ioStartedAt.CompareAndSwap(0, time.Now().UnixNano())
 	w.startPtyToVt(ctx)
 	w.startVtToPty(ctx)
 }
@@ -213,7 +214,11 @@ func (w *Window) handleTerminalWrite(data []byte) {
 	w.termMu.Unlock()
 
 	nowNano := time.Now().UnixNano()
-	w.firstReadAt.CompareAndSwap(0, nowNano)
+	if w.firstReadAt.CompareAndSwap(0, nowNano) {
+		if w.onFirstRead != nil {
+			w.onFirstRead()
+		}
+	}
 	lastWrite := w.lastWriteAt.Load()
 	if lastWrite != 0 {
 		w.firstReadAfterWriteAt.CompareAndSwap(0, nowNano)

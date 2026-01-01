@@ -1,18 +1,37 @@
 package app
 
-import "github.com/regenrek/peakypanes/internal/tui/mouse"
+import (
+	"fmt"
+
+	"github.com/regenrek/peakypanes/internal/tui/mouse"
+)
 
 func (m *Model) dashboardPaneHits() []mouse.PaneHit {
 	body, ok := m.dashboardBodyRect()
 	if !ok {
+		m.logPaneViewSkipGlobal("body_rect_unavailable", m.paneViewSkipContext())
+		if perfDebugEnabled() {
+			logPerfEvery("tui.panehits.dashboard.body", perfLogInterval,
+				"tui: pane hits dashboard skip reason=body_rect_unavailable %s", m.paneViewSkipContext())
+		}
 		return nil
 	}
 	columns := collectDashboardColumns(m.data.Projects)
 	if len(columns) == 0 {
+		m.logPaneViewSkipGlobal("no_columns", m.dashboardColumnsDebug())
+		if perfDebugEnabled() {
+			logPerfEvery("tui.panehits.dashboard.columns", perfLogInterval,
+				"tui: pane hits dashboard skip reason=no_columns %s", m.dashboardColumnsDebug())
+		}
 		return nil
 	}
 	columns = m.filteredDashboardColumns(columns)
 	if countDashboardPanes(columns) == 0 {
+		m.logPaneViewSkipGlobal("no_panes", m.paneViewSkipContext())
+		if perfDebugEnabled() {
+			logPerfEvery("tui.panehits.dashboard.nopanes", perfLogInterval,
+				"tui: pane hits dashboard skip reason=no_panes %s", m.paneViewSkipContext())
+		}
 		return nil
 	}
 
@@ -20,12 +39,17 @@ func (m *Model) dashboardPaneHits() []mouse.PaneHit {
 	selectedIndex := dashboardColumnIndex(columns, selectedProject)
 	layout := buildDashboardHitLayout(body, columns, selectedIndex, m.settings)
 	if len(layout.columns) == 0 || layout.bodyHeight <= 0 {
+		m.logPaneViewSkipGlobal("layout_empty", m.paneViewSkipContext())
+		if perfDebugEnabled() {
+			logPerfEvery("tui.panehits.dashboard.layout", perfLogInterval,
+				"tui: pane hits dashboard skip reason=layout_empty columns=%d body_h=%d %s", len(layout.columns), layout.bodyHeight, m.paneViewSkipContext())
+		}
 		return nil
 	}
 
 	hits := make([]mouse.PaneHit, 0, countDashboardPanes(layout.columns))
 	for i, column := range layout.columns {
-		hits = append(hits, dashboardColumnHits(body, layout, column, i, m.selection)...)
+		hits = append(hits, m.dashboardColumnHits(body, layout, column, i, m.selection)...)
 	}
 	return hits
 }
@@ -132,21 +156,34 @@ func visibleBlockCount(bodyHeight, blockHeight int) int {
 	return visible
 }
 
-func dashboardColumnHits(body mouse.Rect, layout dashboardHitLayout, column DashboardProjectColumn, index int, selection selectionState) []mouse.PaneHit {
+func (m *Model) dashboardColumnHits(body mouse.Rect, layout dashboardHitLayout, column DashboardProjectColumn, index int, selection selectionState) []mouse.PaneHit {
 	if len(column.Panes) == 0 || layout.bodyHeight <= 0 || layout.blockHeight <= 0 {
 		return nil
 	}
 
-	colX := body.X + index*(layout.colWidth+layout.gap)
 	selectedPaneIndex := -1
 	if index == layout.selectedIndex {
 		selectedPaneIndex = dashboardPaneIndex(column.Panes, selection)
 	}
-	start, end := dashboardPaneRange(index == layout.selectedIndex, selectedPaneIndex, layout.visibleBlocks, len(column.Panes))
+	forceAll := perfPaneViewAllEnabled()
+	if forceAll && len(column.Panes) > 0 {
+		if layout.visibleBlocks > 0 && len(column.Panes) > layout.visibleBlocks {
+			m.logPaneViewSkipGlobal("perf_all_panes", fmt.Sprintf("project=%s column=%d total=%d visible=%d selected_idx=%d", column.ProjectID, index, len(column.Panes), layout.visibleBlocks, selectedPaneIndex))
+		}
+		return dashboardColumnHitsRange(body, layout, column, index, 0, len(column.Panes))
+	}
+	start, end, trimmed := dashboardPaneRange(index == layout.selectedIndex, selectedPaneIndex, layout.visibleBlocks, len(column.Panes))
+	if trimmed {
+		m.logPaneViewSkipGlobal("range_trimmed", fmt.Sprintf("project=%s column=%d total=%d visible=%d start=%d end=%d selected_idx=%d", column.ProjectID, index, len(column.Panes), layout.visibleBlocks, start, end, selectedPaneIndex))
+	}
+	return dashboardColumnHitsRange(body, layout, column, index, start, end)
+}
+
+func dashboardColumnHitsRange(body mouse.Rect, layout dashboardHitLayout, column DashboardProjectColumn, index int, start, end int) []mouse.PaneHit {
 	if end <= start {
 		return nil
 	}
-
+	colX := body.X + index*(layout.colWidth+layout.gap)
 	hits := make([]mouse.PaneHit, 0, end-start)
 	for idx := start; idx < end; idx++ {
 		pane := column.Panes[idx]
@@ -171,8 +208,9 @@ func dashboardColumnHits(body mouse.Rect, layout dashboardHitLayout, column Dash
 	return hits
 }
 
-func dashboardPaneRange(isSelectedColumn bool, selectedPaneIndex, visibleBlocks, totalPanes int) (int, int) {
+func dashboardPaneRange(isSelectedColumn bool, selectedPaneIndex, visibleBlocks, totalPanes int) (int, int, bool) {
 	start := 0
+	trimmed := false
 	if isSelectedColumn && selectedPaneIndex >= 0 && selectedPaneIndex >= visibleBlocks {
 		start = selectedPaneIndex - visibleBlocks + 1
 	}
@@ -189,5 +227,8 @@ func dashboardPaneRange(isSelectedColumn bool, selectedPaneIndex, visibleBlocks,
 	if end < start {
 		end = start
 	}
-	return start, end
+	if totalPanes > visibleBlocks {
+		trimmed = true
+	}
+	return start, end, trimmed
 }

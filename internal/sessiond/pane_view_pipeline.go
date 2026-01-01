@@ -401,6 +401,11 @@ func (d *Daemon) paneViewResponseEnvelope(client *clientConn, job paneViewJob, p
 	if client != nil && client.paneViews != nil {
 		defer client.paneViews.clearCancel(paneID)
 	}
+	perf := perfDebugEnabled()
+	var computeStart time.Time
+	if perf {
+		computeStart = time.Now()
+	}
 	viewResp, err := d.paneViewResponse(ctx, client, paneID, job.req)
 	if client != nil && client.paneViews != nil {
 		if !client.paneViews.isLatest(paneID, job.seq) {
@@ -410,6 +415,9 @@ func (d *Daemon) paneViewResponseEnvelope(client *clientConn, job paneViewJob, p
 	if err != nil {
 		resp.Error = err.Error()
 		return resp, true
+	}
+	if perf && !computeStart.IsZero() {
+		d.logPaneViewFirstAfterOutput(paneID, job.received, computeStart, time.Now(), viewResp)
 	}
 	payload, err := encodePayload(viewResp)
 	if err != nil {
@@ -484,6 +492,7 @@ func (d *Daemon) paneViewResponse(ctx context.Context, client *clientConn, paneI
 	if err != nil {
 		return paneViewRenderError(err, client, info.key)
 	}
+	d.logPaneViewFirst(win, paneID, info.renderMode, len(view), info.cols, info.rows)
 
 	// Refresh seq after render. If output happened concurrently, the next request will pick it up.
 	currentSeq = paneViewEffectiveSeq(win, info.renderMode)

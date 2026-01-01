@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/charmbracelet/x/ansi"
@@ -18,6 +19,68 @@ import (
 )
 
 var newWindow = terminal.NewWindow
+
+const (
+	defaultPaneSpawnThreshold    = 8
+	defaultPaneSpawnSpacingMS    = 25
+	defaultPaneSpawnWaitOutputMS = 0
+	maxPaneSpawnSpacingMS        = 1000
+	maxPaneSpawnWaitOutputMS     = 10000
+
+	paneSpawnThresholdEnv  = "PEAKYPANES_PANE_SPAWN_THRESHOLD"
+	paneSpawnSpacingEnv    = "PEAKYPANES_PANE_SPAWN_SPACING_MS"
+	paneSpawnWaitOutputEnv = "PEAKYPANES_PANE_SPAWN_WAIT_OUTPUT_MS"
+)
+
+type paneSpawnPaceConfig struct {
+	threshold  int
+	spacing    time.Duration
+	waitOutput time.Duration
+}
+
+var (
+	paneSpawnPaceOnce sync.Once
+	paneSpawnPace     paneSpawnPaceConfig
+)
+
+func resolvePaneSpawnPace() paneSpawnPaceConfig {
+	paneSpawnPaceOnce.Do(func() {
+		threshold := parsePaneSpawnInt(paneSpawnThresholdEnv, defaultPaneSpawnThreshold)
+		if threshold < 1 {
+			threshold = 0
+		}
+		spacingMS := clampPaneSpawnInt(parsePaneSpawnInt(paneSpawnSpacingEnv, defaultPaneSpawnSpacingMS), 0, maxPaneSpawnSpacingMS)
+		waitOutputMS := clampPaneSpawnInt(parsePaneSpawnInt(paneSpawnWaitOutputEnv, defaultPaneSpawnWaitOutputMS), 0, maxPaneSpawnWaitOutputMS)
+		paneSpawnPace = paneSpawnPaceConfig{
+			threshold:  threshold,
+			spacing:    time.Duration(spacingMS) * time.Millisecond,
+			waitOutput: time.Duration(waitOutputMS) * time.Millisecond,
+		}
+	})
+	return paneSpawnPace
+}
+
+func parsePaneSpawnInt(name string, fallback int) int {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return fallback
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return fallback
+	}
+	return value
+}
+
+func clampPaneSpawnInt(value, min, max int) int {
+	if value < min {
+		return min
+	}
+	if value > max {
+		return max
+	}
+	return value
+}
 
 func (m *Manager) buildPanes(ctx context.Context, spec SessionSpec) ([]*Pane, error) {
 	if spec.Layout == nil {
@@ -48,6 +111,7 @@ func (m *Manager) buildGridPanes(ctx context.Context, path string, layoutCfg *la
 	remainderH := LayoutBaseSize % grid.Rows
 
 	panes := make([]*Pane, 0, grid.Panes())
+	total := grid.Panes()
 	for r := 0; r < grid.Rows; r++ {
 		for c := 0; c < grid.Columns; c++ {
 			idx := r*grid.Columns + c
@@ -92,6 +156,7 @@ func (m *Manager) buildGridPanes(ctx context.Context, path string, layoutCfg *la
 				pane.Active = true
 			}
 			panes = append(panes, pane)
+			m.pacePaneSpawn(ctx, pane, len(panes), total)
 		}
 	}
 	return panes, nil
@@ -100,6 +165,7 @@ func (m *Manager) buildGridPanes(ctx context.Context, path string, layoutCfg *la
 func (m *Manager) buildSplitPanes(ctx context.Context, path string, defs []layout.PaneDef, env []string) ([]*Pane, error) {
 	var panes []*Pane
 	active := (*Pane)(nil)
+	total := len(defs)
 	for i, paneDef := range defs {
 		pane, err := m.createPane(ctx, path, paneDef.Title, paneDef.Cmd, env)
 		if err != nil {
@@ -121,8 +187,39 @@ func (m *Manager) buildSplitPanes(ctx context.Context, path string, defs []layou
 			pane.Left, pane.Top, pane.Width, pane.Height = 0, 0, LayoutBaseSize, LayoutBaseSize
 		}
 		panes = append(panes, pane)
+		m.pacePaneSpawn(ctx, pane, len(panes), total)
 	}
 	return panes, nil
+}
+
+func (m *Manager) pacePaneSpawn(ctx context.Context, pane *Pane, idx, total int) {
+	cfg := resolvePaneSpawnPace()
+	if cfg.threshold == 0 || total < cfg.threshold {
+		return
+	}
+	if ctx != nil {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+	}
+	if pane != nil && cfg.waitOutput > 0 {
+		_ = m.waitForPaneOutput(pane.ID, cfg.waitOutput)
+	}
+	if cfg.spacing > 0 && idx < total {
+		timer := time.NewTimer(cfg.spacing)
+		defer timer.Stop()
+		if ctx != nil {
+			select {
+			case <-ctx.Done():
+				return
+			case <-timer.C:
+			}
+		} else {
+			<-timer.C
+		}
+	}
 }
 
 func (m *Manager) createPane(ctx context.Context, path, title, command string, env []string) (*Pane, error) {
@@ -142,6 +239,9 @@ func (m *Manager) createPane(ctx context.Context, path, title, command string, e
 	}
 	opts.OnToast = func(message string) {
 		m.notifyToast(id, message)
+	}
+	opts.OnFirstRead = func() {
+		m.markPaneOutputReady(id)
 	}
 	startCommand := strings.TrimSpace(command)
 	if startCommand == "" {
@@ -186,6 +286,9 @@ func (m *Manager) createPane(ctx context.Context, path, title, command string, e
 
 func renderPreviewLines(win *terminal.Window, max int) ([]string, bool) {
 	if win == nil || max <= 0 {
+		return nil, false
+	}
+	if win.FirstReadAt().IsZero() {
 		return nil, false
 	}
 	view, ready := win.ViewANSICached()
