@@ -7,8 +7,12 @@ This format is based on Keep a Changelog.
 
 ### Added
 ### Changed
-- Dashboard performance defaults now use `preset: max` and `preview_render: direct`.
 ### Fixed
+
+## 0.0.10 - 2026-01-02
+
+### Changed
+- Dashboard performance defaults now use `preset: max` and `preview_render: direct`.
 
 ## 0.0.9 - 2026-01-02
 
