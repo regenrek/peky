@@ -323,19 +323,47 @@ func (d *Daemon) sendInputToScope(manager sessionManager, req SendInputRequest, 
 	if err != nil {
 		return nil, err
 	}
-	results := make([]SendInputResult, 0, len(targets))
-	action := resolveSendInputAction(req.Action)
-	for _, target := range targets {
-		status, message := sendInputToTarget(manager, target, req.Input)
-		if req.RecordAction {
-			d.recordPaneAction(target, action, req.Summary, "", status)
-		}
-		results = append(results, SendInputResult{
-			PaneID:  target,
-			Status:  status,
-			Message: message,
-		})
+	results := make([]SendInputResult, len(targets))
+	if len(targets) == 0 {
+		return encodePayload(SendInputResponse{Results: results})
 	}
+
+	action := resolveSendInputAction(req.Action)
+	workers := scopeSendConcurrency(len(targets))
+	jobs := make(chan scopeSendJob)
+	responses := make(chan scopeSendResult, len(targets))
+
+	for i := 0; i < workers; i++ {
+		go func() {
+			for job := range jobs {
+				status, message := sendInputToTargetWithTimeout(manager, job.PaneID, req.Input, scopeSendTimeout)
+				if req.RecordAction {
+					d.recordPaneAction(job.PaneID, action, req.Summary, "", status)
+				}
+				responses <- scopeSendResult{
+					Index:   job.Index,
+					PaneID:  job.PaneID,
+					Status:  status,
+					Message: message,
+				}
+			}
+		}()
+	}
+
+	for idx, target := range targets {
+		jobs <- scopeSendJob{Index: idx, PaneID: target}
+	}
+	close(jobs)
+
+	for i := 0; i < len(targets); i++ {
+		res := <-responses
+		results[res.Index] = SendInputResult{
+			PaneID:  res.PaneID,
+			Status:  res.Status,
+			Message: res.Message,
+		}
+	}
+
 	return encodePayload(SendInputResponse{Results: results})
 }
 
