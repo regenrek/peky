@@ -111,51 +111,55 @@ func (m *Model) refreshPaneViewsForIDs(ids map[string]struct{}) tea.Cmd {
 		return nil
 	}
 	if !m.paneViewDataReady() {
-		for paneID := range ids {
-			m.perfNotePaneQueued(paneID, "snapshot_empty", time.Now())
-		}
+		m.perfNotePaneQueuedBatch(ids, "snapshot_empty")
 		return m.requestRefreshCmdReason("paneview_snapshot_empty", true)
 	}
-	hits := m.paneHits()
-	hitByID := make(map[string]mouse.PaneHit, len(hits))
-	for _, hit := range hits {
-		if hit.PaneID == "" {
-			continue
-		}
-		hitByID[hit.PaneID] = hit
-	}
+	return m.refreshPaneViewsForIDsWithHits(ids)
+}
+
+func (m *Model) refreshPaneViewsForIDsWithHits(ids map[string]struct{}) tea.Cmd {
+	hitByID := m.paneHitsByID()
 	needsRefresh := false
 	for paneID := range ids {
 		if paneID == "" {
 			continue
 		}
-		if _, ok := hitByID[paneID]; ok {
-			m.queuePaneViewID(paneID, "event")
-			continue
-		}
-		if !m.paneExistsInSnapshot(paneID) {
+		if m.queuePaneViewForID(paneID, hitByID) {
 			needsRefresh = true
-			m.perfNotePaneQueued(paneID, "pane_not_in_snapshot", time.Now())
-			continue
 		}
-		if m.tab == TabProject {
-			m.queuePaneViewID(paneID, "hit_not_visible")
-			continue
-		}
-		m.perfNotePaneQueued(paneID, "hit_not_visible", time.Now())
 	}
 	cmd := m.schedulePaneViewPump("event_batch", 0)
-	if needsRefresh {
-		refreshCmd := m.requestRefreshCmdReason("paneview_pane_missing_snapshot", true)
-		if refreshCmd == nil {
-			return cmd
-		}
-		if cmd == nil {
-			return refreshCmd
-		}
-		return tea.Batch(cmd, refreshCmd)
+	if !needsRefresh {
+		return cmd
 	}
-	return cmd
+	return m.combinePaneViewRefresh(cmd, m.requestRefreshCmdReason("paneview_pane_missing_snapshot", true))
+}
+
+func (m *Model) queuePaneViewForID(paneID string, hitByID map[string]mouse.PaneHit) bool {
+	if _, ok := hitByID[paneID]; ok {
+		m.queuePaneViewID(paneID, "event")
+		return false
+	}
+	if !m.paneExistsInSnapshot(paneID) {
+		m.perfNotePaneQueued(paneID, "pane_not_in_snapshot", time.Now())
+		return true
+	}
+	if m.tab == TabProject {
+		m.queuePaneViewID(paneID, "hit_not_visible")
+		return false
+	}
+	m.perfNotePaneQueued(paneID, "hit_not_visible", time.Now())
+	return false
+}
+
+func (m *Model) combinePaneViewRefresh(cmd tea.Cmd, refreshCmd tea.Cmd) tea.Cmd {
+	if refreshCmd == nil {
+		return cmd
+	}
+	if cmd == nil {
+		return refreshCmd
+	}
+	return tea.Batch(cmd, refreshCmd)
 }
 
 func (m *Model) paneHitFor(paneID string) (mouse.PaneHit, bool) {
@@ -386,55 +390,72 @@ func (m *Model) buildPaneViewRequestsForPending(maxReqs int) ([]sessiond.PaneVie
 		return builder.reqs, builder.remaining, true
 	}
 	hits := m.paneHitsByID()
-	missing := make([]string, 0, len(m.paneViewQueuedIDs))
-	if len(hits) > 0 {
-		// First pass: prioritize visible panes that already have hit geometry.
-		for paneID, hit := range hits {
-			if paneID == "" {
-				continue
-			}
-			if _, ok := m.paneViewQueuedIDs[paneID]; !ok {
-				continue
-			}
-			if builder.atLimit() || m.isPaneViewInFlight(paneID) {
-				builder.markRemaining(paneID)
-				continue
-			}
-			if m.tryAddPaneViewRequestWithHit(paneID, hit, builder) {
-				continue
-			}
-			missing = append(missing, paneID)
-		}
-		// Second pass: collect remaining queued panes that are not visible.
-		for paneID := range m.paneViewQueuedIDs {
-			if paneID == "" {
-				continue
-			}
-			if _, ok := hits[paneID]; ok {
-				continue
-			}
-			if builder.atLimit() || m.isPaneViewInFlight(paneID) {
-				builder.markRemaining(paneID)
-				continue
-			}
-			missing = append(missing, paneID)
-		}
-	} else {
-		for paneID := range m.paneViewQueuedIDs {
-			if paneID == "" {
-				continue
-			}
-			if builder.atLimit() || m.isPaneViewInFlight(paneID) {
-				builder.markRemaining(paneID)
-				continue
-			}
-			missing = append(missing, paneID)
-		}
-	}
-	if len(missing) > 0 {
-		m.buildPendingRequestsForMissing(missing, hits, builder)
-	}
+	missing := m.collectPendingMissing(builder, hits)
+	m.buildPendingRequestsForMissing(missing, hits, builder)
 	return builder.reqs, builder.remaining, builder.needsRefresh
+}
+
+func (m *Model) collectPendingMissing(b *paneViewPendingBuild, hits map[string]mouse.PaneHit) []string {
+	if len(hits) == 0 {
+		return m.collectPendingMissingNoHits(b)
+	}
+	return m.collectPendingMissingWithHits(b, hits)
+}
+
+func (m *Model) collectPendingMissingWithHits(b *paneViewPendingBuild, hits map[string]mouse.PaneHit) []string {
+	missing := make([]string, 0, len(m.paneViewQueuedIDs))
+	// First pass: visible panes that already have hit geometry.
+	for paneID, hit := range hits {
+		if paneID == "" {
+			continue
+		}
+		if _, ok := m.paneViewQueuedIDs[paneID]; !ok {
+			continue
+		}
+		if m.deferPendingPane(paneID, b) {
+			continue
+		}
+		if m.tryAddPaneViewRequestWithHit(paneID, hit, b) {
+			continue
+		}
+		missing = append(missing, paneID)
+	}
+	// Second pass: queued panes that are not visible.
+	for paneID := range m.paneViewQueuedIDs {
+		if paneID == "" {
+			continue
+		}
+		if _, ok := hits[paneID]; ok {
+			continue
+		}
+		if m.deferPendingPane(paneID, b) {
+			continue
+		}
+		missing = append(missing, paneID)
+	}
+	return missing
+}
+
+func (m *Model) collectPendingMissingNoHits(b *paneViewPendingBuild) []string {
+	missing := make([]string, 0, len(m.paneViewQueuedIDs))
+	for paneID := range m.paneViewQueuedIDs {
+		if paneID == "" {
+			continue
+		}
+		if m.deferPendingPane(paneID, b) {
+			continue
+		}
+		missing = append(missing, paneID)
+	}
+	return missing
+}
+
+func (m *Model) deferPendingPane(paneID string, b *paneViewPendingBuild) bool {
+	if b.atLimit() || m.isPaneViewInFlight(paneID) {
+		b.markRemaining(paneID)
+		return true
+	}
+	return false
 }
 
 type paneViewPendingBuild struct {
@@ -802,66 +823,93 @@ func chunkPaneViewRequests(reqs []sessiond.PaneViewRequest, maxBatch int) [][]se
 }
 
 func (m *Model) paneViewRequestForHit(hit mouse.PaneHit) *sessiond.PaneViewRequest {
-	if hit.PaneID == "" {
-		m.logPaneViewSkipGlobal("missing_pane_id", m.paneViewSkipContext())
+	content, ok := m.paneViewContent(hit)
+	if !ok {
 		return nil
 	}
-	if m.previewRenderMode() == PreviewRenderOff && m.state == StateDashboard {
-		m.logPaneViewSkip(hit.PaneID, "preview_render_off", m.paneViewSkipContext())
-		return nil
-	}
-	if hit.Content.Empty() {
-		if m.renderPolicyAll() && !hit.Outer.Empty() {
-			hit.Content = hit.Outer
-		} else {
-			m.logPaneViewSkip(hit.PaneID, "content_empty", m.paneViewSkipContext())
-			return nil
-		}
-	}
-	cols := hit.Content.W
-	rows := hit.Content.H
+	cols, rows := content.W, content.H
 	if cols <= 0 || rows <= 0 {
 		m.logPaneViewSkip(hit.PaneID, "invalid_size", fmt.Sprintf("cols=%d rows=%d %s", cols, rows, m.paneViewSkipContext()))
 		return nil
 	}
+	mode, showCursor, priority := m.paneViewRenderSettings(hit.PaneID)
+	req := m.newPaneViewRequest(hit.PaneID, cols, rows, mode, showCursor, priority)
+	m.applyKnownPaneViewSeq(req)
+	return req
+}
 
-	// Active-pane Lipgloss only:
-	// - Focused pane (selected + terminal focus) gets Lipgloss for cursor overlay.
-	// - Everything else uses ANSI for speed and fidelity.
+func (m *Model) paneViewContent(hit mouse.PaneHit) (mouse.Rect, bool) {
+	if hit.PaneID == "" {
+		m.logPaneViewSkipGlobal("missing_pane_id", m.paneViewSkipContext())
+		return mouse.Rect{}, false
+	}
+	if m.previewRenderMode() == PreviewRenderOff && m.state == StateDashboard {
+		m.logPaneViewSkip(hit.PaneID, "preview_render_off", m.paneViewSkipContext())
+		return mouse.Rect{}, false
+	}
+	content := hit.Content
+	if content.Empty() {
+		if m.renderPolicyAll() && !hit.Outer.Empty() {
+			content = hit.Outer
+		} else {
+			m.logPaneViewSkip(hit.PaneID, "content_empty", m.paneViewSkipContext())
+			return mouse.Rect{}, false
+		}
+	}
+	return content, true
+}
+
+func (m *Model) paneViewRenderSettings(paneID string) (sessiond.PaneViewMode, bool, sessiond.PaneViewPriority) {
 	mode := sessiond.PaneViewANSI
 	showCursor := false
-
-	selectedID := ""
-	if pane := m.selectedPane(); pane != nil {
-		selectedID = pane.ID
-	}
-	isSelected := selectedID != "" && selectedID == hit.PaneID
-
 	priority := sessiond.PaneViewPriorityBackground
+
+	isSelected := m.selectedPaneID() == paneID
 	if isSelected {
 		priority = sessiond.PaneViewPriorityNormal
 	}
-
 	if isSelected && m.terminalFocus && m.supportsTerminalFocus() {
 		mode = sessiond.PaneViewLipgloss
 		showCursor = true
 		priority = sessiond.PaneViewPriorityFocused
 	}
+	return mode, showCursor, priority
+}
 
+func (m *Model) selectedPaneID() string {
+	if pane := m.selectedPane(); pane != nil {
+		return pane.ID
+	}
+	return ""
+}
+
+func (m *Model) newPaneViewRequest(
+	paneID string,
+	cols int,
+	rows int,
+	mode sessiond.PaneViewMode,
+	showCursor bool,
+	priority sessiond.PaneViewPriority,
+) *sessiond.PaneViewRequest {
 	req := &sessiond.PaneViewRequest{
-		PaneID:       hit.PaneID,
+		PaneID:       paneID,
 		Cols:         cols,
 		Rows:         rows,
 		Mode:         mode,
 		ShowCursor:   showCursor,
 		ColorProfile: m.paneViewProfile,
-
-		Priority: priority,
+		Priority:     priority,
 	}
 	if mode == sessiond.PaneViewANSI && m.previewRenderMode() == PreviewRenderDirect {
 		req.DirectRender = true
 	}
+	return req
+}
 
+func (m *Model) applyKnownPaneViewSeq(req *sessiond.PaneViewRequest) {
+	if req == nil || m.paneViewSeq == nil {
+		return
+	}
 	key := paneViewKey{
 		PaneID:       req.PaneID,
 		Cols:         req.Cols,
@@ -870,11 +918,7 @@ func (m *Model) paneViewRequestForHit(hit mouse.PaneHit) *sessiond.PaneViewReque
 		ShowCursor:   req.ShowCursor,
 		ColorProfile: req.ColorProfile,
 	}
-	if m.paneViewSeq != nil {
-		req.KnownSeq = m.paneViewSeq[key]
-	}
-
-	return req
+	req.KnownSeq = m.paneViewSeq[key]
 }
 
 func (m *Model) allowPaneViewRequest(key paneViewKey, minInterval time.Duration, force bool) bool {

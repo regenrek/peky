@@ -371,28 +371,13 @@ func (m *Manager) collectPreviewUpdates(
 	}
 	updates := make(map[string]previewState)
 	lastProcessed := -1
-	deadline, hasDeadline := ctx.Deadline()
-	budgetDeadline := time.Time{}
-	if previewUpdateBudget > 0 {
-		budgetDeadline = time.Now().Add(previewUpdateBudget)
-		if hasDeadline && deadline.Before(budgetDeadline) {
-			budgetDeadline = deadline
-		}
-	} else if hasDeadline {
-		budgetDeadline = deadline
-	}
+	stopper := newPreviewUpdateStopper(ctx)
 	for i := 0; i < len(refs); i++ {
 		idx := (start + i) % len(refs)
 		if !needsUpdate[idx] {
 			continue
 		}
-		if ctx.Err() != nil {
-			break
-		}
-		if hasDeadline && time.Now().After(deadline) {
-			break
-		}
-		if !budgetDeadline.IsZero() && time.Now().After(budgetDeadline) {
+		if stopper.shouldStop() {
 			break
 		}
 		ref := refs[idx]
@@ -418,6 +403,45 @@ func (m *Manager) collectPreviewUpdates(
 		}
 	}
 	return updates, nextCursor
+}
+
+type previewUpdateStopper struct {
+	ctx            context.Context
+	deadline       time.Time
+	hasDeadline    bool
+	budgetDeadline time.Time
+}
+
+func newPreviewUpdateStopper(ctx context.Context) previewUpdateStopper {
+	deadline, hasDeadline := ctx.Deadline()
+	budgetDeadline := time.Time{}
+	if previewUpdateBudget > 0 {
+		budgetDeadline = time.Now().Add(previewUpdateBudget)
+		if hasDeadline && deadline.Before(budgetDeadline) {
+			budgetDeadline = deadline
+		}
+	} else if hasDeadline {
+		budgetDeadline = deadline
+	}
+	return previewUpdateStopper{
+		ctx:            ctx,
+		deadline:       deadline,
+		hasDeadline:    hasDeadline,
+		budgetDeadline: budgetDeadline,
+	}
+}
+
+func (s previewUpdateStopper) shouldStop() bool {
+	if s.ctx.Err() != nil {
+		return true
+	}
+	if s.hasDeadline && time.Now().After(s.deadline) {
+		return true
+	}
+	if !s.budgetDeadline.IsZero() && time.Now().After(s.budgetDeadline) {
+		return true
+	}
+	return false
 }
 
 func applyPreviewLines(out []SessionSnapshot, refs []panePreviewRef, states map[string]previewState, previewLines int) {

@@ -101,6 +101,19 @@ func (m *Model) perfNotePaneQueued(paneID, reason string, now time.Time) {
 	}
 }
 
+func (m *Model) perfNotePaneQueuedBatch(ids map[string]struct{}, reason string) {
+	if m == nil || len(ids) == 0 || reason == "" {
+		return
+	}
+	now := time.Now()
+	for paneID := range ids {
+		if paneID == "" {
+			continue
+		}
+		m.perfNotePaneQueued(paneID, reason, now)
+	}
+}
+
 func (m *Model) perfNotePaneViewRequest(req sessiond.PaneViewRequest, now time.Time) {
 	if !m.perfEnsurePanePerf() || req.PaneID == "" {
 		return
