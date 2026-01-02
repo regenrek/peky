@@ -65,4 +65,3 @@ func (g Grid) RowY(originY, row int) int {
 	}
 	return y
 }
-

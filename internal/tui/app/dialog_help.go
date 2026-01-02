@@ -17,10 +17,10 @@ const (
 )
 
 const (
-	helpKeyPerfPreset       = "perf.preset"
-	helpKeyPerfRenderPolicy = "perf.render_policy"
+	helpKeyPerfPreset        = "perf.preset"
+	helpKeyPerfRenderPolicy  = "perf.render_policy"
 	helpKeyPerfPreviewRender = "perf.preview_render"
-	helpKeyPerfEditConfig   = "perf.edit_config"
+	helpKeyPerfEditConfig    = "perf.edit_config"
 )
 
 type dialogHelpContent struct {
