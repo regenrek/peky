@@ -62,6 +62,9 @@ func NewCommandPalette() list.Model {
 		BorderLeftForeground(theme.AccentAlt).
 		Bold(true).
 		Padding(0, 0, 0, 0)
+	delegate.Styles.FilterMatch = lipgloss.NewStyle().
+		Foreground(theme.AccentFocus).
+		Bold(true)
 
 	l := list.New(nil, delegate, 0, 0)
 	l.Title = "⌘ Command Palette"

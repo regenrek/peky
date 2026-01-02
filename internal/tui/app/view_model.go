@@ -92,6 +92,7 @@ func (m *Model) viewModel() views.Model {
 		PreviewMode:           m.settings.PreviewMode,
 		DashboardPreviewLines: dashboardPreviewLines(m.settings),
 		PaneView:              m.paneViewProvider(),
+		DialogHelp:            m.dialogHelpView(),
 	}
 
 	return vm

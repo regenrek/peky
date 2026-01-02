@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -14,6 +15,7 @@ import (
 
 const settingsMenuHeading = "Settings"
 const debugMenuHeading = "Debug"
+const performanceMenuHelpFooterLines = 5
 
 func (m *Model) setupSettingsMenu() {
 	m.settingsMenu = picker.NewDialogMenu()
@@ -37,6 +39,9 @@ func (m *Model) openSettingsMenu() tea.Cmd {
 func (m *Model) openPerformanceMenu() tea.Cmd {
 	cmd := m.perfMenu.SetItems(m.performanceMenuItems())
 	m.setPerformanceMenuSize()
+	m.dialogHelpOpen = false
+	m.perfMenu.SetShowHelp(true)
+	m.perfMenu.KeyMap.ShowFullHelp = key.NewBinding(key.WithKeys(""), key.WithHelp("", ""))
 	m.setState(StatePerformanceMenu)
 	return cmd
 }
@@ -65,9 +70,14 @@ func (m *Model) updateSettingsMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *Model) updatePerformanceMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q":
+		m.dialogHelpOpen = false
 		return m, m.openSettingsMenu()
 	case "enter":
 		return m, m.runPerformanceMenuSelection()
+	case "?":
+		m.dialogHelpOpen = !m.dialogHelpOpen
+		return m, nil
+	default:
 	}
 
 	var cmd tea.Cmd
@@ -145,24 +155,33 @@ func (m *Model) settingsMenuItems() []list.Item {
 }
 
 func (m *Model) performanceMenuItems() []list.Item {
-	presetLabel := fmt.Sprintf("Preset: %s", titleCase(m.settings.Performance.Preset))
-	renderLabel := "Render policy: " + strings.ToLower(m.settings.Performance.RenderPolicy)
-	previewLabel := "Preview render: " + strings.ToLower(m.settings.Performance.PreviewRender.Mode)
+	presetValue := titleCase(m.settings.Performance.Preset)
+	presetHelpValue := strings.ToLower(m.settings.Performance.Preset)
+	presetSeverity := dialogHelpSeverityFor(helpKeyPerfPreset, presetHelpValue)
+	presetLabel := fmt.Sprintf("Preset: %s", dialogHelpValueStyle(presetSeverity, presetValue))
+
+	renderValue := strings.ToLower(m.settings.Performance.RenderPolicy)
+	renderSeverity := dialogHelpSeverityFor(helpKeyPerfRenderPolicy, renderValue)
+	renderLabel := "Render policy: " + dialogHelpValueStyle(renderSeverity, renderValue)
+
+	previewValue := strings.ToLower(m.settings.Performance.PreviewRender.Mode)
+	previewSeverity := dialogHelpSeverityFor(helpKeyPerfPreviewRender, previewValue)
+	previewLabel := "Preview render: " + dialogHelpValueStyle(previewSeverity, previewValue)
 	presetDesc := "Low: battery saver • Medium: default • High: smoother • " + theme.FormatWarning("Max: no throttle")
 	renderDesc := "Visible panes only (default) • " + theme.FormatWarning("All panes live")
 	previewDesc := "Cached (default) • " + theme.FormatWarning("Direct: heavy CPU") + " • Off: disable previews"
 
 	items := []picker.CommandItem{
-		{Label: presetLabel, Desc: presetDesc, Run: func() tea.Cmd {
+		{Label: presetLabel, Desc: presetDesc, HelpKey: helpKeyPerfPreset, HelpValue: presetHelpValue, Run: func() tea.Cmd {
 			return m.cyclePerformancePreset()
 		}},
-		{Label: renderLabel, Desc: renderDesc, Run: func() tea.Cmd {
+		{Label: renderLabel, Desc: renderDesc, HelpKey: helpKeyPerfRenderPolicy, HelpValue: renderValue, Run: func() tea.Cmd {
 			return m.toggleRenderPolicy()
 		}},
-		{Label: previewLabel, Desc: previewDesc, Run: func() tea.Cmd {
+		{Label: previewLabel, Desc: previewDesc, HelpKey: helpKeyPerfPreviewRender, HelpValue: previewValue, Run: func() tea.Cmd {
 			return m.cyclePreviewRenderMode()
 		}},
-		{Label: "Edit config (custom overrides)", Desc: "Open config in $EDITOR for fine tuning", Run: func() tea.Cmd {
+		{Label: "Edit config (custom overrides)", Desc: "Open config in $EDITOR for fine tuning", HelpKey: helpKeyPerfEditConfig, Run: func() tea.Cmd {
 			return m.editConfig()
 		}},
 		{Label: "Back", Desc: "Return to settings", Run: func() tea.Cmd {
@@ -202,18 +221,18 @@ func (m *Model) debugMenuItems() []list.Item {
 }
 
 func (m *Model) setSettingsMenuSize() {
-	m.setDialogMenuSize(&m.settingsMenu, settingsMenuHeading, 34, 64, 8, 16)
+	m.setDialogMenuSize(&m.settingsMenu, settingsMenuHeading, 34, 64, 8, 16, 0)
 }
 
 func (m *Model) setPerformanceMenuSize() {
-	m.setDialogMenuSize(&m.perfMenu, "Performance", 34, 64, 8, 16)
+	m.setDialogMenuSize(&m.perfMenu, "Performance", 34, 64, 8, 16, performanceMenuHelpFooterLines)
 }
 
 func (m *Model) setDebugMenuSize() {
-	m.setDialogMenuSize(&m.debugMenu, debugMenuHeading, 34, 64, 8, 16)
+	m.setDialogMenuSize(&m.debugMenu, debugMenuHeading, 34, 64, 8, 16, 0)
 }
 
-func (m *Model) setDialogMenuSize(menu *list.Model, heading string, minW, maxW, minH, maxH int) {
+func (m *Model) setDialogMenuSize(menu *list.Model, heading string, minW, maxW, minH, maxH, footerLines int) {
 	if m.width <= 0 || m.height <= 0 {
 		return
 	}
@@ -230,11 +249,11 @@ func (m *Model) setDialogMenuSize(menu *list.Model, heading string, minW, maxW, 
 	desiredW := clamp(availableW, minW, maxW)
 	desiredH := clamp(availableH, minH, maxH)
 	listW := desiredW - hFrame
-	listH := desiredH - vFrame - headerHeight
+	listH := desiredH - vFrame - headerHeight - footerLines
 	if listW < 20 {
 		listW = clamp(m.width-hFrame, 20, m.width)
 	}
-	maxListH := m.height - vFrame - headerHeight
+	maxListH := m.height - vFrame - headerHeight - footerLines
 	if maxListH < 1 {
 		maxListH = 1
 	}

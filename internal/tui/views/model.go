@@ -53,12 +53,20 @@ type Model struct {
 	PreviewMode              string
 	DashboardPreviewLines    int
 	PaneView                 func(id string, width, height int, showCursor bool) string
+	DialogHelp               DialogHelp
 }
 
 type Project struct {
 	Name     string
 	Path     string
 	Sessions []Session
+}
+
+type DialogHelp struct {
+	Line  string
+	Title string
+	Body  string
+	Open  bool
 }
 
 type Session struct {

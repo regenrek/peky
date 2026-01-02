@@ -11,6 +11,8 @@ type CommandItem struct {
 	Label    string
 	Desc     string
 	Shortcut string
+	HelpKey  string
+	HelpValue string
 	Run      func() tea.Cmd
 }
 

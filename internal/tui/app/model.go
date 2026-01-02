@@ -100,6 +100,7 @@ type Model struct {
 	perfMenu       list.Model
 	debugMenu      list.Model
 	gitProjects    []picker.ProjectItem
+	dialogHelpOpen bool
 
 	confirmSession     string
 	confirmProject     string
