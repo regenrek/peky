@@ -532,14 +532,6 @@ func (m *Model) paneHitsByID() map[string]mouse.PaneHit {
 	return hitByID
 }
 
-func (m *Model) tryAddPaneViewRequest(paneID string, b *paneViewPendingBuild) bool {
-	hit, ok := m.paneHitFor(paneID)
-	if !ok {
-		return false
-	}
-	return m.tryAddPaneViewRequestWithHit(paneID, hit, b)
-}
-
 func (m *Model) tryAddPaneViewRequestWithHit(paneID string, hit mouse.PaneHit, b *paneViewPendingBuild) bool {
 	req := m.paneViewRequestForHit(hit)
 	if req == nil {

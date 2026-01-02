@@ -135,7 +135,7 @@ func commandPaletteTextStyles(selected bool) (lipgloss.Style, lipgloss.Style, li
 			Foreground(theme.Surface).
 			Bold(true)
 	}
-	matchStyle := textStyle.Copy().Bold(true)
+	matchStyle := textStyle.Bold(true)
 	if selected {
 		matchStyle = matchStyle.Foreground(theme.Surface)
 	} else {

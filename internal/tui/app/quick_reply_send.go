@@ -45,10 +45,6 @@ func quickReplyTargetIsCodex(pane PaneItem) bool {
 	return quickReplyTargetTool(pane) == agenttool.ToolCodex
 }
 
-func quickReplyTargetIsClaude(pane PaneItem) bool {
-	return quickReplyTargetTool(pane) == agenttool.ToolClaude
-}
-
 func quickReplyTargetCombineSubmit(pane PaneItem) bool {
 	return false
 }
