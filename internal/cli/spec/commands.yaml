@@ -381,6 +381,32 @@ commands:
         json:
           supported: true
           schema_ref: "#/$defs/ActionResponse"
+      - name: add
+        id: pane.add
+        summary: Add a pane by splitting the active pane
+        side_effects: true
+        confirm: true
+        flags:
+          - name: session
+            type: string
+            description: Session name (defaults to focused session).
+          - name: index
+            type: int
+            description: Pane index to split (defaults to active pane).
+          - name: pane-id
+            type: string
+            description: Pane id to split.
+          - name: orientation
+            type: enum
+            enum: [vertical, horizontal]
+            default: vertical
+            description: Split direction.
+          - name: percent
+            type: int
+            description: Size percentage for the new pane.
+        json:
+          supported: true
+          schema_ref: "#/$defs/ActionResponse"
       - name: split
         id: pane.split
         summary: Split a pane

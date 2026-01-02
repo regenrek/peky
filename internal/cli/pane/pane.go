@@ -25,6 +25,7 @@ import (
 func Register(reg *root.Registry) {
 	reg.Register("pane.list", runList)
 	reg.Register("pane.rename", runRename)
+	reg.Register("pane.add", runAdd)
 	reg.Register("pane.split", runSplit)
 	reg.Register("pane.close", runClose)
 	reg.Register("pane.swap", runSwap)
@@ -89,7 +90,7 @@ func runRename(ctx root.CommandContext) error {
 	defer cleanup()
 	paneID := strings.TrimSpace(ctx.Cmd.String("pane-id"))
 	sessionName := strings.TrimSpace(ctx.Cmd.String("session"))
-	paneIndex := strings.TrimSpace(ctx.Cmd.String("index"))
+	paneIndex := intFlagString(ctx.Cmd, "index")
 	newName := strings.TrimSpace(ctx.Cmd.String("name"))
 	if newName == "" {
 		return fmt.Errorf("pane name is required")
@@ -132,7 +133,7 @@ func runSplit(ctx root.CommandContext) error {
 	}
 	defer cleanup()
 	sessionName := ctx.Cmd.String("session")
-	paneIndex := ctx.Cmd.String("index")
+	paneIndex := intFlagString(ctx.Cmd, "index")
 	orientation := strings.ToLower(strings.TrimSpace(ctx.Cmd.String("orientation")))
 	vertical := orientation == "vertical"
 	percent := ctx.Cmd.Int("percent")
@@ -165,7 +166,7 @@ func runClose(ctx root.CommandContext) error {
 	defer cleanup()
 	paneID := strings.TrimSpace(ctx.Cmd.String("pane-id"))
 	sessionName := ctx.Cmd.String("session")
-	paneIndex := ctx.Cmd.String("index")
+	paneIndex := intFlagString(ctx.Cmd, "index")
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
 	defer cancel()
 	if paneID != "" {
@@ -204,8 +205,8 @@ func runSwap(ctx root.CommandContext) error {
 	}
 	defer cleanup()
 	sessionName := ctx.Cmd.String("session")
-	paneA := ctx.Cmd.String("a")
-	paneB := ctx.Cmd.String("b")
+	paneA := intFlagString(ctx.Cmd, "a")
+	paneB := intFlagString(ctx.Cmd, "b")
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
 	defer cancel()
 	if err := client.SwapPanes(ctxTimeout, sessionName, paneA, paneB); err != nil {

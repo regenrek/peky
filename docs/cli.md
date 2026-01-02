@@ -38,7 +38,7 @@ peakypanes
   workspace [list|open|close|close-all]
   clone|c
   session [list|start|kill|rename|focus|snapshot]
-  pane [list|rename|split|close|swap|resize|send|run|view|tail|snapshot|history|wait|tag|action|key|signal|focus]
+  pane [list|rename|add|split|close|swap|resize|send|run|view|tail|snapshot|history|wait|tag|action|key|signal|focus]
   relay [create|list|stop|stop-all]
   events [watch|replay]
   context [pack]
@@ -101,6 +101,7 @@ Lifecycle and layout:
 ```bash
 peakypanes pane rename --pane-id PANE --name NAME
 peakypanes pane rename --session NAME --index INDEX --name NAME
+peakypanes pane add [--session NAME] [--index INDEX] [--pane-id PANE] [--orientation vertical|horizontal] [--percent 50]
 peakypanes pane split --session NAME --index INDEX --orientation vertical|horizontal [--percent 50]
 peakypanes pane close --pane-id PANE
 peakypanes pane close --session NAME --index INDEX

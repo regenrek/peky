@@ -156,6 +156,7 @@
                         "session.rename",
                         "session.focus",
                         "pane.rename",
+                        "pane.add",
                         "pane.split",
                         "pane.close",
                         "pane.swap",
