@@ -9,12 +9,15 @@ This format is based on Keep a Changelog.
 - Performance profiler harness (`scripts/perf-profiler`) with trace/fgprof/gops capture and timing summaries.
 - Performance layout fixtures for 10-pane baselines plus wait-for-output variant.
 - Performance test README in `testdata/performance-tests/`.
+- Performance tuning guide (`docs/performance.md`).
+- `max` performance preset plus configurable dashboard preview render mode (`dashboard.performance.preview_render.mode`).
 
 ### Changed
 - Layout send actions default to waiting for first output when `send_delay_ms` is omitted.
 - Pane dimension limits now clamp across sessiond, terminal, and VT layers to prevent oversize allocations.
 - VT parser data buffer reduced from 4MB to 64KB (configurable via env override).
 - Pane view scheduling now prioritizes visible panes with per-pane in-flight tracking to reduce refresh overhead.
+- Dashboard performance menu now surfaces render-policy + preview-render tradeoffs with preset hints.
 
 ### Fixed
 - Pane view cache now enforces TTL + max-entry eviction to prevent unbounded growth.

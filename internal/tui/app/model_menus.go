@@ -147,13 +147,20 @@ func (m *Model) settingsMenuItems() []list.Item {
 func (m *Model) performanceMenuItems() []list.Item {
 	presetLabel := fmt.Sprintf("Preset: %s", titleCase(m.settings.Performance.Preset))
 	renderLabel := "Render policy: " + strings.ToLower(m.settings.Performance.RenderPolicy)
+	previewLabel := "Preview render: " + strings.ToLower(m.settings.Performance.PreviewRender.Mode)
+	presetDesc := "Low: battery saver • Medium: default • High: smoother • " + theme.FormatWarning("Max: no throttle")
+	renderDesc := "Visible panes only (default) • " + theme.FormatWarning("All panes live")
+	previewDesc := "Cached (default) • " + theme.FormatWarning("Direct: heavy CPU") + " • Off: disable previews"
 
 	items := []picker.CommandItem{
-		{Label: presetLabel, Desc: "Low, Medium, High, or Custom", Run: func() tea.Cmd {
+		{Label: presetLabel, Desc: presetDesc, Run: func() tea.Cmd {
 			return m.cyclePerformancePreset()
 		}},
-		{Label: renderLabel, Desc: "Visible (default) or All panes live", Run: func() tea.Cmd {
+		{Label: renderLabel, Desc: renderDesc, Run: func() tea.Cmd {
 			return m.toggleRenderPolicy()
+		}},
+		{Label: previewLabel, Desc: previewDesc, Run: func() tea.Cmd {
+			return m.cyclePreviewRenderMode()
 		}},
 		{Label: "Edit config (custom overrides)", Desc: "Open config in $EDITOR for fine tuning", Run: func() tea.Cmd {
 			return m.editConfig()

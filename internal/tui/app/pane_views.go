@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -49,6 +50,9 @@ func (m *Model) refreshPaneViewsCmd() tea.Cmd {
 	if m == nil {
 		return nil
 	}
+	if m.previewRenderMode() == PreviewRenderOff && m.state == StateDashboard {
+		return nil
+	}
 	if !m.paneViewDataReady() {
 		m.logPaneViewSkipGlobal("snapshot_empty", m.dashboardColumnsDebug())
 		return nil
@@ -69,6 +73,9 @@ func (m *Model) refreshPaneViewsCmd() tea.Cmd {
 
 func (m *Model) refreshPaneViewFor(paneID string) tea.Cmd {
 	if m == nil || paneID == "" {
+		return nil
+	}
+	if m.previewRenderMode() == PreviewRenderOff && m.state == StateDashboard {
 		return nil
 	}
 	if !m.paneViewDataReady() {
@@ -98,6 +105,9 @@ func (m *Model) refreshPaneViewFor(paneID string) tea.Cmd {
 
 func (m *Model) refreshPaneViewsForIDs(ids map[string]struct{}) tea.Cmd {
 	if m == nil || len(ids) == 0 {
+		return nil
+	}
+	if m.previewRenderMode() == PreviewRenderOff && m.state == StateDashboard {
 		return nil
 	}
 	if !m.paneViewDataReady() {
@@ -365,6 +375,11 @@ func (m *Model) buildPaneViewRequestsForPending(maxReqs int) ([]sessiond.PaneVie
 	if m == nil || len(m.paneViewQueuedIDs) == 0 {
 		return nil, nil, false
 	}
+	if m.previewRenderMode() == PreviewRenderOff && m.state == StateDashboard {
+		m.paneViewQueuedIDs = nil
+		m.paneViewQueuedAt = nil
+		return nil, nil, false
+	}
 	builder := newPaneViewPendingBuild(time.Now(), maxReqs, len(m.paneViewQueuedIDs))
 	if !m.paneViewDataReady() {
 		m.buildPendingRequestsNoSnapshot(builder)
@@ -615,6 +630,10 @@ func (m *Model) buildFallbackRequest(paneID string, seen map[paneViewKey]struct{
 	if !m.allowFallbackRequest(paneID, now) {
 		return nil
 	}
+	if m.previewRenderMode() == PreviewRenderOff && m.state == StateDashboard {
+		m.logPaneViewSkip(paneID, "preview_render_off", m.paneViewSkipContext())
+		return nil
+	}
 	cols, rows := m.paneSizeForFallback(paneID)
 	req := sessiond.PaneViewRequest{
 		PaneID:       paneID,
@@ -624,6 +643,9 @@ func (m *Model) buildFallbackRequest(paneID string, seen map[paneViewKey]struct{
 		ShowCursor:   false,
 		ColorProfile: m.paneViewProfile,
 		Priority:     sessiond.PaneViewPriorityBackground,
+	}
+	if m.previewRenderMode() == PreviewRenderDirect {
+		req.DirectRender = true
 	}
 	key := paneViewKey{
 		PaneID:       req.PaneID,
@@ -792,6 +814,10 @@ func (m *Model) paneViewRequestForHit(hit mouse.PaneHit) *sessiond.PaneViewReque
 		m.logPaneViewSkipGlobal("missing_pane_id", m.paneViewSkipContext())
 		return nil
 	}
+	if m.previewRenderMode() == PreviewRenderOff && m.state == StateDashboard {
+		m.logPaneViewSkip(hit.PaneID, "preview_render_off", m.paneViewSkipContext())
+		return nil
+	}
 	if hit.Content.Empty() {
 		if m.renderPolicyAll() && !hit.Outer.Empty() {
 			hit.Content = hit.Outer
@@ -839,6 +865,9 @@ func (m *Model) paneViewRequestForHit(hit mouse.PaneHit) *sessiond.PaneViewReque
 		ColorProfile: m.paneViewProfile,
 
 		Priority: priority,
+	}
+	if mode == sessiond.PaneViewANSI && m.previewRenderMode() == PreviewRenderDirect {
+		req.DirectRender = true
 	}
 
 	key := paneViewKey{
@@ -908,6 +937,17 @@ func (m *Model) renderPolicyAll() bool {
 		return false
 	}
 	return m.settings.Performance.RenderPolicy == RenderPolicyAll
+}
+
+func (m *Model) previewRenderMode() string {
+	if m == nil {
+		return PreviewRenderCached
+	}
+	mode := strings.ToLower(strings.TrimSpace(m.settings.Performance.PreviewRender.Mode))
+	if mode == "" {
+		return PreviewRenderCached
+	}
+	return mode
 }
 
 func (m *Model) paneExistsInSnapshot(paneID string) bool {

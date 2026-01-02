@@ -33,10 +33,10 @@ const (
 type EventType string
 
 const (
-	EventPaneUpdated    EventType = "pane_updated"
+	EventPaneUpdated     EventType = "pane_updated"
 	EventPaneMetaChanged EventType = "pane_meta_changed"
-	EventSessionChanged EventType = "session_changed"
-	EventToast          EventType = "toast"
+	EventSessionChanged  EventType = "session_changed"
+	EventToast           EventType = "toast"
 )
 
 // Event is broadcast from daemon to clients.
@@ -212,6 +212,8 @@ type PaneViewRequest struct {
 	Mode         PaneViewMode
 	ShowCursor   bool
 	ColorProfile termenv.Profile
+	// DirectRender bypasses ANSI caching and renders synchronously.
+	DirectRender bool
 	KnownSeq     uint64
 	Priority     PaneViewPriority
 	// DeadlineUnixNano carries the client-side deadline for this request.

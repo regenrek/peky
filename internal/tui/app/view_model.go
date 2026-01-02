@@ -120,6 +120,9 @@ func (m *Model) paneViewProvider() func(id string, width, height int, showCursor
 		if strings.TrimSpace(id) == "" || width <= 0 || height <= 0 {
 			return ""
 		}
+		if m.previewRenderMode() == PreviewRenderOff && m.state == StateDashboard {
+			return ""
+		}
 		mode := sessiond.PaneViewANSI
 		if showCursor {
 			mode = sessiond.PaneViewLipgloss

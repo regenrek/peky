@@ -86,6 +86,7 @@ git add .peakypanes.yml  # Share with team
 - [Layout builder guide](docs/layout-builder.md)
 - [Dashboard & keybindings](docs/dashboard.md)
 - [CLI reference](docs/cli.md)
+- [Performance tuning](docs/performance.md)
 - [Testing](docs/testing.md)
 - [Daemon & troubleshooting](docs/troubleshooting.md)
 - [Release process](RELEASE-DOCS.md)

@@ -673,5 +673,8 @@ func paneViewString(ctx context.Context, win paneViewWindow, req PaneViewRequest
 	if req.Mode == PaneViewLipgloss {
 		return win.ViewLipglossCtx(ctx, req.ShowCursor, req.ColorProfile)
 	}
+	if req.DirectRender {
+		return win.ViewANSIDirectCtx(ctx)
+	}
 	return win.ViewANSICtx(ctx)
 }

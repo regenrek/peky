@@ -16,7 +16,7 @@ func (m *Model) cyclePerformancePreset() tea.Cmd {
 		return nil
 	}
 	current := strings.ToLower(strings.TrimSpace(m.settings.Performance.Preset))
-	order := []string{PerfPresetLow, PerfPresetMedium, PerfPresetHigh, PerfPresetCustom}
+	order := []string{PerfPresetLow, PerfPresetMedium, PerfPresetHigh, PerfPresetMax, PerfPresetCustom}
 	next := order[0]
 	for i, preset := range order {
 		if preset == current {
@@ -24,7 +24,7 @@ func (m *Model) cyclePerformancePreset() tea.Cmd {
 			break
 		}
 	}
-	return m.savePerformanceSettings(next, m.settings.Performance.RenderPolicy)
+	return m.savePerformanceSettings(next, m.settings.Performance.RenderPolicy, m.settings.Performance.PreviewRender.Mode)
 }
 
 func (m *Model) toggleRenderPolicy() tea.Cmd {
@@ -36,10 +36,26 @@ func (m *Model) toggleRenderPolicy() tea.Cmd {
 	if current == RenderPolicyVisible {
 		next = RenderPolicyAll
 	}
-	return m.savePerformanceSettings(m.settings.Performance.Preset, next)
+	return m.savePerformanceSettings(m.settings.Performance.Preset, next, m.settings.Performance.PreviewRender.Mode)
 }
 
-func (m *Model) savePerformanceSettings(preset, renderPolicy string) tea.Cmd {
+func (m *Model) cyclePreviewRenderMode() tea.Cmd {
+	if m == nil {
+		return nil
+	}
+	current := strings.ToLower(strings.TrimSpace(m.settings.Performance.PreviewRender.Mode))
+	order := []string{PreviewRenderCached, PreviewRenderDirect, PreviewRenderOff}
+	next := order[0]
+	for i, mode := range order {
+		if mode == current {
+			next = order[(i+1)%len(order)]
+			break
+		}
+	}
+	return m.savePerformanceSettings(m.settings.Performance.Preset, m.settings.Performance.RenderPolicy, next)
+}
+
+func (m *Model) savePerformanceSettings(preset, renderPolicy, previewMode string) tea.Cmd {
 	configPath, err := m.requireConfigPath()
 	if err != nil {
 		m.setToast("Performance update failed: "+err.Error(), toastError)
@@ -52,6 +68,7 @@ func (m *Model) savePerformanceSettings(preset, renderPolicy string) tea.Cmd {
 	}
 	cfg.Dashboard.Performance.Preset = strings.ToLower(strings.TrimSpace(preset))
 	cfg.Dashboard.Performance.RenderPolicy = strings.ToLower(strings.TrimSpace(renderPolicy))
+	cfg.Dashboard.Performance.PreviewRender.Mode = strings.ToLower(strings.TrimSpace(previewMode))
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
 		m.setToast("Performance update failed: "+err.Error(), toastError)
 		return nil
@@ -68,10 +85,11 @@ func (m *Model) savePerformanceSettings(preset, renderPolicy string) tea.Cmd {
 	}
 	m.settings = settings
 
-	label := fmt.Sprintf("Performance preset: %s", titleCase(m.settings.Performance.Preset))
-	if m.settings.Performance.RenderPolicy == RenderPolicyAll {
-		label += " (all panes live)"
-	}
+	label := fmt.Sprintf("Performance: %s / %s / %s",
+		titleCase(m.settings.Performance.Preset),
+		strings.ToLower(m.settings.Performance.RenderPolicy),
+		strings.ToLower(m.settings.Performance.PreviewRender.Mode),
+	)
 	m.setToast(label, toastSuccess)
 	return m.requestRefreshCmd()
 }

@@ -15,6 +15,7 @@ type paneViewWindow interface {
 	CopyModeActive() bool
 	ViewLipglossCtx(ctx context.Context, showCursor bool, profile termenv.Profile) (string, error)
 	ViewANSICtx(ctx context.Context) (string, error)
+	ViewANSIDirectCtx(ctx context.Context) (string, error)
 	ViewLipgloss(showCursor bool, profile termenv.Profile) string
 	ViewANSI() string
 }

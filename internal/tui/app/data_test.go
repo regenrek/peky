@@ -56,6 +56,9 @@ func TestDefaultDashboardConfigDefaults(t *testing.T) {
 	if cfg.Performance.RenderPolicy != RenderPolicyVisible {
 		t.Fatalf("Performance.RenderPolicy = %q", cfg.Performance.RenderPolicy)
 	}
+	if cfg.Performance.PreviewRender.Mode != PreviewRenderCached {
+		t.Fatalf("Performance.PreviewRender.Mode = %q", cfg.Performance.PreviewRender.Mode)
+	}
 	if cfg.Performance.PaneViews.MaxConcurrency != paneViewPerfMedium.MaxConcurrency {
 		t.Fatalf("Performance.PaneViews.MaxConcurrency = %d", cfg.Performance.PaneViews.MaxConcurrency)
 	}
@@ -78,6 +81,9 @@ func TestDefaultDashboardConfigOverrides(t *testing.T) {
 		Performance: layout.PerformanceConfig{
 			Preset:       PerfPresetCustom,
 			RenderPolicy: RenderPolicyAll,
+			PreviewRender: layout.PreviewRenderConfig{
+				Mode: PreviewRenderDirect,
+			},
 			PaneViews: layout.PaneViewPerformanceConfig{
 				MaxConcurrency:       2,
 				MinIntervalFocusedMS: 10,
@@ -123,6 +129,9 @@ func TestDefaultDashboardConfigOverrides(t *testing.T) {
 	if cfg.Performance.RenderPolicy != RenderPolicyAll {
 		t.Fatalf("Performance.RenderPolicy = %q", cfg.Performance.RenderPolicy)
 	}
+	if cfg.Performance.PreviewRender.Mode != PreviewRenderDirect {
+		t.Fatalf("Performance.PreviewRender.Mode = %q", cfg.Performance.PreviewRender.Mode)
+	}
 	if cfg.Performance.PaneViews.MaxConcurrency != 2 {
 		t.Fatalf("Performance.PaneViews.MaxConcurrency = %d", cfg.Performance.PaneViews.MaxConcurrency)
 	}
@@ -166,8 +175,28 @@ func TestDefaultDashboardConfigInvalidPerformancePreset(t *testing.T) {
 	}
 }
 
+func TestDefaultDashboardConfigMaxPreset(t *testing.T) {
+	cfg, err := defaultDashboardConfig(layout.DashboardConfig{Performance: layout.PerformanceConfig{Preset: PerfPresetMax}})
+	if err != nil {
+		t.Fatalf("defaultDashboardConfig() error: %v", err)
+	}
+	if cfg.Performance.PaneViews.MaxConcurrency != paneViewPerfMax.MaxConcurrency {
+		t.Fatalf("Performance.PaneViews.MaxConcurrency = %d", cfg.Performance.PaneViews.MaxConcurrency)
+	}
+	if cfg.Performance.PaneViews.MinIntervalFocused != 0 {
+		t.Fatalf("Performance.PaneViews.MinIntervalFocused = %s", cfg.Performance.PaneViews.MinIntervalFocused)
+	}
+}
+
 func TestDefaultDashboardConfigInvalidRenderPolicy(t *testing.T) {
 	_, err := defaultDashboardConfig(layout.DashboardConfig{Performance: layout.PerformanceConfig{RenderPolicy: "everywhere"}})
+	if err == nil {
+		t.Fatalf("defaultDashboardConfig() expected error")
+	}
+}
+
+func TestDefaultDashboardConfigInvalidPreviewRenderMode(t *testing.T) {
+	_, err := defaultDashboardConfig(layout.DashboardConfig{Performance: layout.PerformanceConfig{PreviewRender: layout.PreviewRenderConfig{Mode: "fast"}}})
 	if err == nil {
 		t.Fatalf("defaultDashboardConfig() expected error")
 	}

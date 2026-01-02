@@ -81,12 +81,19 @@ const (
 	PerfPresetLow    = "low"
 	PerfPresetMedium = "medium"
 	PerfPresetHigh   = "high"
+	PerfPresetMax    = "max"
 	PerfPresetCustom = "custom"
 )
 
 const (
 	RenderPolicyVisible = "visible"
 	RenderPolicyAll     = "all"
+)
+
+const (
+	PreviewRenderCached = "cached"
+	PreviewRenderDirect = "direct"
+	PreviewRenderOff    = "off"
 )
 
 // DashboardData contains all data required to render the dashboard.
@@ -179,11 +186,17 @@ type PaneViewPerformance struct {
 	FallbackMinInterval   time.Duration
 }
 
+// PreviewRenderSettings controls how live previews are rendered.
+type PreviewRenderSettings struct {
+	Mode string
+}
+
 // DashboardPerformance represents resolved performance settings.
 type DashboardPerformance struct {
-	Preset       string
-	RenderPolicy string
-	PaneViews    PaneViewPerformance
+	Preset        string
+	RenderPolicy  string
+	PreviewRender PreviewRenderSettings
+	PaneViews     PaneViewPerformance
 }
 
 // DashboardConfig wraps dashboard settings after defaults applied.

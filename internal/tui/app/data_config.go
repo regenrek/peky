@@ -72,6 +72,21 @@ var (
 		ForceAfter:            150 * time.Millisecond,
 		FallbackMinInterval:   100 * time.Millisecond,
 	}
+	paneViewPerfMax = PaneViewPerformance{
+		MaxConcurrency:        8,
+		MaxInFlightBatches:    4,
+		MaxBatch:              16,
+		MinIntervalFocused:    0,
+		MinIntervalSelected:   0,
+		MinIntervalBackground: 0,
+		TimeoutFocused:        1000 * time.Millisecond,
+		TimeoutSelected:       800 * time.Millisecond,
+		TimeoutBackground:     600 * time.Millisecond,
+		PumpBaseDelay:         0,
+		PumpMaxDelay:          0,
+		ForceAfter:            0,
+		FallbackMinInterval:   0,
+	}
 )
 
 type statusMatcher struct {
@@ -224,9 +239,9 @@ func resolvePerformanceConfig(cfg layout.PerformanceConfig) (DashboardPerformanc
 		preset = PerfPresetMedium
 	}
 	switch preset {
-	case PerfPresetLow, PerfPresetMedium, PerfPresetHigh, PerfPresetCustom:
+	case PerfPresetLow, PerfPresetMedium, PerfPresetHigh, PerfPresetMax, PerfPresetCustom:
 	default:
-		return DashboardPerformance{}, fmt.Errorf("invalid dashboard.performance.preset %q (use low, medium, high, or custom)", preset)
+		return DashboardPerformance{}, fmt.Errorf("invalid dashboard.performance.preset %q (use low, medium, high, max, or custom)", preset)
 	}
 
 	renderPolicy := strings.ToLower(strings.TrimSpace(cfg.RenderPolicy))
@@ -239,20 +254,33 @@ func resolvePerformanceConfig(cfg layout.PerformanceConfig) (DashboardPerformanc
 		return DashboardPerformance{}, fmt.Errorf("invalid dashboard.performance.render_policy %q (use visible or all)", renderPolicy)
 	}
 
+	previewMode := strings.ToLower(strings.TrimSpace(cfg.PreviewRender.Mode))
+	if previewMode == "" {
+		previewMode = PreviewRenderCached
+	}
+	switch previewMode {
+	case PreviewRenderCached, PreviewRenderDirect, PreviewRenderOff:
+	default:
+		return DashboardPerformance{}, fmt.Errorf("invalid dashboard.performance.preview_render.mode %q (use cached, direct, or off)", previewMode)
+	}
+
 	base := paneViewPerfMedium
 	switch preset {
 	case PerfPresetLow:
 		base = paneViewPerfLow
 	case PerfPresetHigh:
 		base = paneViewPerfHigh
+	case PerfPresetMax:
+		base = paneViewPerfMax
 	case PerfPresetCustom:
 		base = applyPaneViewOverrides(base, cfg.PaneViews)
 	}
 
 	return DashboardPerformance{
-		Preset:       preset,
-		RenderPolicy: renderPolicy,
-		PaneViews:    base,
+		Preset:        preset,
+		RenderPolicy:  renderPolicy,
+		PreviewRender: PreviewRenderSettings{Mode: previewMode},
+		PaneViews:     base,
 	}, nil
 }
 

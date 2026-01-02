@@ -75,6 +75,37 @@ func (w *Window) ViewANSICtx(ctx context.Context) (string, error) {
 	return cached, nil
 }
 
+// ViewANSIDirectCtx renders ANSI output synchronously without using the cache.
+func (w *Window) ViewANSIDirectCtx(ctx context.Context) (string, error) {
+	if w == nil {
+		return "", nil
+	}
+	w.TouchANSIDemand(0)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+
+	cells, cols, rows, state, err := w.collectLipglossCells(ctx, false)
+	if err != nil {
+		return "", err
+	}
+	if cols <= 0 || rows <= 0 {
+		return "", nil
+	}
+	snapCellAt := makeSnapshotCellAccessor(cells, cols, rows)
+	opts := RenderOptions{
+		ShowCursor: state.showCursor,
+		CursorX:    state.cursorX,
+		CursorY:    state.cursorY,
+		Highlight:  state.highlight,
+		Profile:    termenv.TrueColor,
+	}
+	return renderCellsLipglossCtx(ctx, cols, rows, snapCellAt, opts)
+}
+
 // ViewANSICached returns the cached ANSI render and whether it is up to date.
 func (w *Window) ViewANSICached() (string, bool) {
 	if w == nil {

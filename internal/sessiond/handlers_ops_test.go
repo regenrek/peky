@@ -16,6 +16,7 @@ import (
 type stubPaneView struct {
 	lipglossCalled bool
 	ansiCalled     bool
+	ansiDirect     bool
 	showCursor     bool
 	profile        termenv.Profile
 }
@@ -41,6 +42,11 @@ func (s *stubPaneView) ViewLipglossCtx(ctx context.Context, showCursor bool, pro
 
 func (s *stubPaneView) ViewANSICtx(ctx context.Context) (string, error) {
 	s.ansiCalled = true
+	return "ansi", nil
+}
+
+func (s *stubPaneView) ViewANSIDirectCtx(ctx context.Context) (string, error) {
+	s.ansiDirect = true
 	return "ansi", nil
 }
 
@@ -101,6 +107,15 @@ func TestPaneViewString(t *testing.T) {
 	}
 	if out != "ansi" || !win.ansiCalled {
 		t.Fatalf("expected ansi render")
+	}
+
+	win = &stubPaneView{}
+	out, err = paneViewString(context.Background(), win, PaneViewRequest{Mode: PaneViewANSI, DirectRender: true})
+	if err != nil {
+		t.Fatalf("paneViewString: %v", err)
+	}
+	if out != "ansi" || !win.ansiDirect {
+		t.Fatalf("expected direct ansi render")
 	}
 }
 

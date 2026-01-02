@@ -139,11 +139,17 @@ type PaneViewPerformanceConfig struct {
 	FallbackMinIntervalMS   int `yaml:"fallback_min_interval_ms,omitempty"`
 }
 
+// PreviewRenderConfig controls how pane previews are rendered.
+type PreviewRenderConfig struct {
+	Mode string `yaml:"mode,omitempty"` // cached | direct | off
+}
+
 // PerformanceConfig configures dashboard performance presets and render policy.
 type PerformanceConfig struct {
-	Preset       string                    `yaml:"preset,omitempty"`        // low | medium | high | custom
-	RenderPolicy string                    `yaml:"render_policy,omitempty"` // visible | all
-	PaneViews    PaneViewPerformanceConfig `yaml:"pane_views,omitempty"`
+	Preset        string                    `yaml:"preset,omitempty"`        // low | medium | high | max | custom
+	RenderPolicy  string                    `yaml:"render_policy,omitempty"` // visible | all
+	PreviewRender PreviewRenderConfig       `yaml:"preview_render,omitempty"`
+	PaneViews     PaneViewPerformanceConfig `yaml:"pane_views,omitempty"`
 }
 
 // HiddenProjectConfig stores a project hidden from the dashboard.
