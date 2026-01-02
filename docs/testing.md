@@ -65,3 +65,47 @@ When to use which mode:
 - **`--trace-all`**: logs every pane view timing to compute accurate averages.
 
 GitHub Actions runs gofmt checks, go vet, go test with coverage, and race on Linux.
+
+## Release Safety Checklist (pre-release, no tagging)
+
+Run these before a release candidate to avoid regressions:
+
+1) **Clean build & tests**
+
+```bash
+go test ./...
+go test ./... -race
+```
+
+2) **Coverage sanity check**
+
+```bash
+go test ./... -coverprofile /tmp/peakypanes.cover
+go tool cover -func /tmp/peakypanes.cover | tail -n 1
+```
+
+3) **Perf baseline (dev-only)**
+
+```bash
+./scripts/perf-profiler \
+  --layout testdata/performance-tests/peakypanes-perf10.yml \
+  --secs 30 --fgprof 30 --trace 10 --gops --start-timeout 20s
+```
+
+4) **Update perf summary**
+
+```bash
+# Write/refresh: testdata/performance-tests/perf-summary-YYYYMMDD.md
+```
+
+5) **Fresh config smoke**
+
+```bash
+scripts/fresh-run
+scripts/fresh-run X.Y.Z --with-project
+```
+
+6) **Verify dev-only flags are gated**
+
+- Profiling hooks must be behind build tags or env gates.
+- No profiler endpoints enabled by default.

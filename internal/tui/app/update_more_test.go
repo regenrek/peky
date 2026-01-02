@@ -126,6 +126,22 @@ func TestPaneViewQueueingHitNotVisibleProject(t *testing.T) {
 	}
 }
 
+func TestRefreshPaneViewForMissingSnapshotRequestsRefresh(t *testing.T) {
+	m := newTestModelLite()
+	m.client = &sessiond.Client{}
+
+	cmd := m.refreshPaneViewFor("missing-pane")
+	if cmd == nil {
+		t.Fatalf("expected refresh cmd for missing snapshot pane")
+	}
+	if len(m.paneViewQueuedIDs) != 0 {
+		t.Fatalf("expected no queued ids for missing snapshot pane")
+	}
+	if m.refreshInFlight == 0 {
+		t.Fatalf("expected refresh in flight to be set")
+	}
+}
+
 func TestHandleDaemonEventToast(t *testing.T) {
 	m := newTestModelLite()
 	_ = m.handleDaemonEvent(daemonEventMsg{Event: sessiond.Event{

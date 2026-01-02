@@ -165,6 +165,32 @@ func TestDefaultDashboardConfigMaxPreset(t *testing.T) {
 	}
 }
 
+func TestDefaultDashboardConfigLowPreset(t *testing.T) {
+	cfg, err := defaultDashboardConfig(layout.DashboardConfig{Performance: layout.PerformanceConfig{Preset: PerfPresetLow}})
+	if err != nil {
+		t.Fatalf("defaultDashboardConfig() error: %v", err)
+	}
+	if cfg.Performance.PaneViews.MaxConcurrency != paneViewPerfLow.MaxConcurrency {
+		t.Fatalf("Performance.PaneViews.MaxConcurrency = %d", cfg.Performance.PaneViews.MaxConcurrency)
+	}
+	if cfg.Performance.PaneViews.MinIntervalBackground != paneViewPerfLow.MinIntervalBackground {
+		t.Fatalf("Performance.PaneViews.MinIntervalBackground = %s", cfg.Performance.PaneViews.MinIntervalBackground)
+	}
+}
+
+func TestDefaultDashboardConfigHighPreset(t *testing.T) {
+	cfg, err := defaultDashboardConfig(layout.DashboardConfig{Performance: layout.PerformanceConfig{Preset: PerfPresetHigh}})
+	if err != nil {
+		t.Fatalf("defaultDashboardConfig() error: %v", err)
+	}
+	if cfg.Performance.PaneViews.MaxConcurrency != paneViewPerfHigh.MaxConcurrency {
+		t.Fatalf("Performance.PaneViews.MaxConcurrency = %d", cfg.Performance.PaneViews.MaxConcurrency)
+	}
+	if cfg.Performance.PaneViews.MinIntervalFocused != paneViewPerfHigh.MinIntervalFocused {
+		t.Fatalf("Performance.PaneViews.MinIntervalFocused = %s", cfg.Performance.PaneViews.MinIntervalFocused)
+	}
+}
+
 func TestDefaultDashboardConfigInvalidRenderPolicy(t *testing.T) {
 	_, err := defaultDashboardConfig(layout.DashboardConfig{Performance: layout.PerformanceConfig{RenderPolicy: "everywhere"}})
 	if err == nil {

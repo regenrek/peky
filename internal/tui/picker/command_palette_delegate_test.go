@@ -7,6 +7,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TestCommandPaletteDelegateRender(t *testing.T) {
@@ -77,5 +79,27 @@ func TestCommandPaletteDelegateRenderShortcut(t *testing.T) {
 	delegate.Render(&buf, model, 0, items[0])
 	if !strings.Contains(buf.String(), "ctrl+n") {
 		t.Fatalf("expected shortcut in render output, got %q", buf.String())
+	}
+}
+
+func TestCommandPaletteDelegateRenderSelectedWidth(t *testing.T) {
+	delegate := newCommandPaletteDelegate()
+	delegate.ShowDescription = false
+
+	items := []list.Item{
+		CommandItem{Label: "Session: New session", Shortcut: "ctrl+n"},
+	}
+
+	model := list.New(items, delegate, 30, 2)
+	model.SetSize(30, 2)
+	model.Select(0)
+
+	var buf bytes.Buffer
+	delegate.Render(&buf, model, 0, items[0])
+
+	line := strings.Split(buf.String(), "\n")[0]
+	stripped := ansi.Strip(line)
+	if got := lipgloss.Width(stripped); got != 30 {
+		t.Fatalf("expected rendered width 30, got %d (%q)", got, stripped)
 	}
 }
