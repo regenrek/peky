@@ -56,6 +56,7 @@ func (m *Model) viewModel() views.Model {
 		PaneSwapPicker:           m.paneSwapPicker,
 		CommandPalette:           m.commandPalette,
 		SettingsMenu:             m.settingsMenu,
+		PerformanceMenu:          m.perfMenu,
 		DebugMenu:                m.debugMenu,
 		ConfirmKill: views.ConfirmKill{
 			Session: m.confirmSession,
@@ -91,6 +92,7 @@ func (m *Model) viewModel() views.Model {
 		PreviewMode:           m.settings.PreviewMode,
 		DashboardPreviewLines: dashboardPreviewLines(m.settings),
 		PaneView:              m.paneViewProvider(),
+		DialogHelp:            m.dialogHelpView(),
 	}
 
 	return vm
@@ -117,6 +119,9 @@ func (m *Model) paneViewProvider() func(id string, width, height int, showCursor
 	}
 	return func(id string, width, height int, showCursor bool) string {
 		if strings.TrimSpace(id) == "" || width <= 0 || height <= 0 {
+			return ""
+		}
+		if m.previewRenderMode() == PreviewRenderOff && m.state == StateDashboard {
 			return ""
 		}
 		mode := sessiond.PaneViewANSI

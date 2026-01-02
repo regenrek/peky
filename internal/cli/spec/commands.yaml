@@ -15,6 +15,12 @@ global_flags:
     aliases: [y]
     type: bool
     description: Skip confirmations for side-effect commands.
+  - name: fresh-config
+    type: bool
+    description: Start with no global config or saved state.
+  - name: temporary-run
+    type: bool
+    description: Use a temporary runtime + config dir (implies --fresh-config).
 slash_shortcuts:
   - name: all
     summary: Broadcast to all panes
@@ -64,12 +70,26 @@ commands:
   - name: daemon
     id: daemon
     summary: Daemon lifecycle
+    flags:
+      - name: pprof
+        type: bool
+        description: Enable pprof server (requires profiler build).
+      - name: pprof-addr
+        type: string
+        description: pprof listen address (default 127.0.0.1:6060).
     json:
       supported: false
     subcommands:
       - name: start
         id: daemon.start
         summary: Start the daemon in the foreground
+        flags:
+          - name: pprof
+            type: bool
+            description: Enable pprof server (requires profiler build).
+          - name: pprof-addr
+            type: string
+            description: pprof listen address (default 127.0.0.1:6060).
         json:
           supported: false
       - name: stop

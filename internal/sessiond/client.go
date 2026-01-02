@@ -438,6 +438,12 @@ func (c *Client) SwapPanes(ctx context.Context, sessionName, paneA, paneB string
 	return err
 }
 
+// SetPaneTool updates the recorded tool for a pane.
+func (c *Client) SetPaneTool(ctx context.Context, paneID, tool string) error {
+	_, err := c.call(ctx, OpSetPaneTool, SetPaneToolRequest{PaneID: paneID, Tool: tool}, nil)
+	return err
+}
+
 // SendInput forwards raw input to a pane.
 func (c *Client) SendInput(ctx context.Context, paneID string, input []byte) error {
 	_, err := c.call(ctx, OpSendInput, SendInputRequest{PaneID: paneID, Input: input}, nil)

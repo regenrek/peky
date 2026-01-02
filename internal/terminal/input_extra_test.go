@@ -48,7 +48,7 @@ func TestSendInputErrorPaths(t *testing.T) {
 
 func TestSendInputClearsMouseSelection(t *testing.T) {
 	pty := &fakePty{}
-	w := &Window{pty: pty}
+	w := &Window{pty: pty, writeCh: make(chan writeRequest, 1)}
 	w.CopyMode = &CopyMode{Active: true, Selecting: true}
 	w.mouseSelection = true
 	w.ScrollbackMode = true

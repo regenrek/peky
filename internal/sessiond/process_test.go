@@ -212,7 +212,17 @@ func TestRunStop(t *testing.T) {
 
 func waitForListener(t *testing.T, d *Daemon) {
 	t.Helper()
+	if d == nil {
+		t.Fatalf("daemon is nil")
+	}
 	deadline := time.Now().Add(2 * time.Second)
+	if d.started != nil {
+		select {
+		case <-d.started:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("listener not set")
+		}
+	}
 	for time.Now().Before(deadline) {
 		if d.listenerValue() != nil {
 			return

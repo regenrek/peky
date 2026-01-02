@@ -11,6 +11,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 
 	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/limits"
 	"github.com/regenrek/peakypanes/internal/native"
 	"github.com/regenrek/peakypanes/internal/sessionpolicy"
 )
@@ -51,6 +52,7 @@ func (d *Daemon) handleSnapshot(payload []byte) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
 	defer cancel()
 	sessions := manager.Snapshot(ctx, req.PreviewLines)
+	d.debugSnapshot(req.PreviewLines, sessions)
 	focusedSession, focusedPane := d.focusState()
 	resp := SnapshotResponse{
 		Version:        manager.Version(),
@@ -246,6 +248,26 @@ func (d *Daemon) handleSwapPanes(payload []byte) ([]byte, error) {
 	return nil, nil
 }
 
+func (d *Daemon) handleSetPaneTool(payload []byte) ([]byte, error) {
+	var req SetPaneToolRequest
+	if err := decodePayload(payload, &req); err != nil {
+		return nil, err
+	}
+	paneID, err := requirePaneID(req.PaneID)
+	if err != nil {
+		return nil, err
+	}
+	manager, err := d.requireManager()
+	if err != nil {
+		return nil, err
+	}
+	if err := manager.SetPaneTool(paneID, req.Tool); err != nil {
+		return nil, err
+	}
+	d.queuePersistState()
+	return nil, nil
+}
+
 func (d *Daemon) handleSendInput(payload []byte) ([]byte, error) {
 	var req SendInputRequest
 	if err := decodePayload(payload, &req); err != nil {
@@ -420,13 +442,7 @@ func requirePaneID(value string) (string, error) {
 }
 
 func normalizeDimensions(cols, rows int) (int, int) {
-	if cols < 1 {
-		cols = 1
-	}
-	if rows < 1 {
-		rows = 1
-	}
-	return cols, rows
+	return limits.Clamp(cols, rows)
 }
 
 func resolvePaneTargetByID(manager sessionManager, paneID string) (string, string, error) {

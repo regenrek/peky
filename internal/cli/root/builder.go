@@ -31,6 +31,22 @@ func BuildApp(specDoc *spec.Spec, deps Dependencies, reg *Registry) (*cli.Comman
 		Writer:      deps.Stdout,
 		ErrWriter:   deps.Stderr,
 	}
+	var runEnvCleanup func()
+	app.Before = func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+		cleanup, err := applyRunEnvFromFlags(cmd, deps.Version)
+		if err != nil {
+			return ctx, err
+		}
+		runEnvCleanup = cleanup
+		return ctx, nil
+	}
+	app.After = func(ctx context.Context, cmd *cli.Command) error {
+		if runEnvCleanup != nil {
+			runEnvCleanup()
+			runEnvCleanup = nil
+		}
+		return nil
+	}
 	globalFlags, err := buildFlags(specDoc.GlobalFlags)
 	if err != nil {
 		return nil, err

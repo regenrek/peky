@@ -183,7 +183,7 @@ func (m *Manager) restorePane(ctx context.Context, path string, env []string, sp
 	pane.Width = clampRestoreValue(spec.Width, 1, LayoutBaseSize)
 	pane.Height = clampRestoreValue(spec.Height, 1, LayoutBaseSize)
 	if active {
-		pane.LastActive = time.Now()
+		pane.SetLastActive(time.Now())
 	}
 	return pane, nil
 }

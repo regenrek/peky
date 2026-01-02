@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -31,6 +32,8 @@ type Session struct {
 	CreatedAt  time.Time
 	Env        []string
 }
+
+const previewUpdateBudget = 50 * time.Millisecond
 
 // Session returns a snapshot pointer for a session name.
 func (m *Manager) Session(name string) *Session {
@@ -92,6 +95,7 @@ func (m *Manager) KillSession(name string) error {
 	m.mu.Unlock()
 
 	m.dropPreviewCache(paneIDs...)
+	m.clearOutputWaiters(paneIDs...)
 	m.closePanes(session.Panes)
 	for _, id := range paneIDs {
 		m.notifyPane(id)
@@ -134,19 +138,51 @@ func (m *Manager) StartSession(ctx context.Context, spec SessionSpec) (*Session,
 	if m.closed.Load() {
 		return nil, errors.New("native: manager closed")
 	}
+	normalized, err := m.normalizeSessionSpec(spec)
+	if err != nil {
+		return nil, err
+	}
+	session := newSessionFromSpec(normalized)
+	panes, err := m.buildPanes(ctx, normalized)
+	if err != nil {
+		m.closePanes(panes)
+		return nil, err
+	}
+	session.Panes = panes
+	if perfDebugEnabled() {
+		log.Printf("native: session %s panes=%d layout=%s", session.Name, len(panes), session.LayoutName)
+	}
+
+	if err := m.registerSession(session, panes); err != nil {
+		m.closePanes(panes)
+		return nil, err
+	}
+	m.forwardPaneUpdates(panes)
+	m.seedPaneUpdates(panes)
+	m.version.Add(1)
+
+	m.dispatchLayoutSends(session, normalized.Layout)
+
+	return session, nil
+}
+
+func (m *Manager) normalizeSessionSpec(spec SessionSpec) (SessionSpec, error) {
 	if strings.TrimSpace(spec.Name) == "" {
-		return nil, errors.New("native: session name is required")
+		return SessionSpec{}, errors.New("native: session name is required")
 	}
 	if spec.Layout == nil {
-		return nil, errors.New("native: layout is required")
+		return SessionSpec{}, errors.New("native: layout is required")
 	}
 	if strings.TrimSpace(spec.Path) != "" {
 		if err := validatePath(spec.Path); err != nil {
-			return nil, err
+			return SessionSpec{}, err
 		}
 		spec.Path = filepath.Clean(spec.Path)
 	}
+	return spec, nil
+}
 
+func newSessionFromSpec(spec SessionSpec) *Session {
 	session := &Session{
 		Name:       spec.Name,
 		Path:       spec.Path,
@@ -159,37 +195,33 @@ func (m *Manager) StartSession(ctx context.Context, spec SessionSpec) (*Session,
 	if len(spec.Env) > 0 {
 		session.Env = append([]string(nil), spec.Env...)
 	}
+	return session
+}
 
-	panes, err := m.buildPanes(ctx, spec)
-	if err != nil {
-		m.closePanes(panes)
-		return nil, err
-	}
-	session.Panes = panes
-
+func (m *Manager) registerSession(session *Session, panes []*Pane) error {
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	if _, ok := m.sessions[session.Name]; ok {
-		m.mu.Unlock()
-		m.closePanes(panes)
-		return nil, fmt.Errorf("native: session %q already exists", session.Name)
+		return fmt.Errorf("native: session %q already exists", session.Name)
 	}
 	m.sessions[session.Name] = session
 	for _, pane := range panes {
 		m.panes[pane.ID] = pane
 	}
-	m.mu.Unlock()
+	return nil
+}
 
+func (m *Manager) forwardPaneUpdates(panes []*Pane) {
 	for _, pane := range panes {
 		m.forwardUpdates(pane)
 	}
+}
 
+func (m *Manager) seedPaneUpdates(panes []*Pane) {
 	// Seed an update to render initial output.
 	for _, pane := range panes {
 		m.notifyPane(pane.ID)
 	}
-	m.version.Add(1)
-
-	return session, nil
 }
 
 // Snapshot returns a copy of sessions with preview lines computed.
@@ -273,6 +305,7 @@ func (m *Manager) snapshotSessions() ([]SessionSnapshot, []panePreviewRef, []str
 				Title:         title,
 				Command:       pane.Command,
 				StartCommand:  pane.StartCommand,
+				Tool:          pane.Tool,
 				PID:           pane.PID,
 				Active:        pane.Active,
 				Left:          pane.Left,
@@ -281,7 +314,7 @@ func (m *Manager) snapshotSessions() ([]SessionSnapshot, []panePreviewRef, []str
 				Height:        pane.Height,
 				Dead:          pane.window != nil && pane.window.Dead(),
 				DeadStatus:    pane.windowExitStatus(),
-				LastActive:    pane.LastActive,
+				LastActive:    pane.LastActiveAt(),
 				RestoreFailed: pane.RestoreFailed,
 				RestoreError:  pane.RestoreError,
 				Cwd:           cwd,
@@ -296,7 +329,7 @@ func (m *Manager) snapshotSessions() ([]SessionSnapshot, []panePreviewRef, []str
 			paneRefs = append(paneRefs, panePreviewRef{
 				id:         pane.ID,
 				window:     pane.window,
-				lastActive: pane.LastActive,
+				lastActive: pane.LastActiveAt(),
 				seq:        seq,
 				sessionIdx: si,
 				paneIdx:    pi,
@@ -346,16 +379,13 @@ func (m *Manager) collectPreviewUpdates(
 	}
 	updates := make(map[string]previewState)
 	lastProcessed := -1
-	deadline, hasDeadline := ctx.Deadline()
+	stopper := newPreviewUpdateStopper(ctx)
 	for i := 0; i < len(refs); i++ {
 		idx := (start + i) % len(refs)
 		if !needsUpdate[idx] {
 			continue
 		}
-		if ctx.Err() != nil {
-			break
-		}
-		if hasDeadline && time.Now().After(deadline) {
+		if stopper.shouldStop() {
 			break
 		}
 		ref := refs[idx]
@@ -381,6 +411,45 @@ func (m *Manager) collectPreviewUpdates(
 		}
 	}
 	return updates, nextCursor
+}
+
+type previewUpdateStopper struct {
+	ctx            context.Context
+	deadline       time.Time
+	hasDeadline    bool
+	budgetDeadline time.Time
+}
+
+func newPreviewUpdateStopper(ctx context.Context) previewUpdateStopper {
+	deadline, hasDeadline := ctx.Deadline()
+	budgetDeadline := time.Time{}
+	if previewUpdateBudget > 0 {
+		budgetDeadline = time.Now().Add(previewUpdateBudget)
+		if hasDeadline && deadline.Before(budgetDeadline) {
+			budgetDeadline = deadline
+		}
+	} else if hasDeadline {
+		budgetDeadline = deadline
+	}
+	return previewUpdateStopper{
+		ctx:            ctx,
+		deadline:       deadline,
+		hasDeadline:    hasDeadline,
+		budgetDeadline: budgetDeadline,
+	}
+}
+
+func (s previewUpdateStopper) shouldStop() bool {
+	if s.ctx.Err() != nil {
+		return true
+	}
+	if s.hasDeadline && time.Now().After(s.deadline) {
+		return true
+	}
+	if !s.budgetDeadline.IsZero() && time.Now().After(s.budgetDeadline) {
+		return true
+	}
+	return false
 }
 
 func applyPreviewLines(out []SessionSnapshot, refs []panePreviewRef, states map[string]previewState, previewLines int) {
@@ -415,6 +484,7 @@ type PaneSnapshot struct {
 	Command       string
 	StartCommand  string
 	Cwd           string
+	Tool          string
 	PID           int
 	Active        bool
 	Left          int

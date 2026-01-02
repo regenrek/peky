@@ -260,6 +260,7 @@ func panesFromNative(panes []native.PaneSnapshot, settings DashboardConfig, now 
 			Title:         p.Title,
 			Command:       p.Command,
 			StartCommand:  p.StartCommand,
+			Tool:          p.Tool,
 			PID:           p.PID,
 			Active:        p.Active,
 			Left:          p.Left,

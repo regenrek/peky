@@ -74,6 +74,7 @@ var keyHandlers = map[ViewState]keyHandler{
 	StateHelp:             func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateHelp(msg) },
 	StateCommandPalette:   func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateCommandPalette(msg) },
 	StateSettingsMenu:     func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateSettingsMenu(msg) },
+	StatePerformanceMenu:  func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updatePerformanceMenu(msg) },
 	StateDebugMenu:        func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateDebugMenu(msg) },
 	StateRenameSession:    func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateRename(msg) },
 	StateRenamePane:       func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateRename(msg) },
@@ -101,6 +102,9 @@ var updateHandlers = map[reflect.Type]updateHandler{
 	},
 	reflect.TypeOf(paneViewsMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handlePaneViews(msg.(paneViewsMsg))
+	},
+	reflect.TypeOf(paneViewPumpMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handlePaneViewPump(msg.(paneViewPumpMsg))
 	},
 	reflect.TypeOf(daemonRestartMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleDaemonRestart(msg.(daemonRestartMsg))
@@ -169,6 +173,10 @@ func (m *Model) handlePickerUpdate(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		var cmd tea.Cmd
 		m.settingsMenu, cmd = m.settingsMenu.Update(msg)
 		return m, cmd, true
+	case StatePerformanceMenu:
+		var cmd tea.Cmd
+		m.perfMenu, cmd = m.perfMenu.Update(msg)
+		return m, cmd, true
 	case StateDebugMenu:
 		var cmd tea.Cmd
 		m.debugMenu, cmd = m.debugMenu.Update(msg)
@@ -186,6 +194,7 @@ func (m *Model) applyWindowSize(msg tea.WindowSizeMsg) {
 	m.setPaneSwapPickerSize()
 	m.setCommandPaletteSize()
 	m.setSettingsMenuSize()
+	m.setPerformanceMenuSize()
 	m.setDebugMenuSize()
 	m.setQuickReplySize()
 }
@@ -209,29 +218,59 @@ func (m *Model) handleSelectionRefresh(msg selectionRefreshMsg) tea.Cmd {
 func (m *Model) handleDashboardSnapshot(msg dashboardSnapshotMsg) tea.Cmd {
 	m.endRefresh()
 	diag.LogEvery("tui.snapshot.recv", 2*time.Second, "tui: snapshot recv seq=%d err=%v in_flight=%d", msg.Result.RefreshSeq, msg.Result.Err, m.refreshInFlight)
-	if msg.Result.RefreshSeq > 0 && msg.Result.RefreshSeq < m.refreshSeq {
-		if m.refreshQueued {
-			m.refreshQueued = false
-			return m.startRefreshCmd()
-		}
-		return nil
-	}
-	if msg.Result.RefreshSeq < m.lastAppliedSeq {
-		if m.refreshQueued {
-			m.refreshQueued = false
-			return m.startRefreshCmd()
-		}
-		return nil
-	}
-	if msg.Result.Err != nil {
-		m.setToast("Refresh failed: "+msg.Result.Err.Error(), toastError)
-		cmd := m.refreshPaneViewsCmd()
-		if m.refreshQueued {
-			m.refreshQueued = false
-			return tea.Batch(cmd, m.startRefreshCmd())
-		}
+	m.noteRefreshTiming(msg)
+	if cmd, handled := m.handleSnapshotStale(msg); handled {
 		return cmd
 	}
+	if msg.Result.Err != nil {
+		return m.handleSnapshotError(msg)
+	}
+	m.applySnapshotState(msg)
+	return m.handleSnapshotPostApply()
+}
+
+func (m *Model) noteRefreshTiming(msg dashboardSnapshotMsg) {
+	if !perfDebugEnabled() || msg.Result.RefreshSeq == 0 {
+		return
+	}
+	if m.refreshStarted == nil {
+		return
+	}
+	started, ok := m.refreshStarted[msg.Result.RefreshSeq]
+	if !ok {
+		return
+	}
+	delete(m.refreshStarted, msg.Result.RefreshSeq)
+	dur := time.Since(started)
+	if dur > perfSlowRefreshTotal {
+		logPerfEvery("tui.refresh.total", perfLogInterval, "tui: refresh slow seq=%d dur=%s err=%v", msg.Result.RefreshSeq, dur, msg.Result.Err)
+	}
+}
+
+func (m *Model) handleSnapshotStale(msg dashboardSnapshotMsg) (tea.Cmd, bool) {
+	if msg.Result.RefreshSeq > 0 && msg.Result.RefreshSeq < m.refreshSeq {
+		return m.finishQueuedRefresh(), true
+	}
+	if msg.Result.RefreshSeq < m.lastAppliedSeq {
+		return m.finishQueuedRefresh(), true
+	}
+	return nil, false
+}
+
+func (m *Model) finishQueuedRefresh() tea.Cmd {
+	if !m.refreshQueued {
+		return nil
+	}
+	m.refreshQueued = false
+	return m.startRefreshCmd()
+}
+
+func (m *Model) handleSnapshotError(msg dashboardSnapshotMsg) tea.Cmd {
+	m.setToast("Refresh failed: "+msg.Result.Err.Error(), toastError)
+	return m.appendQueuedRefresh(m.refreshPaneViewsCmd())
+}
+
+func (m *Model) applySnapshotState(msg dashboardSnapshotMsg) {
 	m.lastAppliedSeq = msg.Result.RefreshSeq
 	if msg.Result.Warning != "" {
 		m.setToast("Dashboard config: "+msg.Result.Warning, toastWarning)
@@ -252,12 +291,44 @@ func (m *Model) handleDashboardSnapshot(msg dashboardSnapshotMsg) tea.Cmd {
 	if m.refreshSelectionForProjectConfig() {
 		m.setToast("Project config changed: selection refreshed", toastInfo)
 	}
-	cmd := m.refreshPaneViewsCmd()
-	if m.refreshQueued {
-		m.refreshQueued = false
-		cmd = tea.Batch(cmd, m.startRefreshCmd())
+}
+
+func (m *Model) handleSnapshotPostApply() tea.Cmd {
+	cmds := make([]tea.Cmd, 0, 2)
+	if pumpCmd := m.snapshotPumpCmd(); pumpCmd != nil {
+		cmds = append(cmds, pumpCmd)
 	}
-	return cmd
+	if refreshCmd := m.refreshPaneViewsCmd(); refreshCmd != nil {
+		cmds = append(cmds, refreshCmd)
+	}
+	if cmd := m.appendQueuedRefresh(nil); cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+	if len(cmds) == 0 {
+		return nil
+	}
+	if len(cmds) == 1 {
+		return cmds[0]
+	}
+	return tea.Batch(cmds...)
+}
+
+func (m *Model) snapshotPumpCmd() tea.Cmd {
+	if len(m.paneViewQueuedIDs) == 0 {
+		return nil
+	}
+	return m.schedulePaneViewPump("snapshot_pending", 0)
+}
+
+func (m *Model) appendQueuedRefresh(cmd tea.Cmd) tea.Cmd {
+	if !m.refreshQueued {
+		return cmd
+	}
+	m.refreshQueued = false
+	if cmd == nil {
+		return m.startRefreshCmd()
+	}
+	return tea.Batch(cmd, m.startRefreshCmd())
 }
 
 func (m *Model) handlePaneClosed(msg PaneClosedMsg) tea.Cmd {
@@ -279,6 +350,14 @@ const daemonEventBatchMax = 64
 
 func (m *Model) handleDaemonEvent(msg daemonEventMsg) tea.Cmd {
 	events := collectDaemonEvents(m, msg.Event)
+	if perfDebugEnabled() {
+		now := time.Now()
+		for _, event := range events {
+			if event.Type == sessiond.EventPaneUpdated && event.PaneID != "" {
+				m.perfNotePaneUpdated(event.PaneID, event.PaneUpdateSeq, now)
+			}
+		}
+	}
 	paneIDs, refresh, toastMsg, toastLevel := summarizeDaemonEvents(events)
 	diag.LogEvery("tui.event", 2*time.Second, "tui: events batch=%d panes=%d refresh=%v", len(events), len(paneIDs), refresh)
 	cmds := []tea.Cmd{waitDaemonEvent(m.client)}
@@ -331,6 +410,8 @@ func summarizeDaemonEvents(events []sessiond.Event) (map[string]struct{}, bool, 
 			if event.PaneID != "" {
 				paneIDs[event.PaneID] = struct{}{}
 			}
+		case sessiond.EventPaneMetaChanged:
+			refresh = true
 		case sessiond.EventSessionChanged:
 			refresh = true
 		case sessiond.EventToast:
@@ -358,7 +439,7 @@ func toastLevelFromSessiond(level sessiond.ToastLevel) toastLevel {
 
 func (m *Model) handlePaneViews(msg paneViewsMsg) tea.Cmd {
 	var cmd tea.Cmd
-	diag.LogEvery("tui.paneviews.recv", 2*time.Second, "tui: paneViews recv count=%d err=%v in_flight=%d queued=%v queued_ids=%d", len(msg.Views), msg.Err, m.paneViewInFlight, m.paneViewQueued, len(m.paneViewQueuedIDs))
+	diag.LogEvery("tui.paneviews.recv", 2*time.Second, "tui: paneViews recv count=%d err=%v in_flight=%d pending=%d", len(msg.Views), msg.Err, m.paneViewInFlight, len(m.paneViewQueuedIDs))
 	if msg.Err != nil && len(msg.Views) == 0 && !errors.Is(msg.Err, context.DeadlineExceeded) && !errors.Is(msg.Err, context.Canceled) {
 		m.setToast("Pane view failed: "+msg.Err.Error(), toastWarning)
 	}
@@ -366,11 +447,12 @@ func (m *Model) handlePaneViews(msg paneViewsMsg) tea.Cmd {
 	for _, view := range msg.Views {
 		m.applyPaneView(view)
 	}
+	m.clearPaneViewInFlight(msg.PaneIDs)
 	if m.paneViewInFlight > 0 {
 		m.paneViewInFlight--
 	}
-	if m.paneViewInFlight == 0 {
-		cmd = m.handlePaneViewQueue()
+	if len(m.paneViewQueuedIDs) > 0 {
+		cmd = m.schedulePaneViewPump("pane_view_done", 0)
 	}
 	return cmd
 }
@@ -392,26 +474,25 @@ func (m *Model) applyPaneView(view sessiond.PaneViewResponse) {
 	if view.UpdateSeq > 0 {
 		m.paneViewSeq[key] = view.UpdateSeq
 	}
+	if view.PaneID != "" && view.Cols > 0 && view.Rows > 0 {
+		m.recordPaneSize(view.PaneID, view.Cols, view.Rows)
+	}
 	if !view.NotModified && view.View != "" {
 		m.paneViews[key] = view.View
 	}
 	if view.PaneID != "" {
 		m.paneMouseMotion[view.PaneID] = view.AllowMotion
 	}
-}
-
-func (m *Model) handlePaneViewQueue() tea.Cmd {
-	if m.paneViewQueued {
-		m.paneViewQueued = false
-		m.paneViewQueuedIDs = nil
-		return m.refreshPaneViewsCmd()
+	if perfDebugEnabled() && view.PaneID != "" && view.View != "" {
+		if m.paneViewFirst == nil {
+			m.paneViewFirst = make(map[string]struct{})
+		}
+		if _, ok := m.paneViewFirst[view.PaneID]; !ok {
+			m.paneViewFirst[view.PaneID] = struct{}{}
+			logPerfEvery("tui.paneview.first."+view.PaneID, 0, "tui: pane view first pane=%s mode=%v cols=%d rows=%d", view.PaneID, view.Mode, view.Cols, view.Rows)
+		}
 	}
-	if len(m.paneViewQueuedIDs) > 0 {
-		queued := m.paneViewQueuedIDs
-		m.paneViewQueuedIDs = nil
-		return m.startPaneViewFetch(m.paneViewRequestsForIDs(queued))
-	}
-	return nil
+	m.perfNotePaneViewResponse(view, time.Now())
 }
 
 func (m *Model) handleSessionStarted(msg sessionStartedMsg) tea.Cmd {

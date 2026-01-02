@@ -43,8 +43,8 @@ func TestViewDashboardContentRenders(t *testing.T) {
 	if !strings.Contains(out, "Peaky Panes") {
 		t.Fatalf("viewDashboardContent() missing header")
 	}
-	if !strings.Contains(out, "enter send") {
-		t.Fatalf("viewDashboardContent() missing input hint")
+	if !strings.Contains(out, "hello") {
+		t.Fatalf("viewDashboardContent() missing quick reply input")
 	}
 }
 

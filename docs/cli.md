@@ -22,6 +22,8 @@ Global flags (all commands):
 --json        # Emit JSON output (schema: docs/schemas/cli.schema.json)
 --timeout     # Override command timeout (Go duration, e.g. 2s, 500ms)
 --yes|-y      # Skip confirmations for side-effect commands
+--fresh-config   # Start with no global config or saved state
+--temporary-run  # Use a temporary runtime + config dir (implies --fresh-config)
 ```
 
 ## Command tree
@@ -61,6 +63,8 @@ peakypanes daemon               # Run daemon in foreground
 peakypanes daemon start          # Same as `daemon`
 peakypanes daemon stop           # Stop daemon (use --yes to skip confirmation)
 peakypanes daemon restart        # Restart daemon (use --yes to skip confirmation)
+peakypanes daemon --pprof        # Enable pprof server (requires profiler build)
+peakypanes daemon --pprof-addr 127.0.0.1:6060
 
 peakypanes session list
 peakypanes session start --name NAME --path PATH --layout LAYOUT --env KEY=VAL

@@ -8,10 +8,12 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	uv "github.com/charmbracelet/ultraviolet"
 
+	"github.com/regenrek/peakypanes/internal/agenttool"
 	"github.com/regenrek/peakypanes/internal/terminal"
 )
 
@@ -22,6 +24,7 @@ type Pane struct {
 	Title         string
 	Command       string
 	StartCommand  string
+	Tool          string
 	PID           int
 	Active        bool
 	Left          int
@@ -32,10 +35,32 @@ type Pane struct {
 	DeadStatus    int
 	RestoreFailed bool
 	RestoreError  string
-	LastActive    time.Time
+	lastActive    atomic.Int64
 	Tags          []string
 	window        *terminal.Window
 	output        *outputLog
+}
+
+func (p *Pane) SetLastActive(t time.Time) {
+	if p == nil {
+		return
+	}
+	if t.IsZero() {
+		p.lastActive.Store(0)
+		return
+	}
+	p.lastActive.Store(t.UnixNano())
+}
+
+func (p *Pane) LastActiveAt() time.Time {
+	if p == nil {
+		return time.Time{}
+	}
+	nano := p.lastActive.Load()
+	if nano == 0 {
+		return time.Time{}
+	}
+	return time.Unix(0, nano)
 }
 
 // Window returns the terminal window for a pane ID.
@@ -84,6 +109,46 @@ func (m *Manager) RenamePane(sessionName, paneIndex, newTitle string) error {
 		}
 	}
 	return fmt.Errorf("native: pane %q not found in %q", paneIndex, sessionName)
+}
+
+// SetPaneTool updates the recorded tool for a pane.
+func (m *Manager) SetPaneTool(paneID string, tool string) error {
+	if m == nil {
+		return errors.New("native: manager is nil")
+	}
+	paneID = strings.TrimSpace(paneID)
+	if paneID == "" {
+		return errors.New("native: pane id is required")
+	}
+	tool = strings.TrimSpace(tool)
+	var normalized string
+	if tool != "" {
+		if detected := agenttool.Normalize(tool); detected != "" {
+			normalized = string(detected)
+		} else {
+			return fmt.Errorf("native: unknown tool %q", tool)
+		}
+	}
+	var changed bool
+
+	m.mu.Lock()
+	pane := m.panes[paneID]
+	if pane == nil {
+		m.mu.Unlock()
+		return fmt.Errorf("native: pane %q not found", paneID)
+	}
+	if pane.Tool != normalized {
+		pane.Tool = normalized
+		changed = true
+	}
+	m.mu.Unlock()
+
+	if changed {
+		// notifyMeta bumps the snapshot version and emits a metadata update event.
+		// Do not call notifyPane while holding Manager.mu (it takes an RLock).
+		m.notifyMeta(paneID)
+	}
+	return nil
 }
 
 // ClosePane removes a pane from a session and reflows remaining panes.
@@ -233,7 +298,7 @@ func (m *Manager) SplitPane(ctx context.Context, sessionName, paneIndex string, 
 	pane.Index = newIndex
 	pane.Active = true
 	pane.Left, pane.Top, pane.Width, pane.Height = newRect.x, newRect.y, newRect.w, newRect.h
-	pane.LastActive = time.Now()
+	pane.SetLastActive(time.Now())
 	session.Panes = append(session.Panes, pane)
 	m.panes[pane.ID] = pane
 	m.mu.Unlock()

@@ -24,6 +24,69 @@ var (
 	defaultRunningRegex = "(?i)running|in progress|building|installing|▶"
 )
 
+var (
+	paneViewPerfLow = PaneViewPerformance{
+		MaxConcurrency:        2,
+		MaxInFlightBatches:    1,
+		MaxBatch:              4,
+		MinIntervalFocused:    60 * time.Millisecond,
+		MinIntervalSelected:   180 * time.Millisecond,
+		MinIntervalBackground: 400 * time.Millisecond,
+		TimeoutFocused:        2000 * time.Millisecond,
+		TimeoutSelected:       1400 * time.Millisecond,
+		TimeoutBackground:     1100 * time.Millisecond,
+		PumpBaseDelay:         25 * time.Millisecond,
+		PumpMaxDelay:          150 * time.Millisecond,
+		ForceAfter:            400 * time.Millisecond,
+		FallbackMinInterval:   250 * time.Millisecond,
+	}
+	paneViewPerfMedium = PaneViewPerformance{
+		MaxConcurrency:        4,
+		MaxInFlightBatches:    2,
+		MaxBatch:              8,
+		MinIntervalFocused:    33 * time.Millisecond,
+		MinIntervalSelected:   100 * time.Millisecond,
+		MinIntervalBackground: 250 * time.Millisecond,
+		TimeoutFocused:        1500 * time.Millisecond,
+		TimeoutSelected:       1000 * time.Millisecond,
+		TimeoutBackground:     800 * time.Millisecond,
+		PumpBaseDelay:         0,
+		PumpMaxDelay:          50 * time.Millisecond,
+		ForceAfter:            250 * time.Millisecond,
+		FallbackMinInterval:   150 * time.Millisecond,
+	}
+	paneViewPerfHigh = PaneViewPerformance{
+		MaxConcurrency:        6,
+		MaxInFlightBatches:    3,
+		MaxBatch:              12,
+		MinIntervalFocused:    16 * time.Millisecond,
+		MinIntervalSelected:   60 * time.Millisecond,
+		MinIntervalBackground: 150 * time.Millisecond,
+		TimeoutFocused:        1000 * time.Millisecond,
+		TimeoutSelected:       800 * time.Millisecond,
+		TimeoutBackground:     600 * time.Millisecond,
+		PumpBaseDelay:         0,
+		PumpMaxDelay:          25 * time.Millisecond,
+		ForceAfter:            150 * time.Millisecond,
+		FallbackMinInterval:   100 * time.Millisecond,
+	}
+	paneViewPerfMax = PaneViewPerformance{
+		MaxConcurrency:        8,
+		MaxInFlightBatches:    4,
+		MaxBatch:              16,
+		MinIntervalFocused:    0,
+		MinIntervalSelected:   0,
+		MinIntervalBackground: 0,
+		TimeoutFocused:        1000 * time.Millisecond,
+		TimeoutSelected:       800 * time.Millisecond,
+		TimeoutBackground:     600 * time.Millisecond,
+		PumpBaseDelay:         0,
+		PumpMaxDelay:          0,
+		ForceAfter:            0,
+		FallbackMinInterval:   0,
+	}
+)
+
 type statusMatcher struct {
 	success *regexp.Regexp
 	error   *regexp.Regexp
@@ -86,6 +149,10 @@ func defaultDashboardConfig(cfg layout.DashboardConfig) (DashboardConfig, error)
 	if err != nil {
 		return DashboardConfig{}, err
 	}
+	performance, err := resolvePerformanceConfig(cfg.Performance)
+	if err != nil {
+		return DashboardConfig{}, err
+	}
 	return DashboardConfig{
 		RefreshInterval:    time.Duration(refreshMS) * time.Millisecond,
 		PreviewLines:       previewLines,
@@ -100,6 +167,7 @@ func defaultDashboardConfig(cfg layout.DashboardConfig) (DashboardConfig, error)
 		PaneNavigationMode: paneNavigationMode,
 		QuitBehavior:       quitBehavior,
 		HiddenProjects:     hiddenProjects,
+		Performance:        performance,
 	}, nil
 }
 
@@ -161,6 +229,88 @@ func resolveQuitBehavior(value string) (string, error) {
 		return "", fmt.Errorf("invalid quit_behavior %q (use prompt, keep, or stop)", value)
 	}
 	return quitBehavior, nil
+}
+
+func resolvePerformanceConfig(cfg layout.PerformanceConfig) (DashboardPerformance, error) {
+	preset := strings.ToLower(strings.TrimSpace(cfg.Preset))
+	if preset == "" {
+		preset = PerfPresetMax
+	}
+	switch preset {
+	case PerfPresetLow, PerfPresetMedium, PerfPresetHigh, PerfPresetMax, PerfPresetCustom:
+	default:
+		return DashboardPerformance{}, fmt.Errorf("invalid dashboard.performance.preset %q (use low, medium, high, max, or custom)", preset)
+	}
+
+	renderPolicy := strings.ToLower(strings.TrimSpace(cfg.RenderPolicy))
+	if renderPolicy == "" {
+		renderPolicy = RenderPolicyVisible
+	}
+	switch renderPolicy {
+	case RenderPolicyVisible, RenderPolicyAll:
+	default:
+		return DashboardPerformance{}, fmt.Errorf("invalid dashboard.performance.render_policy %q (use visible or all)", renderPolicy)
+	}
+
+	previewMode := strings.ToLower(strings.TrimSpace(cfg.PreviewRender.Mode))
+	if previewMode == "" {
+		previewMode = PreviewRenderDirect
+	}
+	switch previewMode {
+	case PreviewRenderCached, PreviewRenderDirect, PreviewRenderOff:
+	default:
+		return DashboardPerformance{}, fmt.Errorf("invalid dashboard.performance.preview_render.mode %q (use cached, direct, or off)", previewMode)
+	}
+
+	base := paneViewPerfMedium
+	switch preset {
+	case PerfPresetLow:
+		base = paneViewPerfLow
+	case PerfPresetHigh:
+		base = paneViewPerfHigh
+	case PerfPresetMax:
+		base = paneViewPerfMax
+	case PerfPresetCustom:
+		base = applyPaneViewOverrides(base, cfg.PaneViews)
+	}
+
+	return DashboardPerformance{
+		Preset:        preset,
+		RenderPolicy:  renderPolicy,
+		PreviewRender: PreviewRenderSettings{Mode: previewMode},
+		PaneViews:     base,
+	}, nil
+}
+
+func applyPaneViewOverrides(base PaneViewPerformance, overrides layout.PaneViewPerformanceConfig) PaneViewPerformance {
+	base.MaxConcurrency = applyPositiveInt(base.MaxConcurrency, overrides.MaxConcurrency)
+	base.MaxInFlightBatches = applyPositiveInt(base.MaxInFlightBatches, overrides.MaxInFlightBatches)
+	base.MaxBatch = applyPositiveInt(base.MaxBatch, overrides.MaxBatch)
+	base.MinIntervalFocused = applyDurationMS(base.MinIntervalFocused, overrides.MinIntervalFocusedMS)
+	base.MinIntervalSelected = applyDurationMS(base.MinIntervalSelected, overrides.MinIntervalSelectedMS)
+	base.MinIntervalBackground = applyDurationMS(base.MinIntervalBackground, overrides.MinIntervalBackgroundMS)
+	base.TimeoutFocused = applyDurationMS(base.TimeoutFocused, overrides.TimeoutFocusedMS)
+	base.TimeoutSelected = applyDurationMS(base.TimeoutSelected, overrides.TimeoutSelectedMS)
+	base.TimeoutBackground = applyDurationMS(base.TimeoutBackground, overrides.TimeoutBackgroundMS)
+	base.PumpBaseDelay = applyDurationMS(base.PumpBaseDelay, overrides.PumpBaseDelayMS)
+	base.PumpMaxDelay = applyDurationMS(base.PumpMaxDelay, overrides.PumpMaxDelayMS)
+	base.ForceAfter = applyDurationMS(base.ForceAfter, overrides.ForceAfterMS)
+	base.FallbackMinInterval = applyDurationMS(base.FallbackMinInterval, overrides.FallbackMinIntervalMS)
+	return base
+}
+
+func applyPositiveInt(base, override int) int {
+	if override > 0 {
+		return override
+	}
+	return base
+}
+
+func applyDurationMS(base time.Duration, override int) time.Duration {
+	if override > 0 {
+		return time.Duration(override) * time.Millisecond
+	}
+	return base
 }
 
 func resolveProjectRoots(roots []string) []string {

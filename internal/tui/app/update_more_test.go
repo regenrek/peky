@@ -72,32 +72,73 @@ func TestUpdateHandlers(t *testing.T) {
 func TestPaneViewQueueing(t *testing.T) {
 	m := newTestModelLite()
 	m.client = &sessiond.Client{}
-	m.paneViewInFlight = 1
-	if cmd := m.refreshPaneViewsCmd(); cmd != nil {
-		t.Fatalf("expected nil cmd while in flight")
+	m.paneViewInFlight = m.paneViewPerf().MaxInFlightBatches
+	cmd := m.refreshPaneViewsCmd()
+	if cmd == nil {
+		t.Fatalf("expected pane view pump cmd")
 	}
-	if !m.paneViewQueued {
-		t.Fatalf("expected queued refresh")
-	}
-
-	m.paneViewQueued = false
-	m.paneViewQueuedIDs = nil
-	m.paneViewInFlight = 1
-	if cmd := m.refreshPaneViewFor("p1"); cmd != nil {
-		t.Fatalf("expected nil cmd while in flight")
+	if !m.paneViewPumpScheduled {
+		t.Fatalf("expected pane view pump scheduled")
 	}
 	if len(m.paneViewQueuedIDs) == 0 {
-		t.Fatalf("expected queued pane id")
+		t.Fatalf("expected pending pane ids")
+	}
+
+	m.paneViewQueuedIDs = nil
+	m.paneViewPumpScheduled = false
+	_ = m.refreshPaneViewFor("p1")
+	if len(m.paneViewQueuedIDs) == 0 {
+		t.Fatalf("expected pending pane id")
+	}
+	if !m.paneViewPumpScheduled {
+		t.Fatalf("expected pane view pump scheduled")
 	}
 
 	m.paneViewInFlight = 1
-	m.paneViewQueued = true
-	cmd := m.handlePaneViews(paneViewsMsg{Views: []sessiond.PaneViewResponse{}})
+	m.paneViewInFlightByPane = map[string]struct{}{"p1": {}}
+	m.paneViewPumpScheduled = false
+	cmd = m.handlePaneViews(paneViewsMsg{Views: []sessiond.PaneViewResponse{}, PaneIDs: []string{"p1"}})
 	if cmd == nil {
-		t.Fatalf("expected follow-up pane view cmd")
+		t.Fatalf("expected pump cmd after pane view response")
 	}
-	if m.paneViewInFlight == 0 {
-		t.Fatalf("expected in flight set for queued refresh")
+	if m.paneViewInFlight != 0 {
+		t.Fatalf("expected in flight decremented")
+	}
+}
+
+func TestPaneViewQueueingHitNotVisibleProject(t *testing.T) {
+	m := newTestModelLite()
+	m.client = &sessiond.Client{}
+	m.tab = TabProject
+	// Force paneHits() to return empty by setting a zero-sized window.
+	m.width = 0
+	m.height = 0
+
+	cmd := m.refreshPaneViewFor("p1")
+	if cmd == nil {
+		t.Fatalf("expected pane view pump cmd")
+	}
+	if len(m.paneViewQueuedIDs) == 0 {
+		t.Fatalf("expected pending pane id")
+	}
+	if !m.paneViewPumpScheduled {
+		t.Fatalf("expected pane view pump scheduled")
+	}
+}
+
+func TestRefreshPaneViewForMissingSnapshotRequestsRefresh(t *testing.T) {
+	m := newTestModelLite()
+	m.client = &sessiond.Client{}
+
+	cmd := m.refreshPaneViewFor("missing-pane")
+	if cmd == nil {
+		t.Fatalf("expected refresh cmd for missing snapshot pane")
+	}
+	if len(m.paneViewQueuedIDs) != 0 {
+		t.Fatalf("expected no queued ids for missing snapshot pane")
+	}
+	if m.refreshInFlight == 0 {
+		t.Fatalf("expected refresh in flight to be set")
 	}
 }
 
@@ -214,6 +255,7 @@ func TestHandlePickerUpdateMoreStates(t *testing.T) {
 		StatePaneSwapPicker,
 		StateCommandPalette,
 		StateSettingsMenu,
+		StatePerformanceMenu,
 		StateDebugMenu,
 	}
 	for _, state := range states {

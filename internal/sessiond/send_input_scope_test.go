@@ -34,6 +34,7 @@ func (m *scopeSendManager) SplitPane(context.Context, string, string, bool, int)
 }
 func (m *scopeSendManager) ClosePane(context.Context, string, string) error { return nil }
 func (m *scopeSendManager) SwapPanes(string, string, string) error          { return nil }
+func (m *scopeSendManager) SetPaneTool(string, string) error                { return nil }
 func (m *scopeSendManager) SendInput(paneID string, input []byte) error {
 	if err, ok := m.sendErr[paneID]; ok {
 		return err

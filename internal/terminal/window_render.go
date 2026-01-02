@@ -7,6 +7,7 @@ import (
 	"io"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	uv "github.com/charmbracelet/ultraviolet"
@@ -30,6 +31,7 @@ func (w *Window) ViewANSICtx(ctx context.Context) (string, error) {
 	if w == nil {
 		return "", nil
 	}
+	w.TouchANSIDemand(0)
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -73,14 +75,105 @@ func (w *Window) ViewANSICtx(ctx context.Context) (string, error) {
 	return cached, nil
 }
 
+// ViewANSIDirectCtx renders ANSI output synchronously without using the cache.
+func (w *Window) ViewANSIDirectCtx(ctx context.Context) (string, error) {
+	if w == nil {
+		return "", nil
+	}
+	w.TouchANSIDemand(0)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+
+	cells, cols, rows, state, err := w.collectLipglossCells(ctx, false)
+	if err != nil {
+		return "", err
+	}
+	if cols <= 0 || rows <= 0 {
+		return "", nil
+	}
+	snapCellAt := makeSnapshotCellAccessor(cells, cols, rows)
+	opts := RenderOptions{
+		ShowCursor: state.showCursor,
+		CursorX:    state.cursorX,
+		CursorY:    state.cursorY,
+		Highlight:  state.highlight,
+		Profile:    termenv.TrueColor,
+	}
+	return renderCellsLipglossCtx(ctx, cols, rows, snapCellAt, opts)
+}
+
 // ViewANSICached returns the cached ANSI render and whether it is up to date.
 func (w *Window) ViewANSICached() (string, bool) {
 	if w == nil {
 		return "", false
 	}
+	w.TouchANSIDemand(0)
 	w.cacheMu.Lock()
 	defer w.cacheMu.Unlock()
 	return w.cacheANSI, !w.cacheDirty
+}
+
+// PreviewPlainLines returns the last max lines as plain text and whether the view is stable.
+// It avoids full ANSI rendering to keep snapshot preview generation cheap.
+func (w *Window) PreviewPlainLines(max int) ([]string, bool) {
+	if w == nil || max <= 0 {
+		return nil, false
+	}
+	if w.FirstReadAt().IsZero() {
+		return nil, false
+	}
+
+	startSeq := w.UpdateSeq()
+
+	w.termMu.Lock()
+	term := w.term
+	if term == nil {
+		w.termMu.Unlock()
+		return nil, false
+	}
+	cols := term.Width()
+	rows := term.Height()
+	if cols <= 0 || rows <= 0 {
+		w.termMu.Unlock()
+		return nil, true
+	}
+	if max > rows {
+		max = rows
+	}
+	startRow := rows - max
+	lines := make([]string, 0, max)
+	for y := startRow; y < rows; y++ {
+		var b strings.Builder
+		b.Grow(cols)
+		for x := 0; x < cols; {
+			cell := term.CellAt(x, y)
+			if cell != nil && cell.Width == 0 {
+				x++
+				continue
+			}
+			ch := " "
+			width := 1
+			if cell != nil {
+				if cell.Content != "" {
+					ch = cell.Content
+				}
+				if cell.Width > 1 {
+					width = cell.Width
+				}
+			}
+			b.WriteString(ch)
+			x += width
+		}
+		lines = append(lines, strings.TrimRight(b.String(), " "))
+	}
+	w.termMu.Unlock()
+
+	endSeq := w.UpdateSeq()
+	return lines, startSeq == endSeq
 }
 
 func (w *Window) refreshANSICache() {
@@ -90,13 +183,31 @@ func (w *Window) refreshANSICache() {
 
 	startSeq := w.UpdateSeq()
 
+	perf := perfDebugEnabled()
+	var start time.Time
+	if perf {
+		start = time.Now()
+	}
+
 	w.termMu.Lock()
+	lockWait := time.Duration(0)
+	if perf {
+		lockWait = time.Since(start)
+	}
 	term := w.term
 	if term == nil {
 		w.termMu.Unlock()
 		return
 	}
-	s := term.Render()
+	var renderDur time.Duration
+	var s string
+	if perf {
+		renderStart := time.Now()
+		s = term.Render()
+		renderDur = time.Since(renderStart)
+	} else {
+		s = term.Render()
+	}
 	cols := term.Width()
 	rows := term.Height()
 	if cols < 0 {
@@ -109,6 +220,19 @@ func (w *Window) refreshANSICache() {
 	w.termMu.Unlock()
 	endSeq := w.UpdateSeq()
 
+	if perf {
+		total := time.Since(start)
+		if lockWait > perfSlowLock {
+			logPerfEvery("term.ansi.lock", perfLogInterval, "terminal: ansi lock wait=%s cols=%d rows=%d", lockWait, cols, rows)
+		}
+		if renderDur > perfSlowANSIRender {
+			logPerfEvery("term.ansi.render", perfLogInterval, "terminal: ansi render dur=%s cols=%d rows=%d", renderDur, cols, rows)
+		}
+		if total > perfSlowANSIRender {
+			logPerfEvery("term.ansi.total", perfLogInterval, "terminal: ansi total dur=%s cols=%d rows=%d", total, cols, rows)
+		}
+	}
+
 	w.cacheMu.Lock()
 	w.cacheANSI = s
 	w.cacheSeq = startSeq
@@ -118,7 +242,7 @@ func (w *Window) refreshANSICache() {
 	w.cacheDirty = endSeq != startSeq
 	w.cacheMu.Unlock()
 
-	if endSeq != startSeq {
+	if endSeq != startSeq && w.ansiDemandActive() {
 		w.RequestANSIRender()
 	}
 }
@@ -142,6 +266,11 @@ func (w *Window) ViewLipglossCtx(ctx context.Context, showCursor bool, profile t
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
+	perf := perfDebugEnabled()
+	var start time.Time
+	if perf {
+		start = time.Now()
+	}
 	cells, cols, rows, state, err := w.collectLipglossCells(ctx, showCursor)
 	if err != nil || cols <= 0 || rows <= 0 {
 		return "", err
@@ -156,7 +285,26 @@ func (w *Window) ViewLipglossCtx(ctx context.Context, showCursor bool, profile t
 		Profile:    profile,
 	}
 
-	return renderCellsLipglossCtx(ctx, cols, rows, snapCellAt, opts)
+	var collectDur time.Duration
+	if perf {
+		collectDur = time.Since(start)
+		if collectDur > perfSlowLipgloss {
+			logPerfEvery("term.lipgloss.collect", perfLogInterval, "terminal: lipgloss collect dur=%s cols=%d rows=%d", collectDur, cols, rows)
+		}
+	}
+	renderStart := time.Now()
+	out, renderErr := renderCellsLipglossCtx(ctx, cols, rows, snapCellAt, opts)
+	if perf {
+		renderDur := time.Since(renderStart)
+		if renderDur > perfSlowLipgloss {
+			logPerfEvery("term.lipgloss.render", perfLogInterval, "terminal: lipgloss render dur=%s cols=%d rows=%d", renderDur, cols, rows)
+		}
+		total := time.Since(start)
+		if total > perfSlowLipglossAll {
+			logPerfEvery("term.lipgloss.total", perfLogInterval, "terminal: lipgloss total dur=%s cols=%d rows=%d", total, cols, rows)
+		}
+	}
+	return out, renderErr
 }
 
 func ensureContext(ctx context.Context) context.Context {

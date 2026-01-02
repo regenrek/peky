@@ -17,12 +17,15 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 	xpty "github.com/charmbracelet/x/xpty"
+	"github.com/kballard/go-shellquote"
+	"github.com/regenrek/peakypanes/internal/limits"
 	"github.com/regenrek/peakypanes/internal/vt"
 )
 
 const (
 	ansiRenderDebounce    = 50 * time.Millisecond
 	ansiRenderMaxInterval = 250 * time.Millisecond
+	ansiDemandDefaultTTL  = 2 * time.Second
 )
 
 // vtEmulator is the subset of the VT emulator API Window depends on.
@@ -64,6 +67,8 @@ type Options struct {
 
 	// OnToast is called for terminal-originated toast messages.
 	OnToast func(message string)
+	// OnFirstRead is called once when the pane receives its first output.
+	OnFirstRead func()
 
 	// OnOutput receives raw output bytes from the pane.
 	OnOutput func(payload []byte)
@@ -74,6 +79,12 @@ type Options struct {
 type Window struct {
 	id    string
 	title atomic.Value // string
+
+	createdAt time.Time
+	// Stage timing probes (unix nanos).
+	ptyCreatedAt     atomic.Int64
+	processStartedAt atomic.Int64
+	ioStartedAt      atomic.Int64
 
 	cmd *exec.Cmd
 	pty xpty.Pty
@@ -101,6 +112,7 @@ type Window struct {
 	mouseMode     atomic.Uint32
 
 	writeMu sync.Mutex // serialize PTY writes from UI thread
+	writeCh chan writeRequest
 
 	// Cached ANSI render (cursorless) for fast non-focused panes.
 	cacheMu    sync.Mutex
@@ -128,15 +140,23 @@ type Window struct {
 	mouseSelectMoved       bool
 	mouseSelection         bool
 
-	toastFn  func(string)
-	outputFn func([]byte)
+	toastFn     func(string)
+	onFirstRead func()
+	outputFn    func([]byte)
 
 	lastUpdate atomic.Int64 // unix nanos
 
 	updateSeq atomic.Uint64
 
-	bytesIn  atomic.Uint64
-	bytesOut atomic.Uint64
+	bytesIn               atomic.Uint64
+	bytesOut              atomic.Uint64
+	firstReadAt           atomic.Int64
+	firstWriteAt          atomic.Int64
+	firstReadAfterWriteAt atomic.Int64
+	lastWriteAt           atomic.Int64
+	firstUpdateAt         atomic.Int64
+
+	ansiDemandUntil atomic.Int64
 }
 
 // NewWindow starts a new process attached to a PTY and backed by a VT emulator.
@@ -144,6 +164,7 @@ func NewWindow(opts Options) (*Window, error) {
 	if strings.TrimSpace(opts.ID) == "" {
 		return nil, fmt.Errorf("terminal: window id is required")
 	}
+	startAt := time.Now()
 
 	cols := opts.Cols
 	rows := opts.Rows
@@ -153,12 +174,12 @@ func NewWindow(opts Options) (*Window, error) {
 	if rows <= 0 {
 		rows = 24
 	}
+	cols, rows = limits.Clamp(cols, rows)
 
 	cmdName := strings.TrimSpace(opts.Command)
 	args := opts.Args
 	if cmdName == "" {
-		cmdName = detectShell()
-		args = nil
+		cmdName, args = detectShellCommand()
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -200,27 +221,34 @@ func NewWindow(opts Options) (*Window, error) {
 		cancel()
 		return nil, fmt.Errorf("terminal: create pty: %w", err)
 	}
+	ptyCreatedAt := time.Now()
 	if err := pty.Start(cmd); err != nil {
 		cancel()
 		_ = pty.Close()
 		return nil, fmt.Errorf("terminal: start process: %w", err)
 	}
+	processStartedAt := time.Now()
 	_ = pty.Resize(cols, rows)
 
 	w := &Window{
-		id:         opts.ID,
-		cmd:        cmd,
-		pty:        pty,
-		term:       term,
-		cols:       cols,
-		rows:       rows,
-		updates:    make(chan struct{}, 1),
-		renderCh:   make(chan struct{}, 1),
-		cancel:     cancel,
-		cacheDirty: true,
-		toastFn:    opts.OnToast,
-		outputFn:   opts.OnOutput,
+		id:          opts.ID,
+		cmd:         cmd,
+		pty:         pty,
+		term:        term,
+		cols:        cols,
+		rows:        rows,
+		createdAt:   startAt,
+		updates:     make(chan struct{}, 1),
+		renderCh:    make(chan struct{}, 1),
+		writeCh:     make(chan writeRequest, ptyWriteQueueSize),
+		cancel:      cancel,
+		cacheDirty:  true,
+		toastFn:     opts.OnToast,
+		onFirstRead: opts.OnFirstRead,
+		outputFn:    opts.OnOutput,
 	}
+	w.ptyCreatedAt.Store(ptyCreatedAt.UnixNano())
+	w.processStartedAt.Store(processStartedAt.UnixNano())
 	w.title.Store(opts.Title)
 	w.cursorVisible.Store(true)
 	w.lastUpdate.Store(time.Now().UnixNano())
@@ -342,14 +370,18 @@ func (w *Window) UpdateSeq() uint64 {
 }
 
 // ANSICacheSeq returns the UpdateSeq value that produced the cached ANSI frame.
-// It can lag behind UpdateSeq while the cache is dirty.
+// If the cache is dirty, it returns 0 so callers fall back to UpdateSeq.
 func (w *Window) ANSICacheSeq() uint64 {
 	if w == nil {
 		return 0
 	}
 	w.cacheMu.Lock()
+	dirty := w.cacheDirty
 	seq := w.cacheSeq
 	w.cacheMu.Unlock()
+	if dirty {
+		return 0
+	}
 	return seq
 }
 
@@ -416,6 +448,69 @@ func (w *Window) BytesOut() uint64 {
 // Updates returns a coalesced signal channel.
 // Read from this in Bubble Tea to know when to re-render.
 func (w *Window) Updates() <-chan struct{} { return w.updates }
+
+func (w *Window) CreatedAt() time.Time {
+	if w == nil {
+		return time.Time{}
+	}
+	return w.createdAt
+}
+
+func (w *Window) PtyCreatedAt() time.Time {
+	if w == nil {
+		return time.Time{}
+	}
+	return timeFromUnixNano(w.ptyCreatedAt.Load())
+}
+
+func (w *Window) ProcessStartedAt() time.Time {
+	if w == nil {
+		return time.Time{}
+	}
+	return timeFromUnixNano(w.processStartedAt.Load())
+}
+
+func (w *Window) IOStartedAt() time.Time {
+	if w == nil {
+		return time.Time{}
+	}
+	return timeFromUnixNano(w.ioStartedAt.Load())
+}
+
+func (w *Window) FirstReadAt() time.Time {
+	if w == nil {
+		return time.Time{}
+	}
+	return timeFromUnixNano(w.firstReadAt.Load())
+}
+
+func (w *Window) FirstWriteAt() time.Time {
+	if w == nil {
+		return time.Time{}
+	}
+	return timeFromUnixNano(w.firstWriteAt.Load())
+}
+
+func (w *Window) FirstReadAfterWriteAt() time.Time {
+	if w == nil {
+		return time.Time{}
+	}
+	return timeFromUnixNano(w.firstReadAfterWriteAt.Load())
+}
+
+func (w *Window) FirstUpdateAt() time.Time {
+	if w == nil {
+		return time.Time{}
+	}
+	return timeFromUnixNano(w.firstUpdateAt.Load())
+}
+
+func timeFromUnixNano(value int64) time.Time {
+	if value == 0 {
+		return time.Time{}
+	}
+	return time.Unix(0, value)
+}
 
 // Close shuts down goroutines and releases PTY/VT resources.
 func (w *Window) Close() error {
@@ -510,18 +605,50 @@ func (w *Window) detachPTY() {
 func (w *Window) markDirty() {
 	w.updateSeq.Add(1)
 
-	w.lastUpdate.Store(time.Now().UnixNano())
+	now := time.Now().UnixNano()
+	w.lastUpdate.Store(now)
+	w.firstUpdateAt.CompareAndSwap(0, now)
 
 	w.cacheMu.Lock()
 	w.cacheDirty = true
 	w.cacheMu.Unlock()
-	w.RequestANSIRender()
+	if w.ansiDemandActive() {
+		w.RequestANSIRender()
+	}
 
 	// Coalesce signals.
 	select {
 	case w.updates <- struct{}{}:
 	default:
 	}
+}
+
+// TouchANSIDemand keeps the ANSI cache renderer active for a short window.
+func (w *Window) TouchANSIDemand(ttl time.Duration) {
+	if w == nil || w.closed.Load() {
+		return
+	}
+	if ttl <= 0 {
+		ttl = ansiDemandDefaultTTL
+	}
+	until := time.Now().Add(ttl).UnixNano()
+	for {
+		cur := w.ansiDemandUntil.Load()
+		if until <= cur {
+			return
+		}
+		if w.ansiDemandUntil.CompareAndSwap(cur, until) {
+			return
+		}
+	}
+}
+
+func (w *Window) ansiDemandActive() bool {
+	if w == nil {
+		return false
+	}
+	until := w.ansiDemandUntil.Load()
+	return until > 0 && time.Now().UnixNano() <= until
 }
 
 func (w *Window) notifyToast(message string) {
@@ -550,6 +677,16 @@ func detectShell() string {
 		}
 	}
 	return "/bin/sh"
+}
+
+func detectShellCommand() (string, []string) {
+	if raw := strings.TrimSpace(os.Getenv("PEAKYPANES_DEFAULT_SHELL_CMD")); raw != "" {
+		parts, err := shellquote.Split(raw)
+		if err == nil && len(parts) > 0 {
+			return parts[0], parts[1:]
+		}
+	}
+	return detectShell(), nil
 }
 
 // runtimeGOOS exists to keep detectShell testable if you ever want to.

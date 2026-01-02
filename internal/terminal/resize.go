@@ -1,6 +1,10 @@
 package terminal
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/regenrek/peakypanes/internal/limits"
+)
 
 // Resize resizes both the VT and PTY (PTY resize is best-effort).
 func (w *Window) Resize(cols, rows int) error {
@@ -10,11 +14,14 @@ func (w *Window) Resize(cols, rows int) error {
 	if cols <= 0 || rows <= 0 {
 		return nil
 	}
+	cols, rows = limits.Clamp(cols, rows)
 	if w.closed.Load() {
 		return errors.New("terminal: window closed")
 	}
 
-	changed := (cols != w.cols) || (rows != w.rows)
+	if cols == w.cols && rows == w.rows {
+		return nil
+	}
 	w.cols, w.rows = cols, rows
 
 	w.termMu.Lock()
@@ -30,9 +37,7 @@ func (w *Window) Resize(cols, rows int) error {
 		_ = pty.Resize(cols, rows)
 	}
 
-	if changed {
-		w.clampViewState()
-		w.markDirty()
-	}
+	w.clampViewState()
+	w.markDirty()
 	return nil
 }

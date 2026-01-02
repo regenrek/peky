@@ -31,6 +31,7 @@ func (m *fakeScopeManager) SplitPane(context.Context, string, string, bool, int)
 }
 func (m *fakeScopeManager) ClosePane(context.Context, string, string) error         { return nil }
 func (m *fakeScopeManager) SwapPanes(string, string, string) error                  { return nil }
+func (m *fakeScopeManager) SetPaneTool(string, string) error                        { return nil }
 func (m *fakeScopeManager) SendInput(string, []byte) error                          { return nil }
 func (m *fakeScopeManager) SendMouse(string, uv.MouseEvent) error                   { return nil }
 func (m *fakeScopeManager) Window(string) paneWindow                                { return nil }

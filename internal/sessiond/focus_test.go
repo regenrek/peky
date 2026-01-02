@@ -33,6 +33,7 @@ func (m *focusManager) SplitPane(context.Context, string, string, bool, int) (st
 }
 func (m *focusManager) ClosePane(context.Context, string, string) error   { return nil }
 func (m *focusManager) SwapPanes(string, string, string) error            { return nil }
+func (m *focusManager) SetPaneTool(string, string) error                  { return nil }
 func (m *focusManager) SendInput(string, []byte) error                    { return nil }
 func (m *focusManager) SendMouse(string, uv.MouseEvent) error             { return nil }
 func (m *focusManager) Window(string) paneWindow                          { return nil }

@@ -9,12 +9,14 @@ import (
 
 	"github.com/muesli/termenv"
 
+	"github.com/regenrek/peakypanes/internal/limits"
 	"github.com/regenrek/peakypanes/internal/native"
 )
 
 type stubPaneView struct {
 	lipglossCalled bool
 	ansiCalled     bool
+	ansiDirect     bool
 	showCursor     bool
 	profile        termenv.Profile
 }
@@ -40,6 +42,11 @@ func (s *stubPaneView) ViewLipglossCtx(ctx context.Context, showCursor bool, pro
 
 func (s *stubPaneView) ViewANSICtx(ctx context.Context) (string, error) {
 	s.ansiCalled = true
+	return "ansi", nil
+}
+
+func (s *stubPaneView) ViewANSIDirectCtx(ctx context.Context) (string, error) {
+	s.ansiDirect = true
 	return "ansi", nil
 }
 
@@ -77,6 +84,10 @@ func TestNormalizeDimensions(t *testing.T) {
 	if cols != 5 || rows != 1 {
 		t.Fatalf("expected 5x1, got %dx%d", cols, rows)
 	}
+	cols, rows = normalizeDimensions(limits.PaneMaxCols+10, limits.PaneMaxRows+10)
+	if cols != limits.PaneMaxCols || rows != limits.PaneMaxRows {
+		t.Fatalf("expected clamp to %dx%d, got %dx%d", limits.PaneMaxCols, limits.PaneMaxRows, cols, rows)
+	}
 }
 
 func TestPaneViewString(t *testing.T) {
@@ -96,6 +107,15 @@ func TestPaneViewString(t *testing.T) {
 	}
 	if out != "ansi" || !win.ansiCalled {
 		t.Fatalf("expected ansi render")
+	}
+
+	win = &stubPaneView{}
+	out, err = paneViewString(context.Background(), win, PaneViewRequest{Mode: PaneViewANSI, DirectRender: true})
+	if err != nil {
+		t.Fatalf("paneViewString: %v", err)
+	}
+	if out != "ansi" || !win.ansiDirect {
+		t.Fatalf("expected direct ansi render")
 	}
 }
 

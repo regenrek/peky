@@ -92,3 +92,15 @@ func TestPaneViewRequestsAndLookup(t *testing.T) {
 		t.Fatalf("expected pane view lookup, got %q", got)
 	}
 }
+
+func TestPaneViewRequestsGuardSnapshotEmpty(t *testing.T) {
+	m := newTestModelLite()
+	m.state = StateDashboard
+	m.tab = TabDashboard
+	m.data.Projects = nil
+
+	reqs := m.paneViewRequests()
+	if len(reqs) != 0 {
+		t.Fatalf("expected no pane view requests when snapshot data is empty")
+	}
+}

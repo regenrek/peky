@@ -95,7 +95,7 @@ func buildDashboardKeyMap(cfg layout.DashboardKeymapConfig) (*dashboardKeyMap, e
 		{
 			name:     "terminal_focus",
 			desc:     "terminal focus",
-			defaults: []string{"ctrl+\\"},
+			defaults: []string{"ctrl+k"},
 			override: cfg.TerminalFocus,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.terminalFocus = b },
 		},

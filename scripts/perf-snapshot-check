@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+
+if [[ $# -lt 1 ]]; then
+  echo "usage: scripts/perf-snapshot-check <run-dir|out-dir|daemon.log>" >&2
+  exit 1
+fi
+
+input="$1"
+daemon_log=""
+if [[ -f "$input" ]]; then
+  daemon_log="$input"
+elif [[ -d "$input" ]]; then
+  if [[ -f "$input/daemon.log" ]]; then
+    daemon_log="$input/daemon.log"
+  elif [[ -f "$input/../daemon.log" ]]; then
+    daemon_log="$input/../daemon.log"
+  else
+    echo "perf-snapshot-check: daemon.log not found in $input" >&2
+    exit 1
+  fi
+else
+  echo "perf-snapshot-check: path not found: $input" >&2
+  exit 1
+fi
+
+runtime_dir="${PEAKYPANES_RUNTIME_DIR:-}"
+if [[ -z "$runtime_dir" ]]; then
+  socket_path="$(awk '/daemon listening on/ {print $NF}' "$daemon_log" | tail -n 1)"
+  if [[ -z "$socket_path" ]]; then
+    echo "perf-snapshot-check: no daemon socket path in $daemon_log" >&2
+    exit 1
+  fi
+  runtime_dir="${socket_path%/daemon.sock}"
+  if [[ -z "$runtime_dir" || ! -d "$runtime_dir" ]]; then
+    echo "perf-snapshot-check: runtime dir not found: $runtime_dir" >&2
+    exit 1
+  fi
+fi
+
+export PEAKYPANES_RUNTIME_DIR="$runtime_dir"
+
+tmp_go="$(mktemp "$ROOT/tmp-perf-snapshot-XXXX.go")"
+cleanup() {
+  rm -f "$tmp_go"
+}
+trap cleanup EXIT
+
+cat <<'EOGO' > "$tmp_go"
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/regenrek/peakypanes/internal/sessiond"
+)
+
+func main() {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	client, err := sessiond.ConnectDefault(ctx, "dev")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "snapshot-check: connect failed: %v\n", err)
+		os.Exit(1)
+	}
+	defer client.Close()
+	sessions, _, err := client.Snapshot(ctx, 0)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "snapshot-check: snapshot failed: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("sessions: %d\n", len(sessions))
+	for _, s := range sessions {
+		dead := 0
+		for _, p := range s.Panes {
+			if p.Dead {
+				dead++
+			}
+		}
+		fmt.Printf("- %s panes=%d dead=%d\n", s.Name, len(s.Panes), dead)
+	}
+}
+EOGO
+
+(
+  cd "$ROOT"
+  go run -mod=mod "$tmp_go"
+)

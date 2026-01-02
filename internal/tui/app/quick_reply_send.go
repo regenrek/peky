@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kballard/go-shellquote"
+	"github.com/regenrek/peakypanes/internal/agenttool"
 )
 
 var (
@@ -12,10 +12,14 @@ var (
 	bracketedPasteEnd   = [...]byte{0x1b, '[', '2', '0', '1', '~'}
 )
 
-const quickReplyClaudeSubmitDelay = 30 * time.Millisecond
+const (
+	quickReplyClaudeSubmitDelay = 30 * time.Millisecond
+	quickReplyCodexSubmitDelay  = 30 * time.Millisecond
+)
 
 func quickReplyTextBytes(pane PaneItem, text string) []byte {
-	if quickReplyTargetIsCodex(pane) {
+	tool := quickReplyTargetTool(pane)
+	if quickReplyToolUsesBracketedPaste(tool) {
 		return bracketedPasteBytes(text)
 	}
 	return []byte(text)
@@ -34,138 +38,57 @@ func quickReplyInputBytes(pane PaneItem, text string) []byte {
 }
 
 func quickReplySubmitBytes(pane PaneItem) []byte {
-	if quickReplyTargetIsCodex(pane) {
-		return []byte{'\r'}
-	}
-	if quickReplyTargetIsClaude(pane) {
-		return []byte{'\r'}
-	}
 	return []byte{'\r'}
 }
 
 func quickReplyTargetIsCodex(pane PaneItem) bool {
-	return commandIsCodex(pane.StartCommand) || commandIsCodex(pane.Command) || titleIsCodex(pane.Title)
-}
-
-func quickReplyTargetIsClaude(pane PaneItem) bool {
-	return commandIsClaude(pane.StartCommand) || commandIsClaude(pane.Command) || titleIsClaude(pane.Title)
+	return quickReplyTargetTool(pane) == agenttool.ToolCodex
 }
 
 func quickReplyTargetCombineSubmit(pane PaneItem) bool {
-	return quickReplyTargetIsCodex(pane)
+	return false
 }
 
 func quickReplySubmitDelay(pane PaneItem) time.Duration {
-	if quickReplyTargetIsClaude(pane) {
+	switch quickReplyTargetTool(pane) {
+	case agenttool.ToolClaude:
 		return quickReplyClaudeSubmitDelay
+	case agenttool.ToolCodex:
+		return quickReplyCodexSubmitDelay
+	default:
+		return 0
 	}
-	return 0
 }
 
-func commandIsCodex(command string) bool {
-	command = strings.TrimSpace(command)
-	if command == "" {
-		return false
+func quickReplyTargetTool(pane PaneItem) agenttool.Tool {
+	if tool := agenttool.Normalize(pane.Tool); tool != "" {
+		return tool
 	}
-	args, err := shellquote.Split(command)
-	if err != nil || len(args) == 0 {
-		return false
+	if tool := agenttool.DetectFromCommand(pane.StartCommand); tool != "" {
+		return tool
 	}
-	for _, arg := range args {
-		if codexArg(arg) {
-			return true
-		}
+	if tool := agenttool.DetectFromCommand(pane.Command); tool != "" {
+		return tool
 	}
-	return false
+	if tool := agenttool.DetectFromTitle(pane.Title); tool != "" {
+		return tool
+	}
+	return ""
 }
 
-func codexArg(arg string) bool {
-	base := strings.ToLower(strings.TrimSpace(baseNameAnySeparator(arg)))
-	if base == "" {
-		return false
-	}
-	base = strings.TrimSuffix(base, ".exe")
-	if base == "codex" {
-		return true
-	}
-	return strings.HasPrefix(base, "codex@")
+func quickReplyToolUsesBracketedPaste(tool agenttool.Tool) bool {
+	return tool == agenttool.ToolCodex
 }
 
-func commandIsClaude(command string) bool {
-	command = strings.TrimSpace(command)
-	if command == "" {
-		return false
-	}
-	args, err := shellquote.Split(command)
-	if err != nil || len(args) == 0 {
-		return false
-	}
-	for _, arg := range args {
-		if claudeArg(arg) {
-			return true
-		}
-	}
-	return false
-}
-
-func claudeArg(arg string) bool {
-	base := strings.ToLower(strings.TrimSpace(baseNameAnySeparator(arg)))
-	if base == "" {
-		return false
-	}
-	base = strings.TrimSuffix(base, ".exe")
-	if base == "claude" {
-		return true
-	}
-	return strings.HasPrefix(base, "claude@")
-}
-
-func titleIsCodex(title string) bool {
-	title = strings.TrimSpace(title)
-	if title == "" {
-		return false
-	}
-	fields := strings.Fields(strings.ToLower(title))
-	if len(fields) == 0 {
-		return false
-	}
-	first := strings.TrimSuffix(fields[0], ":")
-	if first == "codex" {
-		return true
-	}
-	return strings.HasPrefix(first, "codex@")
-}
-
-func titleIsClaude(title string) bool {
-	title = strings.TrimSpace(title)
-	if title == "" {
-		return false
-	}
-	fields := strings.Fields(strings.ToLower(title))
-	if len(fields) == 0 {
-		return false
-	}
-	first := strings.TrimSuffix(fields[0], ":")
-	if first == "claude" {
-		return true
-	}
-	return strings.HasPrefix(first, "claude@")
-}
-
-func baseNameAnySeparator(path string) string {
-	path = strings.TrimSpace(path)
-	if path == "" {
+func quickReplyToolFromText(text string) agenttool.Tool {
+	text = strings.TrimSpace(text)
+	if text == "" {
 		return ""
 	}
-	path = strings.TrimRight(path, "/\\")
-	if path == "" {
+	if strings.ContainsAny(text, "\r\n") {
 		return ""
 	}
-	idx := strings.LastIndexAny(path, "/\\")
-	if idx < 0 {
-		return path
-	}
-	return path[idx+1:]
+	return agenttool.DetectFromCommand(text)
 }
 
 func bracketedPasteBytes(text string) []byte {

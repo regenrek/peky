@@ -187,6 +187,26 @@ func TestClientRenamePane(t *testing.T) {
 	})
 }
 
+func TestClientSetPaneTool(t *testing.T) {
+	runClientCase(t, clientCase{
+		name: "SetPaneTool",
+		op:   OpSetPaneTool,
+		check: func(env Envelope) error {
+			var req SetPaneToolRequest
+			if err := decodePayload(env.Payload, &req); err != nil {
+				return err
+			}
+			if req.PaneID != "pane-1" || req.Tool != "codex" {
+				return fmt.Errorf("unexpected set tool request")
+			}
+			return nil
+		},
+		call: func(c *Client) error {
+			return c.SetPaneTool(context.Background(), "pane-1", "codex")
+		},
+	})
+}
+
 func TestClientSplitPane(t *testing.T) {
 	runClientCase(t, clientCase{
 		name: "SplitPane",

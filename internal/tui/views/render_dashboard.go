@@ -410,22 +410,11 @@ func (m Model) viewQuickReply(width int) string {
 		contentWidth = 10
 	}
 
-	hintText := "enter send • esc clear • up/down history/select • / commands • tab complete"
-	if m.SupportsTerminalFocus {
-		toggle := m.Keys.TerminalFocus
-		if m.TerminalFocus {
-			hintText = fmt.Sprintf("%s input mode", toggle)
-		} else {
-			hintText = fmt.Sprintf("%s terminal focus • %s", toggle, hintText)
-		}
-	}
-
 	base := lipgloss.NewStyle().
 		Foreground(theme.TextPrimary).
 		Background(theme.QuickReplyBg)
 	accent := base.Foreground(theme.QuickReplyAcc).Render("▌ ")
-	hint := base.Foreground(theme.TextDim).Italic(true).Render(" " + hintText)
-	inputWidth := contentWidth - lipgloss.Width(accent) - lipgloss.Width(hint)
+	inputWidth := contentWidth - lipgloss.Width(accent)
 	if inputWidth < 10 {
 		inputWidth = 10
 	}
@@ -434,7 +423,7 @@ func (m Model) viewQuickReply(width int) string {
 	}
 	m.QuickReplyInput.Width = inputWidth
 
-	line := accent + m.QuickReplyInput.View() + hint
+	line := accent + m.QuickReplyInput.View()
 	line = ansi.Truncate(line, contentWidth, "")
 	visible := lipgloss.Width(line)
 	if visible < contentWidth {

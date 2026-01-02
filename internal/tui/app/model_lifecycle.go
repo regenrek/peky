@@ -61,6 +61,12 @@ func (m *Model) beginRefresh() uint64 {
 	m.refreshInFlight++
 	m.refreshing = true
 	m.refreshSeq++
+	if perfDebugEnabled() {
+		if m.refreshStarted == nil {
+			m.refreshStarted = make(map[uint64]time.Time)
+		}
+		m.refreshStarted[m.refreshSeq] = time.Now()
+	}
 	return m.refreshSeq
 }
 
@@ -111,7 +117,14 @@ func (m Model) refreshCmd(seq uint64) tea.Cmd {
 			timeout := defaultSnapshotTimeout
 			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			defer cancel()
+			snapshotStart := time.Now()
 			sessions, _, err = client.Snapshot(ctx, previewLines)
+			if perfDebugEnabled() {
+				snapshotDur := time.Since(snapshotStart)
+				if snapshotDur > perfSlowSnapshot {
+					logPerfEvery("tui.snapshot.slow", perfLogInterval, "tui: snapshot slow dur=%s preview_lines=%d sessions=%d err=%v", snapshotDur, previewLines, len(sessions), err)
+				}
+			}
 			if err != nil {
 				result := buildDashboardData(dashboardSnapshotInput{
 					Selection:  selection,
@@ -128,6 +141,7 @@ func (m Model) refreshCmd(seq uint64) tea.Cmd {
 				return dashboardSnapshotMsg{Result: result}
 			}
 		}
+		buildStart := time.Now()
 		result := buildDashboardData(dashboardSnapshotInput{
 			Selection:  selection,
 			Tab:        currentTab,
@@ -137,6 +151,12 @@ func (m Model) refreshCmd(seq uint64) tea.Cmd {
 			Settings:   settings,
 			Sessions:   sessions,
 		})
+		if perfDebugEnabled() {
+			buildDur := time.Since(buildStart)
+			if buildDur > perfSlowBuildDashboard {
+				logPerfEvery("tui.dashboard.build", perfLogInterval, "tui: build dashboard slow dur=%s sessions=%d", buildDur, len(sessions))
+			}
+		}
 		result.Keymap = keys
 		result.Warning = warning
 		return dashboardSnapshotMsg{Result: result}
@@ -155,9 +175,32 @@ func (m *Model) requestRefreshCmd() tea.Cmd {
 	if m == nil {
 		return nil
 	}
+	return m.requestRefreshCmdReason("", false)
+}
+
+func (m *Model) requestRefreshCmdReason(reason string, force bool) tea.Cmd {
+	if m == nil {
+		return nil
+	}
 	if m.refreshInFlight > 0 {
 		m.refreshQueued = true
+		if perfDebugEnabled() && reason != "" {
+			logPerfEvery("tui.refresh.request."+reason, perfLogInterval, "tui: refresh request action=queue reason=%s in_flight=%d", reason, m.refreshInFlight)
+		}
 		return nil
+	}
+	if force {
+		now := time.Now()
+		if !m.lastUrgentRefreshAt.IsZero() && now.Sub(m.lastUrgentRefreshAt) < perfUrgentRefreshMinInterval {
+			if perfDebugEnabled() && reason != "" {
+				logPerfEvery("tui.refresh.request."+reason, perfLogInterval, "tui: refresh request action=debounce reason=%s", reason)
+			}
+			return nil
+		}
+		m.lastUrgentRefreshAt = now
+	}
+	if perfDebugEnabled() && reason != "" {
+		logPerfEvery("tui.refresh.request."+reason, perfLogInterval, "tui: refresh request action=start reason=%s", reason)
 	}
 	return m.startRefreshCmd()
 }

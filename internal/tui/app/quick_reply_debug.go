@@ -15,9 +15,11 @@ func logQuickReplySendAttempt(pane PaneItem, payload []byte) {
 		return
 	}
 	paneID := strings.TrimSpace(pane.ID)
+	tool := quickReplyTargetTool(pane)
 	diag.Logf(
-		"quick-reply: send pane=%s codex=%v title=%s command=%s start=%s bytes=%d payload=%s",
+		"quick-reply: send pane=%s tool=%s codex=%v title=%s command=%s start=%s bytes=%d payload=%s",
 		paneID,
+		tool,
 		quickReplyTargetIsCodex(pane),
 		quickReplyLogField("title", pane.Title),
 		quickReplyLogField("command", pane.Command),

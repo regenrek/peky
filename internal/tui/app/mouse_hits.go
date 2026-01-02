@@ -1,9 +1,12 @@
 package app
 
 import (
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/regenrek/peakypanes/internal/tui/mouse"
+	"github.com/regenrek/peakypanes/internal/tui/panelayout"
 )
 
 type headerHitRect struct {
@@ -93,46 +96,86 @@ func (m *Model) headerHitRects() []headerHitRect {
 }
 
 func (m *Model) paneHits() []mouse.PaneHit {
+	var started time.Time
+	if perfDebugEnabled() {
+		started = time.Now()
+	}
 	if m.state != StateDashboard {
+		m.logPaneViewSkipGlobal("state_not_dashboard", fmt.Sprintf("state=%d tab=%d", m.state, m.tab))
+		if !started.IsZero() {
+			logPerfEvery("tui.panehits.skip.state", 500*time.Millisecond,
+				"tui: pane hits skip reason=state_not_dashboard state=%d tab=%d", m.state, m.tab)
+		}
 		return nil
 	}
 	if m.tab == TabProject {
-		return m.projectPaneHits()
+		hits := m.projectPaneHits()
+		if !started.IsZero() {
+			logPerfEvery("tui.panehits.project", 500*time.Millisecond,
+				"tui: pane hits computed scope=project count=%d dur=%s", len(hits), time.Since(started))
+		}
+		return hits
 	}
-	return m.dashboardPaneHits()
+	hits := m.dashboardPaneHits()
+	if !started.IsZero() {
+		logPerfEvery("tui.panehits.dashboard", 500*time.Millisecond,
+			"tui: pane hits computed scope=dashboard count=%d dur=%s", len(hits), time.Since(started))
+	}
+	return hits
 }
 
 func (m *Model) projectPaneHits() []mouse.PaneHit {
-	body, ok := m.dashboardBodyRect()
+	body, project, session, ok := m.projectPaneHitsContext()
 	if !ok {
 		return nil
+	}
+	if len(session.Panes) == 0 {
+		m.logProjectPaneHitsSkip("no_panes", m.paneViewSkipContext(), "tui.panehits.project.empty")
+		return nil
+	}
+	if perfDebugEnabled() {
+		logPerfEvery("tui.panehits.project.meta", 500*time.Millisecond,
+			"tui: pane hits project meta project=%s session=%s panes=%d",
+			project.ID, session.Name, len(session.Panes))
+	}
+	preview, ok := m.projectPaneHitsPreview(body, project)
+	if !ok {
+		return nil
+	}
+	return m.projectPaneHitsForPreview(project, session, preview)
+}
+
+func (m *Model) projectPaneHitsContext() (mouse.Rect, *ProjectGroup, *SessionItem, bool) {
+	body, ok := m.dashboardBodyRect()
+	if !ok {
+		m.logProjectPaneHitsSkip("body_rect_unavailable", m.paneViewSkipContext(), "tui.panehits.project.body")
+		return mouse.Rect{}, nil, nil, false
 	}
 	project := m.selectedProject()
 	session := m.selectedSession()
 	if project == nil || session == nil {
-		return nil
+		m.logProjectPaneHitsSkip("missing_selection", m.paneViewSkipContext(), "tui.panehits.project.selection")
+		return mouse.Rect{}, nil, nil, false
 	}
-	if len(session.Panes) == 0 {
-		return nil
-	}
+	return body, project, session, true
+}
 
+func (m *Model) projectPaneHitsPreview(body mouse.Rect, project *ProjectGroup) (mouse.Rect, bool) {
 	if m.sidebarHidden(project) {
-		preview := mouse.Rect{
-			X: body.X,
-			Y: body.Y,
-			W: body.W,
-			H: body.H,
+		preview := mouse.Rect{X: body.X, Y: body.Y, W: body.W, H: body.H}
+		if !m.validateProjectPreviewRect(preview, "tui.panehits.project.preview.full") {
+			return mouse.Rect{}, false
 		}
-		if preview.W <= 0 || preview.H <= 0 {
-			return nil
-		}
-		mode := m.settings.PreviewMode
-		if mode == "layout" {
-			return projectPaneLayoutHits(project, session, session.Panes, preview)
-		}
-		return projectPaneTileHits(project, session, session.Panes, preview)
+		return preview, true
 	}
+	preview := m.projectSidebarPreviewRect(body)
+	if !m.validateProjectPreviewRect(preview, "tui.panehits.project.preview") {
+		return mouse.Rect{}, false
+	}
+	return preview, true
+}
 
+func (m *Model) projectSidebarPreviewRect(body mouse.Rect) mouse.Rect {
 	base := body.W / 3
 	leftWidth := clamp(base-(body.W/30), 22, 36)
 	if leftWidth > body.W-10 {
@@ -143,23 +186,35 @@ func (m *Model) projectPaneHits() []mouse.PaneHit {
 		leftWidth = clamp(body.W/2, 12, body.W-10)
 		rightWidth = body.W - leftWidth - 1
 	}
-
-	preview := mouse.Rect{
+	return mouse.Rect{
 		X: body.X + leftWidth,
 		Y: body.Y,
 		W: rightWidth,
 		H: body.H,
 	}
+}
 
-	if preview.W <= 0 || preview.H <= 0 {
-		return nil
+func (m *Model) validateProjectPreviewRect(preview mouse.Rect, perfKey string) bool {
+	if preview.W > 0 && preview.H > 0 {
+		return true
 	}
+	m.logProjectPaneHitsSkip("preview_invalid", fmt.Sprintf("w=%d h=%d %s", preview.W, preview.H, m.paneViewSkipContext()), perfKey)
+	return false
+}
 
-	mode := m.settings.PreviewMode
-	if mode == "layout" {
+func (m *Model) projectPaneHitsForPreview(project *ProjectGroup, session *SessionItem, preview mouse.Rect) []mouse.PaneHit {
+	if m.settings.PreviewMode == "layout" {
 		return projectPaneLayoutHits(project, session, session.Panes, preview)
 	}
 	return projectPaneTileHits(project, session, session.Panes, preview)
+}
+
+func (m *Model) logProjectPaneHitsSkip(reason, detail, perfKey string) {
+	m.logPaneViewSkipGlobal(reason, detail)
+	if !perfDebugEnabled() || perfKey == "" {
+		return
+	}
+	logPerfEvery(perfKey, perfLogInterval, "tui: pane hits project skip reason=%s %s", reason, detail)
 }
 
 func projectPaneLayoutHits(project *ProjectGroup, session *SessionItem, panes []PaneItem, preview mouse.Rect) []mouse.PaneHit {
@@ -195,54 +250,22 @@ func projectPaneLayoutHits(project *ProjectGroup, session *SessionItem, panes []
 }
 
 func projectPaneTileHits(project *ProjectGroup, session *SessionItem, panes []PaneItem, preview mouse.Rect) []mouse.PaneHit {
-	cols := 3
-	if preview.W < 70 {
-		cols = 2
-	}
-	if preview.W < 42 {
-		cols = 1
-	}
-	if len(panes) < cols {
-		cols = len(panes)
-	}
-	if cols <= 0 {
-		cols = 1
-	}
-
-	rows := (len(panes) + cols - 1) / cols
-	gap := 0
-	availableHeight := preview.H - gap*(rows-1)
-	if availableHeight < rows {
-		availableHeight = rows
-	}
-	baseHeight := availableHeight / rows
-	extraHeight := availableHeight % rows
-	if baseHeight < 4 {
-		baseHeight = 4
-		extraHeight = 0
-	}
-	tileWidth := (preview.W - gap*(cols-1)) / cols
-	if tileWidth < 14 {
-		tileWidth = 14
-	}
+	layout := panelayout.Compute(len(panes), preview.W, preview.H)
 
 	hits := make([]mouse.PaneHit, 0, len(panes))
-	rowY := preview.Y
-	for r := 0; r < rows; r++ {
-		rowHeight := baseHeight
-		if r == rows-1 {
-			rowHeight += extraHeight
-		}
-		for c := 0; c < cols; c++ {
-			idx := r*cols + c
+	for r := 0; r < layout.Rows; r++ {
+		rowHeight := layout.RowHeight(r)
+		rowY := layout.RowY(preview.Y, r)
+		for c := 0; c < layout.Cols; c++ {
+			idx := r*layout.Cols + c
 			if idx >= len(panes) {
 				continue
 			}
 			pane := panes[idx]
 			outer := mouse.Rect{
-				X: preview.X + c*tileWidth,
+				X: preview.X + c*layout.TileWidth,
 				Y: rowY,
-				W: tileWidth,
+				W: layout.TileWidth,
 				H: rowHeight,
 			}
 			borders := tileBorders{
@@ -263,7 +286,6 @@ func projectPaneTileHits(project *ProjectGroup, session *SessionItem, panes []Pa
 				Content: content,
 			})
 		}
-		rowY += rowHeight
 	}
 	return hits
 }
@@ -300,31 +322,16 @@ func projectTileContentRect(outer mouse.Rect, pane PaneItem, borders tileBorders
 }
 
 func tileInnerRect(outer mouse.Rect, borders tileBorders) mouse.Rect {
-	padLeft, padRight := 1, 1
-	padTop, padBottom := 0, 0
-	left := boolToInt(borders.left)
-	right := boolToInt(borders.right)
-	top := boolToInt(borders.top)
-	bottom := boolToInt(borders.bottom)
-
-	inner := mouse.Rect{
-		X: outer.X + left + padLeft,
-		Y: outer.Y + top + padTop,
-		W: outer.W - left - right - padLeft - padRight,
-		H: outer.H - top - bottom - padTop - padBottom,
+	metrics := panelayout.TileMetricsFor(outer.W, outer.H, panelayout.TileBorders{
+		Top:    borders.top,
+		Left:   borders.left,
+		Right:  borders.right,
+		Bottom: borders.bottom,
+	})
+	return mouse.Rect{
+		X: outer.X + metrics.ContentX,
+		Y: outer.Y + metrics.ContentY,
+		W: metrics.ContentWidth,
+		H: metrics.InnerHeight,
 	}
-	if inner.W < 0 {
-		inner.W = 0
-	}
-	if inner.H < 0 {
-		inner.H = 0
-	}
-	return inner
-}
-
-func boolToInt(v bool) int {
-	if v {
-		return 1
-	}
-	return 0
 }

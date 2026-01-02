@@ -31,11 +31,14 @@ func (d commandPaletteDelegate) Render(w io.Writer, m list.Model, index int, ite
 	isSelected := index == m.Index()
 	isFiltered := m.FilterState() == list.Filtering || m.FilterState() == list.FilterApplied
 
-	shortcutRendered, shortcutWidth, gapWidth := commandPaletteShortcut(shortcut, isSelected)
-	titleStyle := commandPaletteTitleStyle(isSelected, &d.Styles)
-
-	frameW, _ := titleStyle.GetFrameSize()
-	textwidth := m.Width() - frameW - shortcutWidth - gapWidth
+	rowStyle := commandPaletteRowStyle(isSelected, m.Width())
+	innerWidth := commandPaletteInnerWidth(rowStyle, m.Width())
+	shortcutWidth := lipgloss.Width(shortcut)
+	gapWidth := 0
+	if shortcutWidth > 0 {
+		gapWidth = 1
+	}
+	textwidth := innerWidth - shortcutWidth - gapWidth
 	if textwidth < 0 {
 		textwidth = 0
 	}
@@ -49,12 +52,32 @@ func (d commandPaletteDelegate) Render(w io.Writer, m list.Model, index int, ite
 		matchedRunes = m.MatchesForItem(index)
 	}
 
-	title, desc = stylePaletteText(title, desc, titleStyle, &d.Styles, isSelected, isFiltered, matchedRunes)
-
-	if shortcutRendered != "" {
-		title = justifyTitleWithShortcut(title, shortcutRendered, m.Width())
+	rowTextStyle, rowMatchStyle, rowShortcutStyle, rowGapStyle := commandPaletteTextStyles(isSelected)
+	if isFiltered {
+		title = lipgloss.StyleRunes(title, matchedRunes, rowMatchStyle, rowTextStyle)
+	} else {
+		title = rowTextStyle.Render(title)
 	}
+	contentWidth := lipgloss.Width(title)
+	if shortcutWidth > 0 {
+		gap := innerWidth - lipgloss.Width(title) - shortcutWidth
+		if gap < 1 {
+			gap = 1
+		}
+		title = title + rowGapStyle.Render(strings.Repeat(" ", gap)) + rowShortcutStyle.Render(shortcut)
+		contentWidth = lipgloss.Width(title)
+	}
+	if innerWidth > contentWidth {
+		title += rowGapStyle.Render(strings.Repeat(" ", innerWidth-contentWidth))
+	}
+
+	title = rowStyle.Render(title)
 	if d.ShowDescription {
+		descStyle := commandPaletteDescStyle(isSelected)
+		if desc != "" {
+			desc = descStyle.Render(desc)
+			desc = rowStyle.Render(desc)
+		}
 		fmt.Fprintf(w, "%s\n%s", title, desc) //nolint: errcheck
 		return
 	}
@@ -75,23 +98,64 @@ func commandPaletteItem(item list.Item) (string, string, string, bool) {
 	return title, desc, shortcut, true
 }
 
-func commandPaletteShortcut(shortcut string, selected bool) (string, int, int) {
-	if shortcut == "" {
-		return "", 0, 0
-	}
-	shortcutStyle := theme.ShortcutHint
+func commandPaletteRowStyle(selected bool, width int) lipgloss.Style {
+	rowStyle := lipgloss.NewStyle().
+		Padding(0, 1).
+		Width(width).
+		Background(theme.Background).
+		BorderLeft(true).
+		BorderLeftForeground(theme.Background)
 	if selected {
-		shortcutStyle = theme.ShortcutDesc
+		rowStyle = rowStyle.
+			Background(theme.AccentFocus).
+			BorderLeftForeground(theme.AccentAlt)
 	}
-	rendered := shortcutStyle.Render(shortcut)
-	return rendered, lipgloss.Width(rendered), 2
+	return rowStyle
 }
 
-func commandPaletteTitleStyle(selected bool, styles *list.DefaultItemStyles) lipgloss.Style {
-	if selected {
-		return styles.SelectedTitle
+func commandPaletteInnerWidth(style lipgloss.Style, width int) int {
+	frameW, _ := style.GetFrameSize()
+	inner := width - frameW
+	if inner < 0 {
+		return 0
 	}
-	return styles.NormalTitle
+	return inner
+}
+
+func commandPaletteTextStyles(selected bool) (lipgloss.Style, lipgloss.Style, lipgloss.Style, lipgloss.Style) {
+	rowBg := theme.Background
+	if selected {
+		rowBg = theme.AccentFocus
+	}
+	textStyle := lipgloss.NewStyle().
+		Foreground(theme.TextSecondary).
+		Background(rowBg)
+	if selected {
+		textStyle = textStyle.
+			Foreground(theme.Surface).
+			Bold(true)
+	}
+	matchStyle := textStyle.Bold(true)
+	if selected {
+		matchStyle = matchStyle.Foreground(theme.Surface)
+	} else {
+		matchStyle = matchStyle.Foreground(theme.AccentFocus)
+	}
+	shortcutStyle := theme.ShortcutHint.Background(rowBg)
+	if selected {
+		shortcutStyle = theme.ShortcutDesc.
+			Foreground(theme.Surface).
+			Background(rowBg)
+	}
+	gapStyle := lipgloss.NewStyle().Background(rowBg)
+	return textStyle, matchStyle, shortcutStyle, gapStyle
+}
+
+func commandPaletteDescStyle(selected bool) lipgloss.Style {
+	if selected {
+		return lipgloss.NewStyle().Foreground(theme.TextSecondary)
+	}
+	return lipgloss.NewStyle().Foreground(theme.TextDim)
 }
 
 func truncatePaletteDescription(desc string, textwidth int, height int) string {
@@ -106,43 +170,4 @@ func truncatePaletteDescription(desc string, textwidth int, height int) string {
 		lines = append(lines, ansi.Truncate(line, textwidth, commandPaletteEllipsis))
 	}
 	return strings.Join(lines, "\n")
-}
-
-func stylePaletteText(
-	title string,
-	desc string,
-	titleStyle lipgloss.Style,
-	styles *list.DefaultItemStyles,
-	selected bool,
-	filtered bool,
-	matchedRunes []int,
-) (string, string) {
-	if filtered {
-		unmatched := titleStyle.Inline(true)
-		matched := unmatched.Inherit(styles.FilterMatch)
-		title = lipgloss.StyleRunes(title, matchedRunes, matched, unmatched)
-	}
-	title = titleStyle.Render(title)
-	if selected {
-		desc = styles.SelectedDesc.Render(desc)
-	} else {
-		desc = styles.NormalDesc.Render(desc)
-	}
-	return title, desc
-}
-
-func justifyTitleWithShortcut(title, shortcut string, width int) string {
-	if width <= 0 {
-		return title + " " + shortcut
-	}
-	titleWidth := lipgloss.Width(title)
-	shortcutWidth := lipgloss.Width(shortcut)
-	if titleWidth+shortcutWidth+1 > width {
-		return title + " " + shortcut
-	}
-	gap := width - titleWidth - shortcutWidth
-	if gap < 1 {
-		gap = 1
-	}
-	return title + strings.Repeat(" ", gap) + shortcut
 }

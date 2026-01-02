@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -28,37 +29,53 @@ const DefaultStateDebounce = 250 * time.Millisecond
 
 // DaemonConfig configures a session daemon instance.
 type DaemonConfig struct {
-	Version       string
-	SocketPath    string
-	PidPath       string
-	StatePath     string
-	StateDebounce time.Duration
-	HandleSignals bool
+	Version                 string
+	SocketPath              string
+	PidPath                 string
+	StatePath               string
+	StateDebounce           time.Duration
+	HandleSignals           bool
+	SkipRestore             bool
+	DisableStatePersistence bool
+	PprofAddr               string
+}
+
+type pprofServer interface {
+	Shutdown(context.Context) error
 }
 
 // Daemon owns persistent sessions and serves clients over a local socket.
 type Daemon struct {
-	manager     sessionManager
-	listener    net.Listener
-	listenerMu  sync.RWMutex
-	socketPath  string
-	pidPath     string
-	statePath   string
-	stateWriter *state.Writer
-	version     string
-	profileStop func()
-	startMu     sync.Mutex
-	spawnMu     sync.Mutex
-	shutdownMu  sync.Mutex
-	shutdownErr error
-	shutdownOne sync.Once
+	manager       sessionManager
+	listener      net.Listener
+	listenerMu    sync.RWMutex
+	socketPath    string
+	pidPath       string
+	statePath     string
+	pprofAddr     string
+	pprofServer   pprofServer
+	pprofListener net.Listener
+	stateWriter   *state.Writer
+	version       string
+	skipRestore   bool
+	profileStop   func()
+	startMu       sync.Mutex
+	started       chan struct{}
+	startOnce     sync.Once
+	spawnMu       sync.Mutex
+	shutdownMu    sync.Mutex
+	shutdownErr   error
+	shutdownOne   sync.Once
 
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	clients   map[uint64]*clientConn
-	clientsMu sync.RWMutex
-	clientSeq atomic.Uint64
+	clients        map[uint64]*clientConn
+	clientsMu      sync.RWMutex
+	clientSeq      atomic.Uint64
+	debugSnap      atomic.Int64
+	perfPaneViewMu sync.Mutex
+	perfPaneView   map[string]uint8
 
 	actionMu   sync.RWMutex
 	actionLogs map[string]*actionLog
@@ -104,24 +121,30 @@ func NewDaemon(cfg DaemonConfig) (*Daemon, error) {
 	if debounce < 0 {
 		debounce = DefaultStateDebounce
 	}
-	stateWriter := state.NewWriter(statePath, state.WriterOptions{
-		Debounce: debounce,
-		FileMode: 0o600,
-	})
+	var stateWriter *state.Writer
+	if !cfg.DisableStatePersistence {
+		stateWriter = state.NewWriter(statePath, state.WriterOptions{
+			Debounce: debounce,
+			FileMode: 0o600,
+		})
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	d := &Daemon{
 		manager:     wrapManager(native.NewManager()),
 		socketPath:  socketPath,
 		pidPath:     pidPath,
 		statePath:   statePath,
+		pprofAddr:   strings.TrimSpace(cfg.PprofAddr),
 		stateWriter: stateWriter,
 		version:     cfg.Version,
+		skipRestore: cfg.SkipRestore,
 		ctx:         ctx,
 		cancel:      cancel,
 		clients:     make(map[uint64]*clientConn),
 		actionLogs:  make(map[string]*actionLog),
 		eventLog:    newEventLog(0),
 		relays:      newRelayManager(),
+		started:     make(chan struct{}),
 	}
 	if cfg.HandleSignals {
 		d.handleSignals()
@@ -136,6 +159,7 @@ func (d *Daemon) Start() error {
 	}
 	d.startMu.Lock()
 	defer d.startMu.Unlock()
+	defer d.signalStarted()
 	if d.closing.Load() {
 		return errors.New("sessiond: daemon is shutting down")
 	}
@@ -161,8 +185,17 @@ func (d *Daemon) Start() error {
 		_ = listener.Close()
 		return err
 	}
-	if err := d.restorePersistedState(); err != nil {
-		log.Printf("sessiond: restore state: %v", err)
+	if err := d.startPprofServer(); err != nil {
+		if l := d.clearListener(); l != nil {
+			_ = l.Close()
+		}
+		_ = os.Remove(d.pidPath)
+		return err
+	}
+	if !d.skipRestore {
+		if err := d.restorePersistedState(); err != nil {
+			log.Printf("sessiond: restore state: %v", err)
+		}
 	}
 	d.startProfiler()
 
@@ -203,6 +236,7 @@ func (d *Daemon) shutdown() error {
 	if listener := d.clearListener(); listener != nil {
 		_ = listener.Close()
 	}
+	d.stopPprofServer()
 
 	d.spawnMu.Lock()
 	_ = d.closing.Load()
@@ -256,6 +290,17 @@ func (d *Daemon) setListener(listener net.Listener) {
 	d.listenerMu.Lock()
 	d.listener = listener
 	d.listenerMu.Unlock()
+}
+
+func (d *Daemon) signalStarted() {
+	if d == nil {
+		return
+	}
+	d.startOnce.Do(func() {
+		if d.started != nil {
+			close(d.started)
+		}
+	})
 }
 
 func (d *Daemon) listenerValue() net.Listener {

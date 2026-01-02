@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/regenrek/peakypanes/internal/cli/output"
 	"github.com/regenrek/peakypanes/internal/cli/root"
+	"github.com/regenrek/peakypanes/internal/runenv"
 	"github.com/regenrek/peakypanes/internal/sessiond"
 )
 
@@ -24,11 +26,21 @@ func Register(reg *root.Registry) {
 var stopDaemon = sessiond.StopDaemon
 var restartDaemon = sessiond.RestartDaemon
 
+const defaultPprofAddr = "127.0.0.1:6060"
+
 func runDaemon(ctx root.CommandContext) error {
+	pprofAddr, err := resolvePprofAddr(ctx)
+	if err != nil {
+		return err
+	}
+	fresh := runenv.FreshConfigEnabled()
 	daemon, err := sessiond.NewDaemon(sessiond.DaemonConfig{
-		Version:       ctx.Deps.Version,
-		StateDebounce: sessiond.DefaultStateDebounce,
-		HandleSignals: true,
+		Version:                 ctx.Deps.Version,
+		StateDebounce:           sessiond.DefaultStateDebounce,
+		HandleSignals:           true,
+		SkipRestore:             fresh,
+		DisableStatePersistence: fresh,
+		PprofAddr:               pprofAddr,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create daemon: %w", err)
@@ -43,6 +55,17 @@ func runDaemon(ctx root.CommandContext) error {
 		return fmt.Errorf("daemon failed: %w", err)
 	}
 	return nil
+}
+
+func resolvePprofAddr(ctx root.CommandContext) (string, error) {
+	addr := strings.TrimSpace(ctx.Cmd.String("pprof-addr"))
+	if ctx.Cmd.IsSet("pprof-addr") && addr == "" {
+		return "", fmt.Errorf("pprof address is required")
+	}
+	if ctx.Cmd.Bool("pprof") && addr == "" {
+		addr = defaultPprofAddr
+	}
+	return addr, nil
 }
 
 func runStop(ctx root.CommandContext) error {

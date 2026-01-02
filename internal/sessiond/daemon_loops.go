@@ -66,6 +66,8 @@ func (d *Daemon) eventLoop() {
 				continue
 			}
 			d.broadcast(Event{Type: EventToast, PaneID: event.PaneID, Toast: event.Toast, ToastKind: ToastSuccess})
+		case native.PaneEventMetaUpdated:
+			d.broadcast(Event{Type: EventPaneMetaChanged, PaneID: event.PaneID})
 		default:
 			d.broadcast(Event{Type: EventPaneUpdated, PaneID: event.PaneID, PaneUpdateSeq: event.Seq})
 		}
@@ -93,6 +95,7 @@ func (d *Daemon) readLoop(client *clientConn) {
 			var req PaneViewRequest
 			if err := decodePayload(env.Payload, &req); err == nil {
 				if paneID, err := requirePaneID(req.PaneID); err == nil {
+					d.logPaneViewRequest(paneID, req)
 					client.paneViews.enqueue(paneID, env, req)
 					continue
 				}

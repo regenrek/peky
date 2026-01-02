@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/regenrek/peakypanes/internal/tui/theme"
 )
@@ -47,6 +48,7 @@ func (m Model) viewPaneSwapPicker() string {
 
 const commandPaletteHeading = "⌘ Command Palette"
 const settingsMenuHeading = "Settings"
+const performanceMenuHeading = "Performance"
 const debugMenuHeading = "Debug"
 
 func (m Model) viewCommandPalette() string {
@@ -55,6 +57,16 @@ func (m Model) viewCommandPalette() string {
 
 func (m Model) viewSettingsMenu() string {
 	return m.renderDialogList(m.SettingsMenu.View(), m.SettingsMenu.Width(), m.SettingsMenu.Height(), settingsMenuHeading)
+}
+
+func (m Model) viewPerformanceMenu() string {
+	return m.renderDialogListWithHelp(
+		m.PerformanceMenu.View(),
+		m.PerformanceMenu.Width(),
+		m.PerformanceMenu.Height(),
+		performanceMenuHeading,
+		m.DialogHelp,
+	)
 }
 
 func (m Model) viewDebugMenu() string {
@@ -83,6 +95,142 @@ func (m Model) renderDialogList(listView string, listW, listH int, heading strin
 		Style:           dialogStyleCompact,
 		UseStyle:        true,
 	})
+}
+
+func (m Model) renderDialogListWithHelp(listView string, listW, listH int, heading string, help DialogHelp) string {
+	header := theme.HelpTitle.Render(heading)
+	headerW := lipgloss.Width(header)
+	headerH := lipgloss.Height(header)
+	body := lipgloss.NewStyle().
+		Width(listW).
+		Height(listH).
+		Background(theme.Background).
+		Render(listView)
+
+	contentW := listW
+	if headerW > contentW {
+		contentW = headerW
+	}
+	contentH := listH + headerH
+
+	if strings.TrimSpace(help.Line) != "" {
+		helpLines := buildHelpLines(help, listW, 3)
+		spacer := lipgloss.NewStyle().
+			Width(listW).
+			Background(theme.Background).
+			Render("")
+		helpBlocks := make([]string, 0, 2+len(helpLines))
+		helpBlocks = append(helpBlocks, spacer)
+		helpBlocks = append(helpBlocks, helpLines...)
+		helpBlocks = append(helpBlocks, spacer)
+		content := lipgloss.JoinVertical(lipgloss.Left, append([]string{header, body}, helpBlocks...)...)
+		contentH += 2 + len(helpLines)
+		dialog := m.renderDialog(dialogSpec{
+			Content:         content,
+			Size:            dialogSizeForContentWithStyle(dialogStyleCompact, contentW, contentH),
+			RequireViewport: true,
+			Style:           dialogStyleCompact,
+			UseStyle:        true,
+		})
+		return dialog
+	}
+
+	content := lipgloss.JoinVertical(lipgloss.Left, header, body)
+	return m.renderDialog(dialogSpec{
+		Content:         content,
+		Size:            dialogSizeForContentWithStyle(dialogStyleCompact, contentW, contentH),
+		RequireViewport: true,
+		Style:           dialogStyleCompact,
+		UseStyle:        true,
+	})
+}
+
+func buildHelpLines(help DialogHelp, listW int, maxLines int) []string {
+	if maxLines < 1 {
+		return nil
+	}
+	helpWidth := listW - 1
+	if helpWidth < 1 {
+		helpWidth = 1
+	}
+	text := strings.TrimSpace(help.Line)
+	if help.Open && strings.TrimSpace(help.Body) != "" {
+		text = help.Body
+	}
+	lines := wrapHelpText(text, helpWidth)
+	lines = clampHelpLines(lines, helpWidth, maxLines)
+	styled := make([]string, 0, maxLines)
+	for _, line := range lines {
+		styled = append(styled, lipgloss.NewStyle().
+			Width(listW).
+			Padding(0, 0, 0, 1).
+			Background(theme.Background).
+			Render(line))
+	}
+	for len(styled) < maxLines {
+		styled = append(styled, lipgloss.NewStyle().
+			Width(listW).
+			Padding(0, 0, 0, 1).
+			Background(theme.Background).
+			Render(""))
+	}
+	return styled
+}
+
+func wrapHelpText(text string, width int) []string {
+	if width < 1 {
+		return []string{""}
+	}
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return []string{}
+	}
+	paragraphs := strings.Split(text, "\n")
+	lines := make([]string, 0, len(paragraphs))
+	for _, paragraph := range paragraphs {
+		paragraph = strings.TrimSpace(paragraph)
+		if paragraph == "" {
+			lines = append(lines, "")
+			continue
+		}
+		words := strings.Fields(paragraph)
+		line := ""
+		for _, word := range words {
+			if line == "" {
+				line = word
+				continue
+			}
+			if lipgloss.Width(line)+1+lipgloss.Width(word) <= width {
+				line += " " + word
+				continue
+			}
+			lines = append(lines, truncateHelpLine(line, width))
+			line = word
+		}
+		if line != "" {
+			lines = append(lines, truncateHelpLine(line, width))
+		}
+	}
+	return lines
+}
+
+func clampHelpLines(lines []string, width int, maxLines int) []string {
+	if len(lines) == 0 {
+		return make([]string, 0, maxLines)
+	}
+	if len(lines) <= maxLines {
+		return lines
+	}
+	out := append([]string{}, lines[:maxLines]...)
+	out[maxLines-1] = ansi.Truncate(strings.TrimSpace(out[maxLines-1]), width, "…")
+	return out
+}
+
+func truncateHelpLine(line string, width int) string {
+	if width < 1 {
+		return ""
+	}
+	return ansi.Truncate(strings.TrimSpace(line), width, "")
 }
 
 func (m Model) viewHelp() string {

@@ -8,10 +8,12 @@ import (
 
 // CommandItem represents a selectable command in the palette.
 type CommandItem struct {
-	Label    string
-	Desc     string
-	Shortcut string
-	Run      func() tea.Cmd
+	Label     string
+	Desc      string
+	Shortcut  string
+	HelpKey   string
+	HelpValue string
+	Run       func() tea.Cmd
 }
 
 func (c CommandItem) Title() string       { return c.Label }

@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/regenrek/peakypanes/internal/runenv"
 )
 
 func TestExpandVars(t *testing.T) {
@@ -38,6 +40,7 @@ func TestExpandVars(t *testing.T) {
 }
 
 func TestExpandLayoutVars(t *testing.T) {
+	submitDelay := 150
 	layout := &LayoutConfig{
 		Name: "demo",
 		Vars: map[string]string{
@@ -52,8 +55,9 @@ func TestExpandLayoutVars(t *testing.T) {
 		},
 		Titles: []string{"${PROJECT_PATH}"},
 		Panes: []PaneDef{
-			{Title: "${BAR}", Cmd: "${EXTRA}", Setup: []string{"${FOO}"}},
+			{Title: "${BAR}", Cmd: "${EXTRA}", Setup: []string{"${FOO}"}, DirectSend: []SendAction{{Text: "${FOO} ${PROJECT_NAME}", Submit: true, SubmitDelayMS: &submitDelay, WaitForOutput: true}}},
 		},
+		BroadcastSend: []SendAction{{Text: "${BAR} ${PROJECT_PATH}", Submit: true, WaitForOutput: true}},
 	}
 
 	extra := map[string]string{
@@ -62,35 +66,62 @@ func TestExpandLayoutVars(t *testing.T) {
 	}
 
 	expanded := ExpandLayoutVars(layout, extra, "/work/app", "myapp")
-	if expanded.Vars["FOO"] != "override" {
-		t.Fatalf("expanded.Vars[FOO] = %q", expanded.Vars["FOO"])
-	}
-	if expanded.Vars["BAR"] != "two" {
-		t.Fatalf("expanded.Vars[BAR] = %q", expanded.Vars["BAR"])
-	}
-	if expanded.Vars["EXTRA"] != "extra" {
-		t.Fatalf("expanded.Vars[EXTRA] = %q", expanded.Vars["EXTRA"])
-	}
-	if expanded.Grid != "override" {
-		t.Fatalf("expanded.Grid = %q", expanded.Grid)
-	}
-	if expanded.Command != "extra" {
-		t.Fatalf("expanded.Command = %q", expanded.Command)
-	}
-	if !reflect.DeepEqual(expanded.Commands, []string{"override", "two"}) {
-		t.Fatalf("expanded.Commands = %#v", expanded.Commands)
-	}
-	if !reflect.DeepEqual(expanded.Titles, []string{"/work/app"}) {
-		t.Fatalf("expanded.Titles = %#v", expanded.Titles)
-	}
-	if len(expanded.Panes) != 1 || expanded.Panes[0].Title != "two" {
+	assertEqual(t, "expanded.Vars[FOO]", expanded.Vars["FOO"], "override")
+	assertEqual(t, "expanded.Vars[BAR]", expanded.Vars["BAR"], "two")
+	assertEqual(t, "expanded.Vars[EXTRA]", expanded.Vars["EXTRA"], "extra")
+	assertEqual(t, "expanded.Grid", expanded.Grid, "override")
+	assertEqual(t, "expanded.Command", expanded.Command, "extra")
+	assertDeepEqual(t, "expanded.Commands", expanded.Commands, []string{"override", "two"})
+	assertDeepEqual(t, "expanded.Titles", expanded.Titles, []string{"/work/app"})
+	if len(expanded.Panes) != 1 {
 		t.Fatalf("expanded.Panes = %#v", expanded.Panes)
 	}
-	if expanded.Panes[0].Cmd != "extra" {
-		t.Fatalf("expanded.Panes[0].Cmd = %q", expanded.Panes[0].Cmd)
+	assertEqual(t, "expanded.Panes[0].Title", expanded.Panes[0].Title, "two")
+	assertEqual(t, "expanded.Panes[0].Cmd", expanded.Panes[0].Cmd, "extra")
+	assertDeepEqual(t, "expanded.Panes[0].Setup", expanded.Panes[0].Setup, []string{"override"})
+	assertSendActions(t, expanded.Panes[0].DirectSend, "override myapp", &submitDelay, true, true)
+	assertSendActions(t, expanded.BroadcastSend, "two /work/app", nil, true, true)
+}
+
+func assertEqual[T comparable](t *testing.T, label string, got, want T) {
+	t.Helper()
+	if got != want {
+		t.Fatalf("%s = %v", label, got)
 	}
-	if !reflect.DeepEqual(expanded.Panes[0].Setup, []string{"override"}) {
-		t.Fatalf("expanded.Panes[0].Setup = %#v", expanded.Panes[0].Setup)
+}
+
+func assertDeepEqual(t *testing.T, label string, got, want any) {
+	t.Helper()
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("%s = %#v", label, got)
+	}
+}
+
+func assertSendActions(t *testing.T, actions []SendAction, text string, submitDelay *int, submit bool, waitForOutput bool) {
+	t.Helper()
+	if len(actions) != 1 {
+		t.Fatalf("send actions = %#v", actions)
+	}
+	action := actions[0]
+	if action.Text != text {
+		t.Fatalf("send action text = %q", action.Text)
+	}
+	if action.Submit != submit {
+		t.Fatalf("send action submit = %v", action.Submit)
+	}
+	if action.WaitForOutput != waitForOutput {
+		t.Fatalf("send action wait_for_output = %v", action.WaitForOutput)
+	}
+	if submit {
+		if submitDelay == nil {
+			if action.SubmitDelayMS != nil {
+				t.Fatalf("send action submit_delay = %#v", action.SubmitDelayMS)
+			}
+			return
+		}
+		if action.SubmitDelayMS == nil || *action.SubmitDelayMS != *submitDelay {
+			t.Fatalf("send action submit_delay = %#v", action.SubmitDelayMS)
+		}
 	}
 }
 
@@ -190,6 +221,8 @@ func TestLoadLayoutFile(t *testing.T) {
 func TestDefaultPaths(t *testing.T) {
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
+	t.Setenv(runenv.ConfigDirEnv, "")
+	t.Setenv(runenv.FreshConfigEnv, "")
 
 	cfgPath, err := DefaultConfigPath()
 	if err != nil {
@@ -205,6 +238,55 @@ func TestDefaultPaths(t *testing.T) {
 	}
 	if layoutsDir != filepath.Join(tmpHome, ".config", "peakypanes", "layouts") {
 		t.Fatalf("DefaultLayoutsDir() = %q", layoutsDir)
+	}
+}
+
+func TestDefaultPathsConfigDirOverride(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(runenv.ConfigDirEnv, dir)
+	t.Setenv(runenv.FreshConfigEnv, "")
+
+	cfgPath, err := DefaultConfigPath()
+	if err != nil {
+		t.Fatalf("DefaultConfigPath() error: %v", err)
+	}
+	if cfgPath != filepath.Join(dir, "config.yml") {
+		t.Fatalf("DefaultConfigPath() = %q", cfgPath)
+	}
+
+	layoutsDir, err := DefaultLayoutsDir()
+	if err != nil {
+		t.Fatalf("DefaultLayoutsDir() error: %v", err)
+	}
+	if layoutsDir != filepath.Join(dir, "layouts") {
+		t.Fatalf("DefaultLayoutsDir() = %q", layoutsDir)
+	}
+}
+
+func TestDefaultConfigPathFreshConfig(t *testing.T) {
+	t.Setenv(runenv.FreshConfigEnv, "1")
+	t.Setenv(runenv.ConfigDirEnv, "")
+
+	cfgPath, err := DefaultConfigPath()
+	if err != nil {
+		t.Fatalf("DefaultConfigPath() error: %v", err)
+	}
+	if cfgPath != "" {
+		t.Fatalf("DefaultConfigPath() = %q", cfgPath)
+	}
+}
+
+func TestDefaultConfigPathConfigDirFreshConfig(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(runenv.ConfigDirEnv, dir)
+	t.Setenv(runenv.FreshConfigEnv, "1")
+
+	cfgPath, err := DefaultConfigPath()
+	if err != nil {
+		t.Fatalf("DefaultConfigPath() error: %v", err)
+	}
+	if cfgPath != filepath.Join(dir, "config.yml") {
+		t.Fatalf("DefaultConfigPath() = %q", cfgPath)
 	}
 }
 

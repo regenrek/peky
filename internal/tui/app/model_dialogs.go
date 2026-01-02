@@ -13,7 +13,9 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/regenrek/peakypanes/internal/agenttool"
 	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/runenv"
 	"github.com/regenrek/peakypanes/internal/sessiond"
 )
 
@@ -177,6 +179,9 @@ func (m *Model) renamePaneTarget() (string, string, bool) {
 // ===== Project root setup =====
 
 func needsProjectRootSetup(cfg *layout.Config, configExists bool) bool {
+	if runenv.FreshConfigEnabled() {
+		return false
+	}
 	if cfg == nil {
 		return true
 	}
@@ -281,15 +286,19 @@ func validateProjectRoots(roots []string) ([]string, []string) {
 }
 
 func (m *Model) saveProjectRoots(roots []string) error {
+	configPath, err := m.requireConfigPath()
+	if err != nil {
+		return err
+	}
 	cfg, err := loadConfig(m.configPath)
 	if err != nil {
 		return err
 	}
 	cfg.Dashboard.ProjectRoots = roots
-	if err := os.MkdirAll(filepath.Dir(m.configPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
 		return err
 	}
-	if err := layout.SaveConfig(m.configPath, cfg); err != nil {
+	if err := layout.SaveConfig(configPath, cfg); err != nil {
 		return err
 	}
 	m.config = cfg
@@ -359,6 +368,7 @@ type quickReplyPlan struct {
 	paneID  string
 	payload []byte
 	label   string
+	tool    agenttool.Tool
 }
 
 func (m *Model) quickReplyPlan() (quickReplyPlan, tea.Cmd, bool) {
@@ -380,11 +390,12 @@ func (m *Model) quickReplyPlan() (quickReplyPlan, tea.Cmd, bool) {
 		return quickReplyPlan{}, func() tea.Msg { return newPaneClosedMsg(paneID, nil) }, false
 	}
 	payload := quickReplyTextBytes(*pane, text)
+	tool := quickReplyToolFromText(text)
 	label := strings.TrimSpace(pane.Title)
 	if label == "" {
 		label = fmt.Sprintf("pane %s", pane.Index)
 	}
-	return quickReplyPlan{paneID: paneID, payload: payload, label: label}, nil, true
+	return quickReplyPlan{paneID: paneID, payload: payload, label: label, tool: tool}, nil, true
 }
 
 func (m *Model) sendQuickReplyToPane(plan quickReplyPlan) tea.Msg {
@@ -423,6 +434,9 @@ func (m *Model) sendQuickReplyToPane(plan quickReplyPlan) tea.Msg {
 				return msg
 			}
 		}
+	}
+	if plan.tool != "" {
+		m.setPaneTool(plan.paneID, plan.tool)
 	}
 	if plan.label != "" {
 		return SuccessMsg{Message: "Sent to " + plan.label}

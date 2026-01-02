@@ -270,7 +270,8 @@ func (m *Model) sendQuickReplySingle(pane PaneItem, text string, delay time.Dura
 		}
 		result := quickReplySendResult{ScopeLabel: pane.Title, Total: 1}
 		target := quickReplyTarget{Pane: pane}
-		targetResult := m.sendQuickReplyToTarget(target, text)
+		tool := quickReplyToolFromText(text)
+		targetResult := m.sendQuickReplyToTarget(target, text, tool)
 		applyQuickReplyTargetResult(&result, targetResult)
 		return quickReplySendMsg{Result: result}
 	}

@@ -85,6 +85,24 @@ titles:
   - shell
 ```
 
+You can also combine `grid` with `panes` to override per-pane settings (including automation sends):
+
+```yaml
+grid: 2x2
+panes:
+  - title: codex
+    cmd: "codex"
+    direct_send:
+      - text: "hello from pane 1"
+        send_delay_ms: 500
+  - title: dev
+    cmd: "npm run dev"
+  - title: logs
+    cmd: "tail -f app.log"
+  - title: shell
+    cmd: ""
+```
+
 ---
 
 ## Split Directions
@@ -179,6 +197,31 @@ layout:
 ## Large Layouts
 
 When you need many panes, prefer a `grid:` layout for predictable sizing.
+
+---
+
+## Automation Sends
+
+Use `broadcast_send` to send input to every pane after it starts, or `direct_send` to send input to a specific pane. Each action can specify a `send_delay_ms` (default: 750ms). If `send_delay_ms` is omitted, the send waits for the pane’s first output (up to the default delay). A trailing newline is added automatically unless you set `submit: true`, which sends Enter separately (optionally delayed via `submit_delay_ms`). When `wait_for_output: true`, the send waits for the pane’s first output and uses `send_delay_ms` as a fallback timeout.
+
+```yaml
+layout:
+  command: "claude"
+  broadcast_send:
+    - text: "give me a bubble sort in typescript and rust and go"
+      send_delay_ms: 750
+      wait_for_output: true
+      submit: true
+      submit_delay_ms: 250
+
+  panes:
+    - title: pane-1
+      cmd: "claude"
+      direct_send:
+        - text: "pane-specific follow-up"
+          send_delay_ms: 1000
+          wait_for_output: true
+```
 
 ---
 

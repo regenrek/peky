@@ -20,36 +20,20 @@ func TestDefaultDashboardConfigDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("defaultDashboardConfig() error: %v", err)
 	}
-	if cfg.RefreshInterval != 2*time.Second {
-		t.Fatalf("RefreshInterval = %v", cfg.RefreshInterval)
-	}
-	if cfg.PreviewLines != 12 {
-		t.Fatalf("PreviewLines = %d", cfg.PreviewLines)
-	}
-	if cfg.IdleThreshold != 20*time.Second {
-		t.Fatalf("IdleThreshold = %v", cfg.IdleThreshold)
-	}
-	if !cfg.PreviewCompact {
-		t.Fatalf("PreviewCompact=%v", cfg.PreviewCompact)
-	}
-	if cfg.PreviewMode != "grid" {
-		t.Fatalf("PreviewMode = %q", cfg.PreviewMode)
-	}
-	if cfg.SidebarHidden {
-		t.Fatalf("SidebarHidden = %v", cfg.SidebarHidden)
-	}
-	if cfg.AttachBehavior != AttachBehaviorCurrent {
-		t.Fatalf("AttachBehavior = %q", cfg.AttachBehavior)
-	}
-	if cfg.PaneNavigationMode != PaneNavigationSpatial {
-		t.Fatalf("PaneNavigationMode = %q", cfg.PaneNavigationMode)
-	}
-	if cfg.QuitBehavior != QuitBehaviorPrompt {
-		t.Fatalf("QuitBehavior = %q", cfg.QuitBehavior)
-	}
-	if len(cfg.ProjectRoots) != 1 || cfg.ProjectRoots[0] != filepath.Join(home, "projects") {
-		t.Fatalf("ProjectRoots = %#v", cfg.ProjectRoots)
-	}
+	assertDuration(t, "RefreshInterval", cfg.RefreshInterval, 2*time.Second)
+	assertInt(t, "PreviewLines", cfg.PreviewLines, 12)
+	assertDuration(t, "IdleThreshold", cfg.IdleThreshold, 20*time.Second)
+	assertBool(t, "PreviewCompact", cfg.PreviewCompact, true)
+	assertString(t, "PreviewMode", cfg.PreviewMode, "grid")
+	assertBool(t, "SidebarHidden", cfg.SidebarHidden, false)
+	assertString(t, "AttachBehavior", cfg.AttachBehavior, AttachBehaviorCurrent)
+	assertString(t, "PaneNavigationMode", cfg.PaneNavigationMode, PaneNavigationSpatial)
+	assertString(t, "QuitBehavior", cfg.QuitBehavior, QuitBehaviorPrompt)
+	assertStringSlice(t, "ProjectRoots", cfg.ProjectRoots, []string{filepath.Join(home, "projects")})
+	assertString(t, "Performance.Preset", cfg.Performance.Preset, PerfPresetMax)
+	assertString(t, "Performance.RenderPolicy", cfg.Performance.RenderPolicy, RenderPolicyVisible)
+	assertString(t, "Performance.PreviewRender.Mode", cfg.Performance.PreviewRender.Mode, PreviewRenderDirect)
+	assertInt(t, "Performance.PaneViews.MaxConcurrency", cfg.Performance.PaneViews.MaxConcurrency, paneViewPerfMax.MaxConcurrency)
 }
 
 func TestDefaultDashboardConfigOverrides(t *testing.T) {
@@ -66,46 +50,77 @@ func TestDefaultDashboardConfigOverrides(t *testing.T) {
 		PaneNavigationMode: "memory",
 		QuitBehavior:       "keep",
 		ProjectRoots:       []string{"/tmp", "/tmp"},
+		Performance: layout.PerformanceConfig{
+			Preset:       PerfPresetCustom,
+			RenderPolicy: RenderPolicyAll,
+			PreviewRender: layout.PreviewRenderConfig{
+				Mode: PreviewRenderDirect,
+			},
+			PaneViews: layout.PaneViewPerformanceConfig{
+				MaxConcurrency:       2,
+				MinIntervalFocusedMS: 10,
+			},
+		},
 	})
 	if err != nil {
 		t.Fatalf("defaultDashboardConfig() error: %v", err)
 	}
-	if cfg.RefreshInterval != 500*time.Millisecond {
-		t.Fatalf("RefreshInterval = %v", cfg.RefreshInterval)
-	}
-	if cfg.PreviewLines != 5 {
-		t.Fatalf("PreviewLines=%d", cfg.PreviewLines)
-	}
-	if cfg.IdleThreshold != 3*time.Second {
-		t.Fatalf("IdleThreshold = %v", cfg.IdleThreshold)
-	}
-	if cfg.PreviewCompact {
-		t.Fatalf("PreviewCompact=%v", cfg.PreviewCompact)
-	}
-	if cfg.PreviewMode != "layout" {
-		t.Fatalf("PreviewMode = %q", cfg.PreviewMode)
-	}
-	if !cfg.SidebarHidden {
-		t.Fatalf("SidebarHidden = %v", cfg.SidebarHidden)
-	}
-	if cfg.AttachBehavior != AttachBehaviorDetached {
-		t.Fatalf("AttachBehavior = %q", cfg.AttachBehavior)
-	}
-	if cfg.PaneNavigationMode != PaneNavigationMemory {
-		t.Fatalf("PaneNavigationMode = %q", cfg.PaneNavigationMode)
-	}
-	if cfg.QuitBehavior != QuitBehaviorKeep {
-		t.Fatalf("QuitBehavior = %q", cfg.QuitBehavior)
-	}
-	if !reflect.DeepEqual(cfg.ProjectRoots, []string{"/tmp"}) {
-		t.Fatalf("ProjectRoots = %#v", cfg.ProjectRoots)
-	}
+	assertDuration(t, "RefreshInterval", cfg.RefreshInterval, 500*time.Millisecond)
+	assertInt(t, "PreviewLines", cfg.PreviewLines, 5)
+	assertDuration(t, "IdleThreshold", cfg.IdleThreshold, 3*time.Second)
+	assertBool(t, "PreviewCompact", cfg.PreviewCompact, false)
+	assertString(t, "PreviewMode", cfg.PreviewMode, "layout")
+	assertBool(t, "SidebarHidden", cfg.SidebarHidden, true)
+	assertString(t, "AttachBehavior", cfg.AttachBehavior, AttachBehaviorDetached)
+	assertString(t, "PaneNavigationMode", cfg.PaneNavigationMode, PaneNavigationMemory)
+	assertString(t, "QuitBehavior", cfg.QuitBehavior, QuitBehaviorKeep)
+	assertStringSlice(t, "ProjectRoots", cfg.ProjectRoots, []string{"/tmp"})
+	assertString(t, "Performance.Preset", cfg.Performance.Preset, PerfPresetCustom)
+	assertString(t, "Performance.RenderPolicy", cfg.Performance.RenderPolicy, RenderPolicyAll)
+	assertString(t, "Performance.PreviewRender.Mode", cfg.Performance.PreviewRender.Mode, PreviewRenderDirect)
+	assertInt(t, "Performance.PaneViews.MaxConcurrency", cfg.Performance.PaneViews.MaxConcurrency, 2)
+	assertDuration(t, "Performance.PaneViews.MinIntervalFocused", cfg.Performance.PaneViews.MinIntervalFocused, 10*time.Millisecond)
 }
 
 func TestDefaultDashboardConfigInvalidPreviewMode(t *testing.T) {
 	_, err := defaultDashboardConfig(layout.DashboardConfig{PreviewMode: "bad"})
 	if err == nil {
 		t.Fatalf("defaultDashboardConfig() expected error")
+	}
+}
+
+func assertDuration(t *testing.T, name string, got time.Duration, want time.Duration) {
+	t.Helper()
+	if got != want {
+		t.Fatalf("%s = %v", name, got)
+	}
+}
+
+func assertInt(t *testing.T, name string, got int, want int) {
+	t.Helper()
+	if got != want {
+		t.Fatalf("%s = %d", name, got)
+	}
+}
+
+func assertBool(t *testing.T, name string, got bool, want bool) {
+	t.Helper()
+	if got != want {
+		t.Fatalf("%s = %v", name, got)
+	}
+}
+
+func assertString(t *testing.T, name string, got string, want string) {
+	t.Helper()
+	if got != want {
+		t.Fatalf("%s = %q", name, got)
+	}
+}
+
+func assertStringSlice(t *testing.T, name string, got []string, want []string) {
+	t.Helper()
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("%s = %#v", name, got)
 	}
 }
 
@@ -125,6 +140,66 @@ func TestDefaultDashboardConfigInvalidPaneNavigationMode(t *testing.T) {
 
 func TestDefaultDashboardConfigInvalidQuitBehavior(t *testing.T) {
 	_, err := defaultDashboardConfig(layout.DashboardConfig{QuitBehavior: "nope"})
+	if err == nil {
+		t.Fatalf("defaultDashboardConfig() expected error")
+	}
+}
+
+func TestDefaultDashboardConfigInvalidPerformancePreset(t *testing.T) {
+	_, err := defaultDashboardConfig(layout.DashboardConfig{Performance: layout.PerformanceConfig{Preset: "fast"}})
+	if err == nil {
+		t.Fatalf("defaultDashboardConfig() expected error")
+	}
+}
+
+func TestDefaultDashboardConfigMaxPreset(t *testing.T) {
+	cfg, err := defaultDashboardConfig(layout.DashboardConfig{Performance: layout.PerformanceConfig{Preset: PerfPresetMax}})
+	if err != nil {
+		t.Fatalf("defaultDashboardConfig() error: %v", err)
+	}
+	if cfg.Performance.PaneViews.MaxConcurrency != paneViewPerfMax.MaxConcurrency {
+		t.Fatalf("Performance.PaneViews.MaxConcurrency = %d", cfg.Performance.PaneViews.MaxConcurrency)
+	}
+	if cfg.Performance.PaneViews.MinIntervalFocused != 0 {
+		t.Fatalf("Performance.PaneViews.MinIntervalFocused = %s", cfg.Performance.PaneViews.MinIntervalFocused)
+	}
+}
+
+func TestDefaultDashboardConfigLowPreset(t *testing.T) {
+	cfg, err := defaultDashboardConfig(layout.DashboardConfig{Performance: layout.PerformanceConfig{Preset: PerfPresetLow}})
+	if err != nil {
+		t.Fatalf("defaultDashboardConfig() error: %v", err)
+	}
+	if cfg.Performance.PaneViews.MaxConcurrency != paneViewPerfLow.MaxConcurrency {
+		t.Fatalf("Performance.PaneViews.MaxConcurrency = %d", cfg.Performance.PaneViews.MaxConcurrency)
+	}
+	if cfg.Performance.PaneViews.MinIntervalBackground != paneViewPerfLow.MinIntervalBackground {
+		t.Fatalf("Performance.PaneViews.MinIntervalBackground = %s", cfg.Performance.PaneViews.MinIntervalBackground)
+	}
+}
+
+func TestDefaultDashboardConfigHighPreset(t *testing.T) {
+	cfg, err := defaultDashboardConfig(layout.DashboardConfig{Performance: layout.PerformanceConfig{Preset: PerfPresetHigh}})
+	if err != nil {
+		t.Fatalf("defaultDashboardConfig() error: %v", err)
+	}
+	if cfg.Performance.PaneViews.MaxConcurrency != paneViewPerfHigh.MaxConcurrency {
+		t.Fatalf("Performance.PaneViews.MaxConcurrency = %d", cfg.Performance.PaneViews.MaxConcurrency)
+	}
+	if cfg.Performance.PaneViews.MinIntervalFocused != paneViewPerfHigh.MinIntervalFocused {
+		t.Fatalf("Performance.PaneViews.MinIntervalFocused = %s", cfg.Performance.PaneViews.MinIntervalFocused)
+	}
+}
+
+func TestDefaultDashboardConfigInvalidRenderPolicy(t *testing.T) {
+	_, err := defaultDashboardConfig(layout.DashboardConfig{Performance: layout.PerformanceConfig{RenderPolicy: "everywhere"}})
+	if err == nil {
+		t.Fatalf("defaultDashboardConfig() expected error")
+	}
+}
+
+func TestDefaultDashboardConfigInvalidPreviewRenderMode(t *testing.T) {
+	_, err := defaultDashboardConfig(layout.DashboardConfig{Performance: layout.PerformanceConfig{PreviewRender: layout.PreviewRenderConfig{Mode: "fast"}}})
 	if err == nil {
 		t.Fatalf("defaultDashboardConfig() expected error")
 	}

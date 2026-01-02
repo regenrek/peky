@@ -93,6 +93,10 @@ func (f *fakeTerminalWindow) ViewANSICtx(ctx context.Context) (string, error) {
 	f.record("viewANSI")
 	return f.viewANSI, nil
 }
+func (f *fakeTerminalWindow) ViewANSIDirectCtx(ctx context.Context) (string, error) {
+	f.record("viewANSI")
+	return f.viewANSI, nil
+}
 func (f *fakeTerminalWindow) ViewLipgloss(showCursor bool, profile termenv.Profile) string {
 	f.record("viewLipgloss")
 	return f.viewLipgloss

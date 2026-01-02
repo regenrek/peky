@@ -22,11 +22,18 @@ func newTestModelLite() *Model {
 		paneInputDisabled:      make(map[string]struct{}),
 		paneViewSeq:            make(map[paneViewKey]uint64),
 		paneViewLastReq:        make(map[paneViewKey]time.Time),
+		paneViewFirst:          make(map[string]struct{}),
 		quickReplyHistoryIndex: -1,
 		quickReplySlashIndex:   -1,
 		settings: DashboardConfig{
 			PreviewMode:  "grid",
 			PreviewLines: 12,
+			Performance: DashboardPerformance{
+				Preset:        PerfPresetMax,
+				RenderPolicy:  RenderPolicyVisible,
+				PreviewRender: PreviewRenderSettings{Mode: PreviewRenderDirect},
+				PaneViews:     paneViewPerfMax,
+			},
 		},
 		width:  120,
 		height: 40,
@@ -38,6 +45,7 @@ func newTestModelLite() *Model {
 	m.setupPaneSwapPicker()
 	m.setupCommandPalette()
 	m.setupSettingsMenu()
+	m.setupPerformanceMenu()
 	m.setupDebugMenu()
 	m.keys = testKeyMap()
 	return m

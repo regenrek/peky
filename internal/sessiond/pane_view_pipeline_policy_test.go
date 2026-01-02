@@ -31,6 +31,11 @@ func (w *fakePaneViewWin) ViewANSICtx(ctx context.Context) (string, error) {
 	return "ANSI", nil
 }
 
+func (w *fakePaneViewWin) ViewANSIDirectCtx(ctx context.Context) (string, error) {
+	w.ansiCalls++
+	return "ANSI", nil
+}
+
 func (w *fakePaneViewWin) ViewLipgloss(showCursor bool, profile termenv.Profile) string { return "LIP" }
 func (w *fakePaneViewWin) ViewANSI() string                                             { return "ANSI" }
 

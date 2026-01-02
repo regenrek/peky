@@ -24,6 +24,14 @@ layout:
       split: vertical
     - title: docker
       cmd: "docker compose logs -f"
+  # Optional automation inputs:
+  # broadcast_send:
+  #   - text: "claude"
+  #     send_delay_ms: 750
+  #     # If send_delay_ms is omitted, waits for first output (default 750ms timeout).
+  #     wait_for_output: true
+  #     submit: true
+  #     submit_delay_ms: 250
 
 # Or use exact grids
 # layout:
@@ -42,6 +50,19 @@ layout:
 #     - codex-3
 #     - codex-4
 #     - codex-5
+#
+# Grid + panes (per-pane direct_send, overrides commands/titles):
+# layout:
+#   grid: 2x2
+#   panes:
+#     - title: pane-1
+#       cmd: "claude"
+#       direct_send:
+#         - text: "give me a bubble sort in typescript and rust and go"
+#           send_delay_ms: 750
+#           wait_for_output: true
+#           submit: true
+#           submit_delay_ms: 250
 
 # Optional per-project dashboard overrides
 # dashboard:
@@ -59,6 +80,28 @@ Use this for personal layouts and multi-project management:
 #   project_roots:
 #     - ~/projects
 #     - ~/code
+#
+#   performance:
+#     preset: max          # low | medium | high | max | custom
+#     render_policy: visible # visible | all
+#     preview_render:
+#       mode: direct       # cached | direct | off
+#     # For custom tuning:
+#     # preset: custom
+#     # pane_views:
+#     #   max_concurrency: 6
+#     #   max_inflight_batches: 3
+#     #   max_batch: 12
+#     #   min_interval_focused_ms: 16
+#     #   min_interval_selected_ms: 60
+#     #   min_interval_background_ms: 150
+#     #   timeout_focused_ms: 1000
+#     #   timeout_selected_ms: 800
+#     #   timeout_background_ms: 600
+#     #   pump_base_delay_ms: 0
+#     #   pump_max_delay_ms: 25
+#     #   force_after_ms: 150
+#     #   fallback_min_interval_ms: 100
 
 # Custom layouts
 layouts:

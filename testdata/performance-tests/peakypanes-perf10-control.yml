@@ -1,0 +1,5 @@
+session: perf-control-10
+
+layout:
+  grid: 2x5
+  command: "bash -lc 'for i in $(seq 1 300); do printf \"line %04d: control workload output\\n\" \"$i\"; sleep 0.05; done; exec bash'"

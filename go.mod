@@ -12,6 +12,8 @@ require (
 	github.com/charmbracelet/x/cellbuf v0.0.14
 	github.com/charmbracelet/x/exp/ordered v0.1.0
 	github.com/charmbracelet/x/xpty v0.1.3
+	github.com/felixge/fgprof v0.9.5
+	github.com/google/gops v0.3.28
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/muesli/termenv v0.16.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
@@ -115,6 +117,7 @@ require (
 	github.com/golangci/swaggoswag v0.0.0-20250504205917-77f2aca3143e // indirect
 	github.com/golangci/unconvert v0.0.0-20250410112200-a129a6e6413e // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
+	github.com/google/pprof v0.0.0-20250820193118-f64d9cf942d6 // indirect
 	github.com/gordonklaus/ineffassign v0.2.0 // indirect
 	github.com/gostaticanalysis/analysisutil v0.7.1 // indirect
 	github.com/gostaticanalysis/comment v1.5.0 // indirect

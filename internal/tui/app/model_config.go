@@ -15,7 +15,11 @@ import (
 // ===== Project visibility in config =====
 
 func (m *Model) hideProjectInConfig(project ProjectGroup) (bool, error) {
-	cfg, err := loadConfig(m.configPath)
+	configPath, err := m.requireConfigPath()
+	if err != nil {
+		return false, err
+	}
+	cfg, err := loadConfig(configPath)
 	if err != nil {
 		return false, fmt.Errorf("load config: %w", err)
 	}
@@ -24,7 +28,7 @@ func (m *Model) hideProjectInConfig(project ProjectGroup) (bool, error) {
 		return false, err
 	}
 	if changed {
-		if err := workspace.SaveConfig(m.configPath, cfg); err != nil {
+		if err := workspace.SaveConfig(configPath, cfg); err != nil {
 			return false, err
 		}
 	}
@@ -36,6 +40,10 @@ func (m *Model) hideProjectInConfig(project ProjectGroup) (bool, error) {
 func (m *Model) hideAllProjectsInConfig(projects []ProjectGroup) (int, error) {
 	if len(projects) == 0 {
 		return 0, nil
+	}
+	configPath, err := m.requireConfigPath()
+	if err != nil {
+		return 0, err
 	}
 	cfg, err := loadConfig(m.configPath)
 	if err != nil {
@@ -54,7 +62,7 @@ func (m *Model) hideAllProjectsInConfig(projects []ProjectGroup) (int, error) {
 		return 0, err
 	}
 	if added > 0 {
-		if err := workspace.SaveConfig(m.configPath, cfg); err != nil {
+		if err := workspace.SaveConfig(configPath, cfg); err != nil {
 			return 0, err
 		}
 	}
@@ -64,7 +72,11 @@ func (m *Model) hideAllProjectsInConfig(projects []ProjectGroup) (int, error) {
 }
 
 func (m *Model) unhideProjectInConfig(entry layout.HiddenProjectConfig) (bool, error) {
-	cfg, err := loadConfig(m.configPath)
+	configPath, err := m.requireConfigPath()
+	if err != nil {
+		return false, err
+	}
+	cfg, err := loadConfig(configPath)
 	if err != nil {
 		return false, fmt.Errorf("load config: %w", err)
 	}
@@ -73,7 +85,7 @@ func (m *Model) unhideProjectInConfig(entry layout.HiddenProjectConfig) (bool, e
 		return false, err
 	}
 	if changed {
-		if err := workspace.SaveConfig(m.configPath, cfg); err != nil {
+		if err := workspace.SaveConfig(configPath, cfg); err != nil {
 			return false, err
 		}
 	}
@@ -109,6 +121,14 @@ func hiddenProjectLabel(entry layout.HiddenProjectConfig) string {
 		return userpath.ShortenUser(path)
 	}
 	return "unknown project"
+}
+
+func (m *Model) requireConfigPath() (string, error) {
+	path := strings.TrimSpace(m.configPath)
+	if path == "" {
+		return "", fmt.Errorf("config path unavailable (fresh-config mode)")
+	}
+	return path, nil
 }
 
 func (m *Model) reopenHiddenProject(entry layout.HiddenProjectConfig) tea.Cmd {

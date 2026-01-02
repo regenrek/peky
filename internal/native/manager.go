@@ -19,6 +19,7 @@ type PaneEventType uint8
 const (
 	PaneEventUpdated PaneEventType = iota + 1
 	PaneEventToast
+	PaneEventMetaUpdated
 )
 
 // PaneEvent signals that a pane updated or emitted a toast.
@@ -44,6 +45,13 @@ type Manager struct {
 	previewMu     sync.Mutex
 	previewCache  map[string]previewState
 	previewCursor int
+
+	perfMu     sync.Mutex
+	perfLogged map[string]uint8
+
+	outputMu    sync.Mutex
+	outputReady map[string]chan struct{}
+	outputSeen  map[string]bool
 }
 
 // NewManager creates a new native session manager.
@@ -80,6 +88,7 @@ func (m *Manager) Close() {
 	if m.closed.Swap(true) {
 		return
 	}
+	var panes []*Pane
 	m.mu.Lock()
 	for _, session := range m.sessions {
 		for _, pane := range session.Panes {
@@ -87,7 +96,7 @@ func (m *Manager) Close() {
 				pane.output.disable()
 			}
 			if pane.window != nil {
-				_ = pane.window.Close()
+				panes = append(panes, pane)
 			}
 		}
 	}
@@ -95,10 +104,24 @@ func (m *Manager) Close() {
 	m.panes = nil
 	m.mu.Unlock()
 
+	if len(panes) > 0 {
+		m.closePanes(panes)
+	}
+
 	m.previewMu.Lock()
 	m.previewCache = nil
 	m.previewCursor = 0
 	m.previewMu.Unlock()
+
+	m.outputMu.Lock()
+	if m.outputReady != nil {
+		for _, ch := range m.outputReady {
+			close(ch)
+		}
+	}
+	m.outputReady = nil
+	m.outputSeen = nil
+	m.outputMu.Unlock()
 
 	m.eventsMu.Lock()
 	if !m.eventsClosed {
@@ -128,15 +151,21 @@ func (m *Manager) markActive(id string) {
 		return
 	}
 	var seq uint64
-	m.mu.Lock()
+	m.mu.RLock()
 	pane := m.panes[id]
+	m.mu.RUnlock()
 	if pane != nil {
-		pane.LastActive = time.Now()
+		pane.SetLastActive(time.Now())
 		if pane.window != nil {
 			seq = pane.window.UpdateSeq()
 		}
 	}
-	m.mu.Unlock()
+	if pane != nil {
+		m.logPanePerf(pane)
+		if pane.window != nil && !pane.window.FirstReadAt().IsZero() {
+			m.markPaneOutputReady(pane.ID)
+		}
+	}
 	m.notify(id, seq)
 }
 
@@ -146,6 +175,14 @@ func (m *Manager) notify(id string, seq uint64) {
 	}
 	m.version.Add(1)
 	m.emitEvent(PaneEvent{Type: PaneEventUpdated, PaneID: id, Seq: seq})
+}
+
+func (m *Manager) notifyMeta(id string) {
+	if m == nil || m.closed.Load() {
+		return
+	}
+	m.version.Add(1)
+	m.emitEvent(PaneEvent{Type: PaneEventMetaUpdated, PaneID: id})
 }
 
 func (m *Manager) notifyToast(id, message string) {

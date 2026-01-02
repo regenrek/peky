@@ -39,6 +39,7 @@ func (m *fakeRelayManager) SplitPane(context.Context, string, string, bool, int)
 }
 func (m *fakeRelayManager) ClosePane(context.Context, string, string) error { return nil }
 func (m *fakeRelayManager) SwapPanes(string, string, string) error          { return nil }
+func (m *fakeRelayManager) SetPaneTool(string, string) error                { return nil }
 func (m *fakeRelayManager) SendInput(paneID string, input []byte) error {
 	if m.sent == nil {
 		m.sent = make(map[string][][]byte)

@@ -20,6 +20,34 @@ This format is based on Keep a Changelog.
 
 ### Fixed
 - Layout shorthand no longer overrides explicit top-level commands like `daemon`.
+ 
+## 0.0.10 - 2026-01-02
+
+### Changed
+- Dashboard performance defaults now use `preset: max` and `preview_render: direct`.
+
+## 0.0.9 - 2026-01-02
+
+### Added
+- Performance profiler harness (`scripts/perf-profiler`) with trace/fgprof/gops capture and timing summaries.
+- Performance layout fixtures for 10-pane baselines plus wait-for-output variant.
+- Performance test README in `testdata/performance-tests/`.
+- Performance tuning guide (`docs/performance.md`).
+- `max` performance preset plus configurable dashboard preview render mode (`dashboard.performance.preview_render.mode`).
+
+### Changed
+- Layout send actions default to waiting for first output when `send_delay_ms` is omitted.
+- Pane dimension limits now clamp across sessiond, terminal, and VT layers to prevent oversize allocations.
+- VT parser data buffer reduced from 4MB to 64KB (configurable via env override).
+- Pane view scheduling now prioritizes visible panes with per-pane in-flight tracking to reduce refresh overhead.
+- Dashboard performance menu now surfaces render-policy + preview-render tradeoffs with preset hints.
+- Performance dialog help is now inline with optional expanded details (no overlay dialog).
+- Command palette rows render full-width with clearer selection highlighting.
+- Quick reply input bar no longer shows the placeholder hint line.
+
+### Fixed
+- Pane view cache now enforces TTL + max-entry eviction to prevent unbounded growth.
+- Dashboard pane view refresh no longer churns on off-screen panes, reducing update storms under load.
 
 ## 0.0.8 - 2025-12-31
 
@@ -82,7 +110,7 @@ This format is based on Keep a Changelog.
 ### Added
 - Native multiplexer manager with PTY/VT panes and full-screen TUI support.
 - Live pane rendering in the dashboard and project views for native sessions.
-- Terminal focus toggle for native panes (default `ctrl+\`, configurable).
+- Terminal focus toggle for native panes (default `ctrl+k`, configurable).
 - Native mouse support in the dashboard: single-click selects panes, double-click toggles terminal focus, and motion forwarding is throttled to avoid CPU spikes.
 - Mouse wheel scrollback for native panes with shift/ctrl modifiers and drag-to-select copy mode in terminal focus.
 - Mouse drag selection now auto-copies to the clipboard and shows a success toast.

@@ -13,7 +13,7 @@ import (
 )
 
 func (d *Daemon) restorePersistedState() error {
-	if d == nil || d.manager == nil {
+	if d == nil || d.manager == nil || d.skipRestore {
 		return nil
 	}
 	path := strings.TrimSpace(d.statePath)

@@ -1,7 +1,6 @@
 package terminal
 
 import (
-	"bytes"
 	"image/color"
 	"os"
 	"runtime"
@@ -37,12 +36,14 @@ func TestTranslateCPR(t *testing.T) {
 	}
 }
 
-func TestWriteToPTY(t *testing.T) {
-	var buf bytes.Buffer
-	w := &Window{}
-	w.writeToPTY(&buf, []byte("hi"))
-	if buf.String() != "hi" {
-		t.Fatalf("writeToPTY = %q", buf.String())
+func TestEnqueueWrite(t *testing.T) {
+	w := &Window{writeCh: make(chan writeRequest, 1)}
+	if err := w.enqueueWrite([]byte("hi"), false); err != nil {
+		t.Fatalf("enqueueWrite: %v", err)
+	}
+	req := <-w.writeCh
+	if string(req.data) != "hi" {
+		t.Fatalf("write payload = %q", string(req.data))
 	}
 }
 

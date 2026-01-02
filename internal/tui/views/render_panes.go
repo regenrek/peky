@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/regenrek/peakypanes/internal/tui/ansi"
+	"github.com/regenrek/peakypanes/internal/tui/panelayout"
 	"github.com/regenrek/peakypanes/internal/tui/theme"
 )
 
@@ -156,42 +157,13 @@ type paneGridLayout struct {
 }
 
 func computePaneGridLayout(paneCount, width, height int) paneGridLayout {
-	cols := 3
-	if width < 70 {
-		cols = 2
-	}
-	if width < 42 {
-		cols = 1
-	}
-	if paneCount < cols {
-		cols = paneCount
-	}
-	if cols <= 0 {
-		cols = 1
-	}
-
-	rows := (paneCount + cols - 1) / cols
-	availableHeight := height
-	if availableHeight < rows {
-		availableHeight = rows
-	}
-	baseHeight := availableHeight / rows
-	extraHeight := availableHeight % rows
-	if baseHeight < 4 {
-		baseHeight = 4
-		extraHeight = 0
-	}
-	tileWidth := width / cols
-	if tileWidth < 14 {
-		tileWidth = 14
-	}
-
+	grid := panelayout.Compute(paneCount, width, height)
 	return paneGridLayout{
-		cols:        cols,
-		rows:        rows,
-		tileWidth:   tileWidth,
-		baseHeight:  baseHeight,
-		extraHeight: extraHeight,
+		cols:        grid.Cols,
+		rows:        grid.Rows,
+		tileWidth:   grid.TileWidth,
+		baseHeight:  grid.BaseHeight,
+		extraHeight: grid.ExtraHeight,
 	}
 }
 
@@ -204,10 +176,14 @@ func paneBorderLevels(panes []Pane, targetPane string, terminalFocus bool) []int
 }
 
 func paneRowHeight(layout paneGridLayout, row int) int {
-	if row == layout.rows-1 {
-		return layout.baseHeight + layout.extraHeight
+	grid := panelayout.Grid{
+		Cols:        layout.cols,
+		Rows:        layout.rows,
+		TileWidth:   layout.tileWidth,
+		BaseHeight:  layout.baseHeight,
+		ExtraHeight: layout.extraHeight,
 	}
-	return layout.baseHeight
+	return grid.RowHeight(row)
 }
 
 type paneTileContext struct {
@@ -348,7 +324,7 @@ func renderPaneTile(pane Pane, width, height int, compact bool, target bool, bor
 func (m Model) renderPaneTileLive(pane Pane, width, height int, compact bool, target bool, borders tileBorders) string {
 	title := paneTileTitle(pane, target)
 	style := paneTileStyle(borders)
-	style, contentWidth, innerHeight := paneTileLayoutFor(width, height, style)
+	style, contentWidth, innerHeight := paneTileLayoutFor(width, height, borders, style)
 
 	header := fmt.Sprintf("%s %s", renderBadge(pane.Status), title)
 	lines := []string{truncateTileLine(header, contentWidth)}
@@ -392,15 +368,24 @@ func paneTileStyle(borders tileBorders) lipgloss.Style {
 		Padding(0, 1)
 }
 
-func paneTileLayoutFor(width, height int, style lipgloss.Style) (lipgloss.Style, int, int) {
-	frameW, frameH := style.GetFrameSize()
-	borderW := style.GetHorizontalBorderSize()
-	borderH := style.GetVerticalBorderSize()
-	contentWidth := width - frameW
+func paneTileLayoutFor(width, height int, borders tileBorders, style lipgloss.Style) (lipgloss.Style, int, int) {
+	metrics := panelayout.TileMetricsFor(width, height, panelayout.TileBorders{
+		Top:    borders.top,
+		Left:   borders.left,
+		Right:  borders.right,
+		Bottom: borders.bottom,
+	})
+	borderW, borderH := panelayout.BorderSizes(panelayout.TileBorders{
+		Top:    borders.top,
+		Left:   borders.left,
+		Right:  borders.right,
+		Bottom: borders.bottom,
+	})
+	contentWidth := metrics.ContentWidth
 	if contentWidth < 1 {
 		contentWidth = 1
 	}
-	innerHeight := height - frameH
+	innerHeight := metrics.InnerHeight
 	if innerHeight < 1 {
 		innerHeight = 1
 	}

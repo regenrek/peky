@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/regenrek/peakypanes/internal/tui/dashlayout"
 	"github.com/regenrek/peakypanes/internal/tui/icons"
 	"github.com/regenrek/peakypanes/internal/tui/theme"
 )
@@ -78,13 +79,6 @@ func renderDashboardColumn(column DashboardColumn, width, height int, selected b
 	return strings.Join(append(headerLines, body), "\n")
 }
 
-func dashboardPaneBlockHeight(previewLines int) int {
-	if previewLines < 0 {
-		previewLines = 0
-	}
-	return previewLines + 4
-}
-
 type dashboardColumnsLayout struct {
 	columns       []DashboardColumn
 	selectedIndex int
@@ -103,11 +97,22 @@ type dashboardColumnLayout struct {
 func buildDashboardColumnsLayout(columns []DashboardColumn, width int, selectedProject string) dashboardColumnsLayout {
 	layout := dashboardColumnsLayout{
 		columns: columns,
-		gap:     2,
+		gap:     dashlayout.DefaultColumnGap,
 	}
 	layout.selectedIndex = dashboardColumnIndex(columns, selectedProject)
-	layout.columns, layout.selectedIndex = clampDashboardColumns(layout.columns, layout.selectedIndex, width, layout.gap)
-	layout.colWidth = columnWidth(width, len(layout.columns), layout.gap)
+	start, end, selected := dashlayout.ClampColumns(len(layout.columns), layout.selectedIndex, width, layout.gap)
+	if start < 0 {
+		start = 0
+	}
+	if end < start {
+		end = start
+	}
+	if end > len(layout.columns) {
+		end = len(layout.columns)
+	}
+	layout.columns = layout.columns[start:end]
+	layout.selectedIndex = selected
+	layout.colWidth = dashlayout.ColumnWidth(width, len(layout.columns), layout.gap)
 	return layout
 }
 
@@ -118,39 +123,6 @@ func dashboardColumnIndex(columns []DashboardColumn, selectedProject string) int
 		}
 	}
 	return 0
-}
-
-func clampDashboardColumns(columns []DashboardColumn, selectedIndex, width, gap int) ([]DashboardColumn, int) {
-	minColWidth := 24
-	maxCols := (width + gap) / (minColWidth + gap)
-	if maxCols < 1 {
-		maxCols = 1
-	}
-	if len(columns) <= maxCols {
-		return columns, selectedIndex
-	}
-	start := selectedIndex - maxCols/2
-	if start < 0 {
-		start = 0
-	}
-	if start+maxCols > len(columns) {
-		start = len(columns) - maxCols
-	}
-	return columns[start : start+maxCols], selectedIndex - start
-}
-
-func columnWidth(width, columns, gap int) int {
-	if columns <= 1 {
-		if width < 1 {
-			return 1
-		}
-		return width
-	}
-	colWidth := (width - gap*(columns-1)) / columns
-	if colWidth < 1 {
-		colWidth = 1
-	}
-	return colWidth
 }
 
 func dashboardColumnHeader(column DashboardColumn, width int, selected bool) []string {
@@ -172,24 +144,15 @@ func dashboardColumnHeader(column DashboardColumn, width int, selected bool) []s
 
 func buildDashboardColumnLayout(column DashboardColumn, bodyHeight int, selected bool, ctx dashboardRenderContext) dashboardColumnLayout {
 	layout := dashboardColumnLayout{
-		blockHeight: dashboardPaneBlockHeight(ctx.previewLines),
+		blockHeight: dashlayout.BlockHeight(ctx.previewLines, bodyHeight),
 	}
-	if layout.blockHeight > bodyHeight {
-		layout.blockHeight = bodyHeight
-	}
-	if layout.blockHeight < 3 {
-		layout.blockHeight = bodyHeight
-	}
-	layout.visibleBlocks = bodyHeight / layout.blockHeight
-	if layout.visibleBlocks < 1 {
-		layout.visibleBlocks = 1
-	}
+	layout.visibleBlocks = dashlayout.VisibleBlocks(bodyHeight, layout.blockHeight)
 	if selected {
 		layout.selectedIndex = dashboardPaneIndex(column.Panes, ctx.selectionSession, ctx.selectionPane)
 	} else {
 		layout.selectedIndex = -1
 	}
-	layout.start, layout.end = dashboardPaneRange(selected, layout.selectedIndex, layout.visibleBlocks, len(column.Panes))
+	layout.start, layout.end = dashlayout.PaneRange(selected, layout.selectedIndex, layout.visibleBlocks, len(column.Panes))
 	return layout
 }
 
@@ -204,27 +167,6 @@ func renderDashboardPaneBlocks(column DashboardColumn, layout dashboardColumnLay
 		blocks = append(blocks, ctx.renderer(column.Panes[i], width, layout.blockHeight, ctx.previewLines, selectedPane, focused, ctx.icons))
 	}
 	return blocks
-}
-
-func dashboardPaneRange(selected bool, selectedIndex, visibleBlocks, total int) (int, int) {
-	start := 0
-	if selected && selectedIndex >= 0 && selectedIndex >= visibleBlocks {
-		start = selectedIndex - visibleBlocks + 1
-	}
-	if start < 0 {
-		start = 0
-	}
-	if total > 0 && start > total-1 {
-		start = total - 1
-	}
-	end := start + visibleBlocks
-	if end > total {
-		end = total
-	}
-	if end < start {
-		end = start
-	}
-	return start, end
 }
 
 func renderDashboardPaneTile(pane DashboardPane, width, height, previewLines int, selected bool, focused bool, iconCtx paneIconContext) string {
