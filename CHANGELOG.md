@@ -18,6 +18,9 @@ This format is based on Keep a Changelog.
 - VT parser data buffer reduced from 4MB to 64KB (configurable via env override).
 - Pane view scheduling now prioritizes visible panes with per-pane in-flight tracking to reduce refresh overhead.
 - Dashboard performance menu now surfaces render-policy + preview-render tradeoffs with preset hints.
+- Performance dialog help is now inline with optional expanded details (no overlay dialog).
+- Command palette rows render full-width with clearer selection highlighting.
+- Quick reply input bar no longer shows the placeholder hint line.
 
 ### Fixed
 - Pane view cache now enforces TTL + max-entry eviction to prevent unbounded growth.
