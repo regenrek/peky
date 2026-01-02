@@ -38,6 +38,7 @@ type Model struct {
 	PaneSwapPicker           list.Model
 	CommandPalette           list.Model
 	SettingsMenu             list.Model
+	PerformanceMenu          list.Model
 	DebugMenu                list.Model
 	ConfirmKill              ConfirmKill
 	ConfirmQuit              ConfirmQuit

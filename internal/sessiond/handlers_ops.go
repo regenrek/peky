@@ -225,6 +225,26 @@ func (d *Daemon) handleSwapPanes(payload []byte) ([]byte, error) {
 	return nil, nil
 }
 
+func (d *Daemon) handleSetPaneTool(payload []byte) ([]byte, error) {
+	var req SetPaneToolRequest
+	if err := decodePayload(payload, &req); err != nil {
+		return nil, err
+	}
+	paneID, err := requirePaneID(req.PaneID)
+	if err != nil {
+		return nil, err
+	}
+	manager, err := d.requireManager()
+	if err != nil {
+		return nil, err
+	}
+	if err := manager.SetPaneTool(paneID, req.Tool); err != nil {
+		return nil, err
+	}
+	d.queuePersistState()
+	return nil, nil
+}
+
 func (d *Daemon) handleSendInput(payload []byte) ([]byte, error) {
 	var req SendInputRequest
 	if err := decodePayload(payload, &req); err != nil {

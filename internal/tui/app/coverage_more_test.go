@@ -13,6 +13,7 @@ import (
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/sessiond"
 	"github.com/regenrek/peakypanes/internal/tui/agent"
+	"github.com/regenrek/peakypanes/internal/tui/dashlayout"
 	"github.com/regenrek/peakypanes/internal/userpath"
 )
 
@@ -242,7 +243,7 @@ func TestViewModelHelpers(t *testing.T) {
 }
 
 func TestPaneLayoutHelpers(t *testing.T) {
-	if dashboardPaneBlockHeight(2) != 6 {
+	if dashlayout.PaneBlockHeight(2) != 6 {
 		t.Fatalf("dashboardPaneBlockHeight unexpected")
 	}
 	panes := []PaneItem{{Left: 0, Top: 0, Width: 10, Height: 5}, {Left: 10, Top: 5, Width: 5, Height: 5}}

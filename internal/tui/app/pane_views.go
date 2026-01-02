@@ -15,22 +15,9 @@ import (
 )
 
 const (
-	paneViewTimeout               = 2 * time.Second
-	paneViewMaxConcurrency        = 4
-	paneViewMaxInFlightBatches    = 2
-	paneViewMaxBatch              = 8
-	paneViewMinIntervalFocused    = 33 * time.Millisecond
-	paneViewMinIntervalSelected   = 100 * time.Millisecond
-	paneViewMinIntervalBackground = 250 * time.Millisecond
-	paneViewTimeoutFocused        = 1500 * time.Millisecond
-	paneViewTimeoutSelected       = 1000 * time.Millisecond
-	paneViewTimeoutBackground     = 800 * time.Millisecond
-	paneViewPumpBaseDelay         = 0 * time.Millisecond
-	paneViewPumpMaxDelay          = 50 * time.Millisecond
-	paneViewForceAfter            = 250 * time.Millisecond
-	paneViewFallbackCols          = 80
-	paneViewFallbackRows          = 24
-	paneViewFallbackMinInterval   = 150 * time.Millisecond
+	paneViewTimeout      = 2 * time.Second
+	paneViewFallbackCols = 80
+	paneViewFallbackRows = 24
 )
 
 type paneViewKey struct {
@@ -94,6 +81,10 @@ func (m *Model) refreshPaneViewFor(paneID string) tea.Cmd {
 			m.perfNotePaneQueued(paneID, "pane_not_in_snapshot", time.Now())
 			return m.requestRefreshCmdReason("paneview_pane_missing_snapshot", true)
 		}
+		if m.tab == TabProject {
+			m.queuePaneViewID(paneID, "hit_not_visible")
+			return m.schedulePaneViewPump("hit_not_visible", 0)
+		}
 		m.perfNotePaneQueued(paneID, "hit_not_visible", time.Now())
 		return nil
 	}
@@ -137,6 +128,10 @@ func (m *Model) refreshPaneViewsForIDs(ids map[string]struct{}) tea.Cmd {
 			m.perfNotePaneQueued(paneID, "pane_not_in_snapshot", time.Now())
 			continue
 		}
+		if m.tab == TabProject {
+			m.queuePaneViewID(paneID, "hit_not_visible")
+			continue
+		}
 		m.perfNotePaneQueued(paneID, "hit_not_visible", time.Now())
 	}
 	cmd := m.schedulePaneViewPump("event_batch", 0)
@@ -175,6 +170,7 @@ func (m *Model) paneViewRequests() []sessiond.PaneViewRequest {
 	}
 	reqs := make([]sessiond.PaneViewRequest, 0, len(hits))
 	seen := make(map[paneViewKey]struct{})
+	perf := m.paneViewPerf()
 	for _, hit := range hits {
 		req := m.paneViewRequestForHit(hit)
 		if req == nil {
@@ -193,10 +189,7 @@ func (m *Model) paneViewRequests() []sessiond.PaneViewRequest {
 		}
 		seen[key] = struct{}{}
 
-		minInterval := paneViewMinIntervalFor(*req)
-		if perfPaneViewAllEnabled() {
-			minInterval = 0
-		}
+		minInterval := paneViewMinIntervalFor(*req, perf)
 		if !m.allowPaneViewRequest(key, minInterval, false) {
 			continue
 		}
@@ -244,8 +237,9 @@ func (m *Model) allowFallbackRequest(paneID string, now time.Time) bool {
 	if m.paneLastFallback == nil {
 		m.paneLastFallback = make(map[string]time.Time)
 	}
+	perf := m.paneViewPerf()
 	last := m.paneLastFallback[paneID]
-	if !last.IsZero() && now.Sub(last) < paneViewFallbackMinInterval {
+	if !last.IsZero() && now.Sub(last) < perf.FallbackMinInterval {
 		return false
 	}
 	m.paneLastFallback[paneID] = now
@@ -259,14 +253,15 @@ func (m *Model) schedulePaneViewPump(reason string, delay time.Duration) tea.Cmd
 	if m.paneViewPumpScheduled {
 		return nil
 	}
+	perf := m.paneViewPerf()
 	if delay < 0 {
 		delay = 0
 	}
 	if delay == 0 {
-		delay = paneViewPumpBaseDelay
+		delay = perf.PumpBaseDelay
 	}
-	if delay > paneViewPumpMaxDelay {
-		delay = paneViewPumpMaxDelay
+	if delay > perf.PumpMaxDelay {
+		delay = perf.PumpMaxDelay
 	}
 	m.paneViewPumpScheduled = true
 	if perfDebugEnabled() && reason != "" {
@@ -277,13 +272,13 @@ func (m *Model) schedulePaneViewPump(reason string, delay time.Duration) tea.Cmd
 	})
 }
 
-func nextPaneViewPumpBackoff(current time.Duration) time.Duration {
+func nextPaneViewPumpBackoff(current time.Duration, perf PaneViewPerformance) time.Duration {
 	if current <= 0 {
-		return paneViewPumpBaseDelay
+		return perf.PumpBaseDelay
 	}
 	next := current * 2
-	if next > paneViewPumpMaxDelay {
-		next = paneViewPumpMaxDelay
+	if next > perf.PumpMaxDelay {
+		next = perf.PumpMaxDelay
 	}
 	return next
 }
@@ -306,29 +301,25 @@ func (m *Model) handlePaneViewPump(msg paneViewPumpMsg) tea.Cmd {
 }
 
 func (m *Model) shouldDelayPaneViewPump() bool {
-	return m.paneViewInFlight >= paneViewMaxInFlightBatches && !perfPaneViewAllEnabled()
+	perf := m.paneViewPerf()
+	return m.paneViewInFlight >= perf.MaxInFlightBatches
 }
 
 func (m *Model) paneViewPumpMaxReqs() int {
-	maxBatches := paneViewMaxInFlightBatches - m.paneViewInFlight
+	perf := m.paneViewPerf()
+	maxBatches := perf.MaxInFlightBatches - m.paneViewInFlight
 	if maxBatches < 1 {
 		maxBatches = 1
 	}
-	if perfPaneViewAllEnabled() {
-		maxBatches = paneViewMaxConcurrency
-		if maxBatches < 1 {
-			maxBatches = 1
-		}
-	}
-	maxReqs := maxBatches * paneViewMaxBatch
+	maxReqs := maxBatches * perf.MaxBatch
 	if maxReqs < 1 {
-		maxReqs = paneViewMaxBatch
+		maxReqs = perf.MaxBatch
 	}
 	return maxReqs
 }
 
 func (m *Model) schedulePaneViewPumpWithBackoff(reason string) tea.Cmd {
-	m.paneViewPumpBackoff = nextPaneViewPumpBackoff(m.paneViewPumpBackoff)
+	m.paneViewPumpBackoff = nextPaneViewPumpBackoff(m.paneViewPumpBackoff, m.paneViewPerf())
 	return m.schedulePaneViewPump(reason, m.paneViewPumpBackoff)
 }
 
@@ -360,7 +351,7 @@ func (m *Model) appendPaneViewPumpFollowup(cmds []tea.Cmd) []tea.Cmd {
 		return cmds
 	}
 	if m.shouldDelayPaneViewPump() {
-		m.paneViewPumpBackoff = nextPaneViewPumpBackoff(m.paneViewPumpBackoff)
+		m.paneViewPumpBackoff = nextPaneViewPumpBackoff(m.paneViewPumpBackoff, m.paneViewPerf())
 	} else {
 		m.paneViewPumpBackoff = 0
 	}
@@ -379,8 +370,54 @@ func (m *Model) buildPaneViewRequestsForPending(maxReqs int) ([]sessiond.PaneVie
 		m.buildPendingRequestsNoSnapshot(builder)
 		return builder.reqs, builder.remaining, true
 	}
-	for paneID := range m.paneViewQueuedIDs {
-		m.buildPendingRequestForPane(paneID, builder)
+	hits := m.paneHitsByID()
+	missing := make([]string, 0, len(m.paneViewQueuedIDs))
+	if len(hits) > 0 {
+		// First pass: prioritize visible panes that already have hit geometry.
+		for paneID, hit := range hits {
+			if paneID == "" {
+				continue
+			}
+			if _, ok := m.paneViewQueuedIDs[paneID]; !ok {
+				continue
+			}
+			if builder.atLimit() || m.isPaneViewInFlight(paneID) {
+				builder.markRemaining(paneID)
+				continue
+			}
+			if m.tryAddPaneViewRequestWithHit(paneID, hit, builder) {
+				continue
+			}
+			missing = append(missing, paneID)
+		}
+		// Second pass: collect remaining queued panes that are not visible.
+		for paneID := range m.paneViewQueuedIDs {
+			if paneID == "" {
+				continue
+			}
+			if _, ok := hits[paneID]; ok {
+				continue
+			}
+			if builder.atLimit() || m.isPaneViewInFlight(paneID) {
+				builder.markRemaining(paneID)
+				continue
+			}
+			missing = append(missing, paneID)
+		}
+	} else {
+		for paneID := range m.paneViewQueuedIDs {
+			if paneID == "" {
+				continue
+			}
+			if builder.atLimit() || m.isPaneViewInFlight(paneID) {
+				builder.markRemaining(paneID)
+				continue
+			}
+			missing = append(missing, paneID)
+		}
+	}
+	if len(missing) > 0 {
+		m.buildPendingRequestsForMissing(missing, hits, builder)
 	}
 	return builder.reqs, builder.remaining, builder.needsRefresh
 }
@@ -449,22 +486,6 @@ func (m *Model) buildPendingRequestsNoSnapshot(b *paneViewPendingBuild) {
 	}
 }
 
-func (m *Model) buildPendingRequestForPane(paneID string, b *paneViewPendingBuild) {
-	if b.atLimit() || m.isPaneViewInFlight(paneID) {
-		b.markRemaining(paneID)
-		return
-	}
-	if !m.paneExistsInSnapshot(paneID) {
-		m.queueFallbackAndNote(paneID, b, "pane_not_in_snapshot")
-		b.needsRefresh = true
-		return
-	}
-	if handled := m.tryAddPaneViewRequest(paneID, b); handled {
-		return
-	}
-	m.queueFallbackAndNote(paneID, b, "hit_not_found")
-}
-
 func (m *Model) queueFallbackAndNote(paneID string, b *paneViewPendingBuild, reason string) {
 	if fallback := m.buildFallbackRequest(paneID, b.seen, b.now); fallback != nil {
 		key := paneViewKey{
@@ -481,11 +502,30 @@ func (m *Model) queueFallbackAndNote(paneID string, b *paneViewPendingBuild, rea
 	m.perfNotePaneQueued(paneID, reason, b.now)
 }
 
+func (m *Model) paneHitsByID() map[string]mouse.PaneHit {
+	hits := m.paneHits()
+	if len(hits) == 0 {
+		return nil
+	}
+	hitByID := make(map[string]mouse.PaneHit, len(hits))
+	for _, hit := range hits {
+		if hit.PaneID == "" {
+			continue
+		}
+		hitByID[hit.PaneID] = hit
+	}
+	return hitByID
+}
+
 func (m *Model) tryAddPaneViewRequest(paneID string, b *paneViewPendingBuild) bool {
 	hit, ok := m.paneHitFor(paneID)
 	if !ok {
 		return false
 	}
+	return m.tryAddPaneViewRequestWithHit(paneID, hit, b)
+}
+
+func (m *Model) tryAddPaneViewRequestWithHit(paneID string, hit mouse.PaneHit, b *paneViewPendingBuild) bool {
 	req := m.paneViewRequestForHit(hit)
 	if req == nil {
 		return false
@@ -510,14 +550,55 @@ func (m *Model) tryAddPaneViewRequest(paneID string, b *paneViewPendingBuild) bo
 	return true
 }
 
-func (m *Model) paneViewRequestPolicy(paneID string, req sessiond.PaneViewRequest) (time.Duration, bool) {
-	minInterval := paneViewMinIntervalFor(req)
-	force := m.paneViewQueuedAge(paneID) >= paneViewForceAfter
-	if !m.hasPaneViewFirst(paneID) {
-		minInterval = 0
-		force = true
+func (m *Model) buildPendingRequestsForMissing(missing []string, hits map[string]mouse.PaneHit, b *paneViewPendingBuild) {
+	if len(missing) == 0 || b == nil {
+		return
 	}
-	if perfPaneViewAllEnabled() {
+	// If hits are available, prioritize visible panes and keep non-visible pending
+	// without emitting fallback requests that would crowd the queue.
+	if len(hits) > 0 {
+		for _, paneID := range missing {
+			if paneID == "" {
+				continue
+			}
+			if b.atLimit() || m.isPaneViewInFlight(paneID) {
+				b.markRemaining(paneID)
+				continue
+			}
+			if !m.paneExistsInSnapshot(paneID) {
+				m.queueFallbackAndNote(paneID, b, "pane_not_in_snapshot")
+				b.needsRefresh = true
+				continue
+			}
+			b.markRemaining(paneID)
+			m.perfNotePaneQueued(paneID, "hit_not_visible", b.now)
+		}
+		return
+	}
+
+	// No hits at all: emit fallback requests so panes can render while layout settles.
+	for _, paneID := range missing {
+		if paneID == "" {
+			continue
+		}
+		if b.atLimit() || m.isPaneViewInFlight(paneID) {
+			b.markRemaining(paneID)
+			continue
+		}
+		if !m.paneExistsInSnapshot(paneID) {
+			m.queueFallbackAndNote(paneID, b, "pane_not_in_snapshot")
+			b.needsRefresh = true
+			continue
+		}
+		m.queueFallbackAndNote(paneID, b, "hit_not_found")
+	}
+}
+
+func (m *Model) paneViewRequestPolicy(paneID string, req sessiond.PaneViewRequest) (time.Duration, bool) {
+	perf := m.paneViewPerf()
+	minInterval := paneViewMinIntervalFor(req, perf)
+	force := m.paneViewQueuedAge(paneID) >= perf.ForceAfter
+	if !m.hasPaneViewFirst(paneID) {
 		minInterval = 0
 		force = true
 	}
@@ -558,7 +639,8 @@ func (m *Model) buildFallbackRequest(paneID string, seen map[paneViewKey]struct{
 	if m.paneViewSeq != nil {
 		req.KnownSeq = m.paneViewSeq[key]
 	}
-	minInterval := paneViewMinIntervalBackground
+	perf := m.paneViewPerf()
+	minInterval := perf.MinIntervalBackground
 	force := false
 	if !m.hasPaneViewFirst(paneID) {
 		minInterval = 0
@@ -635,7 +717,8 @@ func (m *Model) startPaneViewFetch(reqs []sessiond.PaneViewRequest) tea.Cmd {
 		m.paneViewPerfBurstDone = true
 		logPerfEvery("tui.paneviews.perf_burst", 0, "tui: pane views perf initial burst reqs=%d", len(reqs))
 	}
-	chunks := chunkPaneViewRequests(reqs, paneViewMaxBatch)
+	perf := m.paneViewPerf()
+	chunks := chunkPaneViewRequests(reqs, perf.MaxBatch)
 	if len(chunks) == 0 {
 		return nil
 	}
@@ -644,9 +727,7 @@ func (m *Model) startPaneViewFetch(reqs []sessiond.PaneViewRequest) tea.Cmd {
 		if len(chunk) == 0 {
 			continue
 		}
-		if !perfPaneViewAllEnabled() {
-			m.paneViewInFlight++
-		}
+		m.paneViewInFlight++
 		cmds = append(cmds, m.fetchPaneViewsCmd(chunk))
 	}
 	if len(cmds) == 1 {
@@ -712,7 +793,7 @@ func (m *Model) paneViewRequestForHit(hit mouse.PaneHit) *sessiond.PaneViewReque
 		return nil
 	}
 	if hit.Content.Empty() {
-		if perfPaneViewAllEnabled() && !hit.Outer.Empty() {
+		if m.renderPolicyAll() && !hit.Outer.Empty() {
 			hit.Content = hit.Outer
 		} else {
 			m.logPaneViewSkip(hit.PaneID, "content_empty", m.paneViewSkipContext())
@@ -811,6 +892,24 @@ func (m *Model) paneViewDataReady() bool {
 	return false
 }
 
+func (m *Model) paneViewPerf() PaneViewPerformance {
+	if m == nil {
+		return paneViewPerfMedium
+	}
+	perf := m.settings.Performance.PaneViews
+	if perf.MaxConcurrency <= 0 || perf.MaxBatch <= 0 || perf.MaxInFlightBatches <= 0 {
+		return paneViewPerfMedium
+	}
+	return perf
+}
+
+func (m *Model) renderPolicyAll() bool {
+	if m == nil {
+		return false
+	}
+	return m.settings.Performance.RenderPolicy == RenderPolicyAll
+}
+
 func (m *Model) paneExistsInSnapshot(paneID string) bool {
 	if m == nil || paneID == "" {
 		return false
@@ -834,7 +933,7 @@ func (m *Model) perfPaneViewInitialBurst() bool {
 	if m == nil {
 		return false
 	}
-	return perfPaneViewAllEnabled() && !m.paneViewPerfBurstDone
+	return m.renderPolicyAll() && !m.paneViewPerfBurstDone
 }
 
 func (m *Model) paneViewSkipContext() string {
@@ -917,24 +1016,24 @@ func (m *Model) dashboardColumnsDebug() string {
 		projectCount, sessionCount, paneCount, runningSessions, selectedProject, selectedSession, m.state, m.tab)
 }
 
-func paneViewMinIntervalFor(req sessiond.PaneViewRequest) time.Duration {
+func paneViewMinIntervalFor(req sessiond.PaneViewRequest, perf PaneViewPerformance) time.Duration {
 	if req.Priority == sessiond.PaneViewPriorityFocused || req.Mode == sessiond.PaneViewLipgloss || req.ShowCursor {
-		return paneViewMinIntervalFocused
+		return perf.MinIntervalFocused
 	}
 	if req.Priority == sessiond.PaneViewPriorityNormal || req.Priority == sessiond.PaneViewPriorityUnset {
-		return paneViewMinIntervalSelected
+		return perf.MinIntervalSelected
 	}
-	return paneViewMinIntervalBackground
+	return perf.MinIntervalBackground
 }
 
-func paneViewTimeoutFor(req sessiond.PaneViewRequest) time.Duration {
+func paneViewTimeoutFor(req sessiond.PaneViewRequest, perf PaneViewPerformance) time.Duration {
 	if req.Priority == sessiond.PaneViewPriorityFocused || req.Mode == sessiond.PaneViewLipgloss || req.ShowCursor {
-		return paneViewTimeoutFocused
+		return perf.TimeoutFocused
 	}
 	if req.Priority == sessiond.PaneViewPriorityNormal || req.Priority == sessiond.PaneViewPriorityUnset {
-		return paneViewTimeoutSelected
+		return perf.TimeoutSelected
 	}
-	return paneViewTimeoutBackground
+	return perf.TimeoutBackground
 }
 
 func (m *Model) fetchPaneViewsCmd(reqs []sessiond.PaneViewRequest) tea.Cmd {
@@ -948,8 +1047,9 @@ func (m *Model) fetchPaneViewsCmd(reqs []sessiond.PaneViewRequest) tea.Cmd {
 	if client == nil {
 		return nil
 	}
+	perf := m.paneViewPerf()
 	return func() tea.Msg {
-		return fetchPaneViews(client, reqs)
+		return fetchPaneViews(client, reqs, perf)
 	}
 }
 
@@ -977,17 +1077,17 @@ func paneViewReqPaneIDs(reqs []sessiond.PaneViewRequest) []string {
 	return out
 }
 
-func fetchPaneViews(client *sessiond.Client, reqs []sessiond.PaneViewRequest) paneViewsMsg {
+func fetchPaneViews(client *sessiond.Client, reqs []sessiond.PaneViewRequest, perf PaneViewPerformance) paneViewsMsg {
 	paneIDs := paneViewReqPaneIDs(reqs)
 	start := time.Now()
 	results := make(chan paneViewResult, len(reqs))
 	jobs := make(chan sessiond.PaneViewRequest)
 
-	workers := paneViewWorkerCount(reqs)
+	workers := paneViewWorkerCount(reqs, perf)
 	var wg sync.WaitGroup
 	wg.Add(workers)
 	for i := 0; i < workers; i++ {
-		go paneViewWorker(client, jobs, results, &wg)
+		go paneViewWorker(client, jobs, results, &wg, perf)
 	}
 
 	go func() {
@@ -1012,8 +1112,8 @@ func fetchPaneViews(client *sessiond.Client, reqs []sessiond.PaneViewRequest) pa
 	return paneViewsMsg{Views: views, Err: firstErr, PaneIDs: paneIDs}
 }
 
-func paneViewWorkerCount(reqs []sessiond.PaneViewRequest) int {
-	workers := paneViewMaxConcurrency
+func paneViewWorkerCount(reqs []sessiond.PaneViewRequest, perf PaneViewPerformance) int {
+	workers := perf.MaxConcurrency
 	if len(reqs) < workers {
 		workers = len(reqs)
 	}
@@ -1023,10 +1123,10 @@ func paneViewWorkerCount(reqs []sessiond.PaneViewRequest) int {
 	return workers
 }
 
-func paneViewWorker(client *sessiond.Client, jobs <-chan sessiond.PaneViewRequest, results chan<- paneViewResult, wg *sync.WaitGroup) {
+func paneViewWorker(client *sessiond.Client, jobs <-chan sessiond.PaneViewRequest, results chan<- paneViewResult, wg *sync.WaitGroup, perf PaneViewPerformance) {
 	defer wg.Done()
 	for req := range jobs {
-		timeout := paneViewTimeoutFor(req)
+		timeout := paneViewTimeoutFor(req, perf)
 		if timeout <= 0 {
 			timeout = paneViewTimeout
 		}

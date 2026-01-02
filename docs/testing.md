@@ -61,7 +61,7 @@ Perf-profiler outputs (per run under `.bench/profiler-12/<timestamp>/`):
 When to use which mode:
 
 - **Baseline** (default): visible panes only; measure realistic dashboard behavior.
-- **`--paneviews-all`**: forces all panes live (tmux-like) to compare apples‑to‑apples.
+- **`--paneviews-all`**: sets dashboard.performance.render_policy=all to render all panes live for profiling.
 - **`--trace-all`**: logs every pane view timing to compute accurate averages.
 
 GitHub Actions runs gofmt checks, go vet, go test with coverage, and race on Linux.

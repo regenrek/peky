@@ -23,6 +23,7 @@ var viewRenderers = map[int]func(Model) string{
 	viewHelp:                    func(m Model) string { return m.viewHelp() },
 	viewCommandPalette:          func(m Model) string { return m.viewCommandPalette() },
 	viewSettingsMenu:            func(m Model) string { return m.viewSettingsMenu() },
+	viewPerformanceMenu:         func(m Model) string { return m.viewPerformanceMenu() },
 	viewDebugMenu:               func(m Model) string { return m.viewDebugMenu() },
 	viewRenameSession:           func(m Model) string { return m.viewRename() },
 	viewRenamePane:              func(m Model) string { return m.viewRename() },

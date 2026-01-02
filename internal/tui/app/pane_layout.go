@@ -1,12 +1,5 @@
 package app
 
-func dashboardPaneBlockHeight(previewLines int) int {
-	if previewLines < 0 {
-		previewLines = 0
-	}
-	return previewLines + 4
-}
-
 func paneBounds(panes []PaneItem) (int, int) {
 	maxW := 0
 	maxH := 0

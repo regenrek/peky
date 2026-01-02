@@ -60,6 +60,7 @@ type sessionManager interface {
 	SplitPane(ctx context.Context, sessionName, paneIndex string, vertical bool, percent int) (string, error)
 	ClosePane(ctx context.Context, sessionName, paneIndex string) error
 	SwapPanes(sessionName, paneA, paneB string) error
+	SetPaneTool(paneID, tool string) error
 	SendInput(paneID string, input []byte) error
 	SendMouse(paneID string, event uv.MouseEvent) error
 	Window(paneID string) paneWindow

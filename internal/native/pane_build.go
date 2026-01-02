@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/charmbracelet/x/ansi"
 	"github.com/kballard/go-shellquote"
 
+	"github.com/regenrek/peakypanes/internal/agenttool"
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/terminal"
 )
@@ -244,6 +244,7 @@ func (m *Manager) createPane(ctx context.Context, path, title, command string, e
 		m.markPaneOutputReady(id)
 	}
 	startCommand := strings.TrimSpace(command)
+	tool := agenttool.DetectFromCommand(startCommand)
 	if startCommand == "" {
 		opts.Command = ""
 	} else {
@@ -271,9 +272,10 @@ func (m *Manager) createPane(ctx context.Context, path, title, command string, e
 		Title:        strings.TrimSpace(title),
 		Command:      startCommand,
 		StartCommand: startCommand,
+		Tool:         string(tool),
 		window:       win,
-		LastActive:   time.Now(),
 	}
+	pane.SetLastActive(time.Now())
 	if win != nil && win.Exited() {
 		pane.Dead = true
 		pane.DeadStatus = win.ExitStatus()
@@ -291,19 +293,11 @@ func renderPreviewLines(win *terminal.Window, max int) ([]string, bool) {
 	if win.FirstReadAt().IsZero() {
 		return nil, false
 	}
-	view, ready := win.ViewANSICached()
-	if !ready {
-		win.RequestANSIRender()
-	}
-	if view == "" {
+	lines, ready := win.PreviewPlainLines(max)
+	if len(lines) == 0 {
 		return nil, ready
 	}
-	plain := ansi.Strip(view)
-	lines := strings.Split(plain, "\n")
-	if len(lines) <= max {
-		return lines, ready
-	}
-	return lines[len(lines)-max:], ready
+	return lines, ready
 }
 
 func splitCommand(command string) (string, []string, error) {

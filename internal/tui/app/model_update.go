@@ -74,6 +74,7 @@ var keyHandlers = map[ViewState]keyHandler{
 	StateHelp:             func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateHelp(msg) },
 	StateCommandPalette:   func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateCommandPalette(msg) },
 	StateSettingsMenu:     func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateSettingsMenu(msg) },
+	StatePerformanceMenu:  func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updatePerformanceMenu(msg) },
 	StateDebugMenu:        func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateDebugMenu(msg) },
 	StateRenameSession:    func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateRename(msg) },
 	StateRenamePane:       func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateRename(msg) },
@@ -172,6 +173,10 @@ func (m *Model) handlePickerUpdate(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		var cmd tea.Cmd
 		m.settingsMenu, cmd = m.settingsMenu.Update(msg)
 		return m, cmd, true
+	case StatePerformanceMenu:
+		var cmd tea.Cmd
+		m.perfMenu, cmd = m.perfMenu.Update(msg)
+		return m, cmd, true
 	case StateDebugMenu:
 		var cmd tea.Cmd
 		m.debugMenu, cmd = m.debugMenu.Update(msg)
@@ -189,6 +194,7 @@ func (m *Model) applyWindowSize(msg tea.WindowSizeMsg) {
 	m.setPaneSwapPickerSize()
 	m.setCommandPaletteSize()
 	m.setSettingsMenuSize()
+	m.setPerformanceMenuSize()
 	m.setDebugMenuSize()
 	m.setQuickReplySize()
 }
@@ -404,6 +410,8 @@ func summarizeDaemonEvents(events []sessiond.Event) (map[string]struct{}, bool, 
 			if event.PaneID != "" {
 				paneIDs[event.PaneID] = struct{}{}
 			}
+		case sessiond.EventPaneMetaChanged:
+			refresh = true
 		case sessiond.EventSessionChanged:
 			refresh = true
 		case sessiond.EventToast:

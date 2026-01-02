@@ -33,6 +33,8 @@ type Session struct {
 	Env        []string
 }
 
+const previewUpdateBudget = 50 * time.Millisecond
+
 // Session returns a snapshot pointer for a session name.
 func (m *Manager) Session(name string) *Session {
 	if m == nil {
@@ -299,6 +301,7 @@ func (m *Manager) snapshotSessions() ([]SessionSnapshot, []panePreviewRef, []str
 				Title:         title,
 				Command:       pane.Command,
 				StartCommand:  pane.StartCommand,
+				Tool:          pane.Tool,
 				PID:           pane.PID,
 				Active:        pane.Active,
 				Left:          pane.Left,
@@ -307,7 +310,7 @@ func (m *Manager) snapshotSessions() ([]SessionSnapshot, []panePreviewRef, []str
 				Height:        pane.Height,
 				Dead:          pane.window != nil && pane.window.Dead(),
 				DeadStatus:    pane.windowExitStatus(),
-				LastActive:    pane.LastActive,
+				LastActive:    pane.LastActiveAt(),
 				RestoreFailed: pane.RestoreFailed,
 				RestoreError:  pane.RestoreError,
 			}
@@ -318,7 +321,7 @@ func (m *Manager) snapshotSessions() ([]SessionSnapshot, []panePreviewRef, []str
 			paneRefs = append(paneRefs, panePreviewRef{
 				id:         pane.ID,
 				window:     pane.window,
-				lastActive: pane.LastActive,
+				lastActive: pane.LastActiveAt(),
 				seq:        seq,
 				sessionIdx: si,
 				paneIdx:    pi,
@@ -369,6 +372,15 @@ func (m *Manager) collectPreviewUpdates(
 	updates := make(map[string]previewState)
 	lastProcessed := -1
 	deadline, hasDeadline := ctx.Deadline()
+	budgetDeadline := time.Time{}
+	if previewUpdateBudget > 0 {
+		budgetDeadline = time.Now().Add(previewUpdateBudget)
+		if hasDeadline && deadline.Before(budgetDeadline) {
+			budgetDeadline = deadline
+		}
+	} else if hasDeadline {
+		budgetDeadline = deadline
+	}
 	for i := 0; i < len(refs); i++ {
 		idx := (start + i) % len(refs)
 		if !needsUpdate[idx] {
@@ -378,6 +390,9 @@ func (m *Manager) collectPreviewUpdates(
 			break
 		}
 		if hasDeadline && time.Now().After(deadline) {
+			break
+		}
+		if !budgetDeadline.IsZero() && time.Now().After(budgetDeadline) {
 			break
 		}
 		ref := refs[idx]
@@ -436,6 +451,7 @@ type PaneSnapshot struct {
 	Title         string
 	Command       string
 	StartCommand  string
+	Tool          string
 	PID           int
 	Active        bool
 	Left          int

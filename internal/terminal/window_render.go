@@ -86,6 +86,65 @@ func (w *Window) ViewANSICached() (string, bool) {
 	return w.cacheANSI, !w.cacheDirty
 }
 
+// PreviewPlainLines returns the last max lines as plain text and whether the view is stable.
+// It avoids full ANSI rendering to keep snapshot preview generation cheap.
+func (w *Window) PreviewPlainLines(max int) ([]string, bool) {
+	if w == nil || max <= 0 {
+		return nil, false
+	}
+	if w.FirstReadAt().IsZero() {
+		return nil, false
+	}
+
+	startSeq := w.UpdateSeq()
+
+	w.termMu.Lock()
+	term := w.term
+	if term == nil {
+		w.termMu.Unlock()
+		return nil, false
+	}
+	cols := term.Width()
+	rows := term.Height()
+	if cols <= 0 || rows <= 0 {
+		w.termMu.Unlock()
+		return nil, true
+	}
+	if max > rows {
+		max = rows
+	}
+	startRow := rows - max
+	lines := make([]string, 0, max)
+	for y := startRow; y < rows; y++ {
+		var b strings.Builder
+		b.Grow(cols)
+		for x := 0; x < cols; {
+			cell := term.CellAt(x, y)
+			if cell != nil && cell.Width == 0 {
+				x++
+				continue
+			}
+			ch := " "
+			width := 1
+			if cell != nil {
+				if cell.Content != "" {
+					ch = cell.Content
+				}
+				if cell.Width > 1 {
+					width = cell.Width
+				}
+			}
+			b.WriteString(ch)
+			x += width
+		}
+		lines = append(lines, strings.TrimRight(b.String(), " "))
+	}
+	w.termMu.Unlock()
+
+	endSeq := w.UpdateSeq()
+	return lines, startSeq == endSeq
+}
+
 func (w *Window) refreshANSICache() {
 	if w == nil {
 		return

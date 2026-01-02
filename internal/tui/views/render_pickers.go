@@ -47,6 +47,7 @@ func (m Model) viewPaneSwapPicker() string {
 
 const commandPaletteHeading = "⌘ Command Palette"
 const settingsMenuHeading = "Settings"
+const performanceMenuHeading = "Performance"
 const debugMenuHeading = "Debug"
 
 func (m Model) viewCommandPalette() string {
@@ -55,6 +56,10 @@ func (m Model) viewCommandPalette() string {
 
 func (m Model) viewSettingsMenu() string {
 	return m.renderDialogList(m.SettingsMenu.View(), m.SettingsMenu.Width(), m.SettingsMenu.Height(), settingsMenuHeading)
+}
+
+func (m Model) viewPerformanceMenu() string {
+	return m.renderDialogList(m.PerformanceMenu.View(), m.PerformanceMenu.Width(), m.PerformanceMenu.Height(), performanceMenuHeading)
 }
 
 func (m Model) viewDebugMenu() string {

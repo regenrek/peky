@@ -27,6 +27,7 @@ type fakeManager struct {
 	lastKilled           string
 	lastRename           [2]string
 	lastSwap             [3]string
+	lastTool             [2]string
 }
 
 func (m *fakeManager) SessionNames() []string { return m.sessions }
@@ -65,6 +66,10 @@ func (m *fakeManager) ClosePane(context.Context, string, string) error {
 }
 func (m *fakeManager) SwapPanes(sessionName, paneA, paneB string) error {
 	m.lastSwap = [3]string{sessionName, paneA, paneB}
+	return nil
+}
+func (m *fakeManager) SetPaneTool(paneID, tool string) error {
+	m.lastTool = [2]string{paneID, tool}
 	return nil
 }
 func (m *fakeManager) SendInput(paneID string, input []byte) error {
@@ -130,6 +135,22 @@ func TestHandlePaneViewSuccess(t *testing.T) {
 	}
 	if !resp.HasMouse || !resp.AllowMotion {
 		t.Fatalf("expected mouse flags true")
+	}
+}
+
+func TestHandleSetPaneToolSuccess(t *testing.T) {
+	manager := &fakeManager{}
+	d := &Daemon{manager: manager}
+
+	payload, err := encodePayload(SetPaneToolRequest{PaneID: "pane-1", Tool: "codex"})
+	if err != nil {
+		t.Fatalf("encodePayload: %v", err)
+	}
+	if _, err := d.handleSetPaneTool(payload); err != nil {
+		t.Fatalf("handleSetPaneTool: %v", err)
+	}
+	if manager.lastTool != [2]string{"pane-1", "codex"} {
+		t.Fatalf("unexpected tool update: %#v", manager.lastTool)
 	}
 }
 

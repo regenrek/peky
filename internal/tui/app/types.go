@@ -30,6 +30,7 @@ const (
 	StateRenamePane
 	StateProjectRootSetup
 	StateSettingsMenu
+	StatePerformanceMenu
 	StateDebugMenu
 )
 
@@ -74,6 +75,18 @@ const (
 	QuitBehaviorPrompt = "prompt"
 	QuitBehaviorKeep   = "keep"
 	QuitBehaviorStop   = "stop"
+)
+
+const (
+	PerfPresetLow    = "low"
+	PerfPresetMedium = "medium"
+	PerfPresetHigh   = "high"
+	PerfPresetCustom = "custom"
+)
+
+const (
+	RenderPolicyVisible = "visible"
+	RenderPolicyAll     = "all"
 )
 
 // DashboardData contains all data required to render the dashboard.
@@ -127,6 +140,7 @@ type PaneItem struct {
 	Title         string
 	Command       string
 	StartCommand  string
+	Tool          string
 	PID           int
 	Active        bool
 	Left          int
@@ -148,6 +162,30 @@ type AgentDetectionConfig struct {
 	Claude bool
 }
 
+// PaneViewPerformance controls pane view scheduling and throttling.
+type PaneViewPerformance struct {
+	MaxConcurrency        int
+	MaxInFlightBatches    int
+	MaxBatch              int
+	MinIntervalFocused    time.Duration
+	MinIntervalSelected   time.Duration
+	MinIntervalBackground time.Duration
+	TimeoutFocused        time.Duration
+	TimeoutSelected       time.Duration
+	TimeoutBackground     time.Duration
+	PumpBaseDelay         time.Duration
+	PumpMaxDelay          time.Duration
+	ForceAfter            time.Duration
+	FallbackMinInterval   time.Duration
+}
+
+// DashboardPerformance represents resolved performance settings.
+type DashboardPerformance struct {
+	Preset       string
+	RenderPolicy string
+	PaneViews    PaneViewPerformance
+}
+
 // DashboardConfig wraps dashboard settings after defaults applied.
 type DashboardConfig struct {
 	RefreshInterval    time.Duration
@@ -163,6 +201,7 @@ type DashboardConfig struct {
 	PaneNavigationMode string
 	QuitBehavior       string
 	HiddenProjects     map[string]struct{}
+	Performance        DashboardPerformance
 }
 
 // selectionState tracks the current selection by stable project ID.

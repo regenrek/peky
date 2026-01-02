@@ -50,6 +50,15 @@ func TestDefaultDashboardConfigDefaults(t *testing.T) {
 	if len(cfg.ProjectRoots) != 1 || cfg.ProjectRoots[0] != filepath.Join(home, "projects") {
 		t.Fatalf("ProjectRoots = %#v", cfg.ProjectRoots)
 	}
+	if cfg.Performance.Preset != PerfPresetMedium {
+		t.Fatalf("Performance.Preset = %q", cfg.Performance.Preset)
+	}
+	if cfg.Performance.RenderPolicy != RenderPolicyVisible {
+		t.Fatalf("Performance.RenderPolicy = %q", cfg.Performance.RenderPolicy)
+	}
+	if cfg.Performance.PaneViews.MaxConcurrency != paneViewPerfMedium.MaxConcurrency {
+		t.Fatalf("Performance.PaneViews.MaxConcurrency = %d", cfg.Performance.PaneViews.MaxConcurrency)
+	}
 }
 
 func TestDefaultDashboardConfigOverrides(t *testing.T) {
@@ -66,6 +75,14 @@ func TestDefaultDashboardConfigOverrides(t *testing.T) {
 		PaneNavigationMode: "memory",
 		QuitBehavior:       "keep",
 		ProjectRoots:       []string{"/tmp", "/tmp"},
+		Performance: layout.PerformanceConfig{
+			Preset:       PerfPresetCustom,
+			RenderPolicy: RenderPolicyAll,
+			PaneViews: layout.PaneViewPerformanceConfig{
+				MaxConcurrency:       2,
+				MinIntervalFocusedMS: 10,
+			},
+		},
 	})
 	if err != nil {
 		t.Fatalf("defaultDashboardConfig() error: %v", err)
@@ -100,6 +117,18 @@ func TestDefaultDashboardConfigOverrides(t *testing.T) {
 	if !reflect.DeepEqual(cfg.ProjectRoots, []string{"/tmp"}) {
 		t.Fatalf("ProjectRoots = %#v", cfg.ProjectRoots)
 	}
+	if cfg.Performance.Preset != PerfPresetCustom {
+		t.Fatalf("Performance.Preset = %q", cfg.Performance.Preset)
+	}
+	if cfg.Performance.RenderPolicy != RenderPolicyAll {
+		t.Fatalf("Performance.RenderPolicy = %q", cfg.Performance.RenderPolicy)
+	}
+	if cfg.Performance.PaneViews.MaxConcurrency != 2 {
+		t.Fatalf("Performance.PaneViews.MaxConcurrency = %d", cfg.Performance.PaneViews.MaxConcurrency)
+	}
+	if cfg.Performance.PaneViews.MinIntervalFocused != 10*time.Millisecond {
+		t.Fatalf("Performance.PaneViews.MinIntervalFocused = %s", cfg.Performance.PaneViews.MinIntervalFocused)
+	}
 }
 
 func TestDefaultDashboardConfigInvalidPreviewMode(t *testing.T) {
@@ -125,6 +154,20 @@ func TestDefaultDashboardConfigInvalidPaneNavigationMode(t *testing.T) {
 
 func TestDefaultDashboardConfigInvalidQuitBehavior(t *testing.T) {
 	_, err := defaultDashboardConfig(layout.DashboardConfig{QuitBehavior: "nope"})
+	if err == nil {
+		t.Fatalf("defaultDashboardConfig() expected error")
+	}
+}
+
+func TestDefaultDashboardConfigInvalidPerformancePreset(t *testing.T) {
+	_, err := defaultDashboardConfig(layout.DashboardConfig{Performance: layout.PerformanceConfig{Preset: "fast"}})
+	if err == nil {
+		t.Fatalf("defaultDashboardConfig() expected error")
+	}
+}
+
+func TestDefaultDashboardConfigInvalidRenderPolicy(t *testing.T) {
+	_, err := defaultDashboardConfig(layout.DashboardConfig{Performance: layout.PerformanceConfig{RenderPolicy: "everywhere"}})
 	if err == nil {
 		t.Fatalf("defaultDashboardConfig() expected error")
 	}

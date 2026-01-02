@@ -66,6 +66,8 @@ func (d *Daemon) eventLoop() {
 				continue
 			}
 			d.broadcast(Event{Type: EventToast, PaneID: event.PaneID, Toast: event.Toast, ToastKind: ToastSuccess})
+		case native.PaneEventMetaUpdated:
+			d.broadcast(Event{Type: EventPaneMetaChanged, PaneID: event.PaneID})
 		default:
 			d.broadcast(Event{Type: EventPaneUpdated, PaneID: event.PaneID, PaneUpdateSeq: event.Seq})
 		}

@@ -8,6 +8,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/regenrek/peakypanes/internal/agenttool"
 )
 
 type quickReplyTarget struct {
@@ -55,20 +57,21 @@ func (m *Model) sendQuickReplyBroadcast(scope quickReplyScope, text string) tea.
 	if len(targets) == 0 {
 		return NewWarningCmd("No panes to send to")
 	}
+	tool := quickReplyToolFromText(message)
 	return func() tea.Msg {
 		result := quickReplySendResult{
 			ScopeLabel: label,
 			Total:      len(targets),
 		}
 		for _, target := range targets {
-			targetResult := m.sendQuickReplyToTarget(target, message)
+			targetResult := m.sendQuickReplyToTarget(target, message, tool)
 			applyQuickReplyTargetResult(&result, targetResult)
 		}
 		return quickReplySendMsg{Result: result}
 	}
 }
 
-func (m *Model) sendQuickReplyToTarget(target quickReplyTarget, message string) quickReplyTargetResult {
+func (m *Model) sendQuickReplyToTarget(target quickReplyTarget, message string, tool agenttool.Tool) quickReplyTargetResult {
 	paneID := strings.TrimSpace(target.Pane.ID)
 	if paneID == "" {
 		return quickReplyTargetResult{Status: quickReplyTargetSkipped}
@@ -90,12 +93,18 @@ func (m *Model) sendQuickReplyToTarget(target quickReplyTarget, message string) 
 		if err := m.sendQuickReplyPayload(ctx, target.Pane, paneID, combined); err != nil {
 			return quickReplyResultForSendError(paneID, err)
 		}
+		if tool != "" {
+			m.setPaneTool(paneID, tool)
+		}
 		return quickReplyTargetResult{Status: quickReplyTargetSent, PaneID: paneID}
 	}
 	if err := m.sendQuickReplyPayload(ctx, target.Pane, paneID, payload); err != nil {
 		return quickReplyResultForSendError(paneID, err)
 	}
 	if len(submit) == 0 {
+		if tool != "" {
+			m.setPaneTool(paneID, tool)
+		}
 		return quickReplyTargetResult{Status: quickReplyTargetSent, PaneID: paneID}
 	}
 	if delay := quickReplySubmitDelay(target.Pane); delay > 0 {
@@ -103,6 +112,9 @@ func (m *Model) sendQuickReplyToTarget(target quickReplyTarget, message string) 
 	}
 	if err := m.sendQuickReplyPayload(ctx, target.Pane, paneID, submit); err != nil {
 		return quickReplyResultForSendError(paneID, err)
+	}
+	if tool != "" {
+		m.setPaneTool(paneID, tool)
 	}
 	return quickReplyTargetResult{Status: quickReplyTargetSent, PaneID: paneID}
 }

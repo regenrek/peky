@@ -97,6 +97,7 @@ type Model struct {
 	paneSwapPicker list.Model
 	commandPalette list.Model
 	settingsMenu   list.Model
+	perfMenu       list.Model
 	debugMenu      list.Model
 	gitProjects    []picker.ProjectItem
 
@@ -230,6 +231,7 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 	m.setupPaneSwapPicker()
 	m.setupCommandPalette()
 	m.setupSettingsMenu()
+	m.setupPerformanceMenu()
 	m.setupDebugMenu()
 
 	configExists := true

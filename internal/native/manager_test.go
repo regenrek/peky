@@ -230,7 +230,7 @@ func TestMarkActiveAndForwardUpdates(t *testing.T) {
 	pane := &Pane{ID: "p-2"}
 	m.panes[pane.ID] = pane
 	m.markActive(pane.ID)
-	if pane.LastActive.IsZero() {
+	if pane.LastActiveAt().IsZero() {
 		t.Fatalf("markActive() did not set LastActive")
 	}
 	if m.Version() == 0 {

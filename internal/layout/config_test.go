@@ -265,12 +265,27 @@ func TestDefaultPathsConfigDirOverride(t *testing.T) {
 
 func TestDefaultConfigPathFreshConfig(t *testing.T) {
 	t.Setenv(runenv.FreshConfigEnv, "1")
+	t.Setenv(runenv.ConfigDirEnv, "")
 
 	cfgPath, err := DefaultConfigPath()
 	if err != nil {
 		t.Fatalf("DefaultConfigPath() error: %v", err)
 	}
 	if cfgPath != "" {
+		t.Fatalf("DefaultConfigPath() = %q", cfgPath)
+	}
+}
+
+func TestDefaultConfigPathConfigDirFreshConfig(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(runenv.ConfigDirEnv, dir)
+	t.Setenv(runenv.FreshConfigEnv, "1")
+
+	cfgPath, err := DefaultConfigPath()
+	if err != nil {
+		t.Fatalf("DefaultConfigPath() error: %v", err)
+	}
+	if cfgPath != filepath.Join(dir, "config.yml") {
 		t.Fatalf("DefaultConfigPath() = %q", cfgPath)
 	}
 }

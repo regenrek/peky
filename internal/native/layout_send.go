@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/regenrek/peakypanes/internal/agenttool"
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/profiling"
 )
@@ -185,6 +186,7 @@ func (m *Manager) runPaneSendQueue(paneID string, actions []paneSendAction) {
 			m.notifyToast(paneID, "Automation send failed: "+err.Error())
 			continue
 		}
+		m.maybeSetPaneToolFromSend(paneID, action)
 		if action.submit {
 			if action.submitDelay > 0 {
 				time.Sleep(action.submitDelay)
@@ -194,6 +196,17 @@ func (m *Manager) runPaneSendQueue(paneID string, actions []paneSendAction) {
 			}
 		}
 	}
+}
+
+func (m *Manager) maybeSetPaneToolFromSend(paneID string, action paneSendAction) {
+	if m == nil || paneID == "" || !action.submit {
+		return
+	}
+	tool := agenttool.DetectFromCommand(action.text)
+	if tool == "" {
+		return
+	}
+	_ = m.SetPaneTool(paneID, string(tool))
 }
 
 func buildSendPayload(text string, appendNewline bool) ([]byte, bool) {

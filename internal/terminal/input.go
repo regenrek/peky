@@ -10,6 +10,17 @@ import (
 	"time"
 )
 
+const (
+	ptyWriteQueueSize = 128
+)
+
+var errWriteQueueFull = errors.New("terminal: write queue full")
+
+type writeRequest struct {
+	data      []byte
+	markDirty bool
+}
+
 // SendInput writes bytes to the underlying PTY.
 // This is what your Bubble Tea model should call for focused pane input.
 func (w *Window) SendInput(input []byte) error {
@@ -40,28 +51,7 @@ func (w *Window) SendInput(input []byte) error {
 	if pty == nil {
 		return &PaneClosedError{Reason: PaneClosedPTYClosed}
 	}
-
-	w.writeMu.Lock()
-	n, err := pty.Write(input)
-	w.writeMu.Unlock()
-	if err != nil {
-		if isPTYClosedWriteError(err) {
-			w.markInputClosed(PaneClosedPTYClosed)
-			return &PaneClosedError{Reason: PaneClosedPTYClosed, Cause: err}
-		}
-		return fmt.Errorf("terminal: pty write: %w", err)
-	}
-	if n != len(input) {
-		return fmt.Errorf("terminal: partial write: wrote %d of %d", n, len(input))
-	}
-
-	now := time.Now().UnixNano()
-	w.lastWriteAt.Store(now)
-	w.firstWriteAt.CompareAndSwap(0, now)
-
-	// Input often changes the screen (echo, app updates).
-	w.markDirty()
-	return nil
+	return w.enqueueWrite(input, true)
 }
 
 func isPTYClosedWriteError(err error) bool {
@@ -86,6 +76,7 @@ func isPTYClosedWriteError(err error) bool {
 
 func (w *Window) startIO(ctx context.Context) {
 	w.ioStartedAt.CompareAndSwap(0, time.Now().UnixNano())
+	w.startPtyWriter(ctx)
 	w.startPtyToVt(ctx)
 	w.startVtToPty(ctx)
 }
@@ -156,7 +147,7 @@ func (w *Window) startVtToPty(ctx context.Context) {
 			n, err := term.Read(buf)
 			if n > 0 {
 				data := w.translateCPR(term, buf[:n])
-				w.writeToPTY(pty, data)
+				_ = w.enqueueWrite(data, false)
 			}
 			if err != nil {
 				// Best-effort: treat read errors as exit.
@@ -250,10 +241,71 @@ func (w *Window) translateCPR(term vtEmulator, data []byte) []byte {
 	return []byte(fmt.Sprintf("\x1b[%d;%dR", pos.Y+1, pos.X+1))
 }
 
-func (w *Window) writeToPTY(pty io.Writer, data []byte) {
-	w.writeMu.Lock()
-	_, _ = pty.Write(data)
-	w.writeMu.Unlock()
+func (w *Window) enqueueWrite(data []byte, markDirty bool) error {
+	if w == nil {
+		return errors.New("terminal: nil window")
+	}
+	if len(data) == 0 {
+		return nil
+	}
+	if w.closed.Load() {
+		return &PaneClosedError{Reason: PaneClosedWindowClosed}
+	}
+	if w.exited.Load() {
+		return &PaneClosedError{Reason: PaneClosedProcessExited}
+	}
+	if w.inputClosed.Load() {
+		return &PaneClosedError{Reason: w.inputClosedReasonValue()}
+	}
+	buf := append([]byte(nil), data...)
+	req := writeRequest{data: buf, markDirty: markDirty}
+	select {
+	case w.writeCh <- req:
+		return nil
+	default:
+		return errWriteQueueFull
+	}
+}
+
+func (w *Window) startPtyWriter(ctx context.Context) {
+	w.wg.Add(1)
+	go func() {
+		defer w.wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case req := <-w.writeCh:
+				if len(req.data) == 0 {
+					continue
+				}
+				pty := w.currentPTY()
+				if pty == nil {
+					return
+				}
+				w.writeMu.Lock()
+				n, err := pty.Write(req.data)
+				w.writeMu.Unlock()
+				if err != nil {
+					if isPTYClosedWriteError(err) {
+						w.markInputClosed(PaneClosedPTYClosed)
+						return
+					}
+					return
+				}
+				if n != len(req.data) {
+					w.markInputClosed(PaneClosedPTYClosed)
+					return
+				}
+				now := time.Now().UnixNano()
+				w.lastWriteAt.Store(now)
+				w.firstWriteAt.CompareAndSwap(0, now)
+				if req.markDirty {
+					w.markDirty()
+				}
+			}
+		}
+	}()
 }
 
 func ctxDone(ctx context.Context) bool {

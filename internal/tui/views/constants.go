@@ -19,6 +19,7 @@ const (
 	viewRenamePane
 	viewProjectRootSetup
 	viewSettingsMenu
+	viewPerformanceMenu
 	viewDebugMenu
 )
 

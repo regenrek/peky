@@ -122,6 +122,30 @@ type DashboardKeymapConfig struct {
 	CopyMode        []string `yaml:"copy_mode,omitempty"`
 }
 
+// PaneViewPerformanceConfig customizes pane view scheduling for the dashboard.
+type PaneViewPerformanceConfig struct {
+	MaxConcurrency          int `yaml:"max_concurrency,omitempty"`
+	MaxInFlightBatches      int `yaml:"max_inflight_batches,omitempty"`
+	MaxBatch                int `yaml:"max_batch,omitempty"`
+	MinIntervalFocusedMS    int `yaml:"min_interval_focused_ms,omitempty"`
+	MinIntervalSelectedMS   int `yaml:"min_interval_selected_ms,omitempty"`
+	MinIntervalBackgroundMS int `yaml:"min_interval_background_ms,omitempty"`
+	TimeoutFocusedMS        int `yaml:"timeout_focused_ms,omitempty"`
+	TimeoutSelectedMS       int `yaml:"timeout_selected_ms,omitempty"`
+	TimeoutBackgroundMS     int `yaml:"timeout_background_ms,omitempty"`
+	PumpBaseDelayMS         int `yaml:"pump_base_delay_ms,omitempty"`
+	PumpMaxDelayMS          int `yaml:"pump_max_delay_ms,omitempty"`
+	ForceAfterMS            int `yaml:"force_after_ms,omitempty"`
+	FallbackMinIntervalMS   int `yaml:"fallback_min_interval_ms,omitempty"`
+}
+
+// PerformanceConfig configures dashboard performance presets and render policy.
+type PerformanceConfig struct {
+	Preset       string                    `yaml:"preset,omitempty"`        // low | medium | high | custom
+	RenderPolicy string                    `yaml:"render_policy,omitempty"` // visible | all
+	PaneViews    PaneViewPerformanceConfig `yaml:"pane_views,omitempty"`
+}
+
 // HiddenProjectConfig stores a project hidden from the dashboard.
 type HiddenProjectConfig struct {
 	Name string `yaml:"name,omitempty"`
@@ -144,6 +168,7 @@ type DashboardConfig struct {
 	QuitBehavior       string                 `yaml:"quit_behavior,omitempty"`        // prompt | keep | stop
 	HiddenProjects     []HiddenProjectConfig  `yaml:"hidden_projects,omitempty"`
 	Keymap             DashboardKeymapConfig  `yaml:"keymap,omitempty"`
+	Performance        PerformanceConfig      `yaml:"performance,omitempty"`
 }
 
 // ZellijSection holds zellij-specific config.
@@ -376,11 +401,11 @@ func (l *LayoutConfig) ToYAML() (string, error) {
 
 // DefaultConfigPath returns the default global config path.
 func DefaultConfigPath() (string, error) {
-	if runenv.FreshConfigEnabled() {
-		return "", nil
-	}
 	if dir := runenv.ConfigDir(); dir != "" {
 		return filepath.Join(dir, "config.yml"), nil
+	}
+	if runenv.FreshConfigEnabled() {
+		return "", nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {

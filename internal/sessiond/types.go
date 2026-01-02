@@ -20,6 +20,7 @@ const (
 	OpSplitPane      Op = "split_pane"
 	OpClosePane      Op = "close_pane"
 	OpSwapPanes      Op = "swap_panes"
+	OpSetPaneTool    Op = "set_pane_tool"
 	OpSendInput      Op = "send_input"
 	OpSendMouse      Op = "send_mouse"
 	OpResizePane     Op = "resize_pane"
@@ -33,6 +34,7 @@ type EventType string
 
 const (
 	EventPaneUpdated    EventType = "pane_updated"
+	EventPaneMetaChanged EventType = "pane_meta_changed"
 	EventSessionChanged EventType = "session_changed"
 	EventToast          EventType = "toast"
 )
@@ -136,6 +138,12 @@ type SwapPanesRequest struct {
 	SessionName string
 	PaneA       string
 	PaneB       string
+}
+
+// SetPaneToolRequest updates the recorded tool for a pane.
+type SetPaneToolRequest struct {
+	PaneID string
+	Tool   string
 }
 
 // SendInputRequest forwards raw input.

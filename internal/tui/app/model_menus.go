@@ -1,6 +1,9 @@
 package app
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -16,6 +19,10 @@ func (m *Model) setupSettingsMenu() {
 	m.settingsMenu = picker.NewDialogMenu()
 }
 
+func (m *Model) setupPerformanceMenu() {
+	m.perfMenu = picker.NewDialogMenu()
+}
+
 func (m *Model) setupDebugMenu() {
 	m.debugMenu = picker.NewDialogMenu()
 }
@@ -24,6 +31,13 @@ func (m *Model) openSettingsMenu() tea.Cmd {
 	cmd := m.settingsMenu.SetItems(m.settingsMenuItems())
 	m.setSettingsMenuSize()
 	m.setState(StateSettingsMenu)
+	return cmd
+}
+
+func (m *Model) openPerformanceMenu() tea.Cmd {
+	cmd := m.perfMenu.SetItems(m.performanceMenuItems())
+	m.setPerformanceMenuSize()
+	m.setState(StatePerformanceMenu)
 	return cmd
 }
 
@@ -45,6 +59,19 @@ func (m *Model) updateSettingsMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	var cmd tea.Cmd
 	m.settingsMenu, cmd = m.settingsMenu.Update(msg)
+	return m, cmd
+}
+
+func (m *Model) updatePerformanceMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "q":
+		return m, m.openSettingsMenu()
+	case "enter":
+		return m, m.runPerformanceMenuSelection()
+	}
+
+	var cmd tea.Cmd
+	m.perfMenu, cmd = m.perfMenu.Update(msg)
 	return m, cmd
 }
 
@@ -71,6 +98,23 @@ func (m *Model) runSettingsMenuSelection() tea.Cmd {
 	return item.Run()
 }
 
+func (m *Model) runPerformanceMenuSelection() tea.Cmd {
+	item, ok := m.perfMenu.SelectedItem().(picker.CommandItem)
+	if !ok || item.Run == nil {
+		return nil
+	}
+	prevState := m.state
+	cmd := item.Run()
+	if m.state != prevState || m.state != StatePerformanceMenu {
+		return cmd
+	}
+	refresh := m.perfMenu.SetItems(m.performanceMenuItems())
+	if cmd == nil {
+		return refresh
+	}
+	return tea.Batch(cmd, refresh)
+}
+
 func (m *Model) runDebugMenuSelection() tea.Cmd {
 	item, ok := m.debugMenu.SelectedItem().(picker.CommandItem)
 	m.setState(StateDashboard)
@@ -90,11 +134,46 @@ func (m *Model) settingsMenuItems() []list.Item {
 			m.openProjectRootSetup()
 			return nil
 		}},
+		{Label: "Performance", Desc: "Tune live rendering and throttling", Run: func() tea.Cmd {
+			return m.openPerformanceMenu()
+		}},
 		{Label: "Edit global config", Desc: "Open config in $EDITOR", Shortcut: shortcut, Run: func() tea.Cmd {
 			return m.editConfig()
 		}},
 	}
 	return commandItemsToList(items)
+}
+
+func (m *Model) performanceMenuItems() []list.Item {
+	presetLabel := fmt.Sprintf("Preset: %s", titleCase(m.settings.Performance.Preset))
+	renderLabel := "Render policy: " + strings.ToLower(m.settings.Performance.RenderPolicy)
+
+	items := []picker.CommandItem{
+		{Label: presetLabel, Desc: "Low, Medium, High, or Custom", Run: func() tea.Cmd {
+			return m.cyclePerformancePreset()
+		}},
+		{Label: renderLabel, Desc: "Visible (default) or All panes live", Run: func() tea.Cmd {
+			return m.toggleRenderPolicy()
+		}},
+		{Label: "Edit config (custom overrides)", Desc: "Open config in $EDITOR for fine tuning", Run: func() tea.Cmd {
+			return m.editConfig()
+		}},
+		{Label: "Back", Desc: "Return to settings", Run: func() tea.Cmd {
+			return m.openSettingsMenu()
+		}},
+	}
+	return commandItemsToList(items)
+}
+
+func titleCase(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return value
+	}
+	if len(value) == 1 {
+		return strings.ToUpper(value)
+	}
+	return strings.ToUpper(value[:1]) + value[1:]
 }
 
 func (m *Model) debugMenuItems() []list.Item {
@@ -117,6 +196,10 @@ func (m *Model) debugMenuItems() []list.Item {
 
 func (m *Model) setSettingsMenuSize() {
 	m.setDialogMenuSize(&m.settingsMenu, settingsMenuHeading, 34, 64, 8, 16)
+}
+
+func (m *Model) setPerformanceMenuSize() {
+	m.setDialogMenuSize(&m.perfMenu, "Performance", 34, 64, 8, 16)
 }
 
 func (m *Model) setDebugMenuSize() {

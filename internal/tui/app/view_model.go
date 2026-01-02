@@ -56,6 +56,7 @@ func (m *Model) viewModel() views.Model {
 		PaneSwapPicker:           m.paneSwapPicker,
 		CommandPalette:           m.commandPalette,
 		SettingsMenu:             m.settingsMenu,
+		PerformanceMenu:          m.perfMenu,
 		DebugMenu:                m.debugMenu,
 		ConfirmKill: views.ConfirmKill{
 			Session: m.confirmSession,

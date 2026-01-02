@@ -80,6 +80,26 @@ Use this for personal layouts and multi-project management:
 #   project_roots:
 #     - ~/projects
 #     - ~/code
+#
+#   performance:
+#     preset: medium       # low | medium | high | custom
+#     render_policy: visible # visible | all
+#     # For custom tuning:
+#     # preset: custom
+#     # pane_views:
+#     #   max_concurrency: 6
+#     #   max_inflight_batches: 3
+#     #   max_batch: 12
+#     #   min_interval_focused_ms: 16
+#     #   min_interval_selected_ms: 60
+#     #   min_interval_background_ms: 150
+#     #   timeout_focused_ms: 1000
+#     #   timeout_selected_ms: 800
+#     #   timeout_background_ms: 600
+#     #   pump_base_delay_ms: 0
+#     #   pump_max_delay_ms: 25
+#     #   force_after_ms: 150
+#     #   fallback_min_interval_ms: 100
 
 # Custom layouts
 layouts:

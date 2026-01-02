@@ -28,6 +28,11 @@ func newTestModelLite() *Model {
 		settings: DashboardConfig{
 			PreviewMode:  "grid",
 			PreviewLines: 12,
+			Performance: DashboardPerformance{
+				Preset:       PerfPresetMedium,
+				RenderPolicy: RenderPolicyVisible,
+				PaneViews:    paneViewPerfMedium,
+			},
 		},
 		width:  120,
 		height: 40,
@@ -39,6 +44,7 @@ func newTestModelLite() *Model {
 	m.setupPaneSwapPicker()
 	m.setupCommandPalette()
 	m.setupSettingsMenu()
+	m.setupPerformanceMenu()
 	m.setupDebugMenu()
 	m.keys = testKeyMap()
 	return m

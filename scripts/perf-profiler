@@ -26,7 +26,7 @@ Options:
   --start-timeout   Timeout for StartSession RPC (seconds or Go duration)
   --gops            Enable gops agent (config lives under the run output)
   --trace-all       Log all pane view request/response timings (PEAKYPANES_PERF_TRACE_ALL=1)
-  --paneviews-all   Render all panes live during profiling (PEAKYPANES_PERF_PANEVIEWS_ALL=1)
+  --paneviews-all   Render all panes live during profiling (dashboard.performance.render_policy=all)
   --no-tmux         Skip the tmux monitor dashboard (tail + htop)
   --no-ghostty      Run peakypanes in the current terminal (no Ghostty)
   -h, --help        Show this help
@@ -353,9 +353,6 @@ fi
 if [[ -n "$trace_all" ]]; then
   export PEAKYPANES_PERF_TRACE_ALL="1"
 fi
-if [[ -n "$paneviews_all" ]]; then
-  export PEAKYPANES_PERF_PANEVIEWS_ALL="1"
-fi
 if [[ -n "$start_timeout" ]]; then
   export PEAKYPANES_START_TIMEOUT="$start_timeout"
 fi
@@ -372,6 +369,15 @@ daemon_log="$out_root/daemon.log"
 done_marker="$out_root/DONE"
 rm -f "$done_marker"
 touch "$run_log" "$daemon_log"
+
+config_file="$config_dir/config.yml"
+if [[ -n "$paneviews_all" ]]; then
+  cat >"$config_file" <<'EOF'
+dashboard:
+  performance:
+    render_policy: all
+EOF
+fi
 
 {
   echo "# peakypanes perf profiler"
@@ -403,10 +409,7 @@ touch "$run_log" "$daemon_log"
     echo "trace_all: enabled"
   fi
   if [[ -n "$paneviews_all" ]]; then
-    echo "paneviews_all: enabled"
-  fi
-  if [[ -n "$paneviews_all" ]]; then
-    echo "paneviews_all: enabled"
+    echo "render_policy: all"
   fi
   if [[ "$enable_block" == true ]]; then
     echo "block_profile: $out_root/block.pprof"
@@ -521,9 +524,6 @@ if [[ "$use_ghostty" == true ]]; then
     env_exports=$(printf 'export PEAKYPANES_CPU_PROFILE=%q; export PEAKYPANES_MEM_PROFILE=%q; export PEAKYPANES_CPU_PROFILE_SECS=%q; export PEAKYPANES_DAEMON_LOG=%q; export PEAKYPANES_PROFILE_DONE=%q; export PEAKYPANES_PERF_DEBUG=%q; ' "$PEAKYPANES_CPU_PROFILE" "$PEAKYPANES_MEM_PROFILE" "$PEAKYPANES_CPU_PROFILE_SECS" "$PEAKYPANES_DAEMON_LOG" "$PEAKYPANES_PROFILE_DONE" "$PEAKYPANES_PERF_DEBUG")
     if [[ -n "$trace_all" ]]; then
       env_exports+=$(printf 'export PEAKYPANES_PERF_TRACE_ALL=%q; ' "1")
-    fi
-    if [[ -n "$paneviews_all" ]]; then
-      env_exports+=$(printf 'export PEAKYPANES_PERF_PANEVIEWS_ALL=%q; ' "1")
     fi
     env_exports+=$(printf 'export PEAKYPANES_RUNTIME_DIR=%q; export PEAKYPANES_CONFIG_DIR=%q; export PEAKYPANES_FRESH_CONFIG=%q; export PEAKYPANES_DAEMON_PID=%q; ' "$PEAKYPANES_RUNTIME_DIR" "$PEAKYPANES_CONFIG_DIR" "$PEAKYPANES_FRESH_CONFIG" "$PEAKYPANES_DAEMON_PID")
     if [[ -n "$start_delay" ]]; then

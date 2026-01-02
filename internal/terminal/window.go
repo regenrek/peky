@@ -108,6 +108,7 @@ type Window struct {
 	mouseMode     atomic.Uint32
 
 	writeMu sync.Mutex // serialize PTY writes from UI thread
+	writeCh chan writeRequest
 
 	// Cached ANSI render (cursorless) for fast non-focused panes.
 	cacheMu    sync.Mutex
@@ -232,6 +233,7 @@ func NewWindow(opts Options) (*Window, error) {
 		createdAt:   startAt,
 		updates:     make(chan struct{}, 1),
 		renderCh:    make(chan struct{}, 1),
+		writeCh:     make(chan writeRequest, ptyWriteQueueSize),
 		cancel:      cancel,
 		cacheDirty:  true,
 		toastFn:     opts.OnToast,
@@ -360,14 +362,18 @@ func (w *Window) UpdateSeq() uint64 {
 }
 
 // ANSICacheSeq returns the UpdateSeq value that produced the cached ANSI frame.
-// It can lag behind UpdateSeq while the cache is dirty.
+// If the cache is dirty, it returns 0 so callers fall back to UpdateSeq.
 func (w *Window) ANSICacheSeq() uint64 {
 	if w == nil {
 		return 0
 	}
 	w.cacheMu.Lock()
+	dirty := w.cacheDirty
 	seq := w.cacheSeq
 	w.cacheMu.Unlock()
+	if dirty {
+		return 0
+	}
 	return seq
 }
 

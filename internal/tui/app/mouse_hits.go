@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/regenrek/peakypanes/internal/tui/mouse"
+	"github.com/regenrek/peakypanes/internal/tui/panelayout"
 )
 
 type headerHitRect struct {
@@ -132,6 +133,11 @@ func (m *Model) projectPaneHits() []mouse.PaneHit {
 		m.logProjectPaneHitsSkip("no_panes", m.paneViewSkipContext(), "tui.panehits.project.empty")
 		return nil
 	}
+	if perfDebugEnabled() {
+		logPerfEvery("tui.panehits.project.meta", 500*time.Millisecond,
+			"tui: pane hits project meta project=%s session=%s panes=%d",
+			project.ID, session.Name, len(session.Panes))
+	}
 	preview, ok := m.projectPaneHitsPreview(body, project)
 	if !ok {
 		return nil
@@ -244,54 +250,22 @@ func projectPaneLayoutHits(project *ProjectGroup, session *SessionItem, panes []
 }
 
 func projectPaneTileHits(project *ProjectGroup, session *SessionItem, panes []PaneItem, preview mouse.Rect) []mouse.PaneHit {
-	cols := 3
-	if preview.W < 70 {
-		cols = 2
-	}
-	if preview.W < 42 {
-		cols = 1
-	}
-	if len(panes) < cols {
-		cols = len(panes)
-	}
-	if cols <= 0 {
-		cols = 1
-	}
-
-	rows := (len(panes) + cols - 1) / cols
-	gap := 0
-	availableHeight := preview.H - gap*(rows-1)
-	if availableHeight < rows {
-		availableHeight = rows
-	}
-	baseHeight := availableHeight / rows
-	extraHeight := availableHeight % rows
-	if baseHeight < 4 {
-		baseHeight = 4
-		extraHeight = 0
-	}
-	tileWidth := (preview.W - gap*(cols-1)) / cols
-	if tileWidth < 14 {
-		tileWidth = 14
-	}
+	layout := panelayout.Compute(len(panes), preview.W, preview.H)
 
 	hits := make([]mouse.PaneHit, 0, len(panes))
-	rowY := preview.Y
-	for r := 0; r < rows; r++ {
-		rowHeight := baseHeight
-		if r == rows-1 {
-			rowHeight += extraHeight
-		}
-		for c := 0; c < cols; c++ {
-			idx := r*cols + c
+	for r := 0; r < layout.Rows; r++ {
+		rowHeight := layout.RowHeight(r)
+		rowY := layout.RowY(preview.Y, r)
+		for c := 0; c < layout.Cols; c++ {
+			idx := r*layout.Cols + c
 			if idx >= len(panes) {
 				continue
 			}
 			pane := panes[idx]
 			outer := mouse.Rect{
-				X: preview.X + c*tileWidth,
+				X: preview.X + c*layout.TileWidth,
 				Y: rowY,
-				W: tileWidth,
+				W: layout.TileWidth,
 				H: rowHeight,
 			}
 			borders := tileBorders{
@@ -312,7 +286,6 @@ func projectPaneTileHits(project *ProjectGroup, session *SessionItem, panes []Pa
 				Content: content,
 			})
 		}
-		rowY += rowHeight
 	}
 	return hits
 }
@@ -349,31 +322,16 @@ func projectTileContentRect(outer mouse.Rect, pane PaneItem, borders tileBorders
 }
 
 func tileInnerRect(outer mouse.Rect, borders tileBorders) mouse.Rect {
-	padLeft, padRight := 1, 1
-	padTop, padBottom := 0, 0
-	left := boolToInt(borders.left)
-	right := boolToInt(borders.right)
-	top := boolToInt(borders.top)
-	bottom := boolToInt(borders.bottom)
-
-	inner := mouse.Rect{
-		X: outer.X + left + padLeft,
-		Y: outer.Y + top + padTop,
-		W: outer.W - left - right - padLeft - padRight,
-		H: outer.H - top - bottom - padTop - padBottom,
+	metrics := panelayout.TileMetricsFor(outer.W, outer.H, panelayout.TileBorders{
+		Top:    borders.top,
+		Left:   borders.left,
+		Right:  borders.right,
+		Bottom: borders.bottom,
+	})
+	return mouse.Rect{
+		X: outer.X + metrics.ContentX,
+		Y: outer.Y + metrics.ContentY,
+		W: metrics.ContentWidth,
+		H: metrics.InnerHeight,
 	}
-	if inner.W < 0 {
-		inner.W = 0
-	}
-	if inner.H < 0 {
-		inner.H = 0
-	}
-	return inner
-}
-
-func boolToInt(v bool) int {
-	if v {
-		return 1
-	}
-	return 0
 }

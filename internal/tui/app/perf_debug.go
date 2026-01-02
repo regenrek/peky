@@ -9,7 +9,6 @@ import (
 )
 
 const perfDebugEnv = "PEAKYPANES_PERF_DEBUG"
-const perfPaneViewAllEnv = "PEAKYPANES_PERF_PANEVIEWS_ALL"
 const perfTraceAllEnv = "PEAKYPANES_PERF_TRACE_ALL"
 
 const (
@@ -26,12 +25,10 @@ const (
 )
 
 var (
-	perfMu              sync.Mutex
-	perfLastByKey       = map[string]time.Time{}
-	perfPaneViewAllOnce sync.Once
-	perfPaneViewAll     bool
-	perfTraceAllOnce    sync.Once
-	perfTraceAll        bool
+	perfMu           sync.Mutex
+	perfLastByKey    = map[string]time.Time{}
+	perfTraceAllOnce sync.Once
+	perfTraceAll     bool
 )
 
 func perfDebugEnabled() bool {
@@ -45,26 +42,6 @@ func perfDebugEnabled() bool {
 	default:
 		return true
 	}
-}
-
-func perfPaneViewAllEnabled() bool {
-	if !perfDebugEnabled() {
-		return false
-	}
-	perfPaneViewAllOnce.Do(func() {
-		value := strings.TrimSpace(os.Getenv(perfPaneViewAllEnv))
-		if value == "" {
-			perfPaneViewAll = false
-			return
-		}
-		switch strings.ToLower(value) {
-		case "1", "true", "yes", "on":
-			perfPaneViewAll = true
-		default:
-			perfPaneViewAll = false
-		}
-	})
-	return perfPaneViewAll
 }
 
 func perfTraceAllEnabled() bool {

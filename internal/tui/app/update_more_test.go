@@ -72,7 +72,7 @@ func TestUpdateHandlers(t *testing.T) {
 func TestPaneViewQueueing(t *testing.T) {
 	m := newTestModelLite()
 	m.client = &sessiond.Client{}
-	m.paneViewInFlight = paneViewMaxInFlightBatches
+	m.paneViewInFlight = m.paneViewPerf().MaxInFlightBatches
 	cmd := m.refreshPaneViewsCmd()
 	if cmd == nil {
 		t.Fatalf("expected pane view pump cmd")
@@ -103,6 +103,26 @@ func TestPaneViewQueueing(t *testing.T) {
 	}
 	if m.paneViewInFlight != 0 {
 		t.Fatalf("expected in flight decremented")
+	}
+}
+
+func TestPaneViewQueueingHitNotVisibleProject(t *testing.T) {
+	m := newTestModelLite()
+	m.client = &sessiond.Client{}
+	m.tab = TabProject
+	// Force paneHits() to return empty by setting a zero-sized window.
+	m.width = 0
+	m.height = 0
+
+	cmd := m.refreshPaneViewFor("p1")
+	if cmd == nil {
+		t.Fatalf("expected pane view pump cmd")
+	}
+	if len(m.paneViewQueuedIDs) == 0 {
+		t.Fatalf("expected pending pane id")
+	}
+	if !m.paneViewPumpScheduled {
+		t.Fatalf("expected pane view pump scheduled")
 	}
 }
 
@@ -219,6 +239,7 @@ func TestHandlePickerUpdateMoreStates(t *testing.T) {
 		StatePaneSwapPicker,
 		StateCommandPalette,
 		StateSettingsMenu,
+		StatePerformanceMenu,
 		StateDebugMenu,
 	}
 	for _, state := range states {
