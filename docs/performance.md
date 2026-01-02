@@ -13,9 +13,9 @@ Peaky Panes exposes a small set of performance knobs for dashboard previews. The
 Presets affect how often pane views are requested and how much work is done per refresh.
 
 - **low**: battery saver, conservative scheduling.
-- **medium**: default, balanced.
+- **medium**: balanced.
 - **high**: smoother updates, higher CPU.
-- **max**: no throttling. Highest CPU, only recommended on powerful machines.
+- **max**: no throttling. Highest CPU, default for new installs.
 - **custom**: override specific fields under `dashboard.performance.pane_views`.
 
 ## Render policy
@@ -25,8 +25,9 @@ Presets affect how often pane views are requested and how much work is done per 
 
 ## Preview render mode
 
-- **cached** (default): uses ANSI cache + background refresh. Best overall cost/perf.
+- **cached**: uses ANSI cache + background refresh. Best overall cost/perf.
 - **direct**: bypasses cache and renders synchronously. Smoothest, but CPU-heavy.
+- **direct** (default): prefer this when you want maximum smoothness.
 - **off**: disables live previews in the dashboard (reduces CPU). Ctrl+k still shows the live terminal.
 
 ## Recommended settings
@@ -42,19 +43,19 @@ Presets affect how often pane views are requested and how much work is done per 
   - preview_render: cached
 
 - **High-end workstation**:
-  - preset: high or max
+  - preset: max
   - render_policy: visible
-  - preview_render: direct (only if you want maximum smoothness)
+  - preview_render: direct
 
 ## Example config
 
 ```yaml
 dashboard:
   performance:
-    preset: high           # low | medium | high | max | custom
+    preset: max            # low | medium | high | max | custom
     render_policy: visible # visible | all
     preview_render:
-      mode: cached         # cached | direct | off
+      mode: direct         # cached | direct | off
 ```
 
 ## Custom overrides

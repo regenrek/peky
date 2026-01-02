@@ -29,10 +29,10 @@ func newTestModelLite() *Model {
 			PreviewMode:  "grid",
 			PreviewLines: 12,
 			Performance: DashboardPerformance{
-				Preset:        PerfPresetMedium,
+				Preset:        PerfPresetMax,
 				RenderPolicy:  RenderPolicyVisible,
-				PreviewRender: PreviewRenderSettings{Mode: PreviewRenderCached},
-				PaneViews:     paneViewPerfMedium,
+				PreviewRender: PreviewRenderSettings{Mode: PreviewRenderDirect},
+				PaneViews:     paneViewPerfMax,
 			},
 		},
 		width:  120,
