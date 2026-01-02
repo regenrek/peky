@@ -82,10 +82,10 @@ Use this for personal layouts and multi-project management:
 #     - ~/code
 #
 #   performance:
-#     preset: medium       # low | medium | high | max | custom
+#     preset: max          # low | medium | high | max | custom
 #     render_policy: visible # visible | all
 #     preview_render:
-#       mode: cached       # cached | direct | off
+#       mode: direct       # cached | direct | off
 #     # For custom tuning:
 #     # preset: custom
 #     # pane_views:

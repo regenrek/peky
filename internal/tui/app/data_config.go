@@ -236,7 +236,7 @@ func resolveQuitBehavior(value string) (string, error) {
 func resolvePerformanceConfig(cfg layout.PerformanceConfig) (DashboardPerformance, error) {
 	preset := strings.ToLower(strings.TrimSpace(cfg.Preset))
 	if preset == "" {
-		preset = PerfPresetMedium
+		preset = PerfPresetMax
 	}
 	switch preset {
 	case PerfPresetLow, PerfPresetMedium, PerfPresetHigh, PerfPresetMax, PerfPresetCustom:
@@ -256,7 +256,7 @@ func resolvePerformanceConfig(cfg layout.PerformanceConfig) (DashboardPerformanc
 
 	previewMode := strings.ToLower(strings.TrimSpace(cfg.PreviewRender.Mode))
 	if previewMode == "" {
-		previewMode = PreviewRenderCached
+		previewMode = PreviewRenderDirect
 	}
 	switch previewMode {
 	case PreviewRenderCached, PreviewRenderDirect, PreviewRenderOff:

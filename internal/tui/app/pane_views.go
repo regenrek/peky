@@ -959,11 +959,11 @@ func (m *Model) paneViewDataReady() bool {
 
 func (m *Model) paneViewPerf() PaneViewPerformance {
 	if m == nil {
-		return paneViewPerfMedium
+		return paneViewPerfMax
 	}
 	perf := m.settings.Performance.PaneViews
 	if perf.MaxConcurrency <= 0 || perf.MaxBatch <= 0 || perf.MaxInFlightBatches <= 0 {
-		return paneViewPerfMedium
+		return paneViewPerfMax
 	}
 	return perf
 }
@@ -977,11 +977,11 @@ func (m *Model) renderPolicyAll() bool {
 
 func (m *Model) previewRenderMode() string {
 	if m == nil {
-		return PreviewRenderCached
+		return PreviewRenderDirect
 	}
 	mode := strings.ToLower(strings.TrimSpace(m.settings.Performance.PreviewRender.Mode))
 	if mode == "" {
-		return PreviewRenderCached
+		return PreviewRenderDirect
 	}
 	return mode
 }

@@ -30,10 +30,10 @@ func TestDefaultDashboardConfigDefaults(t *testing.T) {
 	assertString(t, "PaneNavigationMode", cfg.PaneNavigationMode, PaneNavigationSpatial)
 	assertString(t, "QuitBehavior", cfg.QuitBehavior, QuitBehaviorPrompt)
 	assertStringSlice(t, "ProjectRoots", cfg.ProjectRoots, []string{filepath.Join(home, "projects")})
-	assertString(t, "Performance.Preset", cfg.Performance.Preset, PerfPresetMedium)
+	assertString(t, "Performance.Preset", cfg.Performance.Preset, PerfPresetMax)
 	assertString(t, "Performance.RenderPolicy", cfg.Performance.RenderPolicy, RenderPolicyVisible)
-	assertString(t, "Performance.PreviewRender.Mode", cfg.Performance.PreviewRender.Mode, PreviewRenderCached)
-	assertInt(t, "Performance.PaneViews.MaxConcurrency", cfg.Performance.PaneViews.MaxConcurrency, paneViewPerfMedium.MaxConcurrency)
+	assertString(t, "Performance.PreviewRender.Mode", cfg.Performance.PreviewRender.Mode, PreviewRenderDirect)
+	assertInt(t, "Performance.PaneViews.MaxConcurrency", cfg.Performance.PaneViews.MaxConcurrency, paneViewPerfMax.MaxConcurrency)
 }
 
 func TestDefaultDashboardConfigOverrides(t *testing.T) {
