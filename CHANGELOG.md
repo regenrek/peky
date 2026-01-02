@@ -6,6 +6,12 @@ This format is based on Keep a Changelog.
 ## Unreleased
 
 ### Added
+### Changed
+### Fixed
+
+## 0.0.9 - 2026-01-02
+
+### Added
 - Performance profiler harness (`scripts/perf-profiler`) with trace/fgprof/gops capture and timing summaries.
 - Performance layout fixtures for 10-pane baselines plus wait-for-output variant.
 - Performance test README in `testdata/performance-tests/`.
