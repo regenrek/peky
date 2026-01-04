@@ -3,6 +3,7 @@ package root
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -33,6 +34,14 @@ func BuildApp(specDoc *spec.Spec, deps Dependencies, reg *Registry) (*cli.Comman
 	}
 	var runEnvCleanup func()
 	app.Before = func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+		if cmd != nil && cmd.Bool("version") {
+			out := deps.Stdout
+			if out == nil {
+				out = io.Discard
+			}
+			_, _ = fmt.Fprintf(out, "%s %s\n", specDoc.App.Name, deps.Version)
+			return ctx, cli.Exit("", 0)
+		}
 		cleanup, err := applyRunEnvFromFlags(cmd, deps.Version)
 		if err != nil {
 			return ctx, err

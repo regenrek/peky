@@ -21,6 +21,10 @@ global_flags:
   - name: temporary-run
     type: bool
     description: Use a temporary runtime + config dir (implies --fresh-config).
+  - name: version
+    aliases: [v]
+    type: bool
+    description: Show version and exit.
 slash_shortcuts:
   - name: all
     summary: Broadcast to all panes
@@ -245,7 +249,6 @@ commands:
       schema_ref: "#/$defs/ActionResponse"
   - name: version
     id: version
-    aliases: [--version, -v]
     summary: Show version
     json:
       supported: false

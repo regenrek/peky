@@ -12,7 +12,8 @@ peakypanes init --local         # Create .peakypanes.yml in cwd
 peakypanes layouts              # List available layouts
 peakypanes layouts export NAME  # Export layout YAML
 peakypanes clone|c USER/REPO    # Clone and start session
-peakypanes version|--version    # Show version
+peakypanes version              # Show version
+peakypanes --version|-v         # Show version
 peakypanes help|--help          # Help
 ```
 
@@ -22,6 +23,7 @@ Global flags (all commands):
 --json        # Emit JSON output (schema: docs/schemas/cli.schema.json)
 --timeout     # Override command timeout (Go duration, e.g. 2s, 500ms)
 --yes|-y      # Skip confirmations for side-effect commands
+--version|-v  # Show version and exit
 --fresh-config   # Start with no global config or saved state
 --temporary-run  # Use a temporary runtime + config dir (implies --fresh-config)
 ```
@@ -43,7 +45,7 @@ peakypanes
   events [watch|replay]
   context [pack]
   nl [plan|run]
-  version|--version
+  version
   help|--help
 ```
 
