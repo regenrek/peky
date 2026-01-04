@@ -62,7 +62,11 @@ func main() {
 		fmt.Fprintln(os.Stderr, "devwatch:", err)
 		os.Exit(1)
 	}
-	defer watcher.Close()
+	defer func() {
+		if err := watcher.Close(); err != nil {
+			fmt.Fprintln(os.Stderr, "devwatch:", err)
+		}
+	}()
 
 	for _, dir := range cfg.watchDirs {
 		if err := addWatchTree(watcher, dir); err != nil {

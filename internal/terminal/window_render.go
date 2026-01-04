@@ -834,8 +834,6 @@ func colorToStyleToken(c color.Color) string {
 		return strconv.Itoa(int(v))
 	case xansi.IndexedColor:
 		return strconv.Itoa(int(v))
-	case xansi.TrueColor:
-		return fmt.Sprintf("#%06x", uint32(v))
 	case xansi.RGBColor:
 		return fmt.Sprintf("#%02x%02x%02x", v.R, v.G, v.B)
 	case xansi.HexColor:
