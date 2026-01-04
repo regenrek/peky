@@ -302,6 +302,7 @@ runtime_dir="$tmp_root/runtime"
 config_dir="$run_dir/config"
 pid_file="$runtime_dir/daemon.pid"
 mkdir -p "$run_dir" "$runtime_dir" "$config_dir/layouts"
+chmod 700 "$runtime_dir"
 
 cp "$layout_file" "$run_dir/.peakypanes.yml"
 
@@ -315,6 +316,7 @@ export PEAKYPANES_CPU_PROFILE="$out_root/cpu.pprof"
 export PEAKYPANES_MEM_PROFILE="$out_root/heap.pprof"
 export PEAKYPANES_CPU_PROFILE_SECS="$profile_secs"
 export PEAKYPANES_LOG_FILE="$out_root/daemon.log"
+export PEAKYPANES_LOG_LEVEL="debug"
 export PEAKYPANES_PROFILE_DONE="$out_root/DONE"
 export PEAKYPANES_PERF_DEBUG="1"
 export PEAKYPANES_RUNTIME_DIR="$runtime_dir"
@@ -521,7 +523,7 @@ fi
 
 if [[ "$use_ghostty" == true ]]; then
   if [[ "$(uname -s)" == "Darwin" && -d "/Applications/Ghostty.app" ]]; then
-    env_exports=$(printf 'export PEAKYPANES_CPU_PROFILE=%q; export PEAKYPANES_MEM_PROFILE=%q; export PEAKYPANES_CPU_PROFILE_SECS=%q; export PEAKYPANES_LOG_FILE=%q; export PEAKYPANES_PROFILE_DONE=%q; export PEAKYPANES_PERF_DEBUG=%q; ' "$PEAKYPANES_CPU_PROFILE" "$PEAKYPANES_MEM_PROFILE" "$PEAKYPANES_CPU_PROFILE_SECS" "$PEAKYPANES_LOG_FILE" "$PEAKYPANES_PROFILE_DONE" "$PEAKYPANES_PERF_DEBUG")
+    env_exports=$(printf 'export PEAKYPANES_CPU_PROFILE=%q; export PEAKYPANES_MEM_PROFILE=%q; export PEAKYPANES_CPU_PROFILE_SECS=%q; export PEAKYPANES_LOG_FILE=%q; export PEAKYPANES_LOG_LEVEL=%q; export PEAKYPANES_PROFILE_DONE=%q; export PEAKYPANES_PERF_DEBUG=%q; ' "$PEAKYPANES_CPU_PROFILE" "$PEAKYPANES_MEM_PROFILE" "$PEAKYPANES_CPU_PROFILE_SECS" "$PEAKYPANES_LOG_FILE" "$PEAKYPANES_LOG_LEVEL" "$PEAKYPANES_PROFILE_DONE" "$PEAKYPANES_PERF_DEBUG")
     if [[ -n "$trace_all" ]]; then
       env_exports+=$(printf 'export PEAKYPANES_PERF_TRACE_ALL=%q; ' "1")
     fi
@@ -633,160 +635,114 @@ fi
 timings_out="$out_root/timings.tsv"
 timings_summary="$out_root/timings.summary.txt"
 if [[ -f "$daemon_log" ]]; then
-  awk '
-  function dur_ms(s) {
-    if (s == "" || s == "-") { return "" }
-    if (s ~ /µs$/) { sub(/µs$/, "", s); return (s + 0) / 1000 }
-    if (s ~ /us$/) { sub(/us$/, "", s); return (s + 0) / 1000 }
-    if (s ~ /ms$/) { sub(/ms$/, "", s); return s + 0 }
-    if (s ~ /s$/) { sub(/s$/, "", s); return (s + 0) * 1000 }
-    return s + 0
-  }
-  /native: pane pty ready / && /since_start=/ {
-    pane=""; since=""
-    for (i=1;i<=NF;i++) {
-      if ($i ~ /^pane=/) { pane=substr($i,6) }
-      if ($i ~ /^since_start=/) { since=substr($i,13) }
-    }
-    if (pane != "") { pty[pane]=since; panes[pane]=1 }
-    next
-  }
-  /native: pane process started / && /since_start=/ {
-    pane=""; since=""
-    for (i=1;i<=NF;i++) {
-      if ($i ~ /^pane=/) { pane=substr($i,6) }
-      if ($i ~ /^since_start=/) { since=substr($i,13) }
-    }
-    if (pane != "") { proc[pane]=since; panes[pane]=1 }
-    next
-  }
-  /native: pane io started / && /since_start=/ {
-    pane=""; since=""
-    for (i=1;i<=NF;i++) {
-      if ($i ~ /^pane=/) { pane=substr($i,6) }
-      if ($i ~ /^since_start=/) { since=substr($i,13) }
-    }
-    if (pane != "") { io[pane]=since; panes[pane]=1 }
-    next
-  }
-  /native: pane first update / && /since_start=/ {
-    pane=""; since=""
-    for (i=1;i<=NF;i++) {
-      if ($i ~ /^pane=/) { pane=substr($i,6) }
-      if ($i ~ /^since_start=/) { since=substr($i,13) }
-    }
-    if (pane != "") { upd[pane]=since; panes[pane]=1 }
-    next
-  }
-  /native: pane first output after pty ready / && /since_pty_ready=/ {
-    pane=""; since=""
-    for (i=1;i<=NF;i++) {
-      if ($i ~ /^pane=/) { pane=substr($i,6) }
-      if ($i ~ /^since_pty_ready=/) { since=substr($i,17) }
-    }
-    if (pane != "") { outpty[pane]=since; panes[pane]=1 }
-    next
-  }
-  /native: pane first output after input / {
-    pane=""; since=""; sincein=""
-    for (i=1;i<=NF;i++) {
-      if ($i ~ /^pane=/) { pane=substr($i,6) }
-      if ($i ~ /^since_start=/) { since=substr($i,13) }
-      if ($i ~ /^since_input=/) { sincein=substr($i,13) }
-    }
-    if (pane != "") { outafter[pane]=since; sincein_arr[pane]=sincein; panes[pane]=1 }
-    next
-  }
-  /native: pane first output / && !/after input/ && !/after pty ready/ && /since_start=/ {
-    pane=""; since=""
-    for (i=1;i<=NF;i++) {
-      if ($i ~ /^pane=/) { pane=substr($i,6) }
-      if ($i ~ /^since_start=/) { since=substr($i,13) }
-    }
-    if (pane != "") { out[pane]=since; panes[pane]=1 }
-    next
-  }
-  /native: pane first input sent / && /since_start=/ {
-    pane=""; since=""
-    for (i=1;i<=NF;i++) {
-      if ($i ~ /^pane=/) { pane=substr($i,6) }
-      if ($i ~ /^since_start=/) { since=substr($i,13) }
-    }
-    if (pane != "") { ins[pane]=since; panes[pane]=1 }
-    next
-  }
-  /sessiond: pane view first request / && /since_start=/ {
-    pane=""; since=""
-    for (i=1;i<=NF;i++) {
-      if ($i ~ /^pane=/) { pane=substr($i,6) }
-      if ($i ~ /^since_start=/) { since=substr($i,13) }
-    }
-    if (pane != "") { viewreq[pane]=since; panes[pane]=1 }
-    next
-  }
-  /sessiond: pane view first render after output / {
-    pane=""; since=""; outreq=""; reqrender=""; outrender=""; queue=""; compute=""
-    for (i=1;i<=NF;i++) {
-      if ($i ~ /^pane=/) { pane=substr($i,6) }
-      if ($i ~ /^since_start=/) { since=substr($i,13) }
-      if ($i ~ /^output_to_view_req=/) { outreq=substr($i,20) }
-      if ($i ~ /^view_req_to_render=/) { reqrender=substr($i,20) }
-      if ($i ~ /^output_to_render=/) { outrender=substr($i,18) }
-      if ($i ~ /^queue_wait=/) { queue=substr($i,12) }
-      if ($i ~ /^compute=/) { compute=substr($i,9) }
-    }
-    if (pane != "") {
-      render[pane]=since
-      out_to_req[pane]=outreq
-      req_to_render[pane]=reqrender
-      out_to_render[pane]=outrender
-      queue_wait[pane]=queue
-      compute_arr[pane]=compute
-      panes[pane]=1
-    }
-    next
-  }
-  END {
-    print "pane_num\tpane\tpty_ready\tprocess_started\tio_started\tfirst_update\tfirst_output\tfirst_input\tfirst_output_after_input\tsince_input\tfirst_output_after_pty\tfirst_view_request\tfirst_render_after_output\toutput_to_view_req\tview_req_to_render\toutput_to_render\tqueue_wait\tcompute\tpty_ready_ms\tprocess_started_ms\tio_started_ms\tfirst_update_ms\tfirst_output_ms\tfirst_input_ms\tfirst_output_after_input_ms\tsince_input_ms\tfirst_output_after_pty_ms\tfirst_view_request_ms\tfirst_render_after_output_ms\toutput_to_view_req_ms\tview_req_to_render_ms\toutput_to_render_ms\tqueue_wait_ms\tcompute_ms"
-    for (p in panes) {
-      n = substr(p,3) + 0
-      pr = (p in pty ? pty[p] : "-")
-      ps = (p in proc ? proc[p] : "-")
-      ioa = (p in io ? io[p] : "-")
-      fu = (p in upd ? upd[p] : "-")
-      o = (p in out ? out[p] : "-")
-      i = (p in ins ? ins[p] : "-")
-      oa = (p in outafter ? outafter[p] : "-")
-      si = (p in sincein_arr ? sincein_arr[p] : "-")
-      op = (p in outpty ? outpty[p] : "-")
-      vr = (p in viewreq ? viewreq[p] : "-")
-      fr = (p in render ? render[p] : "-")
-      otr = (p in out_to_req ? out_to_req[p] : "-")
-      rtr = (p in req_to_render ? req_to_render[p] : "-")
-      otrr = (p in out_to_render ? out_to_render[p] : "-")
-      qw = (p in queue_wait ? queue_wait[p] : "-")
-      comp = (p in compute_arr ? compute_arr[p] : "-")
-      prm = dur_ms(pr); if (prm == "") { prm = "-" }
-      psm = dur_ms(ps); if (psm == "") { psm = "-" }
-      iom = dur_ms(ioa); if (iom == "") { iom = "-" }
-      fum = dur_ms(fu); if (fum == "") { fum = "-" }
-      om = dur_ms(o); if (om == "") { om = "-" }
-      im = dur_ms(i); if (im == "") { im = "-" }
-      oam = dur_ms(oa); if (oam == "") { oam = "-" }
-      sim = dur_ms(si); if (sim == "") { sim = "-" }
-      opm = dur_ms(op); if (opm == "") { opm = "-" }
-      vrm = dur_ms(vr); if (vrm == "") { vrm = "-" }
-      frm = dur_ms(fr); if (frm == "") { frm = "-" }
-      otrm = dur_ms(otr); if (otrm == "") { otrm = "-" }
-      rtrm = dur_ms(rtr); if (rtrm == "") { rtrm = "-" }
-      otrrm = dur_ms(otrr); if (otrrm == "") { otrrm = "-" }
-      qwm = dur_ms(qw); if (qwm == "") { qwm = "-" }
-      compm = dur_ms(comp); if (compm == "") { compm = "-" }
-      printf "%03d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-        n, p, pr, ps, ioa, fu, o, i, oa, si, op, vr, fr, otr, rtr, otrr, qw, comp,
-        prm, psm, iom, fum, om, im, oam, sim, opm, vrm, frm, otrm, rtrm, otrrm, qwm, compm
-    }
-  }' "$daemon_log" | sort -n > "$timings_out"
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "perf-profiler: jq not found; skipping timings table generation" >&2
+  else
+    jq -n -r '
+      def dur_ms:
+        if . == null or . == "-" or . == "n/a" then null
+        # Go time.Duration encodes as int64 nanoseconds when emitted as a JSON number.
+        elif type == "number" then (. / 1000000)
+        elif type != "string" then null
+        elif test("µs$") then (sub("µs$";"") | tonumber / 1000)
+        elif test("us$") then (sub("us$";"") | tonumber / 1000)
+        elif test("ms$") then (sub("ms$";"") | tonumber)
+        elif test("s$") then (sub("s$";"") | tonumber * 1000)
+        else (tonumber? )
+        end;
+
+      def lpad($width; $ch):
+        tostring as $s
+        | if ($s | length) >= $width then $s
+          else (($ch * ($width - ($s | length))) + $s)
+          end;
+
+      def dash: "-";
+      def val($o; $k): ($o[$k] // dash);
+      def ms($o; $k): (val($o; $k) | dur_ms | if . == null then dash else tostring end);
+
+      (reduce inputs as $e ({}; 
+        if ($e|type) != "object" then .
+        elif ($e.pane_id? // null) == null then .
+        else
+          .[$e.pane_id] = (
+            (.[$e.pane_id] // {}) as $cur
+            | if $e.msg == "native: pane pty ready" then ($cur + {pty_ready: ($e.since_start // dash)})
+              elif $e.msg == "native: pane process started" then ($cur + {process_started: ($e.since_start // dash)})
+              elif $e.msg == "native: pane io started" then ($cur + {io_started: ($e.since_start // dash)})
+              elif $e.msg == "native: pane first update" then ($cur + {first_update: ($e.since_start // dash)})
+              elif $e.msg == "native: pane first output" then ($cur + {first_output: ($e.since_start // dash)})
+              elif $e.msg == "native: pane first input sent" then ($cur + {first_input: ($e.since_start // dash)})
+              elif $e.msg == "native: pane first output after pty ready" then ($cur + {first_output_after_pty: ($e.since_pty_ready // dash)})
+              elif $e.msg == "native: pane first output after input" then ($cur + {first_output_after_input: ($e.since_start // dash), since_input: ($e.since_input // dash)})
+              elif $e.msg == "sessiond: pane view first request" then ($cur + {first_view_request: ($e.since_start // dash)})
+              elif $e.msg == "sessiond: pane view first render after output" then ($cur + {
+                first_render_after_output: ($e.since_start // dash),
+                output_to_view_req: ($e.output_to_view_req // dash),
+                view_req_to_render: ($e.view_req_to_render // dash),
+                output_to_render: ($e.output_to_render // dash),
+                queue_wait: ($e.queue_wait // dash),
+                compute: ($e.compute // dash)
+              })
+              else $cur
+              end
+          )
+        end
+      )) as $m
+      | [
+          "pane_num","pane","pty_ready","process_started","io_started","first_update","first_output","first_input",
+          "first_output_after_input","since_input","first_output_after_pty","first_view_request","first_render_after_output",
+          "output_to_view_req","view_req_to_render","output_to_render","queue_wait","compute",
+          "pty_ready_ms","process_started_ms","io_started_ms","first_update_ms","first_output_ms","first_input_ms",
+          "first_output_after_input_ms","since_input_ms","first_output_after_pty_ms","first_view_request_ms",
+          "first_render_after_output_ms","output_to_view_req_ms","view_req_to_render_ms","output_to_render_ms",
+          "queue_wait_ms","compute_ms"
+        ] | @tsv,
+        (
+          ($m | keys) 
+          | sort_by(sub("^p-";"") | tonumber? // 0)
+          | .[]
+          | . as $pane
+          | ($m[$pane] // {}) as $row
+          | [
+              (sub("^p-";"") | tonumber? // 0 | lpad(3;"0")),
+              $pane,
+              val($row;"pty_ready"),
+              val($row;"process_started"),
+              val($row;"io_started"),
+              val($row;"first_update"),
+              val($row;"first_output"),
+              val($row;"first_input"),
+              val($row;"first_output_after_input"),
+              val($row;"since_input"),
+              val($row;"first_output_after_pty"),
+              val($row;"first_view_request"),
+              val($row;"first_render_after_output"),
+              val($row;"output_to_view_req"),
+              val($row;"view_req_to_render"),
+              val($row;"output_to_render"),
+              val($row;"queue_wait"),
+              val($row;"compute"),
+              ms($row;"pty_ready"),
+              ms($row;"process_started"),
+              ms($row;"io_started"),
+              ms($row;"first_update"),
+              ms($row;"first_output"),
+              ms($row;"first_input"),
+              ms($row;"first_output_after_input"),
+              ms($row;"since_input"),
+              ms($row;"first_output_after_pty"),
+              ms($row;"first_view_request"),
+              ms($row;"first_render_after_output"),
+              ms($row;"output_to_view_req"),
+              ms($row;"view_req_to_render"),
+              ms($row;"output_to_render"),
+              ms($row;"queue_wait"),
+              ms($row;"compute")
+            ] | @tsv
+        )
+    ' "$daemon_log" | sort -n > "$timings_out"
+  fi
 
   awk -F '\t' '
   function upd(val, minv, maxv, sumv, cntv) {
@@ -868,7 +824,10 @@ if [[ -f "$daemon_log" ]]; then
   }' "$timings_out" > "$input_output_out"
 
   coverage_out="$out_root/timings.coverage.txt"
-  expected_panes="$(awk '/native: session / && /panes=/ { for (i=1;i<=NF;i++) if ($i ~ /^panes=/) { print substr($i,7); exit } }' "$daemon_log")"
+  expected_panes=""
+  if command -v jq >/dev/null 2>&1; then
+    expected_panes="$(jq -r 'select(.msg == "native: session started") | .panes // empty' "$daemon_log" | head -n 1)"
+  fi
   awk -F '\t' -v expected="$expected_panes" '
   NR == 1 { next }
   {
