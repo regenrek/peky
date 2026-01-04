@@ -8,9 +8,11 @@ import (
 )
 
 type cellGrid struct {
-	cols  int
-	rows  int
-	cells []uv.Cell
+	cols    int
+	rows    int
+	stride  int
+	capRows int
+	cells   []uv.Cell
 }
 
 func newCellGrid(cols, rows int) cellGrid {
@@ -27,10 +29,13 @@ func (g *cellGrid) Bounds() uv.Rectangle {
 }
 
 func (g *cellGrid) Row(y int) []uv.Cell {
-	if y < 0 || y >= g.rows || g.cols <= 0 {
+	if y < 0 || y >= g.rows || g.cols <= 0 || g.stride <= 0 {
 		return nil
 	}
-	start := y * g.cols
+	start := y * g.stride
+	if start < 0 || start+g.cols > len(g.cells) {
+		return nil
+	}
 	return g.cells[start : start+g.cols]
 }
 
@@ -38,7 +43,11 @@ func (g *cellGrid) CellAt(x, y int) *uv.Cell {
 	if x < 0 || y < 0 || x >= g.cols || y >= g.rows {
 		return nil
 	}
-	return &g.cells[y*g.cols+x]
+	idx := y*g.stride + x
+	if idx < 0 || idx >= len(g.cells) {
+		return nil
+	}
+	return &g.cells[idx]
 }
 
 func (g *cellGrid) SetCell(x, y int, c *uv.Cell) {
@@ -61,8 +70,7 @@ func (g *cellGrid) ClearArea(area uv.Rectangle) {
 	}
 	for y := area.Min.Y; y < area.Max.Y; y++ {
 		if area.Min.X == 0 && area.Max.X == g.cols {
-			start := y * g.cols
-			row := g.cells[start : start+g.cols]
+			row := g.Row(y)
 			fillEmptyCells(row)
 			continue
 		}
@@ -107,31 +115,54 @@ func (g *cellGrid) Resize(cols, rows int) {
 
 	oldCols := g.cols
 	oldRows := g.rows
+	oldStride := g.stride
+	oldCapRows := g.capRows
 	oldCells := g.cells
 
 	g.cols = cols
 	g.rows = rows
 
 	if cols == 0 || rows == 0 {
-		g.cells = nil
 		return
 	}
 
-	newSize := cols * rows
-	if oldCols == cols && len(oldCells) > 0 {
-		if cap(oldCells) >= newSize {
-			g.cells = oldCells[:newSize]
-			if len(g.cells) > len(oldCells) {
-				fillEmptyCells(g.cells[len(oldCells):])
+	if cols <= oldStride && rows <= oldCapRows && len(oldCells) == oldStride*oldCapRows {
+		g.stride = oldStride
+		g.capRows = oldCapRows
+
+		// Fill newly visible columns in existing rows.
+		if cols > oldCols {
+			for y := 0; y < oldRows && y < rows; y++ {
+				row := g.cells[y*g.stride : y*g.stride+g.stride]
+				fillEmptyCells(row[oldCols:cols])
 			}
-			return
 		}
+
+		// Fill newly visible rows.
+		if rows > oldRows {
+			for y := oldRows; y < rows; y++ {
+				row := g.cells[y*g.stride : y*g.stride+g.stride]
+				fillEmptyCells(row[:cols])
+			}
+		}
+
+		return
 	}
+
+	newStride := roundUpMultiple(cols, 8)
+	newCapRows := roundUpMultiple(rows, 8)
+	if newStride < cols {
+		newStride = cols
+	}
+	if newCapRows < rows {
+		newCapRows = rows
+	}
+	newSize := newStride * newCapRows
 
 	newCells := make([]uv.Cell, newSize)
 	fillEmptyCells(newCells)
 
-	if len(oldCells) > 0 && oldCols > 0 && oldRows > 0 {
+	if len(oldCells) > 0 && oldCols > 0 && oldRows > 0 && oldStride > 0 && oldCapRows > 0 {
 		minRows := oldRows
 		if rows < minRows {
 			minRows = rows
@@ -141,12 +172,14 @@ func (g *cellGrid) Resize(cols, rows int) {
 			minCols = cols
 		}
 		for y := 0; y < minRows; y++ {
-			src := y * oldCols
-			dst := y * cols
+			src := y * oldStride
+			dst := y * newStride
 			copy(newCells[dst:dst+minCols], oldCells[src:src+minCols])
 		}
 	}
 	g.cells = newCells
+	g.stride = newStride
+	g.capRows = newCapRows
 }
 
 func (g *cellGrid) InsertLineArea(y, n int, c *uv.Cell, area uv.Rectangle) {
@@ -388,6 +421,20 @@ func fillCells(dst []uv.Cell, c *uv.Cell) {
 	for i := range dst {
 		dst[i] = val
 	}
+}
+
+func roundUpMultiple(n, multiple int) int {
+	if multiple <= 1 {
+		return n
+	}
+	if n <= 0 {
+		return 0
+	}
+	r := n % multiple
+	if r == 0 {
+		return n
+	}
+	return n + (multiple - r)
 }
 
 func fillRowArea(row []uv.Cell, start, end int, c *uv.Cell) {
