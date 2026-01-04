@@ -79,7 +79,7 @@ if [[ -n "$debug_events" ]]; then
   fi
 fi
 if [[ -n "$daemon_log" ]]; then
-  export PEAKYPANES_DAEMON_LOG="$daemon_log"
+  export PEAKYPANES_LOG_FILE="$daemon_log"
 fi
 if [[ -n "$debug_log" ]]; then
   export PEAKYPANES_DEBUG_EVENTS_LOG="$debug_log"

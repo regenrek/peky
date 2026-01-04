@@ -202,7 +202,7 @@ func (p *daemonProfiler) startCPU(ctx context.Context, duration, delay time.Dura
 		return
 	}
 	go func() {
-		if !sleepWithContext(ctx, delay) {
+		if err := sleepWithContext(ctx, delay); err != nil {
 			return
 		}
 		path, err := sanitizeProfilePath(p.cpuPath)
@@ -243,7 +243,7 @@ func (p *daemonProfiler) startFgprof(ctx context.Context, duration, delay time.D
 		return
 	}
 	go func() {
-		if !sleepWithContext(ctx, delay) {
+		if err := sleepWithContext(ctx, delay); err != nil {
 			return
 		}
 		path, err := sanitizeProfilePath(p.fgPath)
@@ -262,7 +262,7 @@ func (p *daemonProfiler) startFgprof(ctx context.Context, duration, delay time.D
 		p.fgStop = stop
 		p.stopMu.Unlock()
 		slog.Info("sessiond: fgprof profile started", slog.String("path", path))
-		if !sleepWithContext(ctx, duration) {
+		if err := sleepWithContext(ctx, duration); err != nil {
 			p.stopFgprof()
 			return
 		}
@@ -275,7 +275,7 @@ func (p *daemonProfiler) startTrace(ctx context.Context, duration, delay time.Du
 		return
 	}
 	go func() {
-		if !sleepWithContext(ctx, delay) {
+		if err := sleepWithContext(ctx, delay); err != nil {
 			return
 		}
 		path, err := sanitizeProfilePath(p.tracePath)
@@ -297,7 +297,7 @@ func (p *daemonProfiler) startTrace(ctx context.Context, duration, delay time.Du
 		p.traceFile = file
 		p.stopMu.Unlock()
 		slog.Info("sessiond: trace started", slog.String("path", path))
-		if !sleepWithContext(ctx, duration) {
+		if err := sleepWithContext(ctx, duration); err != nil {
 			p.stopTrace()
 			return
 		}
@@ -627,20 +627,6 @@ func writeDoneMarker(raw string) error {
 	}
 	slog.Info("sessiond: profiler done", slog.String("path", path))
 	return nil
-}
-
-func sleepWithContext(ctx context.Context, delay time.Duration) bool {
-	if delay <= 0 {
-		return true
-	}
-	timer := time.NewTimer(delay)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return false
-	case <-timer.C:
-		return true
-	}
 }
 
 func envBool(name string) bool {

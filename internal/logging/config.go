@@ -22,6 +22,19 @@ const (
 	SinkNone   Sink = "none"
 )
 
+const (
+	EnvLogLevel           = "PEAKYPANES_LOG_LEVEL"
+	EnvLogFormat          = "PEAKYPANES_LOG_FORMAT"
+	EnvLogSink            = "PEAKYPANES_LOG_SINK"
+	EnvLogFile            = "PEAKYPANES_LOG_FILE"
+	EnvLogAddSource       = "PEAKYPANES_LOG_ADD_SOURCE"
+	EnvLogIncludePayloads = "PEAKYPANES_LOG_INCLUDE_PAYLOADS"
+	EnvLogMaxSizeMB       = "PEAKYPANES_LOG_MAX_SIZE_MB"
+	EnvLogMaxBackups      = "PEAKYPANES_LOG_MAX_BACKUPS"
+	EnvLogMaxAgeDays      = "PEAKYPANES_LOG_MAX_AGE_DAYS"
+	EnvLogCompress        = "PEAKYPANES_LOG_COMPRESS"
+)
+
 type Config struct {
 	Level           *string `yaml:"level,omitempty"`
 	Format          *string `yaml:"format,omitempty"`
@@ -94,16 +107,16 @@ func (c Config) WithEnv() Config {
 		*dst = &n
 	}
 
-	applyString(&c.Level, "PEAKYPANES_LOG_LEVEL")
-	applyString(&c.Format, "PEAKYPANES_LOG_FORMAT")
-	applyString(&c.Sink, "PEAKYPANES_LOG_SINK")
-	applyString(&c.File, "PEAKYPANES_LOG_FILE")
-	applyBool(&c.AddSource, "PEAKYPANES_LOG_ADD_SOURCE")
-	applyBool(&c.IncludePayloads, "PEAKYPANES_LOG_INCLUDE_PAYLOADS")
-	applyInt(&c.MaxSizeMB, "PEAKYPANES_LOG_MAX_SIZE_MB")
-	applyInt(&c.MaxBackups, "PEAKYPANES_LOG_MAX_BACKUPS")
-	applyInt(&c.MaxAgeDays, "PEAKYPANES_LOG_MAX_AGE_DAYS")
-	applyBool(&c.Compress, "PEAKYPANES_LOG_COMPRESS")
+	applyString(&c.Level, EnvLogLevel)
+	applyString(&c.Format, EnvLogFormat)
+	applyString(&c.Sink, EnvLogSink)
+	applyString(&c.File, EnvLogFile)
+	applyBool(&c.AddSource, EnvLogAddSource)
+	applyBool(&c.IncludePayloads, EnvLogIncludePayloads)
+	applyInt(&c.MaxSizeMB, EnvLogMaxSizeMB)
+	applyInt(&c.MaxBackups, EnvLogMaxBackups)
+	applyInt(&c.MaxAgeDays, EnvLogMaxAgeDays)
+	applyBool(&c.Compress, EnvLogCompress)
 	return c
 }
 

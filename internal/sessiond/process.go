@@ -10,6 +10,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/regenrek/peakypanes/internal/appdirs"
+	"github.com/regenrek/peakypanes/internal/logging"
 )
 
 type daemonOps struct {
@@ -159,7 +162,7 @@ func startDaemonProcess(socketPath string) error {
 	return startDaemonProcessWith(socketPath, daemonProcessDeps{
 		executable:   os.Executable,
 		execCommand:  exec.Command,
-		defaultLog:   DefaultLogPath,
+		defaultLog:   defaultDaemonLogFile,
 		environ:      os.Environ,
 		openFile:     os.OpenFile,
 		releaseProc:  func(p *os.Process) error { return p.Release() },
@@ -178,7 +181,7 @@ func startDaemonProcessWith(socketPath string, deps daemonProcessDeps) error {
 	}
 	defaultLog := deps.defaultLog
 	if defaultLog == nil {
-		defaultLog = DefaultLogPath
+		defaultLog = defaultDaemonLogFile
 	}
 	environ := deps.environ
 	if environ == nil {
@@ -221,6 +224,17 @@ func startDaemonProcessWith(socketPath string, deps daemonProcessDeps) error {
 		_ = releaseProc(cmd.Process)
 	}
 	return nil
+}
+
+func defaultDaemonLogFile() (string, error) {
+	if path := strings.TrimSpace(os.Getenv(logging.EnvLogFile)); path != "" {
+		return path, nil
+	}
+	dir, err := appdirs.RuntimeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "daemon.log"), nil
 }
 
 func waitForDaemon(ctx context.Context, socketPath, version string) error {

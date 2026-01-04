@@ -61,7 +61,7 @@ Examples:
 
 Flags:
   --debug-events    Enable debug event logs (PEAKYPANES_DEBUG_EVENTS=1)
-  --daemon-log PATH Override daemon log path used by auto-started daemon
+  --daemon-log PATH Override daemon log file used by auto-started daemon
   --debug-log PATH  Write debug event logs to a file
 USAGE
   exit 0
@@ -101,7 +101,7 @@ if [[ -n "$debug_events" ]]; then
   env_exports+="export PEAKYPANES_DEBUG_EVENTS=1; "
 fi
 if [[ -n "$daemon_log" ]]; then
-  env_exports+="export PEAKYPANES_DAEMON_LOG=$(printf %q "$daemon_log"); "
+  env_exports+="export PEAKYPANES_LOG_FILE=$(printf %q "$daemon_log"); "
 fi
 if [[ -n "$debug_log" ]]; then
   env_exports+="export PEAKYPANES_DEBUG_EVENTS_LOG=$(printf %q "$debug_log"); "

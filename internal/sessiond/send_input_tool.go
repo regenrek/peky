@@ -314,24 +314,6 @@ func sendInputError(ctx context.Context, err error) (string, string) {
 	return "failed", err.Error()
 }
 
-func sleepWithContext(ctx context.Context, delay time.Duration) error {
-	if delay <= 0 {
-		return nil
-	}
-	if ctx == nil {
-		time.Sleep(delay)
-		return nil
-	}
-	timer := time.NewTimer(delay)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
-		return nil
-	}
-}
-
 func detectAndSetPaneTool(manager sessionManager, reg *tool.Registry, paneID string, input []byte) {
 	if manager == nil || reg == nil {
 		return

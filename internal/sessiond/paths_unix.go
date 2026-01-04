@@ -12,7 +12,6 @@ import (
 const (
 	socketEnv = "PEAKYPANES_DAEMON_SOCKET"
 	pidEnv    = "PEAKYPANES_DAEMON_PID"
-	logEnv    = "PEAKYPANES_DAEMON_LOG"
 )
 
 // DefaultSocketPath returns the default unix socket path.
@@ -37,18 +36,6 @@ func DefaultPidPath() (string, error) {
 		return "", err
 	}
 	return filepath.Join(dir, "daemon.pid"), nil
-}
-
-// DefaultLogPath returns the default log file path.
-func DefaultLogPath() (string, error) {
-	if path := os.Getenv(logEnv); path != "" {
-		return path, nil
-	}
-	dir, err := runtimeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "daemon.log"), nil
 }
 
 func runtimeDir() (string, error) {

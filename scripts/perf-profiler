@@ -53,7 +53,7 @@ Notes:
 USAGE
 }
 
-layout_file="$ROOT/testdata/performance-tests/peakypanes-perf12.yml"
+layout_file="$ROOT/testdata/performance-tests/peakypanes-perf10-control.yml"
 profile_secs="${PROFILE_SECS:-30}"
 fgprof_secs="${PROFILE_FGPROF:-}"
 trace_secs="${PROFILE_TRACE:-}"
@@ -314,7 +314,7 @@ bin_path="$out_root/peakypanes-profiler"
 export PEAKYPANES_CPU_PROFILE="$out_root/cpu.pprof"
 export PEAKYPANES_MEM_PROFILE="$out_root/heap.pprof"
 export PEAKYPANES_CPU_PROFILE_SECS="$profile_secs"
-export PEAKYPANES_DAEMON_LOG="$out_root/daemon.log"
+export PEAKYPANES_LOG_FILE="$out_root/daemon.log"
 export PEAKYPANES_PROFILE_DONE="$out_root/DONE"
 export PEAKYPANES_PERF_DEBUG="1"
 export PEAKYPANES_RUNTIME_DIR="$runtime_dir"
@@ -469,7 +469,7 @@ if [[ "\$max" -lt 1 ]]; then
 fi
 
 while true; do
-  $(printf %q "$bin_path") start --fresh-config --path $(printf %q "$run_dir")
+  $(printf %q "$bin_path") start --fresh-config --yes --path $(printf %q "$run_dir")
   code=\$?
   if [[ "\$code" -eq 0 ]]; then
     exit 0
@@ -521,7 +521,7 @@ fi
 
 if [[ "$use_ghostty" == true ]]; then
   if [[ "$(uname -s)" == "Darwin" && -d "/Applications/Ghostty.app" ]]; then
-    env_exports=$(printf 'export PEAKYPANES_CPU_PROFILE=%q; export PEAKYPANES_MEM_PROFILE=%q; export PEAKYPANES_CPU_PROFILE_SECS=%q; export PEAKYPANES_DAEMON_LOG=%q; export PEAKYPANES_PROFILE_DONE=%q; export PEAKYPANES_PERF_DEBUG=%q; ' "$PEAKYPANES_CPU_PROFILE" "$PEAKYPANES_MEM_PROFILE" "$PEAKYPANES_CPU_PROFILE_SECS" "$PEAKYPANES_DAEMON_LOG" "$PEAKYPANES_PROFILE_DONE" "$PEAKYPANES_PERF_DEBUG")
+    env_exports=$(printf 'export PEAKYPANES_CPU_PROFILE=%q; export PEAKYPANES_MEM_PROFILE=%q; export PEAKYPANES_CPU_PROFILE_SECS=%q; export PEAKYPANES_LOG_FILE=%q; export PEAKYPANES_PROFILE_DONE=%q; export PEAKYPANES_PERF_DEBUG=%q; ' "$PEAKYPANES_CPU_PROFILE" "$PEAKYPANES_MEM_PROFILE" "$PEAKYPANES_CPU_PROFILE_SECS" "$PEAKYPANES_LOG_FILE" "$PEAKYPANES_PROFILE_DONE" "$PEAKYPANES_PERF_DEBUG")
     if [[ -n "$trace_all" ]]; then
       env_exports+=$(printf 'export PEAKYPANES_PERF_TRACE_ALL=%q; ' "1")
     fi
@@ -604,7 +604,13 @@ if [[ "$use_ghostty" == false ]]; then
   fi
   echo "Done marker: $done_marker"
   echo
+  set +e
   eval "$run_cmd"
+  run_code=$?
+  set -e
+  if [[ "$run_code" -ne 0 && ! -f "$done_marker" ]]; then
+    exit "$run_code"
+  fi
 fi
 
 if [[ -n "$monitor_session" ]]; then

@@ -13,11 +13,9 @@ import (
 func TestDefaultPathsEnvOverride(t *testing.T) {
 	wantSocket := filepath.Join(t.TempDir(), "sock")
 	wantPid := filepath.Join(t.TempDir(), "pid")
-	wantLog := filepath.Join(t.TempDir(), "log")
 
 	t.Setenv(socketEnv, wantSocket)
 	t.Setenv(pidEnv, wantPid)
-	t.Setenv(logEnv, wantLog)
 
 	if got, err := DefaultSocketPath(); err != nil {
 		t.Fatalf("DefaultSocketPath: %v", err)
@@ -30,12 +28,6 @@ func TestDefaultPathsEnvOverride(t *testing.T) {
 	} else if got != wantPid {
 		t.Fatalf("DefaultPidPath = %q", got)
 	}
-
-	if got, err := DefaultLogPath(); err != nil {
-		t.Fatalf("DefaultLogPath: %v", err)
-	} else if got != wantLog {
-		t.Fatalf("DefaultLogPath = %q", got)
-	}
 }
 
 func TestDefaultPathsRuntimeDir(t *testing.T) {
@@ -44,7 +36,6 @@ func TestDefaultPathsRuntimeDir(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", "")
 	t.Setenv(socketEnv, "")
 	t.Setenv(pidEnv, "")
-	t.Setenv(logEnv, "")
 	t.Setenv(runenv.RuntimeDirEnv, "")
 
 	socketPath, err := DefaultSocketPath()
@@ -54,10 +45,6 @@ func TestDefaultPathsRuntimeDir(t *testing.T) {
 	pidPath, err := DefaultPidPath()
 	if err != nil {
 		t.Fatalf("DefaultPidPath: %v", err)
-	}
-	logPath, err := DefaultLogPath()
-	if err != nil {
-		t.Fatalf("DefaultLogPath: %v", err)
 	}
 
 	configDir, err := os.UserConfigDir()
@@ -75,9 +62,6 @@ func TestDefaultPathsRuntimeDir(t *testing.T) {
 	if pidPath != filepath.Join(runtimeDir, "daemon.pid") {
 		t.Fatalf("pidPath = %q", pidPath)
 	}
-	if logPath != filepath.Join(runtimeDir, "daemon.log") {
-		t.Fatalf("logPath = %q", logPath)
-	}
 }
 
 func TestDefaultPathsRuntimeDirOverride(t *testing.T) {
@@ -85,7 +69,6 @@ func TestDefaultPathsRuntimeDirOverride(t *testing.T) {
 	t.Setenv(runenv.RuntimeDirEnv, runtimeDir)
 	t.Setenv(socketEnv, "")
 	t.Setenv(pidEnv, "")
-	t.Setenv(logEnv, "")
 
 	socketPath, err := DefaultSocketPath()
 	if err != nil {
@@ -95,18 +78,11 @@ func TestDefaultPathsRuntimeDirOverride(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DefaultPidPath: %v", err)
 	}
-	logPath, err := DefaultLogPath()
-	if err != nil {
-		t.Fatalf("DefaultLogPath: %v", err)
-	}
 
 	if socketPath != filepath.Join(runtimeDir, "daemon.sock") {
 		t.Fatalf("socketPath = %q", socketPath)
 	}
 	if pidPath != filepath.Join(runtimeDir, "daemon.pid") {
 		t.Fatalf("pidPath = %q", pidPath)
-	}
-	if logPath != filepath.Join(runtimeDir, "daemon.log") {
-		t.Fatalf("logPath = %q", logPath)
 	}
 }
