@@ -5,8 +5,8 @@ go 1.25.0
 toolchain go1.25.5
 
 require (
-	github.com/atotto/clipboard v0.1.4
 	github.com/Masterminds/semver/v3 v3.4.0
+	github.com/atotto/clipboard v0.1.4
 	github.com/charmbracelet/bubbles v0.21.1-0.20250623103423-23b8fd6302d7
 	github.com/charmbracelet/bubbletea v1.3.6
 	github.com/charmbracelet/lipgloss v1.1.0
