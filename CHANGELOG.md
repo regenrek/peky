@@ -5,6 +5,11 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.0.12 - 2026-01-04
+
+### Fixed
+- `--version` / `-v` now works as a global flag (instead of being parsed as an unknown flag).
+
 ## 0.0.11 - 2026-01-04
 
 ### Added
