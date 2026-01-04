@@ -1,13 +1,14 @@
 name: nightly-stress
 
 on:
-  schedule:
-    - cron: "0 3 * * *"
   workflow_dispatch:
 
 concurrency:
   group: nightly-stress-${{ github.ref }}
   cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
   stress:
@@ -17,6 +18,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Setup Go
         uses: actions/setup-go@v5
