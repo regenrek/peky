@@ -46,9 +46,6 @@ func (m *fakeManager) Version() uint64 { return m.version }
 func (m *fakeManager) StartSession(context.Context, native.SessionSpec) (*native.Session, error) {
 	return &native.Session{Name: "demo"}, nil
 }
-func (m *fakeManager) RestoreSession(context.Context, native.SessionRestoreSpec) (*native.Session, error) {
-	return &native.Session{Name: "restored"}, nil
-}
 func (m *fakeManager) KillSession(name string) error {
 	m.lastKilled = name
 	return nil

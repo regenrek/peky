@@ -112,6 +112,20 @@ layouts:
       - title: term
         cmd: ""
 
+# Session restore (daemon snapshots)
+# session_restore:
+#   enabled: true
+#   # base_dir defaults to OS-native data dir:
+#   #   macOS: ~/Library/Application Support/peakypanes/sessions
+#   #   Linux: ~/.local/share/peakypanes/sessions (or $XDG_DATA_HOME/peakypanes/sessions)
+#   #   Windows: %LocalAppData%\\peakypanes\\sessions
+#   # base_dir: "~/Library/Application Support/peakypanes/sessions"
+#   max_scrollback_lines: 0     # 0 = keep full in-memory scrollback
+#   max_scrollback_bytes: 0     # 0 = no extra limit beyond in-memory
+#   snapshot_interval_ms: 2000  # snapshot cadence
+#   max_disk_mb: 512            # hard cap (GC evicts oldest)
+#   ttl_inactive_seconds: 604800 # 7 days
+
 # Projects for quick switching
 projects:
   - name: webapp

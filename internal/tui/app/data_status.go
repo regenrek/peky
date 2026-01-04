@@ -37,6 +37,9 @@ func classifyAgentStatus(paneID string, settings DashboardConfig, now time.Time)
 }
 
 func classifyPane(pane PaneItem, lines []string, settings DashboardConfig, now time.Time) PaneStatus {
+	if pane.Disconnected {
+		return PaneStatusDisconnected
+	}
 	if status, ok := paneStatusForDead(pane); ok {
 		return status
 	}

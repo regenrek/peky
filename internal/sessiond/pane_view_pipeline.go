@@ -459,6 +459,11 @@ func (d *Daemon) paneViewResponse(ctx context.Context, client *clientConn, paneI
 	}
 	win := manager.Window(paneID)
 	if win == nil {
+		if d.restore != nil {
+			if snap, ok := d.restore.Snapshot(paneID); ok {
+				return offlinePaneView(req, snap), nil
+			}
+		}
 		return PaneViewResponse{}, fmt.Errorf("sessiond: pane %q not found", paneID)
 	}
 	info := buildPaneViewRenderInfo(win, paneID, req)

@@ -55,6 +55,7 @@ func (d *Daemon) handleSnapshot(payload []byte) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
 	defer cancel()
 	sessions := manager.Snapshot(ctx, req.PreviewLines)
+	sessions = d.mergeOfflineSessions(sessions, req.PreviewLines)
 	d.debugSnapshot(req.PreviewLines, sessions)
 	focusedSession, focusedPane := d.focusState()
 	resp := SnapshotResponse{
@@ -76,7 +77,9 @@ func (d *Daemon) handleStartSession(payload []byte) ([]byte, error) {
 		return nil, err
 	}
 	d.broadcast(Event{Type: EventSessionChanged, Session: resp.Name})
-	d.queuePersistState()
+	if d.restore != nil {
+		d.restore.MarkSessionDirty(context.Background(), d.manager, resp.Name)
+	}
 	return encodePayload(resp)
 }
 
@@ -93,11 +96,13 @@ func (d *Daemon) handleKillSession(payload []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if d.restore != nil {
+		d.dropSessionSnapshots(context.Background(), manager, name)
+	}
 	if err := manager.KillSession(name); err != nil {
 		return nil, err
 	}
 	d.broadcast(Event{Type: EventSessionChanged, Session: name})
-	d.queuePersistState()
 	return nil, nil
 }
 
@@ -122,7 +127,9 @@ func (d *Daemon) handleRenameSession(payload []byte) ([]byte, error) {
 		return nil, err
 	}
 	d.broadcast(Event{Type: EventSessionChanged, Session: newName})
-	d.queuePersistState()
+	if d.restore != nil {
+		d.restore.MarkSessionDirty(context.Background(), manager, newName)
+	}
 	return encodePayload(RenameSessionResponse{NewName: newName})
 }
 
@@ -158,7 +165,6 @@ func (d *Daemon) handleRenamePane(payload []byte) ([]byte, error) {
 	if err := manager.RenamePane(sessionName, paneIndex, newTitle); err != nil {
 		return nil, err
 	}
-	d.queuePersistState()
 	return nil, nil
 }
 
@@ -185,7 +191,9 @@ func (d *Daemon) handleSplitPane(payload []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	d.queuePersistState()
+	if d.restore != nil {
+		d.restore.MarkSessionDirty(context.Background(), manager, sessionName)
+	}
 	return encodePayload(SplitPaneResponse{NewIndex: newIndex})
 }
 
@@ -200,7 +208,8 @@ func (d *Daemon) handleClosePane(payload []byte) ([]byte, error) {
 	}
 	sessionName := strings.TrimSpace(req.SessionName)
 	paneIndex := strings.TrimSpace(req.PaneIndex)
-	if paneID := strings.TrimSpace(req.PaneID); paneID != "" {
+	paneID := strings.TrimSpace(req.PaneID)
+	if paneID != "" {
 		sessionName, paneIndex, err = resolvePaneTargetByID(manager, paneID)
 		if err != nil {
 			return nil, err
@@ -214,12 +223,20 @@ func (d *Daemon) handleClosePane(payload []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if paneID == "" {
+		paneID = paneIDForIndex(context.Background(), manager, sessionName, paneIndex)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
 	defer cancel()
 	if err := manager.ClosePane(ctx, sessionName, paneIndex); err != nil {
 		return nil, err
 	}
-	d.queuePersistState()
+	if d.restore != nil {
+		if paneID != "" {
+			d.restore.DeletePane(paneID)
+		}
+		d.restore.MarkSessionDirty(context.Background(), manager, sessionName)
+	}
 	return nil, nil
 }
 
@@ -247,7 +264,9 @@ func (d *Daemon) handleSwapPanes(payload []byte) ([]byte, error) {
 	if err := manager.SwapPanes(sessionName, paneA, paneB); err != nil {
 		return nil, err
 	}
-	d.queuePersistState()
+	if d.restore != nil {
+		d.restore.MarkSessionDirty(context.Background(), manager, sessionName)
+	}
 	return nil, nil
 }
 
@@ -267,7 +286,6 @@ func (d *Daemon) handleSetPaneTool(payload []byte) ([]byte, error) {
 	if err := manager.SetPaneTool(paneID, req.Tool); err != nil {
 		return nil, err
 	}
-	d.queuePersistState()
 	return nil, nil
 }
 

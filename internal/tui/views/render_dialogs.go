@@ -105,7 +105,7 @@ func (m Model) viewConfirmClosePane() string {
 }
 
 func (m Model) viewConfirmRestart() string {
-	body := theme.DialogNote.Render("Restarting will disconnect clients. Sessions will be restored on startup.")
+	body := theme.DialogNote.Render("Restarting will disconnect clients. Live panes will reattach when the daemon restarts; offline panes will show their last snapshot.")
 	return m.renderConfirmDialog("Restart Daemon?", body, []dialogChoice{
 		{Key: "y", Label: "restart"},
 		{Key: "n", Label: "cancel"},

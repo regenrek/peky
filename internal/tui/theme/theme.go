@@ -271,6 +271,13 @@ var StatusBadgeError = lipgloss.NewStyle().
 	Background(Error).
 	Padding(0, 1)
 
+// StatusBadgeDisconnected for offline panes.
+var StatusBadgeDisconnected = lipgloss.NewStyle().
+	Bold(true).
+	Foreground(TextPrimary).
+	Background(Warning).
+	Padding(0, 1)
+
 // StatusBadgeIdle for idle/unknown.
 var StatusBadgeIdle = lipgloss.NewStyle().
 	Foreground(TextMuted).

@@ -282,6 +282,8 @@ func panesFromNative(panes []native.PaneSnapshot, settings DashboardConfig, now 
 			DeadStatus:    p.DeadStatus,
 			RestoreFailed: p.RestoreFailed,
 			RestoreError:  p.RestoreError,
+			Disconnected:  p.Disconnected,
+			SnapshotAt:    p.SnapshotAt,
 			LastActive:    p.LastActive,
 			Preview:       p.Preview,
 		}

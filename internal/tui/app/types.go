@@ -59,6 +59,7 @@ const (
 	PaneStatusRunning
 	PaneStatusDone
 	PaneStatusError
+	PaneStatusDisconnected
 )
 
 const (
@@ -158,6 +159,8 @@ type PaneItem struct {
 	DeadStatus    int
 	RestoreFailed bool
 	RestoreError  string
+	Disconnected  bool
+	SnapshotAt    time.Time
 	LastActive    time.Time
 	Preview       []string
 	Status        PaneStatus

@@ -28,9 +28,6 @@ func (m *fakeRelayManager) Version() uint64 { return 0 }
 func (m *fakeRelayManager) StartSession(context.Context, native.SessionSpec) (*native.Session, error) {
 	return nil, nil
 }
-func (m *fakeRelayManager) RestoreSession(context.Context, native.SessionRestoreSpec) (*native.Session, error) {
-	return nil, nil
-}
 func (m *fakeRelayManager) KillSession(string) error                { return nil }
 func (m *fakeRelayManager) RenameSession(string, string) error      { return nil }
 func (m *fakeRelayManager) RenamePane(string, string, string) error { return nil }

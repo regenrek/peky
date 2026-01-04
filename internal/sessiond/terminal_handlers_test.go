@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/muesli/termenv"
+
+	"github.com/regenrek/peakypanes/internal/terminal"
 )
 
 type fakeTerminalWindow struct {
@@ -110,6 +112,10 @@ func (f *fakeTerminalWindow) HasMouseMode() bool {
 }
 func (f *fakeTerminalWindow) AllowsMouseMotion() bool {
 	return f.allowMotion
+}
+func (f *fakeTerminalWindow) SnapshotPlain(opts terminal.PlainSnapshotOptions) (terminal.PlainSnapshot, error) {
+	_ = opts
+	return terminal.PlainSnapshot{}, nil
 }
 
 func TestHandleAltScreenKeyResetsModes(t *testing.T) {

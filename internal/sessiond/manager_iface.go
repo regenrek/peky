@@ -48,6 +48,7 @@ type paneWindow interface {
 	Resize(cols, rows int) error
 	HasMouseMode() bool
 	AllowsMouseMotion() bool
+	SnapshotPlain(opts terminal.PlainSnapshotOptions) (terminal.PlainSnapshot, error)
 }
 
 type sessionManager interface {
@@ -55,7 +56,6 @@ type sessionManager interface {
 	Snapshot(ctx context.Context, previewLines int) []native.SessionSnapshot
 	Version() uint64
 	StartSession(ctx context.Context, spec native.SessionSpec) (*native.Session, error)
-	RestoreSession(ctx context.Context, spec native.SessionRestoreSpec) (*native.Session, error)
 	KillSession(name string) error
 	RenameSession(oldName, newName string) error
 	RenamePane(sessionName, paneIndex, newTitle string) error

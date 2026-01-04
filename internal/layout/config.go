@@ -21,6 +21,8 @@ type PaneDef struct {
 	Setup      []string     `yaml:"setup,omitempty"`       // commands to run before main cmd
 	Enabled    string       `yaml:"enabled,omitempty"`     // expression like "${VAR:-true}"
 	DirectSend []SendAction `yaml:"direct_send,omitempty"` // input actions sent after pane start
+	// SessionRestore overrides persistence behavior for this pane: true | false | private.
+	SessionRestore string `yaml:"session_restore,omitempty"`
 }
 
 // LayoutSettings contains optional layout configuration.
@@ -204,6 +206,17 @@ type DashboardConfig struct {
 	Performance        PerformanceConfig      `yaml:"performance,omitempty"`
 }
 
+// SessionRestoreConfig configures on-disk session restore behavior.
+type SessionRestoreConfig struct {
+	Enabled            *bool  `yaml:"enabled,omitempty"`
+	BaseDir            string `yaml:"base_dir,omitempty"`
+	MaxScrollbackLines int    `yaml:"max_scrollback_lines,omitempty"`
+	MaxScrollbackBytes int    `yaml:"max_scrollback_bytes,omitempty"`
+	SnapshotIntervalMS int    `yaml:"snapshot_interval_ms,omitempty"`
+	MaxDiskMB          int    `yaml:"max_disk_mb,omitempty"`
+	TTLInactiveSeconds int    `yaml:"ttl_inactive_seconds,omitempty"`
+}
+
 // ZellijSection holds zellij-specific config.
 type ZellijSection struct {
 	Config       string `yaml:"config,omitempty"`
@@ -227,6 +240,7 @@ type Config struct {
 	ToolDetection ToolDetectionConfig      `yaml:"tool_detection,omitempty"`
 	Logging       logging.Config           `yaml:"logging,omitempty"`
 	Dashboard     DashboardConfig          `yaml:"dashboard,omitempty"`
+	SessionRestore SessionRestoreConfig    `yaml:"session_restore,omitempty"`
 }
 
 // ProjectDashboardConfig configures dashboard overrides in .peakypanes.yml.

@@ -21,9 +21,6 @@ func (m *fakeScopeManager) Version() uint64 { return 0 }
 func (m *fakeScopeManager) StartSession(context.Context, native.SessionSpec) (*native.Session, error) {
 	return nil, nil
 }
-func (m *fakeScopeManager) RestoreSession(context.Context, native.SessionRestoreSpec) (*native.Session, error) {
-	return nil, nil
-}
 func (m *fakeScopeManager) KillSession(string) error                { return nil }
 func (m *fakeScopeManager) RenameSession(string, string) error      { return nil }
 func (m *fakeScopeManager) RenamePane(string, string, string) error { return nil }

@@ -43,3 +43,17 @@ func TestStartSessionTimeoutNonPositive(t *testing.T) {
 		t.Fatalf("expected default timeout on zero duration, got %v", got)
 	}
 }
+
+func TestDataDirEnv(t *testing.T) {
+	t.Setenv(DataDirEnv, "/tmp/pp-data")
+	if got := DataDir(); got != "/tmp/pp-data" {
+		t.Fatalf("DataDir() = %q, want %q", got, "/tmp/pp-data")
+	}
+}
+
+func TestDataDirEmpty(t *testing.T) {
+	t.Setenv(DataDirEnv, "")
+	if got := DataDir(); got != "" {
+		t.Fatalf("DataDir() = %q, want empty", got)
+	}
+}
