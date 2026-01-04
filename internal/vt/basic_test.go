@@ -8,6 +8,7 @@ import (
 
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/regenrek/peakypanes/internal/limits"
 )
 
 func TestBufferInsertDelete(t *testing.T) {
@@ -52,33 +53,29 @@ func TestBufferInsertDelete(t *testing.T) {
 }
 
 func TestScrollbackBasics(t *testing.T) {
-	sb := NewScrollback(2)
-	sb.PushLine(mkLine("one", 3))
-	sb.PushLine(mkLine("two", 3))
+	sb := NewScrollback(limits.TerminalScrollbackMaxBytesDefault)
+	sb.SetWrapWidth(3)
+	sb.PushLineWithWrap(mkLine("one", 3), false)
+	sb.PushLineWithWrap(mkLine("two", 3), false)
 	if sb.Len() != 2 {
 		t.Fatalf("Len = %d", sb.Len())
 	}
-	lines := sb.Lines()
-	if len(lines) != 2 {
-		t.Fatalf("Lines len = %d", len(lines))
+	row := make([]uv.Cell, 3)
+	if !sb.CopyRow(0, row) {
+		t.Fatalf("expected CopyRow(0) to succeed")
 	}
-	if got := cellsToText(lines[0]); !strings.Contains(got, "one") {
-		t.Fatalf("line0 = %q", got)
+	if got := cellsToText(row); !strings.Contains(got, "one") {
+		t.Fatalf("row0 = %q", got)
 	}
-	sb.SetCaptureWidth(10)
-	if sb.CaptureWidth() != 10 {
-		t.Fatalf("CaptureWidth = %d", sb.CaptureWidth())
+	if !sb.CopyRow(1, row) {
+		t.Fatalf("expected CopyRow(1) to succeed")
 	}
-	sb.SetMaxLines(1)
-	if sb.Len() != 1 {
-		t.Fatalf("SetMaxLines Len = %d", sb.Len())
+	if got := cellsToText(row); !strings.Contains(got, "two") {
+		t.Fatalf("row1 = %q", got)
 	}
-	if sb.MaxLines() != 1 {
-		t.Fatalf("MaxLines = %d", sb.MaxLines())
-	}
-	sb.Clear()
-	if sb.Len() != 0 {
-		t.Fatalf("Clear Len = %d", sb.Len())
+	sb.SetMaxBytes(-1)
+	if got := sb.Len(); got != 0 {
+		t.Fatalf("disabled Len = %d", got)
 	}
 }
 
@@ -99,14 +96,16 @@ func TestScreenBasics(t *testing.T) {
 	}
 	_ = s.Cursor()
 
-	s.scrollback.PushLine(mkLine("hi", 2))
+	s.scrollback.SetWrapWidth(3)
+	s.scrollback.PushLineWithWrap(mkLine("hi", 3), false)
 	if s.ScrollbackLen() != 1 {
 		t.Fatalf("scrollback len = %d", s.ScrollbackLen())
 	}
-	if s.ScrollbackLine(0) == nil {
-		t.Fatalf("expected scrollback line")
+	row := make([]uv.Cell, 3)
+	if !s.CopyScrollbackRow(0, row) {
+		t.Fatalf("expected scrollback row")
 	}
-	s.SetScrollbackMaxLines(1)
+	s.SetScrollbackMaxBytes(-1)
 	s.ClearScrollback()
 	if s.ScrollbackLen() != 0 {
 		t.Fatalf("scrollback not cleared")
@@ -159,18 +158,20 @@ func TestEmulatorBasics(t *testing.T) {
 
 func TestEmulatorScrollback(t *testing.T) {
 	emu := NewEmulator(3, 2)
-	emu.scrs[0].scrollback.PushLine(mkLine("sb", 2))
+	emu.scrs[0].scrollback.SetWrapWidth(3)
+	emu.scrs[0].scrollback.PushLineWithWrap(mkLine("sb", 3), false)
 	if emu.ScrollbackLen() != 1 {
 		t.Fatalf("scrollback len = %d", emu.ScrollbackLen())
 	}
-	if emu.ScrollbackLine(0) == nil {
-		t.Fatalf("expected scrollback line")
+	row := make([]uv.Cell, 3)
+	if !emu.CopyScrollbackRow(0, row) {
+		t.Fatalf("expected scrollback row")
 	}
 	emu.ClearScrollback()
 	if emu.ScrollbackLen() != 0 {
 		t.Fatalf("scrollback not cleared")
 	}
-	emu.SetScrollbackMaxLines(4)
+	emu.SetScrollbackMaxBytes(limits.TerminalScrollbackMaxBytesDefault)
 	_ = emu.IsAltScreen()
 }
 

@@ -1,6 +1,10 @@
 package terminal
 
-import "strings"
+import (
+	"strings"
+
+	uv "github.com/charmbracelet/ultraviolet"
+)
 
 func (w *Window) extractText(startX, startAbsY, endX, endAbsY int) string {
 	if w == nil {
@@ -58,10 +62,26 @@ func clampSelectionX(startX, endX, width int) (int, int) {
 
 func buildSelectionText(term vtEmulator, sbLen, rows, width, startAbsY, endAbsY, startX, endX int) string {
 	var out strings.Builder
+	var sbRow []uv.Cell
+	if sbLen > 0 && width > 0 {
+		sbRow = make([]uv.Cell, width)
+	}
 
 	for y := startAbsY; y <= endAbsY; y++ {
 		x0, x1 := selectionRangeForLine(startAbsY, endAbsY, startX, endX, width, y)
-		out.WriteString(lineText(term, sbLen, rows, x0, x1, y))
+		if y < sbLen {
+			if sbRow == nil || len(sbRow) != width {
+				sbRow = make([]uv.Cell, width)
+			}
+			if ok := term.CopyScrollbackRow(y, sbRow); ok {
+				out.WriteString(lineTextCells(sbRow, x0, x1))
+			} else {
+				out.WriteString("")
+			}
+		} else {
+			screenY := y - sbLen
+			out.WriteString(lineTextScreen(term, screenY, x0, x1))
+		}
 		if y != endAbsY {
 			out.WriteByte('\n')
 		}
@@ -84,10 +104,30 @@ func selectionRangeForLine(startAbsY, endAbsY, startX, endX, width, y int) (int,
 	return x0, x1
 }
 
-func lineText(term vtEmulator, sbLen, rows, x0, x1, y int) string {
+func lineTextCells(cells []uv.Cell, x0, x1 int) string {
 	var line strings.Builder
 	for x := x0; x <= x1; x++ {
-		cell := cellAtAbs(term, sbLen, rows, x, y)
+		if x < 0 || x >= len(cells) {
+			line.WriteByte(' ')
+			continue
+		}
+		cell := &cells[x]
+		if cell != nil && cell.Width == 0 {
+			continue
+		}
+		if cell != nil && cell.Content != "" {
+			line.WriteString(cell.Content)
+		} else {
+			line.WriteByte(' ')
+		}
+	}
+	return strings.TrimRight(line.String(), " ")
+}
+
+func lineTextScreen(term vtEmulator, row, x0, x1 int) string {
+	var line strings.Builder
+	for x := x0; x <= x1; x++ {
+		cell := term.CellAt(x, row)
 		if cell != nil && cell.Width == 0 {
 			continue
 		}

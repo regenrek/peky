@@ -33,7 +33,7 @@ func TestAltScreenDoesNotAffectScrollback(t *testing.T) {
 func TestResizeReflowsScrollback(t *testing.T) {
 	emu := NewEmulator(5, 2)
 	sb := emu.Scrollback()
-	sb.SetCaptureWidth(5)
+	sb.SetWrapWidth(5)
 
 	sb.PushLineWithWrap(mkLineEmu("hello", 5), true)
 	sb.PushLineWithWrap(mkLineEmu(" worl", 5), true)
@@ -42,12 +42,17 @@ func TestResizeReflowsScrollback(t *testing.T) {
 	emu.Resize(7, 2)
 
 	if sb.Len() != 2 {
-		t.Fatalf("expected 2 lines after resize reflow, got %d", sb.Len())
+		t.Fatalf("expected 2 rows after resize rewrap, got %d", sb.Len())
 	}
-	if got := cellsToTextEmu(sb.Line(0)); got != "hello w" {
+	row0 := make([]uv.Cell, 7)
+	row1 := make([]uv.Cell, 7)
+	if !sb.CopyRow(0, row0) || !sb.CopyRow(1, row1) {
+		t.Fatalf("CopyRow failed")
+	}
+	if got := cellsToTextEmu(row0); got != "hello w" {
 		t.Fatalf("line0 = %q", got)
 	}
-	if got := cellsToTextEmu(sb.Line(1)); got != "orld" {
+	if got := cellsToTextEmu(row1); got != "orld" {
 		t.Fatalf("line1 = %q", got)
 	}
 }

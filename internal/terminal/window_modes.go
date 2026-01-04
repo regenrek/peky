@@ -8,7 +8,7 @@ type CopyMode struct {
 	Active bool
 
 	// Absolute coords in combined buffer:
-	// 0..ScrollbackLen-1 == scrollback lines
+	// 0..ScrollbackLen-1 == scrollback rows
 	// ScrollbackLen..ScrollbackLen+Rows-1 == current screen
 	CursorX    int
 	CursorAbsY int
@@ -451,8 +451,25 @@ func (w *Window) adjustToNonContinuation(absY, x, dir int) int {
 	}
 	sbLen := term.ScrollbackLen()
 
+	var sbRow []uv.Cell
+	if absY < sbLen {
+		sbRow = make([]uv.Cell, w.cols)
+		if ok := term.CopyScrollbackRow(absY, sbRow); !ok {
+			return x
+		}
+	}
+
 	for x > 0 && x < w.cols {
-		cell := cellAtAbs(term, sbLen, w.rows, x, absY)
+		var cell *uv.Cell
+		if absY < sbLen {
+			cell = &sbRow[x]
+		} else {
+			screenY := absY - sbLen
+			if screenY < 0 || screenY >= w.rows {
+				return x
+			}
+			cell = term.CellAt(x, screenY)
+		}
 		if cell == nil || cell.Width != 0 {
 			return x
 		}
@@ -465,21 +482,6 @@ func (w *Window) adjustToNonContinuation(absY, x, dir int) int {
 		}
 	}
 	return x
-}
-
-func cellAtAbs(term vtEmulator, sbLen, rows, x, absY int) *uv.Cell {
-	if absY < sbLen {
-		line := term.ScrollbackLine(absY)
-		if line == nil || x < 0 || x >= len(line) {
-			return nil
-		}
-		return &line[x]
-	}
-	screenY := absY - sbLen
-	if screenY < 0 || screenY >= rows {
-		return nil
-	}
-	return term.CellAt(x, screenY)
 }
 
 func clampInt(v, lo, hi int) int {

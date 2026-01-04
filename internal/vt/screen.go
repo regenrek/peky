@@ -201,7 +201,7 @@ func (s *Screen) ClearScrollback() {
 	s.scrollback.Clear()
 }
 
-// ScrollbackLen returns the number of lines in the scrollback buffer.
+// ScrollbackLen returns the number of physical rows in the scrollback buffer.
 func (s *Screen) ScrollbackLen() int {
 	if s.scrollback == nil {
 		return 0
@@ -209,20 +209,21 @@ func (s *Screen) ScrollbackLen() int {
 	return s.scrollback.Len()
 }
 
-// ScrollbackLine returns a line from the scrollback buffer at the given index.
-func (s *Screen) ScrollbackLine(index int) []uv.Cell {
+// CopyScrollbackRow copies a physical scrollback row at the given index into dst.
+// Index 0 is the oldest row.
+func (s *Screen) CopyScrollbackRow(index int, dst []uv.Cell) bool {
 	if s.scrollback == nil {
-		return nil
+		return false
 	}
-	return s.scrollback.Line(index)
+	return s.scrollback.CopyRow(index, dst)
 }
 
-// SetScrollbackMaxLines sets the maximum number of lines for the scrollback buffer.
-func (s *Screen) SetScrollbackMaxLines(maxLines int) {
+// SetScrollbackMaxBytes sets the maximum scrollback size (byte budget).
+func (s *Screen) SetScrollbackMaxBytes(maxBytes int64) {
 	if s.scrollback == nil {
 		return
 	}
-	s.scrollback.SetMaxLines(maxLines)
+	s.scrollback.SetMaxBytes(maxBytes)
 }
 
 // SaveCursor saves the cursor.
@@ -319,14 +320,9 @@ func (s *Screen) ScrollUp(n int) {
 	}
 
 	if s.scrollback != nil && scroll.Min.Y == 0 && scroll.Min.X == 0 && scroll.Dx() == width {
-		s.scrollback.SetCaptureWidth(width)
 		for i := 0; i < n && i < scroll.Dy(); i++ {
 			y := scroll.Min.Y + i
-			line := extractLine(&s.buf, y, width)
-
-			soft := guessSoftWrapped(line)
-
-			s.scrollback.PushLineWithWrap(line, soft)
+			s.scrollback.CaptureRowFromBuffer(&s.buf, y)
 		}
 	}
 

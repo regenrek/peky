@@ -45,9 +45,9 @@ type vtEmulator interface {
 	IsAltScreen() bool
 	Cwd() string
 	ScrollbackLen() int
-	ScrollbackLine(index int) []uv.Cell
+	CopyScrollbackRow(index int, dst []uv.Cell) bool
 	ClearScrollback()
-	SetScrollbackMaxLines(maxLines int)
+	SetScrollbackMaxBytes(maxBytes int64)
 }
 
 // Options describes how to start a pane process.
@@ -217,7 +217,7 @@ func NewWindow(opts Options) (*Window, error) {
 	setupPTYCommand(cmd)
 
 	term := vt.NewEmulator(cols, rows)
-	term.SetScrollbackMaxLines(limits.TerminalScrollbackMaxLinesDefault)
+	term.SetScrollbackMaxBytes(limits.TerminalScrollbackMaxBytesDefault)
 
 	pty, err := xpty.NewPty(cols, rows)
 	if err != nil {

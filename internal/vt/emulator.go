@@ -207,20 +207,20 @@ func (e *Emulator) ClearScrollback() {
 	e.scrs[0].ClearScrollback()
 }
 
-// ScrollbackLen returns the number of lines in the scrollback buffer.
+// ScrollbackLen returns the number of physical rows in the scrollback buffer.
 func (e *Emulator) ScrollbackLen() int {
 	return e.scrs[0].ScrollbackLen()
 }
 
-// ScrollbackLine returns a line from the scrollback buffer at the given index.
-// Index 0 is the oldest line. Returns nil if index is out of bounds.
-func (e *Emulator) ScrollbackLine(index int) []uv.Cell {
-	return e.scrs[0].ScrollbackLine(index)
+// CopyScrollbackRow copies a physical scrollback row at the given index into dst.
+// Index 0 is the oldest row. Returns false if index is out of bounds.
+func (e *Emulator) CopyScrollbackRow(index int, dst []uv.Cell) bool {
+	return e.scrs[0].CopyScrollbackRow(index, dst)
 }
 
-// SetScrollbackMaxLines sets the maximum number of lines for the scrollback buffer.
-func (e *Emulator) SetScrollbackMaxLines(maxLines int) {
-	e.scrs[0].SetScrollbackMaxLines(maxLines)
+// SetScrollbackMaxBytes sets the scrollback byte budget.
+func (e *Emulator) SetScrollbackMaxBytes(maxBytes int64) {
+	e.scrs[0].SetScrollbackMaxBytes(maxBytes)
 }
 
 // IsAltScreen reports whether the alternate screen is active.
@@ -321,9 +321,9 @@ func (e *Emulator) Resize(width int, height int) {
 		x = width - 1
 	}
 
-	// Trigger scrollback reflow when width changes to handle soft-wrapping.
+	// Trigger scrollback rewrap when width changes to handle soft-wrapping.
 	if width != e.Width() && e.Scrollback() != nil {
-		e.Scrollback().Reflow(width)
+		e.Scrollback().SetWrapWidth(width)
 	}
 
 	e.scrs[0].Resize(width, height)

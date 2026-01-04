@@ -389,7 +389,7 @@ func (w *Window) collectLipglossCells(ctx context.Context, showCursor bool) ([]u
 		return nil, 0, 0, viewRenderState{}, nil
 	}
 
-	cellAt := makeCellAccessor(term, rows, state.topAbsY)
+	cellAt := makeCellAccessor(term, cols, rows, state.topAbsY)
 
 	blank := uv.EmptyCell
 	if blank.Width <= 0 {
@@ -501,16 +501,27 @@ func buildViewRenderState(w *Window, term vtEmulator, snapshot viewSnapshot, sho
 	return state
 }
 
-func makeCellAccessor(term vtEmulator, rows, topAbsY int) func(x, y int) *uv.Cell {
+func makeCellAccessor(term vtEmulator, cols, rows, topAbsY int) func(x, y int) *uv.Cell {
 	sbLen := term.ScrollbackLen()
+	var sbRow []uv.Cell
+	lastAbsY := -1
 	return func(x, y int) *uv.Cell {
 		absY := topAbsY + y
 		if absY < sbLen {
-			line := term.ScrollbackLine(absY)
-			if line == nil || x < 0 || x >= len(line) {
+			if cols <= 0 || x < 0 || x >= cols {
 				return nil
 			}
-			return &line[x]
+			if sbRow == nil || len(sbRow) != cols {
+				sbRow = make([]uv.Cell, cols)
+				lastAbsY = -1
+			}
+			if absY != lastAbsY {
+				if ok := term.CopyScrollbackRow(absY, sbRow); !ok {
+					return nil
+				}
+				lastAbsY = absY
+			}
+			return &sbRow[x]
 		}
 		screenY := absY - sbLen
 		if screenY < 0 || screenY >= rows {

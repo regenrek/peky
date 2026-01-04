@@ -1,460 +1,387 @@
 package vt
 
 import (
+	"unsafe"
+
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/regenrek/peakypanes/internal/limits"
 )
 
-// Scrollback represents a scrollback buffer that stores lines that have
-// scrolled off the top of the visible screen.
+// Scrollback stores content that has scrolled off the top of the visible screen.
 //
-// Design: ring buffer + soft-wrap metadata + reflow-on-resize.
+// Unlike the previous per-line allocation model, this scrollback:
+//   - is byte-budgeted (bounded memory per pane),
+//   - stores logical lines compactly in paged backing memory,
+//   - rewraps by rebuilding lightweight row indices (no per-row allocations),
+//   - can render rows into a caller-provided buffer (no escape churn).
+//
+// Scrollback is not safe for concurrent use; callers must serialize access.
 type Scrollback struct {
-	lines    [][]uv.Cell
-	maxLines int
-	head     int
-	tail     int
-	full     bool
+	maxBytes int64
+	wrapW    int
 
-	// Width captured when lines were added. Used for resize reflow.
-	lastWidthCaptured int
+	store cellStore
 
-	// softWrapped indicates whether a stored physical line is a soft wrap
-	// (not a hard newline). Soft-wrapped groups can be merged and rewrapped.
-	softWrapped []bool
+	// lines and lineRows are append-only slices with a moving head (lineStart)
+	// to avoid O(n) shifts when pruning.
+	lines     []logicalLine
+	lineRows  []int // physical rows contributed by lines[i] at wrapW
+	lineStart int
+
+	// rows is an append-only slice with a moving head (rowStart).
+	rows     []rowRef
+	rowStart int
+
+	// lastSoftWrapped tracks whether the last captured physical line was a soft
+	// wrap (not a hard newline).
+	lastSoftWrapped bool
 }
 
-func NewScrollback(maxLines int) *Scrollback {
-	maxLines = normalizeScrollbackMaxLines(maxLines)
-	return &Scrollback{
-		lines:       make([][]uv.Cell, maxLines),
-		maxLines:    maxLines,
-		softWrapped: make([]bool, maxLines),
+type logicalLine struct {
+	cellStart uint64
+	cellLen   int
+}
+
+type rowRef struct {
+	lineAbs    int
+	glyphStart int
+	glyphCount int
+}
+
+var cellBytes = int64(unsafe.Sizeof(uv.Cell{}))
+
+func NewScrollback(maxBytes int64) *Scrollback {
+	sb := &Scrollback{
+		maxBytes: normalizeScrollbackMaxBytes(maxBytes),
+		store:    newCellStore(),
 	}
+	return sb
 }
 
-func (sb *Scrollback) PushLine(line []uv.Cell) {
-	sb.PushLineWithWrap(line, true)
-}
+func (sb *Scrollback) WrapWidth() int  { return sb.wrapW }
+func (sb *Scrollback) MaxBytes() int64 { return sb.maxBytes }
 
-func (sb *Scrollback) PushLineWithWrap(line []uv.Cell, isSoftWrapped bool) {
-	if len(line) == 0 || sb.maxLines <= 0 {
+// SetWrapWidth sets the width used to wrap logical lines into physical rows.
+// This is called on resize and before capturing rows.
+func (sb *Scrollback) SetWrapWidth(width int) {
+	if sb == nil || width <= 0 {
 		return
 	}
-
-	// Copy to avoid aliasing.
-	lineCopy := make([]uv.Cell, len(line))
-	copy(lineCopy, line)
-
-	sb.lines[sb.tail] = lineCopy
-	sb.softWrapped[sb.tail] = isSoftWrapped
-
-	sb.tail = (sb.tail + 1) % sb.maxLines
-	if sb.full {
-		sb.head = (sb.head + 1) % sb.maxLines
+	if width == sb.wrapW {
+		return
 	}
-	if sb.tail == sb.head {
-		sb.full = true
-	}
+	sb.wrapW = width
+	sb.rebuildRows()
 }
 
+// SetMaxBytes updates the scrollback byte budget. Negative values disable
+// scrollback. Zero uses defaults.
+func (sb *Scrollback) SetMaxBytes(maxBytes int64) {
+	if sb == nil {
+		return
+	}
+	sb.maxBytes = normalizeScrollbackMaxBytes(maxBytes)
+	if sb.maxBytes <= 0 {
+		sb.Clear()
+		return
+	}
+	sb.enforceBudget()
+}
+
+// Len returns the number of physical rows in scrollback at the current wrap width.
 func (sb *Scrollback) Len() int {
-	if sb.maxLines <= 0 {
+	if sb == nil {
 		return 0
 	}
-	if sb.full {
-		return sb.maxLines
+	if sb.wrapW <= 0 {
+		return 0
 	}
-	if sb.tail >= sb.head {
-		return sb.tail - sb.head
-	}
-	return sb.maxLines - sb.head + sb.tail
+	return len(sb.rows) - sb.rowStart
 }
 
-func (sb *Scrollback) Line(index int) []uv.Cell {
-	length := sb.Len()
-	if index < 0 || index >= length || sb.maxLines <= 0 {
-		return nil
-	}
-	physical := (sb.head + index) % sb.maxLines
-	if physical < 0 || physical >= len(sb.lines) {
-		return nil
-	}
-	return sb.lines[physical]
-}
-
-func (sb *Scrollback) Lines() [][]uv.Cell {
-	length := sb.Len()
-	if length == 0 {
-		return nil
-	}
-	out := make([][]uv.Cell, length)
-	for i := 0; i < length; i++ {
-		physical := (sb.head + i) % sb.maxLines
-		out[i] = sb.lines[physical]
-	}
-	return out
-}
-
+// Clear removes all scrollback content and releases backing pages.
 func (sb *Scrollback) Clear() {
-	sb.head = 0
-	sb.tail = 0
-	sb.full = false
-	for i := 0; i < len(sb.lines); i++ {
-		sb.lines[i] = nil
-		sb.softWrapped[i] = false
-	}
-}
-
-func (sb *Scrollback) SetCaptureWidth(width int) {
-	if width > 0 {
-		sb.lastWidthCaptured = width
-	}
-}
-
-func (sb *Scrollback) CaptureWidth() int { return sb.lastWidthCaptured }
-func (sb *Scrollback) MaxLines() int     { return sb.maxLines }
-
-func (sb *Scrollback) SetMaxLines(maxLines int) {
-	maxLines = normalizeScrollbackMaxLines(maxLines)
-	if maxLines == sb.maxLines {
+	if sb == nil {
 		return
 	}
-	if maxLines == 0 {
-		sb.lines = nil
-		sb.softWrapped = nil
-		sb.maxLines = 0
-		sb.head, sb.tail, sb.full = 0, 0, false
-		return
+	sb.store.Reset()
+	for i := sb.lineStart; i < len(sb.lines); i++ {
+		sb.lines[i] = logicalLine{}
 	}
-
-	oldLen := sb.Len()
-	old := sb.exportLinear()
-
-	sb.lines = make([][]uv.Cell, maxLines)
-	sb.softWrapped = make([]bool, maxLines)
-	sb.maxLines = maxLines
-	sb.head, sb.tail, sb.full = 0, 0, false
-
-	// Keep most recent lines.
-	if oldLen == 0 {
-		return
-	}
-	if len(old.lines) > maxLines {
-		start := len(old.lines) - maxLines
-		old.lines = old.lines[start:]
-		old.wrap = old.wrap[start:]
-	}
-
-	for i := 0; i < len(old.lines); i++ {
-		sb.lines[i] = old.lines[i]
-		sb.softWrapped[i] = old.wrap[i]
-	}
-	sb.tail = len(old.lines) % sb.maxLines
-	sb.full = len(old.lines) == sb.maxLines
+	sb.lines = sb.lines[:0]
+	sb.lineRows = sb.lineRows[:0]
+	sb.lineStart = 0
+	sb.rows = sb.rows[:0]
+	sb.rowStart = 0
+	sb.lastSoftWrapped = false
 }
 
-func normalizeScrollbackMaxLines(maxLines int) int {
-	switch {
-	case maxLines == 0:
-		maxLines = limits.TerminalScrollbackMaxLinesDefault
-	case maxLines < 0:
-		maxLines = 0
+// CopyRow copies the physical scrollback row at index into dst.
+// Index 0 is the oldest row. Returns false if index is out of range.
+//
+// dst must have length >= WrapWidth(). Only the first WrapWidth() entries are written.
+func (sb *Scrollback) CopyRow(index int, dst []uv.Cell) bool {
+	if sb == nil || sb.wrapW <= 0 {
+		return false
 	}
-	if maxLines > limits.TerminalScrollbackMaxLinesMax {
-		maxLines = limits.TerminalScrollbackMaxLinesMax
+	if index < 0 || index >= sb.Len() {
+		return false
 	}
-	return maxLines
-}
-
-// Reflow reconstructs scrollback lines for a different terminal width.
-// This merges soft-wrapped groups back into logical lines, then re-wraps them
-// at newWidth while preserving uv.Cell styles.
-func (sb *Scrollback) Reflow(newWidth int) {
-	if newWidth <= 0 {
-		return
-	}
-	if sb.maxLines <= 0 {
-		sb.lastWidthCaptured = newWidth
-		return
+	if len(dst) < sb.wrapW {
+		return false
 	}
 
-	oldWidth := sb.lastWidthCaptured
-	if oldWidth <= 0 {
-		// Fallback: derive from first non-nil line.
-		for i := 0; i < sb.Len(); i++ {
-			if line := sb.Line(i); len(line) > 0 {
-				oldWidth = len(line)
-				break
-			}
-		}
-		if oldWidth <= 0 {
-			sb.lastWidthCaptured = newWidth
-			return
-		}
-	}
-	if newWidth == oldWidth {
-		return
-	}
-
-	linear := sb.exportLinear()
-	lines := linear.lines
-	wrap := linear.wrap
-	if len(lines) == 0 {
-		sb.lastWidthCaptured = newWidth
-		return
-	}
-
-	var outLines [][]uv.Cell
-	var outWrap []bool
-
-	i := 0
-	for i < len(lines) {
-		// Build one logical line by concatenating physical soft-wrapped lines.
-		var logical []uv.Cell
-		var lastSoft bool
-
-		for {
-			logical = append(logical, flattenForReflow(lines[i])...)
-			lastSoft = wrap[i]
-			if !wrap[i] || i == len(lines)-1 {
-				break
-			}
-			i++
-		}
-
-		rewrappedLines, rewrappedWrap := wrapCells(logical, newWidth, lastSoft)
-		outLines = append(outLines, rewrappedLines...)
-		outWrap = append(outWrap, rewrappedWrap...)
-
-		i++
-	}
-
-	// Enforce maxLines (keep most recent).
-	if len(outLines) > sb.maxLines {
-		start := len(outLines) - sb.maxLines
-		outLines = outLines[start:]
-		outWrap = outWrap[start:]
-	}
-
-	// Rebuild ring.
-	sb.lines = make([][]uv.Cell, sb.maxLines)
-	sb.softWrapped = make([]bool, sb.maxLines)
-	for idx := 0; idx < len(outLines); idx++ {
-		// copy line slice
-		lineCopy := make([]uv.Cell, len(outLines[idx]))
-		copy(lineCopy, outLines[idx])
-		sb.lines[idx] = lineCopy
-		sb.softWrapped[idx] = outWrap[idx]
-	}
-	sb.head = 0
-	sb.tail = len(outLines) % sb.maxLines
-	sb.full = len(outLines) == sb.maxLines
-	sb.lastWidthCaptured = newWidth
-}
-
-type linearExport struct {
-	lines [][]uv.Cell
-	wrap  []bool
-}
-
-func (sb *Scrollback) exportLinear() linearExport {
-	n := sb.Len()
-	out := linearExport{
-		lines: make([][]uv.Cell, 0, n),
-		wrap:  make([]bool, 0, n),
-	}
-	if n == 0 || sb.maxLines <= 0 {
-		return out
-	}
-	for i := 0; i < n; i++ {
-		phys := (sb.head + i) % sb.maxLines
-		if sb.lines[phys] == nil {
-			continue
-		}
-		out.lines = append(out.lines, sb.lines[phys])
-		out.wrap = append(out.wrap, sb.softWrapped[phys])
-	}
-	return out
-}
-
-func flattenForReflow(line []uv.Cell) []uv.Cell {
-	if len(line) == 0 {
-		return nil
-	}
-
-	// Trim right padding that is truly "empty", and trim trailing continuation cells.
-	end := len(line)
-	for end > 0 {
-		c := line[end-1]
-		if c.Width == 0 {
-			end--
-			continue
-		}
-		if isBlankCell(c) {
-			end--
-			continue
-		}
-		break
-	}
-	if end <= 0 {
-		return nil
-	}
-
-	out := make([]uv.Cell, 0, end)
-	for i := 0; i < end; i++ {
-		c := line[i]
-		if c.Width == 0 {
-			continue
-		}
-		if c.Width <= 0 {
-			c.Width = 1
-		}
-		// Treat empty content as a space for correct wrapping.
-		if c.Content == "" {
-			c.Content = " "
-		}
-		out = append(out, c)
-	}
-	return out
-}
-
-func wrapCells(glyphs []uv.Cell, width int, lastSoftWrapped bool) ([][]uv.Cell, []bool) {
-	if width <= 0 {
-		return nil, nil
-	}
+	ref := sb.rows[sb.rowStart+index]
+	line := sb.lines[ref.lineAbs]
 
 	blank := uv.EmptyCell
-	if blank.Width == 0 {
-		blank.Width = 1
+	blank.Width = 1
+	for i := 0; i < sb.wrapW; i++ {
+		dst[i] = blank
 	}
 
-	makeBlankLine := func() []uv.Cell {
-		l := make([]uv.Cell, width)
-		for i := 0; i < width; i++ {
-			l[i] = blank
-		}
-		return l
-	}
-
-	// Empty logical line -> one blank line.
-	if len(glyphs) == 0 {
-		return [][]uv.Cell{makeBlankLine()}, []bool{lastSoftWrapped}
-	}
-
-	var lines [][]uv.Cell
-	var wraps []bool
-
-	line := makeBlankLine()
 	col := 0
-
-	flush := func(isSoft bool) {
-		lines = append(lines, line)
-		wraps = append(wraps, isSoft)
-		line = makeBlankLine()
-		col = 0
-	}
-
-	for gi := 0; gi < len(glyphs); gi++ {
-		cell := glyphs[gi]
-		w := cell.Width
-		if w <= 0 {
-			w = 1
-			cell.Width = 1
-		}
-		if w > width {
-			// Extremely wide glyph: place it alone (best-effort).
-			w = 1
-			cell.Width = 1
+	startAbs := line.cellStart + uint64(ref.glyphStart)
+	endAbs := startAbs + uint64(ref.glyphCount)
+	for abs := startAbs; abs < endAbs && col < sb.wrapW; abs++ {
+		cell, ok := sb.store.CellAt(abs)
+		if !ok {
+			break
 		}
 
-		if col+w > width {
-			flush(true)
+		w := glyphWidth(cell, sb.wrapW)
+		if col+w > sb.wrapW {
+			break
 		}
 
-		// Place start cell.
-		line[col] = cell
-
-		// Place continuation cells (Width=0) for wide glyphs.
+		dst[col] = cell
 		if w > 1 {
-			for k := 1; k < w && (col+k) < width; k++ {
+			for k := 1; k < w && (col+k) < sb.wrapW; k++ {
 				cont := blank
 				cont.Width = 0
 				cont.Style = cell.Style
 				cont.Link = cell.Link
-				line[col+k] = cont
+				dst[col+k] = cont
 			}
 		}
-
 		col += w
-	}
-
-	// Last line: preserve original last soft-wrap marker.
-	lines = append(lines, line)
-	wraps = append(wraps, lastSoftWrapped)
-
-	// Any line before last is necessarily a soft wrap introduced by reflow.
-	for i := 0; i < len(wraps)-1; i++ {
-		wraps[i] = true
-	}
-	return lines, wraps
-}
-
-func isBlankCell(c uv.Cell) bool {
-	if c.Content != "" && c.Content != " " {
-		return false
-	}
-	if c.Width == 0 {
-		return true
-	}
-	var zeroStyle uv.Style
-	if !c.Style.Equal(&zeroStyle) {
-		return false
-	}
-	if c.Link != (uv.Link{}) {
-		return false
 	}
 	return true
 }
 
-func guessSoftWrapped(line []uv.Cell) bool {
-	if len(line) == 0 {
-		return false
+// PushLineWithWrap captures a physical line with wrap metadata. This is primarily
+// used by tests; production capture should use CaptureRowFromBuffer.
+func (sb *Scrollback) PushLineWithWrap(line []uv.Cell, isSoftWrapped bool) {
+	if sb == nil || sb.maxBytes <= 0 || sb.wrapW <= 0 {
+		return
 	}
-
-	last := -1
-	var cell uv.Cell
-	for i := len(line) - 1; i >= 0; i-- {
-		if line[i].Width == 0 {
-			continue
-		}
-		if isBlankCell(line[i]) {
-			continue
-		}
-		last = i
-		cell = line[i]
-		break
-	}
-	if last == -1 {
-		return false
-	}
-	width := cell.Width
-	if width <= 0 {
-		width = 1
-	}
-	end := last + width - 1
-	return end >= len(line)-1
+	sb.pushFromCells(line, isSoftWrapped)
 }
 
-// extractLine copies a full screen-width line from a buffer.
-func extractLine(buf *uv.Buffer, y, width int) []uv.Cell {
-	line := make([]uv.Cell, width)
-	for x := 0; x < width; x++ {
-		if cell := buf.CellAt(x, y); cell != nil {
-			line[x] = *cell
-		} else {
-			line[x] = uv.EmptyCell
+// CaptureRowFromBuffer captures the row y from buf into scrollback.
+// It derives soft-wrap metadata from the row’s last visible cell and maintains
+// logical-line grouping for correct rewrapping on resize.
+func (sb *Scrollback) CaptureRowFromBuffer(buf *uv.Buffer, y int) {
+	if sb == nil || sb.maxBytes <= 0 || buf == nil {
+		return
+	}
+	width := buf.Width()
+	if width <= 0 {
+		return
+	}
+	sb.SetWrapWidth(width)
+	soft := guessSoftWrappedRow(buf, y, width)
+	sb.pushFromBuffer(buf, y, width, soft)
+}
+
+func normalizeScrollbackMaxBytes(maxBytes int64) int64 {
+	switch {
+	case maxBytes == 0:
+		maxBytes = limits.TerminalScrollbackMaxBytesDefault
+	case maxBytes < 0:
+		maxBytes = 0
+	}
+	if maxBytes > limits.TerminalScrollbackMaxBytesMax {
+		maxBytes = limits.TerminalScrollbackMaxBytesMax
+	}
+	return maxBytes
+}
+
+func (sb *Scrollback) pushFromCells(line []uv.Cell, isSoftWrapped bool) {
+	startAbs := sb.store.NextAbs()
+	n := appendGlyphsFromCells(&sb.store, line)
+	sb.appendLogicalLine(startAbs, n, isSoftWrapped)
+	sb.enforceBudget()
+}
+
+func (sb *Scrollback) pushFromBuffer(buf *uv.Buffer, y, width int, isSoftWrapped bool) {
+	startAbs := sb.store.NextAbs()
+	n := appendGlyphsFromBuffer(&sb.store, buf, y, width)
+	sb.appendLogicalLine(startAbs, n, isSoftWrapped)
+	sb.enforceBudget()
+}
+
+func (sb *Scrollback) appendLogicalLine(startAbs uint64, appended int, isSoftWrapped bool) {
+	if sb.lastSoftWrapped && sb.activeLineCount() > 0 {
+		lastAbs := len(sb.lines) - 1
+		if sb.tryExtendTailLine(lastAbs, startAbs, appended) {
+			sb.lastSoftWrapped = isSoftWrapped
+			return
 		}
 	}
-	return line
+
+	lineAbs := len(sb.lines)
+	sb.lines = append(sb.lines, logicalLine{cellStart: startAbs, cellLen: appended})
+	sb.lineRows = append(sb.lineRows, 0)
+
+	added := sb.appendRowsForLine(lineAbs)
+	sb.lineRows[lineAbs] = added
+	sb.lastSoftWrapped = isSoftWrapped
+}
+
+func (sb *Scrollback) tryExtendTailLine(lineAbs int, startAbs uint64, appended int) bool {
+	line := &sb.lines[lineAbs]
+	if appended > 0 {
+		want := line.cellStart + uint64(line.cellLen)
+		if want != startAbs {
+			// Defensive: refuse to merge if caller invariants are violated.
+			return false
+		}
+		line.cellLen += appended
+	}
+
+	// Remove existing row refs for this logical line and recompute with new content.
+	prevRows := sb.lineRows[lineAbs]
+	if prevRows > 0 {
+		sb.rows = sb.rows[:len(sb.rows)-prevRows]
+	}
+	added := sb.appendRowsForLine(lineAbs)
+	sb.lineRows[lineAbs] = added
+	return true
+}
+
+func (sb *Scrollback) activeLineCount() int {
+	return len(sb.lines) - sb.lineStart
+}
+
+func (sb *Scrollback) enforceBudget() {
+	if sb.maxBytes <= 0 {
+		return
+	}
+	for sb.activeLineCount() > 0 {
+		bytesUsed := int64(sb.store.Len()) * cellBytes
+		if bytesUsed <= sb.maxBytes {
+			break
+		}
+		sb.dropOldestLine()
+	}
+	sb.maybeCompact()
+}
+
+func (sb *Scrollback) dropOldestLine() {
+	idx := sb.lineStart
+	if idx < 0 || idx >= len(sb.lines) {
+		return
+	}
+	line := sb.lines[idx]
+	sb.store.DropPrefix(line.cellLen)
+	if idx < len(sb.lineRows) {
+		sb.rowStart += sb.lineRows[idx]
+		sb.lineRows[idx] = 0
+	}
+	sb.lines[idx] = logicalLine{}
+	sb.lineStart++
+	if sb.activeLineCount() == 0 {
+		sb.lastSoftWrapped = false
+	}
+}
+
+func (sb *Scrollback) maybeCompact() {
+	const (
+		minShift = 1024
+	)
+	if sb.lineStart < minShift {
+		return
+	}
+	if sb.lineStart*2 <= len(sb.lines) {
+		return
+	}
+
+	// Drop row head first so we only touch active rows.
+	if sb.rowStart > 0 {
+		sb.rows = append([]rowRef(nil), sb.rows[sb.rowStart:]...)
+		sb.rowStart = 0
+	}
+
+	delta := sb.lineStart
+	sb.lines = append([]logicalLine(nil), sb.lines[sb.lineStart:]...)
+	sb.lineRows = append([]int(nil), sb.lineRows[sb.lineStart:]...)
+	sb.lineStart = 0
+
+	for i := range sb.rows {
+		sb.rows[i].lineAbs -= delta
+	}
+}
+
+func (sb *Scrollback) rebuildRows() {
+	sb.rows = sb.rows[:0]
+	sb.rowStart = 0
+	for i := sb.lineStart; i < len(sb.lines); i++ {
+		sb.lineRows[i] = 0
+	}
+	for lineAbs := sb.lineStart; lineAbs < len(sb.lines); lineAbs++ {
+		added := sb.appendRowsForLine(lineAbs)
+		sb.lineRows[lineAbs] = added
+	}
+}
+
+func (sb *Scrollback) appendRowsForLine(lineAbs int) int {
+	if sb.wrapW <= 0 {
+		return 0
+	}
+	line := sb.lines[lineAbs]
+	before := len(sb.rows)
+
+	if line.cellLen == 0 {
+		sb.rows = append(sb.rows, rowRef{lineAbs: lineAbs, glyphStart: 0, glyphCount: 0})
+		return len(sb.rows) - before
+	}
+
+	col := 0
+	startGlyph := 0
+	for gi := 0; gi < line.cellLen; gi++ {
+		cell, ok := sb.store.CellAt(line.cellStart + uint64(gi))
+		if !ok {
+			break
+		}
+		w := glyphWidth(cell, sb.wrapW)
+
+		if col+w > sb.wrapW && col > 0 {
+			sb.rows = append(sb.rows, rowRef{lineAbs: lineAbs, glyphStart: startGlyph, glyphCount: gi - startGlyph})
+			startGlyph = gi
+			col = 0
+		}
+
+		col += w
+		if col == sb.wrapW {
+			sb.rows = append(sb.rows, rowRef{lineAbs: lineAbs, glyphStart: startGlyph, glyphCount: gi + 1 - startGlyph})
+			startGlyph = gi + 1
+			col = 0
+		}
+	}
+	if startGlyph < line.cellLen {
+		sb.rows = append(sb.rows, rowRef{lineAbs: lineAbs, glyphStart: startGlyph, glyphCount: line.cellLen - startGlyph})
+	}
+	return len(sb.rows) - before
+}
+
+func glyphWidth(c uv.Cell, maxWidth int) int {
+	w := c.Width
+	if w <= 0 {
+		w = 1
+	}
+	if maxWidth > 0 && w > maxWidth {
+		w = 1
+	}
+	return w
 }

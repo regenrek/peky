@@ -40,10 +40,21 @@ func (w *Window) SnapshotScrollback(rows int) (string, bool) {
 	start := total - rows
 	truncated := rows < total
 	lines := make([]string, 0, rows)
+	var sbRow []uv.Cell
+	if sbLen > 0 && cols > 0 {
+		sbRow = make([]uv.Cell, cols)
+	}
 	for i := 0; i < rows; i++ {
 		abs := start + i
 		if abs < sbLen {
-			lines = append(lines, lineFromCells(term.ScrollbackLine(abs), cols))
+			if sbRow == nil || len(sbRow) != cols {
+				sbRow = make([]uv.Cell, cols)
+			}
+			if ok := term.CopyScrollbackRow(abs, sbRow); ok {
+				lines = append(lines, lineFromCells(sbRow, cols))
+			} else {
+				lines = append(lines, "")
+			}
 			continue
 		}
 		row := abs - sbLen

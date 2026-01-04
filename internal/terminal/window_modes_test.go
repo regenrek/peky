@@ -38,14 +38,15 @@ func (f *fakeEmu) IsAltScreen() bool         { return f.alt }
 func (f *fakeEmu) Cwd() string               { return "" }
 
 func (f *fakeEmu) ScrollbackLen() int { return len(f.sb) }
-func (f *fakeEmu) ScrollbackLine(i int) []uv.Cell {
-	if i < 0 || i >= len(f.sb) {
-		return nil
+func (f *fakeEmu) CopyScrollbackRow(i int, dst []uv.Cell) bool {
+	if i < 0 || i >= len(f.sb) || len(dst) < f.cols {
+		return false
 	}
-	return f.sb[i]
+	copy(dst[:f.cols], f.sb[i])
+	return true
 }
-func (f *fakeEmu) ClearScrollback()          { f.sb = nil }
-func (f *fakeEmu) SetScrollbackMaxLines(int) {}
+func (f *fakeEmu) ClearScrollback()            { f.sb = nil }
+func (f *fakeEmu) SetScrollbackMaxBytes(int64) {}
 
 func (f *fakeEmu) CellAt(x, y int) *uv.Cell {
 	if y < 0 || y >= len(f.screen) {

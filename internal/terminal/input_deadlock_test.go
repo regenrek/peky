@@ -53,20 +53,20 @@ func (e *lockingEmu) Close() error {
 	}
 	return nil
 }
-func (e *lockingEmu) Resize(int, int)              {}
-func (e *lockingEmu) Render() string               { return "" }
-func (e *lockingEmu) CellAt(int, int) *uv.Cell     { return nil }
-func (e *lockingEmu) CursorPosition() uv.Position  { return uv.Position{} }
-func (e *lockingEmu) SendMouse(uv.MouseEvent)      {}
-func (e *lockingEmu) SetCallbacks(vt.Callbacks)    {}
-func (e *lockingEmu) Height() int                  { return 0 }
-func (e *lockingEmu) Width() int                   { return 0 }
-func (e *lockingEmu) IsAltScreen() bool            { return false }
-func (e *lockingEmu) Cwd() string                  { return "" }
-func (e *lockingEmu) ScrollbackLen() int           { return 0 }
-func (e *lockingEmu) ScrollbackLine(int) []uv.Cell { return nil }
-func (e *lockingEmu) ClearScrollback()             {}
-func (e *lockingEmu) SetScrollbackMaxLines(int)    {}
+func (e *lockingEmu) Resize(int, int)                       {}
+func (e *lockingEmu) Render() string                        { return "" }
+func (e *lockingEmu) CellAt(int, int) *uv.Cell              { return nil }
+func (e *lockingEmu) CursorPosition() uv.Position           { return uv.Position{} }
+func (e *lockingEmu) SendMouse(uv.MouseEvent)               {}
+func (e *lockingEmu) SetCallbacks(vt.Callbacks)             {}
+func (e *lockingEmu) Height() int                           { return 0 }
+func (e *lockingEmu) Width() int                            { return 0 }
+func (e *lockingEmu) IsAltScreen() bool                     { return false }
+func (e *lockingEmu) Cwd() string                           { return "" }
+func (e *lockingEmu) ScrollbackLen() int                    { return 0 }
+func (e *lockingEmu) CopyScrollbackRow(int, []uv.Cell) bool { return false }
+func (e *lockingEmu) ClearScrollback()                      {}
+func (e *lockingEmu) SetScrollbackMaxBytes(int64)           {}
 
 func TestStartVtToPtyDoesNotDependOnTermMu(t *testing.T) {
 	emu := &lockingEmu{

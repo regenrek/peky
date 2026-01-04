@@ -4,37 +4,38 @@ import (
 	"testing"
 
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/regenrek/peakypanes/internal/limits"
 )
 
 func BenchmarkScrollbackPushLine(b *testing.B) {
 	widths := []int{80, 200}
 	for _, width := range widths {
 		b.Run("W"+itoa(width), func(b *testing.B) {
-			sb := NewScrollback(0)
-			sb.SetCaptureWidth(width)
+			sb := NewScrollback(limits.TerminalScrollbackMaxBytesMax)
+			sb.SetWrapWidth(width)
 			line := makeLine(width)
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				sb.PushLineWithWrap(line, true)
+				sb.PushLineWithWrap(line, false)
 			}
 		})
 	}
 }
 
 func BenchmarkScrollbackReflow(b *testing.B) {
-	sb := NewScrollback(0)
-	sb.SetCaptureWidth(80)
+	sb := NewScrollback(limits.TerminalScrollbackMaxBytesMax)
+	sb.SetWrapWidth(80)
 	line := makeLine(80)
 	for i := 0; i < 2000; i++ {
-		sb.PushLineWithWrap(line, true)
+		sb.PushLineWithWrap(line, false)
 	}
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		sb.Reflow(120)
-		sb.Reflow(80)
+		sb.SetWrapWidth(120)
+		sb.SetWrapWidth(80)
 	}
 }
 
