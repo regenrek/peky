@@ -277,14 +277,14 @@ func (f *paneFlow) mustSplitVerticalAndAssertFocus() {
 	if len(updated.Panes) < 2 {
 		f.t.Fatalf("expected split pane, got %#v", updated.Panes)
 	}
-	f.swapIndexA = updated.Panes[0].Index
-	f.otherIndex = updated.Panes[1].Index
 
 	otherPaneID, ok := findOtherPaneID(updated, f.paneID)
 	if !ok {
 		f.t.Fatalf("expected new pane id after split")
 	}
 	f.otherPaneID = otherPaneID
+	f.swapIndexA = findPaneIndexByID(updated, f.paneID)
+	f.otherIndex = findPaneIndexByID(updated, otherPaneID)
 
 	focusCheckCtx, focusCheckCancel := context.WithTimeout(context.Background(), 2*time.Second)
 	focusSnap, err := f.client.SnapshotState(focusCheckCtx, 0)
@@ -304,6 +304,15 @@ func findOtherPaneID(snap native.SessionSnapshot, excludeID string) (string, boo
 		}
 	}
 	return "", false
+}
+
+func findPaneIndexByID(snap native.SessionSnapshot, id string) string {
+	for _, p := range snap.Panes {
+		if p.ID == id {
+			return p.Index
+		}
+	}
+	return ""
 }
 
 func (f paneFlow) mustSendText(paneID, text string) {
