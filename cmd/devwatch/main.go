@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+
+	"github.com/regenrek/peakypanes/internal/identity"
 )
 
 const (
@@ -46,7 +48,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	bin, err := resolvePeakypanesBin()
+	bin, err := resolvePekyBin()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "devwatch:", err)
 		os.Exit(1)
@@ -152,7 +154,7 @@ func ensureRepoRoot() error {
 	return errors.New("run from repo root (go.mod not found)")
 }
 
-func resolvePeakypanesBin() (string, error) {
+func resolvePekyBin() (string, error) {
 	gobin := strings.TrimSpace(os.Getenv("GOBIN"))
 	if gobin == "" {
 		out, err := exec.Command("go", "env", "GOPATH").Output()
@@ -161,7 +163,7 @@ func resolvePeakypanesBin() (string, error) {
 		}
 		gobin = filepath.Join(strings.TrimSpace(string(out)), "bin")
 	}
-	bin := filepath.Join(gobin, "peakypanes")
+	bin := filepath.Join(gobin, identity.CLIName)
 	if runtime.GOOS == "windows" {
 		bin += ".exe"
 	}
@@ -182,7 +184,7 @@ func runCycle(r *runner, bin string, args []string) error {
 }
 
 func goInstall() error {
-	cmd := exec.Command("go", "install", "./cmd/peakypanes")
+	cmd := exec.Command("go", "install", "./cmd/peky")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()

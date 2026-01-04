@@ -15,6 +15,7 @@ import (
 	"github.com/regenrek/peakypanes/internal/cli/output"
 	"github.com/regenrek/peakypanes/internal/cli/root"
 	"github.com/regenrek/peakypanes/internal/cli/spec"
+	"github.com/regenrek/peakypanes/internal/identity"
 )
 
 // Register registers natural language handlers.
@@ -358,7 +359,7 @@ func shellTokens(prompt string) ([]string, bool) {
 	if err != nil || len(tokens) == 0 {
 		return nil, false
 	}
-	if tokens[0] == "peakypanes" || tokens[0] == "pp" {
+	if identity.IsCLICommandToken(tokens[0]) {
 		return tokens[1:], true
 	}
 	if strings.HasPrefix(tokens[0], "-") {
@@ -515,6 +516,7 @@ func executePlan(ctx root.CommandContext, plan output.NLPlan) (output.NLExecutio
 		buf := &bytes.Buffer{}
 		deps := root.Dependencies{
 			Version: ctx.Deps.Version,
+			AppName: identity.CLIName,
 			Stdout:  buf,
 			Stderr:  ctx.ErrOut,
 			Stdin:   ctx.Stdin,
@@ -543,7 +545,7 @@ func executePlan(ctx root.CommandContext, plan output.NLPlan) (output.NLExecutio
 }
 
 func buildArgs(cmd output.NLPlannedCommand) []string {
-	args := []string{"peakypanes"}
+	args := []string{identity.CLIName}
 	args = append(args, strings.Fields(cmd.Command)...)
 	for key, val := range cmd.Flags {
 		switch typed := val.(type) {

@@ -45,7 +45,7 @@ Useful flags:
 
 ## Generate perf layouts
 
-Create reproducible perf layouts and run them via `peakypanes start --path`:
+Create reproducible perf layouts and run them via `peky start --path`:
 
 ```bash
 scripts/perf-12pane
@@ -71,4 +71,3 @@ For releases, we expect:
 - `scripts/cli-stress.sh` passes locally on a typical dev machine.
 - No sustained unbounded RSS growth when running `scripts/perf-40pane` for several minutes.
 - `scripts/perf-bench` does not regress materially vs the previous release tag (compare `.bench/bench-*.txt`).
-

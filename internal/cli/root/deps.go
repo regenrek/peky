@@ -5,12 +5,14 @@ import (
 	"io"
 	"os"
 
+	"github.com/regenrek/peakypanes/internal/identity"
 	"github.com/regenrek/peakypanes/internal/sessiond"
 )
 
 // Dependencies provides external services for CLI handlers.
 type Dependencies struct {
 	Version string
+	AppName string
 
 	Stdout io.Writer
 	Stderr io.Writer
@@ -23,6 +25,7 @@ type Dependencies struct {
 func DefaultDependencies(version string) Dependencies {
 	return Dependencies{
 		Version: version,
+		AppName: identity.CLIName,
 		Stdout:  os.Stdout,
 		Stderr:  os.Stderr,
 		Stdin:   os.Stdin,

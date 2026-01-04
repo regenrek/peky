@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/regenrek/peakypanes/internal/cli/root"
+	"github.com/regenrek/peakypanes/internal/identity"
 )
 
 // Register registers version handler.
@@ -12,6 +13,7 @@ func Register(reg *root.Registry) {
 }
 
 func runVersion(ctx root.CommandContext) error {
-	_, err := fmt.Fprintf(ctx.Out, "peakypanes %s\n", ctx.Deps.Version)
+	appName := identity.NormalizeCLIName(ctx.Deps.AppName)
+	_, err := fmt.Fprintf(ctx.Out, "%s %s\n", appName, ctx.Deps.Version)
 	return err
 }

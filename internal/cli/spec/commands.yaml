@@ -1,6 +1,6 @@
 version: 1
 app:
-  name: peakypanes
+  name: peky
   summary: CLI-first agent control surface
   default_command: dashboard
   allow_layout_shorthand: true

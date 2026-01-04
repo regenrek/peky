@@ -28,7 +28,7 @@ Options:
   --trace-all       Log all pane view request/response timings (PEAKYPANES_PERF_TRACE_ALL=1)
   --paneviews-all   Render all panes live during profiling (dashboard.performance.render_policy=all)
   --no-tmux         Skip the tmux monitor dashboard (tail + htop)
-  --no-ghostty      Run peakypanes in the current terminal (no Ghostty)
+  --no-ghostty      Run peky in the current terminal (no Ghostty)
   -h, --help        Show this help
 
 Environment:
@@ -297,7 +297,7 @@ fi
 stamp="$(date +%Y%m%d-%H%M%S)"
 out_root="$ROOT/.bench/profiler-12/$stamp"
 run_dir="$out_root/run"
-tmp_root="/tmp/peakypanes-prof-$stamp"
+tmp_root="/tmp/peky-prof-$stamp"
 runtime_dir="$tmp_root/runtime"
 config_dir="$run_dir/config"
 pid_file="$runtime_dir/daemon.pid"
@@ -306,10 +306,10 @@ chmod 700 "$runtime_dir"
 
 cp "$layout_file" "$run_dir/.peakypanes.yml"
 
-bin_path="$out_root/peakypanes-profiler"
+bin_path="$out_root/peky-profiler"
 (
   cd "$ROOT"
-  go build -tags profiler -o "$bin_path" ./cmd/peakypanes
+  go build -tags profiler -o "$bin_path" ./cmd/peky
 )
 
 export PEAKYPANES_CPU_PROFILE="$out_root/cpu.pprof"
@@ -382,7 +382,7 @@ EOF
 fi
 
 {
-  echo "# peakypanes perf profiler"
+  echo "# peky perf profiler"
   echo "date: $stamp"
   echo "layout: $layout_file"
   echo "profile_secs: $profile_secs"
@@ -447,7 +447,7 @@ if [[ "$use_tmux" == true && -z "${TMUX:-}" ]]; then
     left_pane="$(tmux display-message -p -t "$monitor_session:" "#{pane_id}")"
     pane_cmd="htop"
     if command -v htop >/dev/null 2>&1; then
-      pane_cmd="htop -F peakypanes,claude"
+      pane_cmd="htop -F peky,claude"
     else
       pane_cmd="top"
     fi
@@ -478,10 +478,10 @@ while true; do
   fi
   attempt=\$((attempt + 1))
   if [[ "\$attempt" -ge "\$max" ]]; then
-    echo "peakypanes: start failed after \$attempt attempts (exit \$code)" >&2
+    echo "peky: start failed after \$attempt attempts (exit \$code)" >&2
     exit "\$code"
   fi
-  echo "peakypanes: start failed (exit \$code), retrying..." >&2
+  echo "peky: start failed (exit \$code), retrying..." >&2
   sleep 1
 done
 EOF

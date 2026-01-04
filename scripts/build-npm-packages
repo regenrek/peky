@@ -161,6 +161,7 @@ function renderLauncher() {
     "const fs = require('fs');",
     "const path = require('path');",
     "const { spawn } = require('child_process');",
+    "const cmdName = path.basename(process.argv[1] || '" + PROJECT + "');",
     '',
     'function pkgFor(platform, arch) {',
     "  if (platform === 'darwin' && arch === 'x64') return '" + platformPackageName('darwin', 'x64') + "';",
@@ -177,7 +178,7 @@ function renderLauncher() {
     'const pkgName = pkgFor(platform, arch);',
     '',
     'if (!pkgName) {',
-    "  console.error('" + PROJECT + ": unsupported platform ' + platform + ' ' + arch);",
+    "  console.error(cmdName + ': unsupported platform ' + platform + ' ' + arch);",
     '  process.exit(1);',
     '}',
     '',
@@ -185,7 +186,7 @@ function renderLauncher() {
     'try {',
     "  pkgRoot = path.dirname(require.resolve(pkgName + '/package.json'));",
     '} catch (err) {',
-    "  console.error('" + PROJECT + ": platform package missing ' + pkgName);",
+    "  console.error(cmdName + ': platform package missing ' + pkgName);",
     "  console.error('Reinstall with optional dependencies enabled.');",
     "  console.error('For npm you can run npm i --include=optional " + PROJECT + "');",
     '  process.exit(1);',
@@ -203,7 +204,7 @@ function renderLauncher() {
     "const child = spawn(binPath, process.argv.slice(2), { stdio: 'inherit' });",
     '',
     "child.on('error', (err) => {",
-    "  console.error('" + PROJECT + ": failed to run binary');",
+    "  console.error(cmdName + ': failed to run binary');",
     "  console.error('Path ' + binPath);",
     "  console.error(String(err && err.message ? err.message : err));",
     '  process.exit(1);',
@@ -276,6 +277,7 @@ function build() {
       url: REPO_GIT
     },
     bin: {
+      peky: 'bin/' + PROJECT + '.js',
       [PROJECT]: 'bin/' + PROJECT + '.js'
     },
     optionalDependencies: optionalDeps,

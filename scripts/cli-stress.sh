@@ -4,7 +4,7 @@ umask 077
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN_DIR="$ROOT_DIR/bin"
-BIN="$BIN_DIR/peakypanes"
+BIN="$BIN_DIR/peky"
 SESSION_NAME="stress-$(date +%s)"
 RUN_TOOLS="${RUN_TOOLS:-0}"
 PANE_COUNT="${PANE_COUNT:-200}"
@@ -58,8 +58,8 @@ OUTPUT_FLOOD_LINES=$(validate_and_clamp_uint "OUTPUT_FLOOD_LINES" "$OUTPUT_FLOOD
 mkdir -p "$BIN_DIR"
 
 if [[ "${SKIP_BUILD:-0}" != "1" ]]; then
-  echo "==> Building peakypanes"
-  go build -o "$BIN" ./cmd/peakypanes
+echo "==> Building peky"
+go build -o "$BIN" ./cmd/peky
 fi
 
 RUNTIME_DIR="$(mktemp -d)"

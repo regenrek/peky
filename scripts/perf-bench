@@ -9,7 +9,7 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 OUTFILE="$OUT/bench-$STAMP.txt"
 
 {
-  echo "# peakypanes benchmarks"
+  echo "# peky benchmarks"
   echo "# date: $STAMP"
   echo "# go: $(go version)"
   echo "# root: $ROOT"

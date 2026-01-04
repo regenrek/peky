@@ -97,10 +97,12 @@ class Peakypanes < Formula
 
   def install
     ldflags = "-s -w -X main.version=${version}"
-    system "go", "build", *std_go_args(ldflags: ldflags), "./cmd/peakypanes"
+    system "go", "build", *std_go_args(ldflags: ldflags, output: bin/"peky"), "./cmd/peky"
+    system "go", "build", *std_go_args(ldflags: ldflags, output: bin/"peakypanes"), "./cmd/peakypanes"
   end
 
   test do
+    system "#{bin}/peky", "--version"
     system "#{bin}/peakypanes", "--version"
   end
 end

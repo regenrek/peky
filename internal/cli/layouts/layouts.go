@@ -9,6 +9,7 @@ import (
 
 	"github.com/regenrek/peakypanes/internal/cli/output"
 	"github.com/regenrek/peakypanes/internal/cli/root"
+	"github.com/regenrek/peakypanes/internal/identity"
 	"github.com/regenrek/peakypanes/internal/layout"
 )
 
@@ -68,7 +69,8 @@ func writeLayoutsText(ctx root.CommandContext, layouts []layout.LayoutInfo) erro
 	if err := writeLayoutsTable(ctx, layouts); err != nil {
 		return err
 	}
-	_, err := fmt.Fprintln(ctx.Out, "Use 'peakypanes layouts export <name>' to view layout YAML")
+	appName := identity.NormalizeCLIName(ctx.Deps.AppName)
+	_, err := fmt.Fprintf(ctx.Out, "Use '%s layouts export <name>' to view layout YAML\n", appName)
 	return err
 }
 

@@ -50,8 +50,8 @@ if [[ ${1:-} == "-h" || ${1:-} == "--help" ]]; then
   cat <<'USAGE'
 Usage: scripts/dev-watch [flags] [-- args...]
 
-Hot-reload peakypanes on file changes using the in-repo watcher.
-Pass any args after -- to forward to peakypanes.
+Hot-reload peky on file changes using the in-repo watcher.
+Pass any args after -- to forward to peky.
 
 Examples:
   scripts/dev-watch

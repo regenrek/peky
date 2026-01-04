@@ -49,8 +49,8 @@ if [[ ${1:-} == "-h" || ${1:-} == "--help" ]]; then
   cat <<'USAGE'
 Usage: scripts/dev-run [flags] [args...]
 
-Installs peakypanes, restarts the daemon, and opens the UI in a fresh Ghostty
-window. Any args are forwarded to the peakypanes command.
+Installs peky, restarts the daemon, and opens the UI in a fresh Ghostty
+window. Any args are forwarded to the peky command.
 
 Examples:
   scripts/dev-run
@@ -84,7 +84,7 @@ if [[ -z "$gobin" ]]; then
   gobin="$(go env GOPATH)/bin"
 fi
 
-peak_bin="${gobin}/peakypanes"
+peak_bin="${gobin}/peky"
 log_file="${DEV_RUN_LOG:-/tmp/peakypanes-dev-run-inner.log}"
 
 if [[ -n "$debug_events" ]]; then
@@ -116,7 +116,7 @@ if [[ ${#args_escaped[@]} -gt 0 ]]; then
   args_joined="${args_escaped[*]}"
 fi
 
-cmd=$(printf 'set -euo pipefail; log=%q; : >"$log"; echo "dev-run started $(date)" >>"$log"; echo "repo: %q" >>"$log"; cd %q; export GOBIN=%q; export PATH=%q:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}; export TERM=xterm-256color; export COLORTERM=truecolor; unset NO_COLOR; %s mkdir -p %q; { go install ./cmd/peakypanes; %q daemon restart -y; } >>"$log" 2>&1; %q %s; status=$?; if [[ $status -ne 0 ]]; then echo "dev-run failed ($status). Log: $log"; echo "Press Enter to close..."; read -r _; fi' \
+cmd=$(printf 'set -euo pipefail; log=%q; : >"$log"; echo "dev-run started $(date)" >>"$log"; echo "repo: %q" >>"$log"; cd %q; export GOBIN=%q; export PATH=%q:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}; export TERM=xterm-256color; export COLORTERM=truecolor; unset NO_COLOR; %s mkdir -p %q; { go install ./cmd/peky; %q daemon restart -y; } >>"$log" 2>&1; %q %s; status=$?; if [[ $status -ne 0 ]]; then echo "dev-run failed ($status). Log: $log"; echo "Press Enter to close..."; read -r _; fi' \
   "$log_file" "$repo_root" "$repo_root" "$gobin" "$gobin" "$env_exports" "$gobin" "$peak_bin" "$peak_bin" "$args_joined")
 
 open -na Ghostty.app --args -e /bin/bash -lc "$cmd"
