@@ -1,0 +1,107 @@
+name: npm Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (vX.Y.Z)"
+        required: true
+        type: string
+
+concurrency:
+  group: npm-release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Build npm packages from GitHub release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          version="${TAG#v}"
+          if [[ -z "$version" || "$version" == "$TAG" ]]; then
+            echo "unexpected tag format: $TAG (expected vX.Y.Z)" >&2
+            exit 1
+          fi
+
+          rm -rf dist packages
+          mkdir -p dist
+
+          fetch_one() {
+            local os="$1"
+            local arch="$2"
+            local archive="peakypanes_${version}_${os}_${arch}.tar.gz"
+
+            gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$archive"
+
+            local tmp
+            tmp="$(mktemp -d)"
+            tar -xzf "$archive" -C "$tmp"
+
+            local bin
+            bin="$(find "$tmp" -type f -name peakypanes | LC_ALL=C sort | head -n 1)"
+            if [[ -z "$bin" ]]; then
+              echo "missing peakypanes binary in $archive" >&2
+              exit 1
+            fi
+
+            local out="dist/peakypanes_${os}_${arch}/peakypanes"
+            mkdir -p "$(dirname "$out")"
+            cp "$bin" "$out"
+            chmod +x "$out" >/dev/null 2>&1 || true
+
+            rm -rf "$tmp" "$archive"
+          }
+
+          fetch_one darwin amd64
+          fetch_one darwin arm64
+          fetch_one linux amd64
+          fetch_one linux arm64
+
+          VERSION="$version" node scripts/build-npm-packages
+
+      - name: Publish platform packages (OIDC)
+        run: |
+          set -euo pipefail
+
+          shopt -s nullglob
+          platform_dirs=(packages/peakypanes-*)
+          if (( ${#platform_dirs[@]} == 0 )); then
+            echo "no platform packages found under packages/" >&2
+            exit 1
+          fi
+
+          IFS=$'\n' platform_dirs=($(printf "%s\n" "${platform_dirs[@]}" | LC_ALL=C sort))
+          for dir in "${platform_dirs[@]}"; do
+            echo "Publishing $dir"
+            (cd "$dir" && npm publish --access public --provenance)
+          done
+
+      - name: Publish meta package (OIDC)
+        run: |
+          set -euo pipefail
+          (cd packages/peakypanes && npm publish --access public --provenance)

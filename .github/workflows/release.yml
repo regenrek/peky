@@ -1,0 +1,65 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (vX.Y.Z)"
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Go test
+        run: go test ./...
+
+      - name: GoReleaser (GitHub release + assets)
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: v2.13.1
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Create Homebrew tap token (GitHub App)
+        id: tap-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.HOMEBREW_TAP_PUBLISH_APP_ID }}
+          private-key: ${{ secrets.HOMEBREW_TAP_PUBLISH_PRIVATE_KEY }}
+          owner: regenrek
+          repositories: homebrew-tap
+
+      - name: Update Homebrew tap formula
+        env:
+          TAP_PUSH_TOKEN: ${{ steps.tap-token.outputs.token }}
+          TAP_GIT_AUTHOR_NAME: ${{ steps.tap-token.outputs.app-slug }}[bot]
+          TAP_GIT_AUTHOR_EMAIL: ${{ steps.tap-token.outputs.app-slug }}[bot]@users.noreply.github.com
+        run: scripts/update-homebrew-tap "${TAG}"

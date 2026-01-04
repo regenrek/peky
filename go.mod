@@ -1,6 +1,8 @@
 module github.com/regenrek/peakypanes
 
-go 1.25.5
+go 1.25.0
+
+toolchain go1.25.5
 
 require (
 	github.com/atotto/clipboard v0.1.4

@@ -6,7 +6,7 @@ This document is the single source of truth for releasing Peaky Panes.
 
 - You are on `main` with a clean working tree.
 - You have push access to the GitHub repo.
-- You are logged into npm (`npm whoami`).
+- Releases, Homebrew tap updates, and npm publishing are done by GitHub Actions; no local npm login required.
 
 ## Required Tests (must pass)
 
@@ -28,7 +28,7 @@ go test ./... -race
 
 ## Release Steps
 
-1) Pick the version (e.g. `0.1.0`).
+1) Pick the next version
 
 2) Update docs:
 - Move `CHANGELOG.md` “Unreleased” → the new version with today’s date.
@@ -44,51 +44,26 @@ git tag vX.Y.Z
 git push origin main --tags
 ```
 
-4) Build and publish the GitHub release (GoReleaser):
+4) GitHub Actions publishes everything:
 
-```bash
-goreleaser release --clean
-```
+- Tag push triggers the `release` workflow, which runs GoReleaser to create the GitHub release + upload assets, then updates the Homebrew tap formula.
+- Publishing the GitHub Release triggers the `npm Release` workflow, which builds npm packages from the GitHub release assets and publishes them using OIDC.
 
-5) Update the Homebrew tap formula (regenrek/tap):
-
-- Update `Formula/peakypanes.rb` with the new `url` + `sha256`.
-- Run a local install/test:
+5) Verify installs (recommended):
 
 ```bash
 brew install --build-from-source regenrek/tap/peakypanes
 brew test regenrek/tap/peakypanes
 ```
 
-- (Optional but recommended) Lint the formula:
+6) Publish npm packages (GitHub Actions, Trusted Publishing):
 
-```bash
-brew audit --strict --online regenrek/tap/peakypanes
-```
-
-- Commit and push the tap repo.
-
-6) Generate npm packages from `dist/`:
-
-```bash
-npm run build:npm-packages
-```
-
-7) Publish npm packages (platform packages first, then the meta package):
-
-Note: Windows npm packages are currently disabled due to npm spam-detection blocks.
-
-```bash
-cd packages/peakypanes-darwin-arm64 && npm publish --access public
-cd ../peakypanes-darwin-x64 && npm publish --access public
-cd ../peakypanes-linux-arm64 && npm publish --access public
-cd ../peakypanes-linux-x64 && npm publish --access public
-cd ../peakypanes && npm publish --access public
-```
+- Creating/publishing the GitHub Release triggers the `npm Release` workflow, which builds the npm packages from the GitHub release assets and publishes all 5 packages using OIDC.
+- Monitor the run under GitHub Actions → `npm Release`.
 
 ## Release Helper (recommended)
 
-You can use the scripted helper to run the full flow (tests, tag, release, npm publish):
+You can use the scripted helper to run the local parts (tests, tag, push) and trigger the GitHub Actions release pipeline:
 
 ```bash
 scripts/release X.Y.Z
@@ -100,14 +75,7 @@ Dry run (no tag/push/release/publish, tests still run):
 scripts/release X.Y.Z --dry-run
 ```
 
-The helper requires:
-- clean working tree
-- `CHANGELOG.md` contains the target version
-- npm auth (`npm whoami` must succeed)
-- `goreleaser` installed locally
-- `GITHUB_TOKEN` set (you can export `GITHUB_TOKEN=$(gh auth token)`).
-- Homebrew installed and `brew tap regenrek/tap` already run.
-- Git credentials with push access to `regenrek/homebrew-tap`.
+The helper requires a clean working tree and push access to the repo.
 
 ## Post-Release Verification
 
@@ -118,7 +86,7 @@ npx -y peakypanes
 
 ## Notes
 
-- `goreleaser release --clean` builds binaries into `dist/` and creates the GitHub release.
-- The release helper updates the Homebrew tap formula (`regenrek/homebrew-tap`).
-- `npm run build:npm-packages` copies those binaries into `packages/` and writes the npm metadata.
+- The `release` workflow builds binaries into `dist/` and creates the GitHub release.
+- The `release` workflow updates the Homebrew tap formula (`regenrek/homebrew-tap`) via `scripts/update-homebrew-tap`.
+- `npm run build:npm-packages` copies those binaries into `packages/` and writes the npm metadata (used by the `npm Release` workflow).
 - The meta package (`packages/peakypanes`) must be published last so it can resolve optional dependencies.
