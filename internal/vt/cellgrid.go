@@ -123,10 +123,18 @@ func (g *cellGrid) Resize(cols, rows int) {
 	g.rows = rows
 
 	if cols == 0 || rows == 0 {
+		g.cells = nil
+		g.stride = 0
+		g.capRows = 0
 		return
 	}
 
 	if cols <= oldStride && rows <= oldCapRows && len(oldCells) == oldStride*oldCapRows {
+		if shouldShrinkCapacity(cols, rows, oldStride, oldCapRows) {
+			g.compactTo(cols, rows)
+			return
+		}
+
 		g.stride = oldStride
 		g.capRows = oldCapRows
 
@@ -180,6 +188,82 @@ func (g *cellGrid) Resize(cols, rows int) {
 	g.cells = newCells
 	g.stride = newStride
 	g.capRows = newCapRows
+}
+
+func (g *cellGrid) Compact() {
+	if g == nil || g.cols <= 0 || g.rows <= 0 {
+		return
+	}
+	targetStride := roundUpMultiple(g.cols, 8)
+	targetRows := roundUpMultiple(g.rows, 8)
+	if g.stride == targetStride && g.capRows == targetRows {
+		return
+	}
+	g.compactTo(g.cols, g.rows)
+}
+
+func (g *cellGrid) compactTo(cols, rows int) {
+	if cols <= 0 || rows <= 0 {
+		g.cells = nil
+		g.stride = 0
+		g.capRows = 0
+		return
+	}
+
+	targetStride := roundUpMultiple(cols, 8)
+	targetRows := roundUpMultiple(rows, 8)
+	if targetStride < cols {
+		targetStride = cols
+	}
+	if targetRows < rows {
+		targetRows = rows
+	}
+
+	newCells := make([]uv.Cell, targetStride*targetRows)
+	fillEmptyCells(newCells)
+
+	minCols := cols
+	if g.cols < minCols {
+		minCols = g.cols
+	}
+	minRows := rows
+	if g.rows < minRows {
+		minRows = g.rows
+	}
+	for y := 0; y < minRows; y++ {
+		src := y * g.stride
+		dst := y * targetStride
+		if src < 0 || dst < 0 || src+minCols > len(g.cells) || dst+minCols > len(newCells) {
+			break
+		}
+		copy(newCells[dst:dst+minCols], g.cells[src:src+minCols])
+	}
+
+	g.cells = newCells
+	g.stride = targetStride
+	g.capRows = targetRows
+}
+
+func shouldShrinkCapacity(cols, rows, stride, capRows int) bool {
+	targetStride := roundUpMultiple(cols, 8)
+	targetRows := roundUpMultiple(rows, 8)
+	if targetStride < cols {
+		targetStride = cols
+	}
+	if targetRows < rows {
+		targetRows = rows
+	}
+	if targetStride == stride && targetRows == capRows {
+		return false
+	}
+
+	// Shrink aggressively if we are holding more than 4x the active cell count.
+	active := cols * rows
+	capacity := stride * capRows
+	if active <= 0 || capacity <= 0 {
+		return false
+	}
+	return capacity > active*4
 }
 
 func (g *cellGrid) InsertLineArea(y, n int, c *uv.Cell, area uv.Rectangle) {

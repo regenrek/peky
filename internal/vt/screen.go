@@ -35,6 +35,7 @@ func NewScreen(w, h int) *Screen {
 // cursor styles, and resets the scroll region.
 func (s *Screen) Reset() {
 	s.buf.Clear()
+	s.buf.Compact()
 	s.cur = Cursor{}
 	s.saved = Cursor{}
 	s.scroll = s.buf.Bounds()
