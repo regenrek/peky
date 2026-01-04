@@ -25,6 +25,8 @@ func renderBadge(status int) string {
 		return theme.StatusBadgeDone.Render("done")
 	case paneStatusError:
 		return theme.StatusBadgeError.Render("error")
+	case paneStatusDead:
+		return theme.StatusBadgeDead.Render("dead")
 	case paneStatusDisconnected:
 		return theme.StatusBadgeDisconnected.Render("offline")
 	case paneStatusRunning:

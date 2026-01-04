@@ -240,12 +240,12 @@ func TestClassifyPane(t *testing.T) {
 	}
 
 	deadErr := classifyPane(PaneItem{Dead: true, DeadStatus: 1}, nil, settings, time.Now())
-	if deadErr != PaneStatusError {
-		t.Fatalf("dead error status = %v", deadErr)
+	if deadErr != PaneStatusDead {
+		t.Fatalf("dead status = %v", deadErr)
 	}
 	deadDone := classifyPane(PaneItem{Dead: true, DeadStatus: 0}, nil, settings, time.Now())
-	if deadDone != PaneStatusDone {
-		t.Fatalf("dead done status = %v", deadDone)
+	if deadDone != PaneStatusDead {
+		t.Fatalf("dead status = %v", deadDone)
 	}
 
 	if got := classifyPane(PaneItem{}, []string{"error: boom"}, settings, time.Now()); got != PaneStatusError {

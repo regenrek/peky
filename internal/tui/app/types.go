@@ -59,6 +59,7 @@ const (
 	PaneStatusRunning
 	PaneStatusDone
 	PaneStatusError
+	PaneStatusDead
 	PaneStatusDisconnected
 )
 

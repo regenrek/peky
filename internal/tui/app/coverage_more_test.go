@@ -80,14 +80,14 @@ func TestClassifyPaneFromLines(t *testing.T) {
 	}
 }
 
-func TestPaneStatusForDeadIdleAndSummary(t *testing.T) {
+func TestPaneStatusDeadIdleAndSummary(t *testing.T) {
 	pane := PaneItem{Dead: true, DeadStatus: 1}
-	if status, ok := paneStatusForDead(pane); !ok || status != PaneStatusError {
-		t.Fatalf("paneStatusForDead error: %v %v", status, ok)
+	if status := classifyPane(pane, nil, DashboardConfig{}, time.Now()); status != PaneStatusDead {
+		t.Fatalf("classifyPane dead: %v", status)
 	}
 	pane.DeadStatus = 0
-	if status, ok := paneStatusForDead(pane); !ok || status != PaneStatusDone {
-		t.Fatalf("paneStatusForDead done: %v %v", status, ok)
+	if status := classifyPane(pane, nil, DashboardConfig{}, time.Now()); status != PaneStatusDead {
+		t.Fatalf("classifyPane dead: %v", status)
 	}
 
 	now := time.Now()

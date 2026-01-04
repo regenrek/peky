@@ -129,6 +129,9 @@ var updateHandlers = map[reflect.Type]updateHandler{
 	reflect.TypeOf(PaneClosedMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handlePaneClosed(msg.(PaneClosedMsg))
 	},
+	reflect.TypeOf(paneCleanupMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handlePaneCleanup(msg.(paneCleanupMsg))
+	},
 	reflect.TypeOf(quickReplySendMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleQuickReplySend(msg.(quickReplySendMsg))
 	},
