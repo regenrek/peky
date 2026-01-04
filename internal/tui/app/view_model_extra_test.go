@@ -28,10 +28,10 @@ func TestPaneViewProvider(t *testing.T) {
 		ColorProfile: termenv.TrueColor,
 	}
 	m.paneViews[key] = "view"
-	if got := provider("p1", 10, 5, false); got != "view" {
+	if got := provider("p1", 10, 5, false, false); got != "view" {
 		t.Fatalf("expected pane view lookup, got %q", got)
 	}
-	if got := provider("", 10, 5, false); got != "" {
+	if got := provider("", 10, 5, false, false); got != "" {
 		t.Fatalf("expected empty result for missing id")
 	}
 }

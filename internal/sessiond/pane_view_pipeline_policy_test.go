@@ -71,16 +71,18 @@ func TestPaneViewString_RenderPolicy(t *testing.T) {
 			checkShowCursor: true,
 		},
 		{
-			name: "lipgloss_requested_without_cursor_or_copy_mode_falls_back_to_ansi",
+			name: "lipgloss_requested_without_cursor_uses_lipgloss",
 			req: PaneViewRequest{
 				Mode:         PaneViewLipgloss,
 				ShowCursor:   false,
 				ColorProfile: termenv.TrueColor,
 			},
-			wantMode:     PaneViewANSI,
-			want:         "ANSI",
-			wantLipgloss: 0,
-			wantANSI:     1,
+			wantMode:        PaneViewLipgloss,
+			want:            "LIP",
+			wantLipgloss:    1,
+			wantANSI:        0,
+			wantShowCursor:  false,
+			checkShowCursor: true,
 		},
 		{
 			name: "lipgloss_requested_without_cursor_but_copy_mode_active_uses_lipgloss",
@@ -111,7 +113,7 @@ func TestPaneViewString_RenderPolicy(t *testing.T) {
 			wantANSI:     1,
 		},
 		{
-			name: "ansi_requested_with_copy_mode_active_uses_lipgloss_for_selection_overlay",
+			name: "ansi_requested_with_copy_mode_active_keeps_ansi",
 			req: PaneViewRequest{
 				Mode:         PaneViewANSI,
 				ShowCursor:   false,
@@ -119,12 +121,10 @@ func TestPaneViewString_RenderPolicy(t *testing.T) {
 			},
 			win: fakePaneViewWin{copyMode: true},
 
-			wantMode:        PaneViewLipgloss,
-			want:            "LIP",
-			wantLipgloss:    1,
-			wantANSI:        0,
-			wantShowCursor:  false,
-			checkShowCursor: true,
+			wantMode:     PaneViewANSI,
+			want:         "ANSI",
+			wantLipgloss: 0,
+			wantANSI:     1,
 		},
 		{
 			name: "ansi_requested_with_cursor_overlay_uses_lipgloss",

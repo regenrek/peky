@@ -675,10 +675,7 @@ func paneViewDeadlineSoon(ctx context.Context) bool {
 }
 
 func paneViewRenderMode(win paneViewWindow, req PaneViewRequest) PaneViewMode {
-	if req.ShowCursor {
-		return PaneViewLipgloss
-	}
-	if win != nil && win.CopyModeActive() {
+	if req.Mode == PaneViewLipgloss || req.ShowCursor {
 		return PaneViewLipgloss
 	}
 	return PaneViewANSI

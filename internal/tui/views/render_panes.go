@@ -411,7 +411,7 @@ func paneTileLiveView(m Model, pane Pane, contentWidth, maxPreview int, target b
 	if m.PaneView == nil || strings.TrimSpace(pane.ID) == "" {
 		return ""
 	}
-	return m.PaneView(pane.ID, contentWidth, maxPreview, target && m.TerminalFocus)
+	return m.PaneView(pane.ID, contentWidth, maxPreview, target && m.TerminalFocus, target)
 }
 
 func paneBounds(panes []Pane) (int, int) {

@@ -113,11 +113,11 @@ func toViewSlashSuggestions(entries []slashSuggestion) []views.SlashSuggestion {
 	return out
 }
 
-func (m *Model) paneViewProvider() func(id string, width, height int, showCursor bool) string {
+func (m *Model) paneViewProvider() func(id string, width, height int, showCursor bool, useLipgloss bool) string {
 	if m == nil || m.client == nil {
 		return nil
 	}
-	return func(id string, width, height int, showCursor bool) string {
+	return func(id string, width, height int, showCursor bool, useLipgloss bool) string {
 		if strings.TrimSpace(id) == "" || width <= 0 || height <= 0 {
 			return ""
 		}
@@ -125,7 +125,7 @@ func (m *Model) paneViewProvider() func(id string, width, height int, showCursor
 			return ""
 		}
 		mode := sessiond.PaneViewANSI
-		if showCursor {
+		if useLipgloss || showCursor {
 			mode = sessiond.PaneViewLipgloss
 		}
 		return m.paneView(id, width, height, mode, showCursor, m.paneViewProfile)
