@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/regenrek/peakypanes/internal/tui/mouse"
 	"github.com/regenrek/peakypanes/internal/tui/panelayout"
 )
@@ -91,6 +93,32 @@ func (m *Model) headerHitRects() []headerHitRect {
 			})
 		}
 		cursor = end
+	}
+	if label, hint, ok := m.updateBannerInfo(); ok {
+		text := label
+		if strings.TrimSpace(hint) != "" {
+			text = text + " " + hint
+		}
+		textWidth := lipgloss.Width(text)
+		if textWidth > 0 {
+			start := header.X + header.W - textWidth
+			if start < header.X {
+				start = header.X
+				textWidth = header.W
+			}
+			updateY := header.Y + 1
+			if updateY < header.Y+header.H {
+				hits = append(hits, headerHitRect{
+					Hit: mouse.HeaderHit{Kind: mouse.HeaderUpdate},
+					Rect: mouse.Rect{
+						X: start,
+						Y: updateY,
+						W: textWidth,
+						H: 1,
+					},
+				})
+			}
+		}
 	}
 	return hits
 }

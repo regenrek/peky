@@ -34,6 +34,9 @@ func (m *Model) dashboardLayoutInternal(logCtx string) (dashboardLayout, bool) {
 	}
 
 	headerHeight := 1
+	if _, _, ok := m.updateBannerInfo(); ok {
+		headerHeight = 2
+	}
 	footerHeight := 1
 	quickReplyHeight := 3
 	headerGap := 1

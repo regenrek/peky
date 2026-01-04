@@ -28,4 +28,7 @@ var viewRenderers = map[int]func(Model) string{
 	viewRenameSession:           func(m Model) string { return m.viewRename() },
 	viewRenamePane:              func(m Model) string { return m.viewRename() },
 	viewProjectRootSetup:        func(m Model) string { return m.viewProjectRootSetup() },
+	viewUpdateDialog:            func(m Model) string { return m.viewUpdateDialog() },
+	viewUpdateProgress:          func(m Model) string { return m.viewUpdateProgress() },
+	viewUpdateRestart:           func(m Model) string { return m.viewUpdateRestart() },
 }

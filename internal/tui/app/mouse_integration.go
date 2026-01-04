@@ -33,6 +33,7 @@ func (m *Model) updateDashboardMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		SelectDashboardTab:    m.selectDashboardTab,
 		SelectProjectTab:      m.selectProjectTab,
 		OpenProjectPicker:     m.openProjectPicker,
+		OpenUpdateDialog:      func() { _ = m.openUpdateDialog() },
 		SetTerminalFocus:      m.setTerminalFocus,
 		TerminalFocus:         func() bool { return m.terminalFocus },
 		SupportsTerminalFocus: m.supportsTerminalFocus,

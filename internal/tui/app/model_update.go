@@ -90,6 +90,9 @@ var keyHandlers = map[ViewState]keyHandler{
 	StateRenameSession:    func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateRename(msg) },
 	StateRenamePane:       func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateRename(msg) },
 	StateProjectRootSetup: func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateProjectRootSetup(msg) },
+	StateUpdateDialog:     func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateUpdateDialog(msg) },
+	StateUpdateProgress:   func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateUpdateProgress(msg) },
+	StateUpdateRestart:    func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateUpdateRestart(msg) },
 }
 
 type updateHandler func(*Model, tea.Msg) (tea.Model, tea.Cmd)
@@ -98,6 +101,24 @@ var updateHandlers = map[reflect.Type]updateHandler{
 	reflect.TypeOf(tea.WindowSizeMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.applyWindowSize(msg.(tea.WindowSizeMsg))
 		return m, nil
+	},
+	reflect.TypeOf(updateCheckMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleUpdateCheck(msg.(updateCheckMsg))
+	},
+	reflect.TypeOf(updateCheckResultMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleUpdateCheckResult(msg.(updateCheckResultMsg))
+	},
+	reflect.TypeOf(updateTickMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleUpdateTick()
+	},
+	reflect.TypeOf(updateProgressMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleUpdateProgress(msg.(updateProgressMsg))
+	},
+	reflect.TypeOf(updateInstallResultMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleUpdateInstallResult(msg.(updateInstallResultMsg))
+	},
+	reflect.TypeOf(updateRestartMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleUpdateRestart(msg.(updateRestartMsg))
 	},
 	reflect.TypeOf(cursorShapeFlushMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleCursorShapeFlush(msg.(cursorShapeFlushMsg))

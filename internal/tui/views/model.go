@@ -54,6 +54,9 @@ type Model struct {
 	DashboardPreviewLines    int
 	PaneView                 func(id string, width, height int, showCursor bool, useLipgloss bool) string
 	DialogHelp               DialogHelp
+	UpdateBanner             UpdateBanner
+	UpdateDialog             UpdateDialog
+	UpdateProgress           UpdateProgress
 }
 
 type Project struct {
@@ -67,6 +70,25 @@ type DialogHelp struct {
 	Title string
 	Body  string
 	Open  bool
+}
+
+type UpdateBanner struct {
+	Visible bool
+	Label   string
+	Hint    string
+}
+
+type UpdateDialog struct {
+	CurrentVersion string
+	LatestVersion  string
+	Channel        string
+	Command        string
+	CanInstall     bool
+}
+
+type UpdateProgress struct {
+	Step    string
+	Percent int
 }
 
 type Session struct {

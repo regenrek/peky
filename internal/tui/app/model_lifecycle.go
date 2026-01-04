@@ -21,7 +21,7 @@ func (m *Model) SetAutoStart(spec AutoStartSpec) {
 }
 
 func (m *Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{m.startRefreshCmd(), tickCmd(m.settings.RefreshInterval)}
+	cmds := []tea.Cmd{m.startRefreshCmd(), tickCmd(m.settings.RefreshInterval), m.scheduleUpdateInit()}
 	if m.client != nil {
 		cmds = append(cmds, waitDaemonEvent(m.client))
 	}

@@ -55,6 +55,40 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 		shortcutQuit = keyLabel(m.keys.quit)
 	}
 
+	updateCommands := []commandSpec{
+		{
+			ID:      "update_check",
+			Label:   "Update: Check for updates",
+			Desc:    "Check npm for the latest version",
+			Aliases: []string{"check-updates", "updates check", "update check"},
+			Run: func(m *Model, _ commandArgs) tea.Cmd {
+				return m.handleUpdateCheck(updateCheckMsg{Force: true})
+			},
+		},
+	}
+	if m.updatePendingRestart {
+		updateCommands = append(updateCommands, commandSpec{
+			ID:      "update_restart",
+			Label:   "Update: Restart now",
+			Desc:    "Restart to finish installing the update",
+			Aliases: []string{"restart update", "update restart"},
+			Run: func(m *Model, _ commandArgs) tea.Cmd {
+				m.setState(StateUpdateRestart)
+				return nil
+			},
+		})
+	} else if m.updateState.UpdateAvailable() && !m.updateState.IsSkipped() {
+		updateCommands = append(updateCommands, commandSpec{
+			ID:      "update_open",
+			Label:   "Update: Install update",
+			Desc:    "Open the update dialog",
+			Aliases: []string{"update", "update install", "updates", "update dialog"},
+			Run: func(m *Model, _ commandArgs) tea.Cmd {
+				return m.openUpdateDialog()
+			},
+		})
+	}
+
 	groups := []commandGroup{
 		{
 			Name: "pane",
@@ -221,6 +255,10 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 					},
 				},
 			},
+		},
+		{
+			Name:     "updates",
+			Commands: updateCommands,
 		},
 		{
 			Name: "menu",

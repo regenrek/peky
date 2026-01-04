@@ -26,6 +26,7 @@ type DashboardCallbacks struct {
 	SelectDashboardTab    func() bool
 	SelectProjectTab      func(projectID string) bool
 	OpenProjectPicker     func()
+	OpenUpdateDialog      func()
 	SetTerminalFocus      func(focus bool)
 	TerminalFocus         func() bool
 	SupportsTerminalFocus func() bool
@@ -92,6 +93,11 @@ func (h *Handler) handleHeaderClick(msg tea.MouseMsg, cb DashboardCallbacks) (te
 	case HeaderNew:
 		if cb.OpenProjectPicker != nil {
 			cb.OpenProjectPicker()
+		}
+		return nil, true
+	case HeaderUpdate:
+		if cb.OpenUpdateDialog != nil {
+			cb.OpenUpdateDialog()
 		}
 		return nil, true
 	default:

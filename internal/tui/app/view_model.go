@@ -25,6 +25,9 @@ func (m *Model) viewModel() views.Model {
 		previewSession = session
 	}
 
+	bannerLabel, bannerHint, bannerVisible := m.updateBannerInfo()
+	updateDialog := m.updateDialogView()
+
 	vm := views.Model{
 		Width:                    m.width,
 		Height:                   m.height,
@@ -93,6 +96,22 @@ func (m *Model) viewModel() views.Model {
 		DashboardPreviewLines: dashboardPreviewLines(m.settings),
 		PaneView:              m.paneViewProvider(),
 		DialogHelp:            m.dialogHelpView(),
+		UpdateBanner: views.UpdateBanner{
+			Visible: bannerVisible,
+			Label:   bannerLabel,
+			Hint:    bannerHint,
+		},
+		UpdateDialog: views.UpdateDialog{
+			CurrentVersion: updateDialog.CurrentVersion,
+			LatestVersion:  updateDialog.LatestVersion,
+			Channel:        string(updateDialog.Channel),
+			Command:        updateDialog.Command,
+			CanInstall:     updateDialog.CanInstall,
+		},
+		UpdateProgress: views.UpdateProgress{
+			Step:    m.updateProgress.Step,
+			Percent: m.updateProgress.Percent,
+		},
 	}
 
 	return vm

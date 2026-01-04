@@ -21,6 +21,9 @@ const (
 	viewSettingsMenu
 	viewPerformanceMenu
 	viewDebugMenu
+	viewUpdateDialog
+	viewUpdateProgress
+	viewUpdateRestart
 )
 
 // Tab ordering must match app.DashboardTab.

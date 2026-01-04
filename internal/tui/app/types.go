@@ -32,6 +32,9 @@ const (
 	StateSettingsMenu
 	StatePerformanceMenu
 	StateDebugMenu
+	StateUpdateDialog
+	StateUpdateProgress
+	StateUpdateRestart
 )
 
 // DashboardTab represents the active tab within the dashboard view.

@@ -132,6 +132,18 @@ func centerLine(text string, width int) string {
 	return strings.Repeat(" ", leftPad) + text + strings.Repeat(" ", rightPad)
 }
 
+func rightAlignLine(text string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	lineWidth := lipgloss.Width(text)
+	if lineWidth >= width {
+		return ansi.Truncate(text, width, "")
+	}
+	pad := width - lineWidth
+	return strings.Repeat(" ", pad) + text
+}
+
 func truncateRunes(text string, width int) string {
 	if width <= 0 {
 		return ""

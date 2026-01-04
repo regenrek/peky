@@ -219,6 +219,15 @@ var ShortcutNote = lipgloss.NewStyle().
 var ShortcutHint = lipgloss.NewStyle().
 	Foreground(TextDim)
 
+// UpdateBanner highlights update availability in the header.
+var UpdateBanner = lipgloss.NewStyle().
+	Bold(true).
+	Foreground(Warning)
+
+// UpdateBannerHint styles the update shortcut hint.
+var UpdateBannerHint = lipgloss.NewStyle().
+	Foreground(TextMuted)
+
 // ===== Tabs and Sections =====
 
 // TabActive for active tabs (projects/views).

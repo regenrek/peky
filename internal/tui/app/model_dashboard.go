@@ -6,6 +6,13 @@ import (
 )
 
 func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.updatePromptPending {
+		m.updatePromptPending = false
+		return m, m.openUpdateDialog()
+	}
+	if cmd, handled := m.handleUpdateShortcut(msg); handled {
+		return m, cmd
+	}
 	if cmd, handled := m.handleDashboardFilter(msg); handled {
 		return m, cmd
 	}
