@@ -8,6 +8,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/regenrek/peakypanes/internal/cli/spec"
+	"github.com/regenrek/peakypanes/internal/identity"
 )
 
 // Runner executes the CLI using the spec and registry.
@@ -30,6 +31,11 @@ func NewRunner(specDoc *spec.Spec, deps Dependencies, reg *Registry) (*Runner, e
 func (r *Runner) Run(ctx context.Context, args []string) error {
 	if r == nil || r.app == nil {
 		return fmt.Errorf("runner is not initialized")
+	}
+	if r.specDoc != nil && r.app != nil {
+		appName := identity.ResolveBinaryName(args)
+		r.specDoc.App.Name = appName
+		r.app.Name = appName
 	}
 	args = applyShorthand(r.specDoc, args)
 	return r.app.Run(ctx, args)

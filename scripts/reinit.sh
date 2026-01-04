@@ -8,7 +8,7 @@ gobin="${GOBIN:-}"
 if [[ -z "$gobin" ]]; then
   gobin="$(go env GOPATH)/bin"
 fi
-peak_bin="${gobin}/peakypanes"
+peky_bin="${gobin}/peky"
 
 kill_all=false
 for arg in "$@"; do
@@ -19,20 +19,20 @@ for arg in "$@"; do
   esac
 done
 
-echo "reinit: go install ./cmd/peakypanes"
-go install ./cmd/peakypanes
+echo "reinit: go install ./cmd/peky"
+go install ./cmd/peky
 
-pids="$(pgrep -f "peakypanes.*daemon" || true)"
+pids="$(pgrep -f "peky.*daemon" || true)"
 if [[ -z "$pids" ]]; then
   echo "reinit: no running daemon found"
-  ps -ax -o pid=,command= | rg "peakypanes" || true
+  ps -ax -o pid=,command= | rg "peky" || true
 else
   echo "reinit: stopping daemon(s): $pids"
   kill "$pids" || true
 fi
 
 if [[ "$kill_all" == true ]]; then
-  ui_pids="$(pgrep -x "peakypanes" || true)"
+  ui_pids="$(pgrep -x "peky" || true)"
   if [[ -n "$ui_pids" ]]; then
     echo "reinit: stopping UI process(es): $ui_pids"
     kill "$ui_pids" || true
@@ -41,24 +41,24 @@ fi
 
 sleep 0.5
 
-still_running="$(pgrep -f "peakypanes.*daemon" || true)"
+still_running="$(pgrep -f "peky.*daemon" || true)"
 if [[ -n "$still_running" ]]; then
   echo "reinit: force-killing daemon(s): $still_running"
   kill -9 "$still_running" || true
 fi
 
 if [[ "$kill_all" == true ]]; then
-  still_ui="$(pgrep -x "peakypanes" || true)"
+  still_ui="$(pgrep -x "peky" || true)"
   if [[ -n "$still_ui" ]]; then
     echo "reinit: force-killing UI process(es): $still_ui"
     kill -9 "$still_ui" || true
   fi
 fi
 
-if [[ ! -x "$peak_bin" ]]; then
-  echo "reinit: peakypanes binary not found at $peak_bin" >&2
+if [[ ! -x "$peky_bin" ]]; then
+  echo "reinit: peky binary not found at $peky_bin" >&2
   exit 1
 fi
 
 echo "reinit: restarting daemon"
-"$peak_bin" daemon restart -y
+"$peky_bin" daemon restart -y

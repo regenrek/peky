@@ -1,6 +1,6 @@
 # Dashboard and keybindings
 
-Running `peakypanes` with no subcommand opens the dashboard UI in the current terminal.
+Running `peky` with no subcommand opens the dashboard UI in the current terminal.
 
 The dashboard shows:
 - Projects on top (tabs)

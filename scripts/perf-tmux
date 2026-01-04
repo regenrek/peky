@@ -22,7 +22,7 @@ usage() {
 Usage: scripts/perf-tmux [options]
 
 Options:
-  --layout <path>             Use a peakypanes layout (command + broadcast_send)
+  --layout <path>             Use a peky layout (command + broadcast_send)
   --panes <n>                 Number of panes (default: 10)
   --poll-ms <ms>              Poll interval for capture (default: 50)
   --startup-timeout-ms <ms>   Timeout waiting for BOOT line (default: 30000)

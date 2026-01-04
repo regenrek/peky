@@ -9,6 +9,7 @@ import (
 
 	"github.com/regenrek/peakypanes/internal/cli/output"
 	"github.com/regenrek/peakypanes/internal/cli/root"
+	"github.com/regenrek/peakypanes/internal/identity"
 	"github.com/regenrek/peakypanes/internal/layout"
 )
 
@@ -26,11 +27,12 @@ func runInit(ctx root.CommandContext) error {
 		layoutName = layout.DefaultLayoutName
 	}
 	force := ctx.Cmd.Bool("force")
+	appName := identity.NormalizeCLIName(ctx.Deps.AppName)
 	var err error
 	if local {
-		err = initLocal(layoutName, force)
+		err = initLocal(appName, layoutName, force)
 	} else {
-		err = initGlobal(layoutName, force)
+		err = initGlobal(appName, layoutName, force)
 	}
 	if err != nil {
 		return err
@@ -45,7 +47,7 @@ func runInit(ctx root.CommandContext) error {
 	return nil
 }
 
-func initLocal(layoutName string, force bool) error {
+func initLocal(appName, layoutName string, force bool) error {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("cannot determine current directory: %w", err)
@@ -66,7 +68,7 @@ func initLocal(layoutName string, force bool) error {
 	projectName := filepath.Base(cwd)
 	content := fmt.Sprintf(`# Peaky Panes - Project Layout Configuration
 # This file defines the Peaky Panes layout for this project.
-# Teammates with peakypanes installed will get this layout automatically.
+# Teammates with %s installed will get this layout automatically.
 #
 # Variables: ${PROJECT_NAME}, ${PROJECT_PATH}, ${EDITOR}, or any env var
 # Use ${VAR:-default} for defaults
@@ -74,7 +76,7 @@ func initLocal(layoutName string, force bool) error {
 session: %s
 
 layout:
-`, projectName)
+`, appName, projectName)
 
 	yamlContent, err := baseLayout.ToYAML()
 	if err != nil {
@@ -98,13 +100,13 @@ layout:
 	fmt.Printf("✨ Created %s\n", configPath)
 	fmt.Printf("   Based on layout: %s\n", layoutName)
 	fmt.Printf("\n   Edit it to customize, then:\n")
-	fmt.Printf("   • Run 'peakypanes start' to start the session\n")
-	fmt.Printf("   • Run 'peakypanes' to open the dashboard\n")
+	fmt.Printf("   • Run '%s start' to start the session\n", appName)
+	fmt.Printf("   • Run '%s' to open the dashboard\n", appName)
 	fmt.Printf("   • Commit to git so teammates get the same layout\n")
 	return nil
 }
 
-func initGlobal(layoutName string, force bool) error {
+func initGlobal(appName, layoutName string, force bool) error {
 	configPath, err := layout.DefaultConfigPath()
 	if err != nil {
 		return fmt.Errorf("cannot determine config path: %w", err)
@@ -219,9 +221,9 @@ tools:
 	fmt.Printf("   Config: %s\n", configPath)
 	fmt.Printf("   Layouts: %s\n\n", layoutsDir)
 	fmt.Printf("   Next steps:\n")
-	fmt.Printf("   • Run 'peakypanes layouts' to see available layouts\n")
-	fmt.Printf("   • Run 'peakypanes init --local' in a project to create .peakypanes.yml\n")
-	fmt.Printf("   • Run 'peakypanes start' in any directory to start a session\n")
-	fmt.Printf("   • Run 'peakypanes' to open the dashboard\n")
+	fmt.Printf("   • Run '%s layouts' to see available layouts\n", appName)
+	fmt.Printf("   • Run '%s init --local' in a project to create .peakypanes.yml\n", appName)
+	fmt.Printf("   • Run '%s start' in any directory to start a session\n", appName)
+	fmt.Printf("   • Run '%s' to open the dashboard\n", appName)
 	return nil
 }

@@ -3,8 +3,8 @@
 Run unit tests with coverage:
 
 ```bash
-go test ./... -coverprofile /tmp/peakypanes.cover
-go tool cover -func /tmp/peakypanes.cover | tail -n 1
+go test ./... -coverprofile /tmp/peky.cover
+go tool cover -func /tmp/peky.cover | tail -n 1
 ```
 
 Race tests:
@@ -20,13 +20,13 @@ scripts/fresh-run
 scripts/fresh-run X.Y.Z --with-project
 ```
 
-CLI smoke run (builds `./bin/peakypanes`, starts daemon, runs core commands):
+CLI smoke run (builds `./bin/peky`, starts daemon, runs core commands):
 
 ```bash
 scripts/cli-smoke.sh
 ```
 
-CLI stress battery (builds `./bin/peakypanes`, isolated runtime/config, heavy concurrency):
+CLI stress battery (builds `./bin/peky`, isolated runtime/config, heavy concurrency):
 
 ```bash
 scripts/cli-stress.sh
@@ -61,8 +61,8 @@ go test ./... -race
 2) **Coverage sanity check**
 
 ```bash
-go test ./... -coverprofile /tmp/peakypanes.cover
-go tool cover -func /tmp/peakypanes.cover | tail -n 1
+go test ./... -coverprofile /tmp/peky.cover
+go tool cover -func /tmp/peky.cover | tail -n 1
 ```
 
 3) **Perf baseline (dev-only)**

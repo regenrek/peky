@@ -47,9 +47,9 @@ cat <<EOF2
 Wrote: $CONFIG
 
 Next steps:
-  peakypanes start --path $OUT
+  peky start --path $OUT
 
 Notes:
   - This runs ${GRID_ROWS}x${GRID_COLS} panes with ~${RATE_MS}ms output cadence.
-  - Stop by closing the UI or killing the peakypanes process.
+  - Stop by closing the UI or killing the peky process.
 EOF2

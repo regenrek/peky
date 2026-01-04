@@ -170,10 +170,10 @@ Core layouts:
 
 ```bash
 # List all layouts
-peakypanes layouts
+peky layouts
 
 # Export a layout to customize
-peakypanes layouts export 3x3 > .peakypanes.yml
+peky layouts export 3x3 > .peakypanes.yml
 ```
 
 ## Layout detection order

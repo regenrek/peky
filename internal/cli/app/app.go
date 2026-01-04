@@ -3,6 +3,7 @@ package app
 import (
 	"github.com/regenrek/peakypanes/internal/cli/root"
 	"github.com/regenrek/peakypanes/internal/cli/spec"
+	"github.com/regenrek/peakypanes/internal/identity"
 )
 
 // NewRunner builds the CLI runner from the embedded spec.
@@ -11,6 +12,7 @@ func NewRunner(deps root.Dependencies) (*root.Runner, error) {
 	if err != nil {
 		return nil, err
 	}
+	specDoc.App.Name = identity.NormalizeCLIName(deps.AppName)
 	reg := root.NewRegistry()
 	registerAll(reg)
 	return root.NewRunner(specDoc, deps, reg)

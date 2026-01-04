@@ -28,7 +28,7 @@ Run all your projects and AI agents in one dashboard instead of juggling termina
 - 📁 **Project-local config** - Commit `.peakypanes.yml` to git for team sharing
 - 🏠 **Global config** - Define layouts once, use everywhere
 - 🔄 **Variable expansion** - Use `${EDITOR}`, `${PROJECT_PATH}`, etc.
-- 🎯 **Zero config** - Just run `peakypanes` in any directory
+- 🎯 **Zero config** - Just run `peky` in any directory
 - 🧠 **Native live previews** - Full TUI support (vim/htop) with live panes
 - 🧭 **Persistent native daemon** - Sessions keep running after the UI exits
 - 📜 **Scrollback + copy mode** - Navigate output and yank from native panes
@@ -43,7 +43,7 @@ Run all your projects and AI agents in one dashboard instead of juggling termina
 
 ```bash
 npm i -g peakypanes
-peakypanes
+peky
 ```
 
 **Run once with npx**
@@ -62,23 +62,25 @@ brew install regenrek/tap/peakypanes
 Using Go
 
 ```bash
-go install github.com/regenrek/peakypanes/cmd/peakypanes@latest
+go install github.com/regenrek/peakypanes/cmd/peky@latest
 ```
 
 ### Usage
 
 **Start a session (auto-detect layout):**
 ```bash
-peakypanes start
+peky start
 ```
 
 **Create project-local config (recommended for teams):**
 ```bash
 cd your-project
-peakypanes init --local
+peky init --local
 # Edit .peakypanes.yml
 git add .peakypanes.yml  # Share with team
 ```
+
+The CLI is `peky` (alias: `peakypanes`).
 
 ## Documentation
 
@@ -134,10 +136,10 @@ See `RELEASE-DOCS.md` for the full release checklist (tests, tag, GoReleaser, np
 
 ## For Teams
 
-1. Run `peakypanes init --local` in your project
+1. Run `peky init --local` in your project
 2. Customize `.peakypanes.yml` for your stack
 3. Commit to git
-4. Teammates install peakypanes and run `peakypanes` - done!
+4. Teammates install peakypanes and run `peky` (alias: `peakypanes`) - done!
 
 ## License
 

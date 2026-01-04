@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/regenrek/peakypanes/internal/identity"
 )
 
 const (
@@ -15,8 +17,8 @@ const (
 )
 
 var (
-	defaultBuildCmd = []string{"go", "build", "-o", "./peakypanes", "./cmd/peakypanes"}
-	defaultRunCmd   = []string{"./peakypanes"}
+	defaultBuildCmd = []string{"go", "build", "-o", "./" + identity.CLIName, "./cmd/peky"}
+	defaultRunCmd   = []string{"./" + identity.CLIName}
 	defaultWatch    = []string{"cmd", "internal", "assets", "go.mod", "go.sum"}
 	defaultExts     = []string{".go", ".mod", ".sum", ".yml", ".yaml", ".json", ".toml", ".md"}
 )
