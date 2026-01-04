@@ -265,3 +265,12 @@ func TestHandlerDoubleClickDetection(t *testing.T) {
 		t.Fatalf("expected different pane to be false")
 	}
 }
+
+func TestHandlerMotionDoesNotHitTestWhenNotInTerminalFocus(t *testing.T) {
+	var h Handler
+	h.UpdateDashboard(tea.MouseMsg{X: 1, Y: 1, Action: tea.MouseActionMotion, Button: tea.MouseButtonNone}, DashboardCallbacks{
+		HitHeader:     func(int, int) (HeaderHit, bool) { return HeaderHit{}, false },
+		HitPane:       func(int, int) (PaneHit, bool) { t.Fatalf("unexpected HitPane call"); return PaneHit{}, false },
+		TerminalFocus: func() bool { return false },
+	})
+}

@@ -47,14 +47,18 @@ func (h *Handler) UpdateDashboard(msg tea.MouseMsg, cb DashboardCallbacks) tea.C
 	if cmd, handled := h.handleHeaderClick(msg, cb); handled {
 		return cmd
 	}
-
-	hit, ok := cb.HitPane(msg.X, msg.Y)
 	if cb.TerminalFocus != nil && cb.TerminalFocus() {
+		hit, ok := cb.HitPane(msg.X, msg.Y)
 		return h.handleTerminalFocusMouse(msg, cb, hit, ok)
 	}
 	h.dragActive = false
 
-	if !isPrimaryClick(msg) || !ok {
+	if !isPrimaryClick(msg) {
+		return nil
+	}
+
+	hit, ok := cb.HitPane(msg.X, msg.Y)
+	if !ok {
 		return nil
 	}
 	return h.handlePaneClick(msg, cb, hit)
