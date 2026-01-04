@@ -65,6 +65,7 @@ Flags:
   --debug-events    Enable debug event logs (PEAKYPANES_DEBUG_EVENTS=1)
   --daemon-log PATH Override daemon log path used by auto-started daemon
   --debug-log PATH  Write debug event logs to a file
+  -- args...        Defaults to "start -y" when omitted
 USAGE
   exit 0
 fi

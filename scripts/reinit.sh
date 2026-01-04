@@ -26,9 +26,6 @@ pids="$(pgrep -f "peakypanes.*daemon" || true)"
 if [[ -z "$pids" ]]; then
   echo "reinit: no running daemon found"
   ps -ax -o pid=,command= | rg "peakypanes" || true
-  if [[ "$kill_all" != true ]]; then
-    exit 0
-  fi
 else
   echo "reinit: stopping daemon(s): $pids"
   kill "$pids" || true

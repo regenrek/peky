@@ -115,7 +115,7 @@ func parseConfig(args []string) (config, error) {
 
 	cmdArgs := fs.Args()
 	if len(cmdArgs) == 0 {
-		cmdArgs = []string{"start"}
+		cmdArgs = []string{"start", "-y"}
 	}
 
 	return config{
