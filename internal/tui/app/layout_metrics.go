@@ -15,16 +15,21 @@ type dashboardLayout struct {
 	footerHeight     int
 }
 
-func (m *Model) dashboardLayout() (dashboardLayout, bool) {
+func (m *Model) dashboardLayoutInternal(logCtx string) (dashboardLayout, bool) {
+	log := logCtx != ""
 	if m.width == 0 || m.height == 0 {
-		m.logPaneViewSkipGlobal("window_zero", "dashboardLayout")
+		if log {
+			m.logPaneViewSkipGlobal("window_zero", logCtx)
+		}
 		return dashboardLayout{}, false
 	}
 	h, v := appStyle.GetFrameSize()
 	contentWidth := m.width - h
 	contentHeight := m.height - v
 	if contentWidth <= 10 || contentHeight <= 6 {
-		m.logPaneViewSkipGlobal("content_too_small", "dashboardLayout")
+		if log {
+			m.logPaneViewSkipGlobal("content_too_small", logCtx)
+		}
 		return dashboardLayout{}, false
 	}
 
@@ -40,7 +45,9 @@ func (m *Model) dashboardLayout() (dashboardLayout, bool) {
 		bodyHeight = contentHeight - extraLines
 	}
 	if bodyHeight <= 0 {
-		m.logPaneViewSkipGlobal("body_height_invalid", "dashboardLayout")
+		if log {
+			m.logPaneViewSkipGlobal("body_height_invalid", logCtx)
+		}
 		return dashboardLayout{}, false
 	}
 
@@ -58,8 +65,12 @@ func (m *Model) dashboardLayout() (dashboardLayout, bool) {
 	}, true
 }
 
+func (m *Model) dashboardLayout() (dashboardLayout, bool) {
+	return m.dashboardLayoutInternal("dashboardLayout")
+}
+
 func (m *Model) dashboardBodyRect() (mouse.Rect, bool) {
-	layout, ok := m.dashboardLayout()
+	layout, ok := m.dashboardLayoutInternal("dashboardBodyRect")
 	if !ok {
 		return mouse.Rect{}, false
 	}
@@ -70,30 +81,15 @@ func (m *Model) dashboardBodyRect() (mouse.Rect, bool) {
 }
 
 func (m *Model) headerRect() (mouse.Rect, bool) {
-	if m.width == 0 || m.height == 0 {
-		m.logPaneViewSkipGlobal("window_zero", "headerRect")
+	layout, ok := m.dashboardLayoutInternal("headerRect")
+	if !ok {
 		return mouse.Rect{}, false
 	}
-	h, v := appStyle.GetFrameSize()
-	contentWidth := m.width - h
-	contentHeight := m.height - v
-	if contentWidth <= 10 || contentHeight <= 6 {
-		m.logPaneViewSkipGlobal("content_too_small", "headerRect")
-		return mouse.Rect{}, false
-	}
-
-	headerHeight := 1
-	if headerHeight <= 0 {
-		m.logPaneViewSkipGlobal("header_height_invalid", "headerRect")
-		return mouse.Rect{}, false
-	}
-
-	padTop, _, _, padLeft := appStyle.GetPadding()
-	return mouse.Rect{X: padLeft, Y: padTop, W: contentWidth, H: headerHeight}, true
+	return mouse.Rect{X: layout.padLeft, Y: layout.padTop, W: layout.contentWidth, H: layout.headerHeight}, true
 }
 
 func (m *Model) quickReplyRect() (mouse.Rect, bool) {
-	layout, ok := m.dashboardLayout()
+	layout, ok := m.dashboardLayoutInternal("quickReplyRect")
 	if !ok {
 		return mouse.Rect{}, false
 	}

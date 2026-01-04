@@ -94,7 +94,7 @@ type Model struct {
 
 	mouse mouse.Handler
 
-	oscPending string
+	oscEmit func(string)
 
 	cursorShape               cursorShape
 	cursorShapePending        cursorShape

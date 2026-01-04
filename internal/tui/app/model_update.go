@@ -102,12 +102,6 @@ var updateHandlers = map[reflect.Type]updateHandler{
 	reflect.TypeOf(cursorShapeFlushMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleCursorShapeFlush(msg.(cursorShapeFlushMsg))
 	},
-	reflect.TypeOf(oscClearMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
-		if m != nil {
-			m.oscPending = ""
-		}
-		return m, nil
-	},
 	reflect.TypeOf(refreshTickMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleRefreshTick(msg.(refreshTickMsg))
 	},

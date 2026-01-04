@@ -66,11 +66,32 @@ func (w *Window) handleMouseWheel(event uv.MouseWheelEvent) bool {
 		return w.forwardMouseToTerm(event)
 	}
 
-	// Normal screen: wheel always scrolls the viewport (history), regardless of
-	// copy mode or mouse reporting. This keeps selections anchored and avoids
-	// "selection grows while scrolling" behavior.
+	// Copy/scrollback views: wheel scrolls host viewport. This keeps selections
+	// anchored and avoids "selection grows while scrolling" behavior.
+	if w.CopyModeActive() || w.ScrollbackModeActive() || w.GetScrollbackOffset() > 0 {
+		sbLen := w.ScrollbackLen()
+		if sbLen <= 0 {
+			return true
+		}
+		step := w.mouseWheelStep(event.Mod)
+		switch event.Button {
+		case uv.MouseWheelUp:
+			w.ScrollUp(step)
+			return true
+		case uv.MouseWheelDown:
+			w.ScrollDown(step)
+			return true
+		default:
+			return false
+		}
+	}
+
 	sbLen := w.ScrollbackLen()
-	if sbLen <= 0 && w.GetScrollbackOffset() == 0 {
+	if sbLen <= 0 {
+		// No host scrollback available: forward to app if it requested mouse reporting.
+		if w.HasMouseMode() {
+			return w.forwardMouseToTerm(event)
+		}
 		return false
 	}
 

@@ -4,6 +4,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/regenrek/peakypanes/internal/tui/mouse"
 )
 
 type cursorShape int
@@ -30,8 +32,6 @@ func oscForCursorShape(shape cursorShape) string {
 type cursorShapeFlushMsg struct {
 	At time.Time
 }
-
-type oscClearMsg struct{}
 
 func (m *Model) updateCursorShape(msg tea.MouseMsg) tea.Cmd {
 	if m == nil {
@@ -123,23 +123,37 @@ func (m *Model) emitOSC(seq string) tea.Cmd {
 	if seq == "" {
 		return nil
 	}
-	m.oscPending = seq
-	return tea.Tick(0, func(time.Time) tea.Msg { return oscClearMsg{} })
+	if m.oscEmit != nil {
+		m.oscEmit(seq)
+		return nil
+	}
+	return tea.Printf("%s", seq)
 }
 
 func (m *Model) cursorShapeAt(x, y int) (cursorShape, bool) {
 	if m == nil || m.state != StateDashboard {
 		return cursorShapeUnknown, false
 	}
-	if rect, ok := m.quickReplyRect(); ok && rect.Contains(x, y) {
+	layout, ok := m.dashboardLayoutInternal("")
+	if !ok {
+		return cursorShapePointer, true
+	}
+
+	header := mouse.Rect{X: layout.padLeft, Y: layout.padTop, W: layout.contentWidth, H: layout.headerHeight}
+	if header.Contains(x, y) {
+		return cursorShapePointer, true
+	}
+
+	bodyY := layout.padTop + layout.headerHeight + layout.headerGap
+	body := mouse.Rect{X: layout.padLeft, Y: bodyY, W: layout.contentWidth, H: layout.bodyHeight}
+	if !body.Contains(x, y) {
+		return cursorShapePointer, true
+	}
+
+	quickReplyY := bodyY + layout.bodyHeight
+	quickReply := mouse.Rect{X: layout.padLeft, Y: quickReplyY, W: layout.contentWidth, H: layout.quickReplyHeight}
+	if quickReply.Contains(x, y) {
 		return cursorShapeText, true
-	}
-	if rect, ok := m.headerRect(); ok && rect.Contains(x, y) {
-		return cursorShapePointer, true
-	}
-	body, ok := m.dashboardBodyRect()
-	if !ok || !body.Contains(x, y) {
-		return cursorShapePointer, true
 	}
 
 	if m.tab == TabDashboard {

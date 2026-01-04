@@ -218,6 +218,8 @@ func TestMouseQuickReplyClickExitsTerminalFocus(t *testing.T) {
 func TestMouseMotionSetsCursorShapeTextOverDashboardBody(t *testing.T) {
 	m := newTestModel(t)
 	seedMouseTestData(m)
+	var emitted string
+	m.oscEmit = func(seq string) { emitted = seq }
 
 	body, ok := m.dashboardBodyRect()
 	if !ok {
@@ -227,14 +229,16 @@ func TestMouseMotionSetsCursorShapeTextOverDashboardBody(t *testing.T) {
 
 	_, _ = m.updateDashboardMouse(msg)
 
-	if got := m.oscPending; got != "\x1b]22;text\x07" {
-		t.Fatalf("oscPending=%q want %q", got, "\x1b]22;text\x07")
+	if emitted != "\x1b]22;text\x07" {
+		t.Fatalf("osc=%q want %q", emitted, "\x1b]22;text\x07")
 	}
 }
 
 func TestMouseMotionSetsCursorShapePointerOverHeader(t *testing.T) {
 	m := newTestModel(t)
 	seedMouseTestData(m)
+	var emitted string
+	m.oscEmit = func(seq string) { emitted = seq }
 
 	header, ok := m.headerRect()
 	if !ok {
@@ -244,7 +248,7 @@ func TestMouseMotionSetsCursorShapePointerOverHeader(t *testing.T) {
 
 	_, _ = m.updateDashboardMouse(msg)
 
-	if got := m.oscPending; got != "\x1b]22;pointer\x07" {
-		t.Fatalf("oscPending=%q want %q", got, "\x1b]22;pointer\x07")
+	if emitted != "\x1b]22;pointer\x07" {
+		t.Fatalf("osc=%q want %q", emitted, "\x1b]22;pointer\x07")
 	}
 }

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN_DIR="$ROOT_DIR/bin"
@@ -12,6 +13,48 @@ VIEW_STORM_PASSES="${VIEW_STORM_PASSES:-10}"
 VIEW_STORM_CONCURRENCY="${VIEW_STORM_CONCURRENCY:-8}"
 OUTPUT_FLOOD_LINES="${OUTPUT_FLOOD_LINES:-200000}"
 
+is_uint() {
+  [[ "${1:-}" =~ ^[0-9]+$ ]]
+}
+
+clamp_uint() {
+  local v="$1"
+  local min="$2"
+  local max="$3"
+  if [[ "$v" -lt "$min" ]]; then
+    echo "$min"
+    return
+  fi
+  if [[ "$v" -gt "$max" ]]; then
+    echo "$max"
+    return
+  fi
+  echo "$v"
+}
+
+validate_and_clamp_uint() {
+  local name="$1"
+  local v="$2"
+  local min="$3"
+  local max="$4"
+  if ! is_uint "$v"; then
+    echo "$name must be a non-negative integer (got: $v)" >&2
+    exit 1
+  fi
+  local clamped
+  clamped=$(clamp_uint "$v" "$min" "$max")
+  if [[ "$clamped" != "$v" ]]; then
+    echo "WARN: clamping $name=$v to $clamped (allowed range: $min..$max)" >&2
+  fi
+  echo "$clamped"
+}
+
+PANE_COUNT=$(validate_and_clamp_uint "PANE_COUNT" "$PANE_COUNT" 1 1000)
+VIEW_STORM_PANES=$(validate_and_clamp_uint "VIEW_STORM_PANES" "$VIEW_STORM_PANES" 1 500)
+VIEW_STORM_PASSES=$(validate_and_clamp_uint "VIEW_STORM_PASSES" "$VIEW_STORM_PASSES" 1 50)
+VIEW_STORM_CONCURRENCY=$(validate_and_clamp_uint "VIEW_STORM_CONCURRENCY" "$VIEW_STORM_CONCURRENCY" 1 32)
+OUTPUT_FLOOD_LINES=$(validate_and_clamp_uint "OUTPUT_FLOOD_LINES" "$OUTPUT_FLOOD_LINES" 1 2000000)
+
 mkdir -p "$BIN_DIR"
 
 if [[ "${SKIP_BUILD:-0}" != "1" ]]; then
@@ -21,6 +64,7 @@ fi
 
 RUNTIME_DIR="$(mktemp -d)"
 CONFIG_DIR="$(mktemp -d)"
+chmod 700 "$RUNTIME_DIR" "$CONFIG_DIR" >/dev/null 2>&1 || true
 export PEAKYPANES_RUNTIME_DIR="$RUNTIME_DIR"
 export PEAKYPANES_CONFIG_DIR="$CONFIG_DIR"
 export PEAKYPANES_FRESH_CONFIG=1

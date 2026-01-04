@@ -297,6 +297,38 @@ func TestMouseWheelNoScrollbackDoesNothing(t *testing.T) {
 	}
 }
 
+func TestMouseWheelForwardsToAppWhenMouseModeEnabledAndNoScrollback(t *testing.T) {
+	emu := &fakeEmu{
+		cols: 5,
+		rows: 3,
+		screen: [][]uv.Cell{
+			mkCellsLine("A0", 5),
+			mkCellsLine("A1", 5),
+			mkCellsLine("A2", 5),
+		},
+	}
+	w := &Window{
+		term:    emu,
+		cols:    5,
+		rows:    3,
+		updates: make(chan struct{}, 2),
+	}
+
+	w.updateMouseMode(ansi.ModeMouseX10, true)
+	if !w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelUp}) {
+		t.Fatalf("expected wheel handled when mouse mode enabled even without scrollback")
+	}
+	if emu.sentMouse == nil {
+		t.Fatalf("expected wheel forwarded to app")
+	}
+	if _, ok := emu.sentMouse.(uv.MouseWheelEvent); !ok {
+		t.Fatalf("expected forwarded event to be MouseWheelEvent, got %T", emu.sentMouse)
+	}
+	if w.GetScrollbackOffset() != 0 || w.ScrollbackModeActive() {
+		t.Fatalf("expected no scrollback state changes, offset=%d mode=%v", w.GetScrollbackOffset(), w.ScrollbackModeActive())
+	}
+}
+
 func TestMouseWheelScrollbackViewWithMouseModeEnabled(t *testing.T) {
 	emu := &fakeEmu{
 		cols: 5,
