@@ -5,6 +5,22 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.0.13 - 2026-01-04
+
+### Added
+- Pane-selection mouse routing to force host selection (distinct from term-capture app routing).
+- Dev helper `justfile` with common init/dev/watch shortcuts.
+
+### Changed
+- Selected pane previews use Lipgloss rendering even without terminal focus to show host-selection highlights.
+- Pane view rendering honors requested mode (no implicit ANSI↔Lipgloss switching).
+- Built-in layout defaults simplified and curated.
+
+### Fixed
+- Pane-selection drag selection now highlights reliably (including alt-screen).
+- Term-capture selection remains available with auto routing.
+- Mouse wheel/OSC handling stability improvements.
+
 ## 0.0.12 - 2026-01-04
 
 ### Fixed
