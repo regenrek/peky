@@ -7,6 +7,7 @@ import (
 	"github.com/muesli/termenv"
 
 	"github.com/regenrek/peakypanes/internal/native"
+	"github.com/regenrek/peakypanes/internal/terminal"
 )
 
 type paneViewWindow interface {
@@ -63,7 +64,7 @@ type sessionManager interface {
 	SwapPanes(sessionName, paneA, paneB string) error
 	SetPaneTool(paneID, tool string) error
 	SendInput(ctx context.Context, paneID string, input []byte) error
-	SendMouse(paneID string, event uv.MouseEvent) error
+	SendMouse(paneID string, event uv.MouseEvent, route terminal.MouseRoute) error
 	Window(paneID string) paneWindow
 	PaneTags(paneID string) ([]string, error)
 	AddPaneTags(paneID string, tags []string) ([]string, error)

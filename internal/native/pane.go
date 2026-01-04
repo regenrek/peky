@@ -392,7 +392,7 @@ func (m *Manager) SendInput(ctx context.Context, id string, input []byte) error 
 }
 
 // SendMouse forwards a mouse event to a pane and updates activity timestamp.
-func (m *Manager) SendMouse(id string, event uv.MouseEvent) error {
+func (m *Manager) SendMouse(id string, event uv.MouseEvent, route terminal.MouseRoute) error {
 	if m == nil {
 		return errors.New("native: manager is nil")
 	}
@@ -405,7 +405,7 @@ func (m *Manager) SendMouse(id string, event uv.MouseEvent) error {
 	if event == nil {
 		return nil
 	}
-	if pane.window.SendMouse(event) {
+	if pane.window.SendMouse(event, route) {
 		m.markActive(id)
 	}
 	return nil

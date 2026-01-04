@@ -6,9 +6,9 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 )
 
-func assertSendMouseHandled(t *testing.T, w *Window, event uv.MouseEvent, msg string) {
+func assertSendMouseHandled(t *testing.T, w *Window, event uv.MouseEvent, route MouseRoute, msg string) {
 	t.Helper()
-	if !w.SendMouse(event) {
+	if !w.SendMouse(event, route) {
 		t.Fatalf("%s", msg)
 	}
 }

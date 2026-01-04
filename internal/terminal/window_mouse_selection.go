@@ -6,12 +6,12 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 )
 
-func (w *Window) handleMouseSelection(event uv.MouseEvent) bool {
+func (w *Window) handleMouseSelection(event uv.MouseEvent, route MouseRoute) bool {
 	switch ev := event.(type) {
 	case uv.MouseClickEvent:
-		return w.handleMouseSelectPress(ev)
+		return w.handleMouseSelectPress(ev, route)
 	case uv.MouseMotionEvent:
-		return w.handleMouseSelectMotion(ev)
+		return w.handleMouseSelectMotion(ev, route)
 	case uv.MouseReleaseEvent:
 		return w.handleMouseSelectRelease(ev)
 	default:
@@ -26,14 +26,14 @@ func (w *Window) mouseNowTime() time.Time {
 	return w.mouseNow()
 }
 
-func (w *Window) handleMouseSelectPress(event uv.MouseClickEvent) bool {
+func (w *Window) handleMouseSelectPress(event uv.MouseClickEvent, route MouseRoute) bool {
 	if w == nil {
 		return false
 	}
 	if event.Button != uv.MouseLeft {
 		return false
 	}
-	if !w.shouldCaptureMouseForSelection(event.Mod) {
+	if !w.shouldCaptureMouseForSelection(event.Mod, route) {
 		return false
 	}
 
@@ -63,9 +63,9 @@ func (w *Window) handleMouseSelectPress(event uv.MouseClickEvent) bool {
 		w.setPendingMouseDrag(event, absX, absY, mouseSelectSingle)
 		return true
 	case 2:
-		return w.beginWordSelection(event, absX, absY)
+		return w.beginWordSelection(event, absX, absY, route)
 	case 3:
-		return w.beginLineSelection(event, absX, absY)
+		return w.beginLineSelection(event, absX, absY, route)
 	default:
 		return true
 	}
@@ -117,7 +117,7 @@ func (w *Window) clearSelectionOnSingleClick(absX, absY int) {
 	w.markDirty()
 }
 
-func (w *Window) beginWordSelection(event uv.MouseClickEvent, absX, absY int) bool {
+func (w *Window) beginWordSelection(event uv.MouseClickEvent, absX, absY int, route MouseRoute) bool {
 	startX, endX, ok := w.wordBoundsAt(absY, absX)
 	if !ok {
 		w.setPendingMouseDrag(event, absX, absY, mouseSelectWord)
@@ -126,7 +126,7 @@ func (w *Window) beginWordSelection(event uv.MouseClickEvent, absX, absY int) bo
 
 	wasCopyActive := w.CopyModeActive()
 	if !wasCopyActive {
-		w.EnterCopyMode()
+		w.enterCopyMode(route == MouseRouteHostSelection)
 	}
 
 	w.stateMu.Lock()
@@ -158,10 +158,10 @@ func (w *Window) beginWordSelection(event uv.MouseClickEvent, absX, absY int) bo
 	return true
 }
 
-func (w *Window) beginLineSelection(event uv.MouseClickEvent, absX, absY int) bool {
+func (w *Window) beginLineSelection(event uv.MouseClickEvent, absX, absY int, route MouseRoute) bool {
 	wasCopyActive := w.CopyModeActive()
 	if !wasCopyActive {
-		w.EnterCopyMode()
+		w.enterCopyMode(route == MouseRouteHostSelection)
 	}
 
 	startX := 0
@@ -222,7 +222,7 @@ func (w *Window) extendSelectionTo(absX, absY int) bool {
 	return true
 }
 
-func (w *Window) handleMouseSelectMotion(event uv.MouseMotionEvent) bool {
+func (w *Window) handleMouseSelectMotion(event uv.MouseMotionEvent, route MouseRoute) bool {
 	if w == nil {
 		return false
 	}
@@ -254,16 +254,16 @@ func (w *Window) handleMouseSelectMotion(event uv.MouseMotionEvent) bool {
 		if !mouseExceededDragThreshold(startX, startY, event.X, event.Y) {
 			return true
 		}
-		return w.startDragSelection(sbLen, pendingAbsX, pendingAbsY, absX, absY)
+		return w.startDragSelection(sbLen, pendingAbsX, pendingAbsY, absX, absY, route)
 	}
 
 	return w.updateDragSelection(sbLen, kind, anchorAbsY, anchorStartX, anchorEndX, absX, absY)
 }
 
-func (w *Window) startDragSelection(sbLen, startAbsX, startAbsY, endAbsX, endAbsY int) bool {
+func (w *Window) startDragSelection(sbLen, startAbsX, startAbsY, endAbsX, endAbsY int, route MouseRoute) bool {
 	wasCopyActive := w.CopyModeActive()
 	if !wasCopyActive {
-		w.EnterCopyMode()
+		w.enterCopyMode(route == MouseRouteHostSelection)
 	}
 	if !w.CopyModeActive() {
 		return false

@@ -8,6 +8,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 
 	"github.com/regenrek/peakypanes/internal/native"
+	"github.com/regenrek/peakypanes/internal/terminal"
 )
 
 type scopeSendManager struct {
@@ -53,11 +54,11 @@ func (m *scopeSendManager) SendInput(ctx context.Context, paneID string, input [
 	}
 	return nil
 }
-func (m *scopeSendManager) SendMouse(string, uv.MouseEvent) error             { return nil }
-func (m *scopeSendManager) Window(string) paneWindow                          { return nil }
-func (m *scopeSendManager) PaneTags(string) ([]string, error)                 { return nil, nil }
-func (m *scopeSendManager) AddPaneTags(string, []string) ([]string, error)    { return nil, nil }
-func (m *scopeSendManager) RemovePaneTags(string, []string) ([]string, error) { return nil, nil }
+func (m *scopeSendManager) SendMouse(string, uv.MouseEvent, terminal.MouseRoute) error { return nil }
+func (m *scopeSendManager) Window(string) paneWindow                                   { return nil }
+func (m *scopeSendManager) PaneTags(string) ([]string, error)                          { return nil, nil }
+func (m *scopeSendManager) AddPaneTags(string, []string) ([]string, error)             { return nil, nil }
+func (m *scopeSendManager) RemovePaneTags(string, []string) ([]string, error)          { return nil, nil }
 func (m *scopeSendManager) OutputSnapshot(string, int) ([]native.OutputLine, error) {
 	return nil, nil
 }

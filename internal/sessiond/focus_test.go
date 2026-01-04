@@ -8,6 +8,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 
 	"github.com/regenrek/peakypanes/internal/native"
+	"github.com/regenrek/peakypanes/internal/terminal"
 )
 
 type focusManager struct {
@@ -31,11 +32,13 @@ func (m *focusManager) RenamePane(string, string, string) error { return nil }
 func (m *focusManager) SplitPane(context.Context, string, string, bool, int) (string, error) {
 	return "", nil
 }
-func (m *focusManager) ClosePane(context.Context, string, string) error   { return nil }
-func (m *focusManager) SwapPanes(string, string, string) error            { return nil }
-func (m *focusManager) SetPaneTool(string, string) error                  { return nil }
-func (m *focusManager) SendInput(context.Context, string, []byte) error   { return nil }
-func (m *focusManager) SendMouse(string, uv.MouseEvent) error             { return nil }
+func (m *focusManager) ClosePane(context.Context, string, string) error { return nil }
+func (m *focusManager) SwapPanes(string, string, string) error          { return nil }
+func (m *focusManager) SetPaneTool(string, string) error                { return nil }
+func (m *focusManager) SendInput(context.Context, string, []byte) error { return nil }
+func (m *focusManager) SendMouse(string, uv.MouseEvent, terminal.MouseRoute) error {
+	return nil
+}
 func (m *focusManager) Window(string) paneWindow                          { return nil }
 func (m *focusManager) PaneTags(string) ([]string, error)                 { return nil, nil }
 func (m *focusManager) AddPaneTags(string, []string) ([]string, error)    { return nil, nil }

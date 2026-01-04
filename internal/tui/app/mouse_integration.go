@@ -143,6 +143,11 @@ func (m *Model) forwardMouseEvent(hit mouse.PaneHit, msg tea.MouseMsg) tea.Cmd {
 	if !ok {
 		return nil
 	}
+	if m.terminalFocus {
+		payload.Route = sessiond.MouseRouteApp
+	} else {
+		payload.Route = sessiond.MouseRouteHostSelection
+	}
 	if payload.Action == sessiond.MouseActionMotion && !m.paneMouseMotion[hit.PaneID] && !m.terminalMouseDrag {
 		return nil
 	}

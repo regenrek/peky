@@ -25,24 +25,43 @@ type assertError string
 func (e assertError) Error() string { return string(e) }
 
 func TestMousePayloadToEvent(t *testing.T) {
-	if _, ok := mousePayloadToEvent(MouseEventPayload{X: -1, Y: 0}); ok {
+	if _, _, ok := mousePayloadToEvent(MouseEventPayload{X: -1, Y: 0}); ok {
 		t.Fatalf("expected invalid payload")
 	}
 
-	if evt, ok := mousePayloadToEvent(MouseEventPayload{X: 1, Y: 2, Button: 1, Wheel: true}); !ok || evt == nil {
+	evt, route, ok := mousePayloadToEvent(MouseEventPayload{X: 1, Y: 2, Button: 1, Wheel: true})
+	if !ok || evt == nil {
 		t.Fatalf("expected wheel event")
 	}
+	if route != MouseRouteAuto {
+		t.Fatalf("expected auto route for wheel, got %q", route)
+	}
 
-	if evt, ok := mousePayloadToEvent(MouseEventPayload{X: 1, Y: 2, Button: 1, Action: MouseActionPress}); !ok || evt == nil {
+	evt, route, ok = mousePayloadToEvent(MouseEventPayload{X: 1, Y: 2, Button: 1, Action: MouseActionPress})
+	if !ok || evt == nil {
 		t.Fatalf("expected press event")
 	}
-	if evt, ok := mousePayloadToEvent(MouseEventPayload{X: 1, Y: 2, Button: 1, Action: MouseActionRelease}); !ok || evt == nil {
+	if route != MouseRouteAuto {
+		t.Fatalf("expected auto route for press, got %q", route)
+	}
+	evt, route, ok = mousePayloadToEvent(MouseEventPayload{X: 1, Y: 2, Button: 1, Action: MouseActionRelease})
+	if !ok || evt == nil {
 		t.Fatalf("expected release event")
 	}
-	if evt, ok := mousePayloadToEvent(MouseEventPayload{X: 1, Y: 2, Button: 1, Action: MouseActionMotion}); !ok || evt == nil {
+	if route != MouseRouteAuto {
+		t.Fatalf("expected auto route for release, got %q", route)
+	}
+	evt, route, ok = mousePayloadToEvent(MouseEventPayload{X: 1, Y: 2, Button: 1, Action: MouseActionMotion})
+	if !ok || evt == nil {
 		t.Fatalf("expected motion event")
 	}
-	if _, ok := mousePayloadToEvent(MouseEventPayload{X: 1, Y: 2, Button: 1, Action: MouseActionUnknown}); ok {
+	if route != MouseRouteAuto {
+		t.Fatalf("expected auto route for motion, got %q", route)
+	}
+	if _, _, ok := mousePayloadToEvent(MouseEventPayload{X: 1, Y: 2, Button: 1, Action: MouseActionUnknown}); ok {
 		t.Fatalf("expected unknown action to be invalid")
+	}
+	if _, _, ok := mousePayloadToEvent(MouseEventPayload{X: 1, Y: 2, Button: 1, Action: MouseActionPress, Route: MouseRoute("bogus")}); ok {
+		t.Fatalf("expected invalid route to be rejected")
 	}
 }

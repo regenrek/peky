@@ -11,6 +11,7 @@ import (
 	"github.com/muesli/termenv"
 
 	"github.com/regenrek/peakypanes/internal/native"
+	"github.com/regenrek/peakypanes/internal/terminal"
 )
 
 type fakeManager struct {
@@ -78,8 +79,9 @@ func (m *fakeManager) SendInput(_ context.Context, paneID string, input []byte) 
 	m.inputs = append(m.inputs, append([]byte(nil), input...))
 	return nil
 }
-func (m *fakeManager) SendMouse(paneID string, event uv.MouseEvent) error {
+func (m *fakeManager) SendMouse(paneID string, event uv.MouseEvent, route terminal.MouseRoute) error {
 	m.lastMouse = event
+	_ = route
 	return nil
 }
 func (m *fakeManager) Window(paneID string) paneWindow {

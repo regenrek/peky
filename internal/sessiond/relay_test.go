@@ -56,7 +56,9 @@ func (m *fakeRelayManager) SendInput(_ context.Context, paneID string, input []b
 	}
 	return nil
 }
-func (m *fakeRelayManager) SendMouse(string, uv.MouseEvent) error             { return nil }
+func (m *fakeRelayManager) SendMouse(string, uv.MouseEvent, terminal.MouseRoute) error {
+	return nil
+}
 func (m *fakeRelayManager) Window(string) paneWindow                          { return nil }
 func (m *fakeRelayManager) PaneTags(string) ([]string, error)                 { return nil, nil }
 func (m *fakeRelayManager) AddPaneTags(string, []string) ([]string, error)    { return nil, nil }

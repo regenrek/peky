@@ -24,7 +24,7 @@ func TestMouseModesAndSendMouse(t *testing.T) {
 	}
 
 	click := uv.MouseClickEvent{X: 1, Y: 1, Button: uv.MouseLeft}
-	if !w.SendMouse(click) {
+	if !w.SendMouse(click, MouseRouteAuto) {
 		t.Fatalf("expected SendMouse to succeed")
 	}
 	if emu.sentMouse == nil {
@@ -34,7 +34,7 @@ func TestMouseModesAndSendMouse(t *testing.T) {
 	emu.sentMouse = nil
 	w2 := &Window{term: emu}
 	w2.updateMouseMode(ansi.ModeMouseX10, true)
-	if w2.SendMouse(uv.MouseMotionEvent{X: 1, Y: 1}) {
+	if w2.SendMouse(uv.MouseMotionEvent{X: 1, Y: 1}, MouseRouteAuto) {
 		t.Fatalf("expected motion event blocked without motion mode")
 	}
 }
@@ -64,7 +64,7 @@ func TestMouseWheelScrollbackSteps(t *testing.T) {
 	}
 
 	// Default: 3 lines per wheel tick.
-	if !w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelUp}) {
+	if !w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelUp}, MouseRouteAuto) {
 		t.Fatalf("expected wheel event handled for scrollback")
 	}
 	if got := w.GetScrollbackOffset(); got != 3 {
@@ -83,7 +83,7 @@ func TestMouseWheelScrollbackSteps(t *testing.T) {
 	}
 
 	// Shift: 1 line per tick.
-	if !w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelUp, Mod: uv.ModShift}) {
+	if !w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelUp, Mod: uv.ModShift}, MouseRouteAuto) {
 		t.Fatalf("expected wheel+shift handled for scrollback")
 	}
 	if got := w.GetScrollbackOffset(); got != 1 {
@@ -93,7 +93,7 @@ func TestMouseWheelScrollbackSteps(t *testing.T) {
 	w.ExitScrollback()
 
 	// Ctrl: page (rows-1) per tick. rows=3 => 2 lines.
-	if !w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelUp, Mod: uv.ModCtrl}) {
+	if !w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelUp, Mod: uv.ModCtrl}, MouseRouteAuto) {
 		t.Fatalf("expected wheel+ctrl handled for scrollback")
 	}
 	if got := w.GetScrollbackOffset(); got != 2 {
@@ -125,7 +125,7 @@ func TestMouseWheelScrollbackAutoExitAtBottom(t *testing.T) {
 		updates: make(chan struct{}, 10),
 	}
 
-	_ = w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelUp})
+	_ = w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelUp}, MouseRouteAuto)
 	if w.GetScrollbackOffset() == 0 {
 		t.Fatalf("expected scrollback offset > 0 after wheel up")
 	}
@@ -133,7 +133,7 @@ func TestMouseWheelScrollbackAutoExitAtBottom(t *testing.T) {
 		t.Fatalf("expected scrollback mode active after wheel up")
 	}
 
-	_ = w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelDown})
+	_ = w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelDown}, MouseRouteAuto)
 	if w.GetScrollbackOffset() != 0 {
 		t.Fatalf("expected scrollback offset 0, got %d", w.GetScrollbackOffset())
 	}
@@ -173,7 +173,7 @@ func TestMouseWheelCopyModeMovesCursor(t *testing.T) {
 	}
 
 	beforeY := w.CopyMode.CursorAbsY
-	if !w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelUp}) {
+	if !w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelUp}, MouseRouteAuto) {
 		t.Fatalf("expected wheel handled in copy mode")
 	}
 	afterY := w.CopyMode.CursorAbsY
@@ -194,7 +194,7 @@ func TestMouseWheelCopyModeMovesCursor(t *testing.T) {
 	}
 	beforeStartX, beforeStartY := w.CopyMode.SelStartX, w.CopyMode.SelStartAbsY
 	beforeEndX, beforeEndY := w.CopyMode.SelEndX, w.CopyMode.SelEndAbsY
-	if !w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelDown}) {
+	if !w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelDown}, MouseRouteAuto) {
 		t.Fatalf("expected wheel handled in copy mode while selecting")
 	}
 	if w.CopyMode.SelStartX != beforeStartX || w.CopyMode.SelStartAbsY != beforeStartY || w.CopyMode.SelEndX != beforeEndX || w.CopyMode.SelEndAbsY != beforeEndY {
@@ -214,7 +214,7 @@ func TestMouseWheelAltScreenForwarding(t *testing.T) {
 	w.altScreen.Store(true)
 
 	// Without mouse mode, wheel should be ignored in alt-screen.
-	if w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelUp}) {
+	if w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelUp}, MouseRouteAuto) {
 		t.Fatalf("expected wheel ignored in alt-screen without mouse mode")
 	}
 	if emu.sentMouse != nil {
@@ -223,7 +223,7 @@ func TestMouseWheelAltScreenForwarding(t *testing.T) {
 
 	// With mouse mode, wheel should be forwarded to the app.
 	w.updateMouseMode(ansi.ModeMouseX10, true)
-	if !w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelUp}) {
+	if !w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelUp}, MouseRouteAuto) {
 		t.Fatalf("expected wheel forwarded in alt-screen when mouse mode enabled")
 	}
 	if emu.sentMouse == nil {
@@ -262,7 +262,7 @@ func TestMouseWheelScrollbackOverridesMouseMode(t *testing.T) {
 	}
 
 	w.updateMouseMode(ansi.ModeMouseX10, true)
-	if !w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelUp}) {
+	if !w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelUp}, MouseRouteAuto) {
 		t.Fatalf("expected wheel handled for scrollback even when mouse mode enabled")
 	}
 	if emu.sentMouse != nil {
@@ -289,7 +289,7 @@ func TestMouseWheelNoScrollbackDoesNothing(t *testing.T) {
 		rows:    3,
 		updates: make(chan struct{}, 2),
 	}
-	if w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelUp}) {
+	if w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelUp}, MouseRouteAuto) {
 		t.Fatalf("expected wheel unhandled when scrollback is empty and mouse mode disabled")
 	}
 	if w.GetScrollbackOffset() != 0 || w.ScrollbackModeActive() {
@@ -315,7 +315,7 @@ func TestMouseWheelForwardsToAppWhenMouseModeEnabledAndNoScrollback(t *testing.T
 	}
 
 	w.updateMouseMode(ansi.ModeMouseX10, true)
-	if !w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelUp}) {
+	if !w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelUp}, MouseRouteAuto) {
 		t.Fatalf("expected wheel handled when mouse mode enabled even without scrollback")
 	}
 	if emu.sentMouse == nil {
@@ -360,7 +360,7 @@ func TestMouseWheelScrollbackViewWithMouseModeEnabled(t *testing.T) {
 	}
 
 	emu.sentMouse = nil
-	if !w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelUp}) {
+	if !w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelUp}, MouseRouteAuto) {
 		t.Fatalf("expected wheel handled in scrollback view even with mouse mode enabled")
 	}
 	if w.GetScrollbackOffset() != 3 {
@@ -371,7 +371,7 @@ func TestMouseWheelScrollbackViewWithMouseModeEnabled(t *testing.T) {
 	}
 
 	emu.sentMouse = nil
-	_ = w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelDown})
+	_ = w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelDown}, MouseRouteAuto)
 	if w.GetScrollbackOffset() != 0 {
 		t.Fatalf("expected offset back to 0, got %d", w.GetScrollbackOffset())
 	}

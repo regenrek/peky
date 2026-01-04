@@ -16,6 +16,7 @@ import (
 	"github.com/regenrek/peakypanes/internal/limits"
 	"github.com/regenrek/peakypanes/internal/native"
 	"github.com/regenrek/peakypanes/internal/sessionpolicy"
+	"github.com/regenrek/peakypanes/internal/terminal"
 )
 
 func (d *Daemon) requireManager() (sessionManager, error) {
@@ -428,7 +429,7 @@ func (d *Daemon) handleSendMouse(payload []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	event, ok := mousePayloadToEvent(req.Event)
+	event, route, ok := mousePayloadToEvent(req.Event)
 	if !ok {
 		return nil, nil
 	}
@@ -436,7 +437,7 @@ func (d *Daemon) handleSendMouse(payload []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := manager.SendMouse(paneID, event); err != nil {
+	if err := manager.SendMouse(paneID, event, route); err != nil {
 		return nil, err
 	}
 	return nil, nil
@@ -633,9 +634,13 @@ func (d *Daemon) startSessionWithLayout(name, path, layoutName string, layoutCon
 	return err
 }
 
-func mousePayloadToEvent(payload MouseEventPayload) (uv.MouseEvent, bool) {
+func mousePayloadToEvent(payload MouseEventPayload) (uv.MouseEvent, terminal.MouseRoute, bool) {
 	if payload.X < 0 || payload.Y < 0 {
-		return nil, false
+		return nil, terminal.MouseRouteAuto, false
+	}
+	route, ok := terminal.ParseMouseRoute(string(payload.Route))
+	if !ok {
+		return nil, terminal.MouseRouteAuto, false
 	}
 	mod := uv.KeyMod(0)
 	if payload.Shift {
@@ -649,16 +654,16 @@ func mousePayloadToEvent(payload MouseEventPayload) (uv.MouseEvent, bool) {
 	}
 	mouse := uv.Mouse{X: payload.X, Y: payload.Y, Button: uv.MouseButton(payload.Button), Mod: mod}
 	if payload.Wheel {
-		return uv.MouseWheelEvent(mouse), true
+		return uv.MouseWheelEvent(mouse), route, true
 	}
 	switch payload.Action {
 	case MouseActionPress:
-		return uv.MouseClickEvent(mouse), true
+		return uv.MouseClickEvent(mouse), route, true
 	case MouseActionRelease:
-		return uv.MouseReleaseEvent(mouse), true
+		return uv.MouseReleaseEvent(mouse), route, true
 	case MouseActionMotion:
-		return uv.MouseMotionEvent(mouse), true
+		return uv.MouseMotionEvent(mouse), route, true
 	default:
-		return nil, false
+		return nil, terminal.MouseRouteAuto, false
 	}
 }

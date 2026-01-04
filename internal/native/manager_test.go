@@ -146,7 +146,7 @@ func TestSendInputMouseErrors(t *testing.T) {
 	if err := m.SendInput(context.Background(), "missing", []byte("hi")); err == nil {
 		t.Fatalf("SendInput() should fail on missing pane")
 	}
-	if err := m.SendMouse("missing", nil); err == nil {
+	if err := m.SendMouse("missing", nil, terminal.MouseRouteAuto); err == nil {
 		t.Fatalf("SendMouse() should fail on missing pane")
 	}
 

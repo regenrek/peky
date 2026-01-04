@@ -137,8 +137,15 @@ func (w *Window) mouseAbsFromViewport(x, y int) (absX, absY, sbLen int, ok bool)
 	return absX, absY, sbLen, true
 }
 
-func (w *Window) shouldCaptureMouseForSelection(mod uv.KeyMod) bool {
+func (w *Window) shouldCaptureMouseForSelection(mod uv.KeyMod, route MouseRoute) bool {
 	if w == nil {
+		return false
+	}
+
+	if route == MouseRouteHostSelection {
+		return true
+	}
+	if route == MouseRouteApp {
 		return false
 	}
 
@@ -229,7 +236,7 @@ func (w *Window) AllowsMouseMotion() bool {
 	return modes&(mouseModeButtonEvent|mouseModeAnyEvent) != 0
 }
 
-func (w *Window) SendMouse(event uv.MouseEvent) bool {
+func (w *Window) SendMouse(event uv.MouseEvent, route MouseRoute) bool {
 	if w == nil || event == nil {
 		return false
 	}
@@ -245,9 +252,15 @@ func (w *Window) SendMouse(event uv.MouseEvent) bool {
 		return true
 	}
 
-	// Host-level drag selection when the app is not capturing mouse (or Shift is held).
-	if w.handleMouseSelection(event) {
+	if route == MouseRouteHostSelection {
+		_ = w.handleMouseSelection(event, route)
 		return true
+	}
+	if route != MouseRouteApp {
+		// Host-level drag selection when the app is not capturing mouse (or Shift is held).
+		if w.handleMouseSelection(event, route) {
+			return true
+		}
 	}
 
 	if !w.allowMouseForwarding(event) {
@@ -263,9 +276,9 @@ func (w *Window) handleMouseInHostModes(event uv.MouseEvent) bool {
 	}
 	switch ev := event.(type) {
 	case uv.MouseClickEvent:
-		_ = w.handleMouseSelectPress(ev)
+		_ = w.handleMouseSelectPress(ev, MouseRouteHostSelection)
 	case uv.MouseMotionEvent:
-		_ = w.handleMouseSelectMotion(ev)
+		_ = w.handleMouseSelectMotion(ev, MouseRouteHostSelection)
 	case uv.MouseReleaseEvent:
 		_ = w.handleMouseSelectRelease(ev)
 	}

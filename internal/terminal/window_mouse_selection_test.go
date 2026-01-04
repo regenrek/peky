@@ -37,12 +37,12 @@ func TestMouseDragSelectionEntersCopyMode(t *testing.T) {
 	assertCopyModeInactive(t, w)
 
 	emu.sentMouse = nil
-	assertSendMouseHandled(t, w, uv.MouseClickEvent{X: 1, Y: 0, Button: uv.MouseLeft}, "expected click handled for selection candidate")
+	assertSendMouseHandled(t, w, uv.MouseClickEvent{X: 1, Y: 0, Button: uv.MouseLeft}, MouseRouteAuto, "expected click handled for selection candidate")
 	assertCopyModeInactive(t, w)
 	assertMouseNotForwarded(t, emu)
 
 	emu.sentMouse = nil
-	assertSendMouseHandled(t, w, uv.MouseMotionEvent{X: 3, Y: 2, Button: uv.MouseNone}, "expected drag motion to start selection")
+	assertSendMouseHandled(t, w, uv.MouseMotionEvent{X: 3, Y: 2, Button: uv.MouseNone}, MouseRouteAuto, "expected drag motion to start selection")
 	assertCopyModeActive(t, w)
 	assertCopySelecting(t, w)
 	assertMouseSelectionActive(t, w)
@@ -52,7 +52,7 @@ func TestMouseDragSelectionEntersCopyMode(t *testing.T) {
 	assertMouseNotForwarded(t, emu)
 
 	emu.sentMouse = nil
-	assertSendMouseHandled(t, w, uv.MouseReleaseEvent{X: 3, Y: 2, Button: uv.MouseLeft}, "expected release handled for selection")
+	assertSendMouseHandled(t, w, uv.MouseReleaseEvent{X: 3, Y: 2, Button: uv.MouseLeft}, MouseRouteAuto, "expected release handled for selection")
 	assertMouseSelectionActive(t, w)
 	assertCopyModeActive(t, w)
 	assertCopySelecting(t, w)
@@ -87,13 +87,13 @@ func TestMouseSelectionAutoCopiesOnRelease(t *testing.T) {
 		toast = message
 	}
 
-	if !w.SendMouse(uv.MouseClickEvent{X: 0, Y: 0, Button: uv.MouseLeft}) {
+	if !w.SendMouse(uv.MouseClickEvent{X: 0, Y: 0, Button: uv.MouseLeft}, MouseRouteAuto) {
 		t.Fatalf("expected click handled for selection candidate")
 	}
-	if !w.SendMouse(uv.MouseMotionEvent{X: 4, Y: 0, Button: uv.MouseNone}) {
+	if !w.SendMouse(uv.MouseMotionEvent{X: 4, Y: 0, Button: uv.MouseNone}, MouseRouteAuto) {
 		t.Fatalf("expected motion to extend selection")
 	}
-	if !w.SendMouse(uv.MouseReleaseEvent{X: 4, Y: 0, Button: uv.MouseLeft}) {
+	if !w.SendMouse(uv.MouseReleaseEvent{X: 4, Y: 0, Button: uv.MouseLeft}, MouseRouteAuto) {
 		t.Fatalf("expected release to finish selection")
 	}
 	if copied == "" {
@@ -126,7 +126,7 @@ func TestMouseSelectionDoesNotStealMouseWhenMouseModeEnabled(t *testing.T) {
 	w.updateMouseMode(ansi.ModeMouseX10, true)
 
 	emu.sentMouse = nil
-	if !w.SendMouse(uv.MouseClickEvent{X: 1, Y: 0, Button: uv.MouseLeft}) {
+	if !w.SendMouse(uv.MouseClickEvent{X: 1, Y: 0, Button: uv.MouseLeft}, MouseRouteAuto) {
 		t.Fatalf("expected click forwarded when mouse mode enabled")
 	}
 	if emu.sentMouse == nil {
@@ -138,7 +138,7 @@ func TestMouseSelectionDoesNotStealMouseWhenMouseModeEnabled(t *testing.T) {
 
 	// Shift bypass should start host selection instead of forwarding.
 	emu.sentMouse = nil
-	if !w.SendMouse(uv.MouseClickEvent{X: 2, Y: 1, Button: uv.MouseLeft, Mod: uv.ModShift}) {
+	if !w.SendMouse(uv.MouseClickEvent{X: 2, Y: 1, Button: uv.MouseLeft, Mod: uv.ModShift}, MouseRouteAuto) {
 		t.Fatalf("expected shift+click handled for host selection")
 	}
 	assertCopyModeInactive(t, w)
@@ -147,11 +147,48 @@ func TestMouseSelectionDoesNotStealMouseWhenMouseModeEnabled(t *testing.T) {
 	}
 
 	emu.sentMouse = nil
-	if !w.SendMouse(uv.MouseMotionEvent{X: 3, Y: 1, Button: uv.MouseNone, Mod: uv.ModShift}) {
+	if !w.SendMouse(uv.MouseMotionEvent{X: 3, Y: 1, Button: uv.MouseNone, Mod: uv.ModShift}, MouseRouteAuto) {
 		t.Fatalf("expected drag to start host selection")
 	}
 	if !w.CopyModeActive() {
 		t.Fatalf("expected copy mode entered after drag threshold")
+	}
+	if emu.sentMouse != nil {
+		t.Fatalf("expected host selection drag not forwarded to app")
+	}
+}
+
+func TestMouseSelectionHostRouteInAltScreen(t *testing.T) {
+	emu := &fakeEmu{
+		cols: 5,
+		rows: 2,
+		alt:  true,
+		screen: [][]uv.Cell{
+			mkCellsLine("A0", 5),
+			mkCellsLine("A1", 5),
+		},
+	}
+	w := &Window{
+		term:    emu,
+		cols:    5,
+		rows:    2,
+		updates: make(chan struct{}, 2),
+	}
+	w.updateMouseMode(ansi.ModeMouseX10, true)
+
+	emu.sentMouse = nil
+	if !w.SendMouse(uv.MouseClickEvent{X: 1, Y: 0, Button: uv.MouseLeft}, MouseRouteHostSelection) {
+		t.Fatalf("expected click handled for host selection route")
+	}
+	if emu.sentMouse != nil {
+		t.Fatalf("expected host selection click not forwarded to app")
+	}
+
+	if !w.SendMouse(uv.MouseMotionEvent{X: 3, Y: 0, Button: uv.MouseNone}, MouseRouteHostSelection) {
+		t.Fatalf("expected drag motion handled for host selection route")
+	}
+	if !w.CopyModeActive() {
+		t.Fatalf("expected copy mode entered in alt-screen for host selection")
 	}
 	if emu.sentMouse != nil {
 		t.Fatalf("expected host selection drag not forwarded to app")
@@ -173,10 +210,10 @@ func TestMouseClickDoesNotSelectWithoutDrag(t *testing.T) {
 		updates: make(chan struct{}, 2),
 	}
 
-	if !w.SendMouse(uv.MouseClickEvent{X: 1, Y: 0, Button: uv.MouseLeft}) {
+	if !w.SendMouse(uv.MouseClickEvent{X: 1, Y: 0, Button: uv.MouseLeft}, MouseRouteAuto) {
 		t.Fatalf("expected click handled")
 	}
-	if !w.SendMouse(uv.MouseReleaseEvent{X: 1, Y: 0, Button: uv.MouseLeft}) {
+	if !w.SendMouse(uv.MouseReleaseEvent{X: 1, Y: 0, Button: uv.MouseLeft}, MouseRouteAuto) {
 		t.Fatalf("expected release handled")
 	}
 	if w.CopyModeActive() {
@@ -212,13 +249,13 @@ func TestMouseWheelDoesNotGrowSelection(t *testing.T) {
 	defer func() { writeClipboard = orig }()
 	writeClipboard = func(string) error { return nil }
 
-	if !w.SendMouse(uv.MouseClickEvent{X: 1, Y: 0, Button: uv.MouseLeft}) {
+	if !w.SendMouse(uv.MouseClickEvent{X: 1, Y: 0, Button: uv.MouseLeft}, MouseRouteAuto) {
 		t.Fatalf("expected click handled")
 	}
-	if !w.SendMouse(uv.MouseMotionEvent{X: 3, Y: 2, Button: uv.MouseNone}) {
+	if !w.SendMouse(uv.MouseMotionEvent{X: 3, Y: 2, Button: uv.MouseNone}, MouseRouteAuto) {
 		t.Fatalf("expected motion handled")
 	}
-	if !w.SendMouse(uv.MouseReleaseEvent{X: 3, Y: 2, Button: uv.MouseLeft}) {
+	if !w.SendMouse(uv.MouseReleaseEvent{X: 3, Y: 2, Button: uv.MouseLeft}, MouseRouteAuto) {
 		t.Fatalf("expected release handled")
 	}
 	if !w.CopySelectionFromMouseActive() {
@@ -226,7 +263,7 @@ func TestMouseWheelDoesNotGrowSelection(t *testing.T) {
 	}
 	sx, sy, ex, ey := w.CopyMode.SelStartX, w.CopyMode.SelStartAbsY, w.CopyMode.SelEndX, w.CopyMode.SelEndAbsY
 
-	if !w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelUp}) {
+	if !w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelUp}, MouseRouteAuto) {
 		t.Fatalf("expected wheel handled")
 	}
 	if got := w.GetScrollbackOffset(); got != 3 {
@@ -256,14 +293,14 @@ func TestMouseDoubleClickSelectsWord(t *testing.T) {
 		},
 	}
 
-	if !w.SendMouse(uv.MouseClickEvent{X: 1, Y: 0, Button: uv.MouseLeft}) {
+	if !w.SendMouse(uv.MouseClickEvent{X: 1, Y: 0, Button: uv.MouseLeft}, MouseRouteAuto) {
 		t.Fatalf("expected first click handled")
 	}
-	if !w.SendMouse(uv.MouseReleaseEvent{X: 1, Y: 0, Button: uv.MouseLeft}) {
+	if !w.SendMouse(uv.MouseReleaseEvent{X: 1, Y: 0, Button: uv.MouseLeft}, MouseRouteAuto) {
 		t.Fatalf("expected first release handled")
 	}
 	clock = clock.Add(100 * time.Millisecond)
-	if !w.SendMouse(uv.MouseClickEvent{X: 1, Y: 0, Button: uv.MouseLeft}) {
+	if !w.SendMouse(uv.MouseClickEvent{X: 1, Y: 0, Button: uv.MouseLeft}, MouseRouteAuto) {
 		t.Fatalf("expected second click handled")
 	}
 	if !w.CopyModeActive() || w.CopyMode == nil || !w.CopyMode.Selecting {
@@ -294,10 +331,10 @@ func TestMouseTripleClickSelectsLine(t *testing.T) {
 	}
 
 	for i := 0; i < 3; i++ {
-		if !w.SendMouse(uv.MouseClickEvent{X: 2, Y: 0, Button: uv.MouseLeft}) {
+		if !w.SendMouse(uv.MouseClickEvent{X: 2, Y: 0, Button: uv.MouseLeft}, MouseRouteAuto) {
 			t.Fatalf("expected click %d handled", i+1)
 		}
-		if !w.SendMouse(uv.MouseReleaseEvent{X: 2, Y: 0, Button: uv.MouseLeft}) {
+		if !w.SendMouse(uv.MouseReleaseEvent{X: 2, Y: 0, Button: uv.MouseLeft}, MouseRouteAuto) {
 			t.Fatalf("expected release %d handled", i+1)
 		}
 		clock = clock.Add(100 * time.Millisecond)
@@ -331,16 +368,16 @@ func TestMouseShiftClickExtendsSelection(t *testing.T) {
 	}
 
 	// Double click selects "hello".
-	_ = w.SendMouse(uv.MouseClickEvent{X: 1, Y: 0, Button: uv.MouseLeft})
-	_ = w.SendMouse(uv.MouseReleaseEvent{X: 1, Y: 0, Button: uv.MouseLeft})
+	_ = w.SendMouse(uv.MouseClickEvent{X: 1, Y: 0, Button: uv.MouseLeft}, MouseRouteAuto)
+	_ = w.SendMouse(uv.MouseReleaseEvent{X: 1, Y: 0, Button: uv.MouseLeft}, MouseRouteAuto)
 	clock = clock.Add(100 * time.Millisecond)
-	_ = w.SendMouse(uv.MouseClickEvent{X: 1, Y: 0, Button: uv.MouseLeft})
+	_ = w.SendMouse(uv.MouseClickEvent{X: 1, Y: 0, Button: uv.MouseLeft}, MouseRouteAuto)
 
 	if !w.CopyModeActive() || w.CopyMode == nil || !w.CopyMode.Selecting {
 		t.Fatalf("expected selection active")
 	}
 
-	if !w.SendMouse(uv.MouseClickEvent{X: 8, Y: 0, Button: uv.MouseLeft, Mod: uv.ModShift}) {
+	if !w.SendMouse(uv.MouseClickEvent{X: 8, Y: 0, Button: uv.MouseLeft, Mod: uv.ModShift}, MouseRouteAuto) {
 		t.Fatalf("expected shift-click handled")
 	}
 	if w.CopyMode.SelEndX != 8 {

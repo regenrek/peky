@@ -230,7 +230,14 @@ func (w *Window) ScrollToBottom() {
 }
 
 func (w *Window) EnterCopyMode() {
-	if w == nil || w.IsAltScreen() {
+	w.enterCopyMode(false)
+}
+
+func (w *Window) enterCopyMode(allowAltScreen bool) {
+	if w == nil {
+		return
+	}
+	if !allowAltScreen && w.IsAltScreen() {
 		return
 	}
 

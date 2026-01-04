@@ -6,6 +6,7 @@ import (
 	"github.com/muesli/termenv"
 
 	"github.com/regenrek/peakypanes/internal/native"
+	"github.com/regenrek/peakypanes/internal/terminal"
 )
 
 // Op identifies the request/response operation.
@@ -227,6 +228,15 @@ const (
 	MouseActionMotion
 )
 
+// MouseRoute controls how mouse input is routed within a pane.
+type MouseRoute = terminal.MouseRoute
+
+const (
+	MouseRouteAuto          = terminal.MouseRouteAuto
+	MouseRouteApp           = terminal.MouseRouteApp
+	MouseRouteHostSelection = terminal.MouseRouteHostSelection
+)
+
 // MouseEventPayload is a serializable mouse event.
 type MouseEventPayload struct {
 	X      int
@@ -237,6 +247,7 @@ type MouseEventPayload struct {
 	Alt    bool
 	Ctrl   bool
 	Wheel  bool
+	Route  MouseRoute
 }
 
 // SendMouseRequest forwards a mouse event.
