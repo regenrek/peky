@@ -25,6 +25,7 @@ func (m *Model) viewModel() views.Model {
 		previewSession = session
 	}
 
+	menu := m.quickReplyMenuState()
 	vm := views.Model{
 		Width:                    m.width,
 		Height:                   m.height,
@@ -47,8 +48,9 @@ func (m *Model) viewModel() views.Model {
 		FilterActive:             m.filterActive,
 		FilterInput:              m.filterInput,
 		QuickReplyInput:          m.quickReplyInput,
-		SlashSuggestions:         toViewSlashSuggestions(m.slashSuggestions()),
-		SlashSelected:            m.quickReplySlashIndex,
+		QuickReplyMode:           m.quickReplyModeLabel(),
+		QuickReplySuggestions:    toViewQuickReplySuggestions(menu.suggestions),
+		QuickReplySelected:       m.quickReplyMenuIndex,
 		TerminalFocus:            m.terminalFocus,
 		SupportsTerminalFocus:    m.supportsTerminalFocus(),
 		ProjectPicker:            m.projectPicker,
@@ -58,6 +60,9 @@ func (m *Model) viewModel() views.Model {
 		SettingsMenu:             m.settingsMenu,
 		PerformanceMenu:          m.perfMenu,
 		DebugMenu:                m.debugMenu,
+		PekyDialogTitle:          m.pekyDialogTitle,
+		PekyDialogFooter:         m.pekyDialogFooter,
+		PekyDialogViewport:       m.pekyViewport,
 		ConfirmKill: views.ConfirmKill{
 			Session: m.confirmSession,
 			Project: m.confirmProject,
@@ -98,16 +103,17 @@ func (m *Model) viewModel() views.Model {
 	return vm
 }
 
-func toViewSlashSuggestions(entries []slashSuggestion) []views.SlashSuggestion {
+func toViewQuickReplySuggestions(entries []quickReplySuggestion) []views.QuickReplySuggestion {
 	if len(entries) == 0 {
 		return nil
 	}
-	out := make([]views.SlashSuggestion, len(entries))
+	out := make([]views.QuickReplySuggestion, len(entries))
 	for i, entry := range entries {
-		out[i] = views.SlashSuggestion{
-			Text:     entry.Text,
-			MatchLen: entry.MatchLen,
-			Desc:     entry.Desc,
+		out[i] = views.QuickReplySuggestion{
+			Text:         entry.Text,
+			MatchLen:     entry.MatchLen,
+			MatchIndexes: entry.MatchIndexes,
+			Desc:         entry.Desc,
 		}
 	}
 	return out

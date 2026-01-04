@@ -90,6 +90,7 @@ var keyHandlers = map[ViewState]keyHandler{
 	StateRenameSession:    func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateRename(msg) },
 	StateRenamePane:       func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateRename(msg) },
 	StateProjectRootSetup: func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateProjectRootSetup(msg) },
+	StatePekyDialog:       func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updatePekyDialog(msg) },
 }
 
 type updateHandler func(*Model, tea.Msg) (tea.Model, tea.Cmd)
@@ -131,6 +132,9 @@ var updateHandlers = map[reflect.Type]updateHandler{
 	},
 	reflect.TypeOf(quickReplySendMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleQuickReplySend(msg.(quickReplySendMsg))
+	},
+	reflect.TypeOf(pekyResultMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handlePekyResult(msg.(pekyResultMsg))
 	},
 	reflect.TypeOf(sessionStartedMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleSessionStarted(msg.(sessionStartedMsg))
@@ -211,6 +215,7 @@ func (m *Model) applyWindowSize(msg tea.WindowSizeMsg) {
 	m.setPerformanceMenuSize()
 	m.setDebugMenuSize()
 	m.setQuickReplySize()
+	m.setPekyDialogSize()
 }
 
 func (m *Model) handleRefreshTick(msg refreshTickMsg) tea.Cmd {

@@ -249,6 +249,8 @@ func (m Model) viewHelp() string {
 	left.WriteString("  esc   Clear input\n")
 	left.WriteString("  up/down Input history\n")
 	left.WriteString("  /     Slash commands (↑/↓ select, tab complete)\n")
+	left.WriteString("  /peky Toggle peky agent\n")
+	left.WriteString("  shift+tab Toggle peky agent\n")
 	left.WriteString(fmt.Sprintf("  %s Toggle terminal focus (Peaky Panes sessions)\n", m.Keys.TerminalFocus))
 	left.WriteString(fmt.Sprintf("  %s Scrollback mode (Peaky Panes sessions)\n", m.Keys.Scrollback))
 	left.WriteString(fmt.Sprintf("  %s Copy mode (Peaky Panes sessions)\n", m.Keys.CopyMode))

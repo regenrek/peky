@@ -32,6 +32,7 @@ const (
 	StateSettingsMenu
 	StatePerformanceMenu
 	StateDebugMenu
+	StatePekyDialog
 )
 
 // DashboardTab represents the active tab within the dashboard view.
@@ -147,6 +148,7 @@ type PaneItem struct {
 	Title         string
 	Command       string
 	StartCommand  string
+	Cwd           string
 	Tool          string
 	PID           int
 	Active        bool

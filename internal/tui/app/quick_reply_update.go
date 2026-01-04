@@ -8,13 +8,16 @@ import (
 )
 
 func (m *Model) updateQuickReply(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.applySlashCompletionOnTab(msg) {
+	if m.handleQuickReplyModeToggle(msg) {
+		return m, nil
+	}
+	if m.applyQuickReplyCompletionOnTab(msg) {
 		return m, nil
 	}
 	if handled, cmd := m.handleQuickReplyPaneNav(msg); handled {
 		return m, cmd
 	}
-	if m.handleQuickReplySlashNav(msg) {
+	if m.handleQuickReplyMenuNav(msg) {
 		return m, nil
 	}
 	m.maybeExitQuickReplyHistory(msg)
@@ -29,12 +32,20 @@ func (m *Model) updateQuickReply(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	var cmd tea.Cmd
 	m.quickReplyInput, cmd = m.quickReplyInput.Update(msg)
-	m.updateSlashSelection()
+	m.updateQuickReplyMenuSelection()
 	return m, cmd
 }
 
-func (m *Model) applySlashCompletionOnTab(msg tea.KeyMsg) bool {
-	return msg.String() == "tab" && m.applySlashCompletion()
+func (m *Model) handleQuickReplyModeToggle(msg tea.KeyMsg) bool {
+	if msg.String() != "shift+tab" {
+		return false
+	}
+	m.toggleQuickReplyMode()
+	return true
+}
+
+func (m *Model) applyQuickReplyCompletionOnTab(msg tea.KeyMsg) bool {
+	return msg.String() == "tab" && m.applyQuickReplyMenuCompletion()
 }
 
 func (m *Model) handleQuickReplyPaneNav(msg tea.KeyMsg) (bool, tea.Cmd) {
@@ -48,12 +59,12 @@ func (m *Model) handleQuickReplyPaneNav(msg tea.KeyMsg) (bool, tea.Cmd) {
 	}
 }
 
-func (m *Model) handleQuickReplySlashNav(msg tea.KeyMsg) bool {
+func (m *Model) handleQuickReplyMenuNav(msg tea.KeyMsg) bool {
 	switch msg.String() {
 	case "up":
-		return m.moveSlashSelection(-1)
+		return m.moveQuickReplyMenuSelection(-1)
 	case "down":
-		return m.moveSlashSelection(1)
+		return m.moveQuickReplyMenuSelection(1)
 	default:
 		return false
 	}
@@ -69,12 +80,12 @@ func (m *Model) handleQuickReplyHistoryNav(msg tea.KeyMsg) bool {
 	switch msg.String() {
 	case "up":
 		if m.moveQuickReplyHistory(-1) {
-			m.updateSlashSelection()
+			m.updateQuickReplyMenuSelection()
 			return true
 		}
 	case "down":
 		if m.moveQuickReplyHistory(1) {
-			m.updateSlashSelection()
+			m.updateQuickReplyMenuSelection()
 			return true
 		}
 	}
@@ -85,12 +96,23 @@ func (m *Model) handleQuickReplySubmit(msg tea.KeyMsg) (bool, tea.Cmd) {
 	if msg.String() != "enter" {
 		return false, nil
 	}
-	if m.applySlashCompletion() {
+	if m.applyQuickReplyMenuCompletion() {
 		return true, nil
 	}
 	text := strings.TrimSpace(m.quickReplyInput.Value())
+	if handled, cmd := m.handlePekyToggleCommand(text); handled {
+		return true, cmd
+	}
 	if text == "" {
+		if m.quickReplyMode == quickReplyModePeky {
+			return true, NewInfoCmd("Enter a prompt")
+		}
 		return true, m.attachOrStart()
+	}
+	if m.quickReplyMode == quickReplyModePeky {
+		m.rememberQuickReply(text)
+		m.resetQuickReplyHistory()
+		return true, m.sendPekyPrompt(text)
 	}
 	outcome := m.handleQuickReplyCommand(text)
 	if outcome.Handled {
@@ -119,5 +141,5 @@ func (m *Model) resetQuickReplyInputState() {
 	m.quickReplyInput.SetValue("")
 	m.quickReplyInput.CursorEnd()
 	m.resetQuickReplyHistory()
-	m.resetSlashMenu()
+	m.resetQuickReplyMenu()
 }

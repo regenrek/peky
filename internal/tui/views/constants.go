@@ -21,6 +21,7 @@ const (
 	viewSettingsMenu
 	viewPerformanceMenu
 	viewDebugMenu
+	viewPekyDialog
 )
 
 // Tab ordering must match app.DashboardTab.

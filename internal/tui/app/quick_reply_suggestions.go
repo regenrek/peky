@@ -7,10 +7,25 @@ import (
 	"github.com/regenrek/peakypanes/internal/cli/spec"
 )
 
-type slashSuggestion struct {
-	Text     string
-	MatchLen int
-	Desc     string
+type quickReplySuggestion struct {
+	Text         string
+	MatchLen     int
+	Desc         string
+	MatchIndexes []int
+}
+
+type quickReplyMenuKind int
+
+const (
+	quickReplyMenuNone quickReplyMenuKind = iota
+	quickReplyMenuSlash
+	quickReplyMenuAt
+)
+
+type quickReplyMenu struct {
+	kind        quickReplyMenuKind
+	prefix      string
+	suggestions []quickReplySuggestion
 }
 
 type slashInputContext struct {
@@ -35,7 +50,7 @@ func slashInputForSuggestions(input string) slashInputContext {
 	return slashInputContext{Active: true, Prefix: body}
 }
 
-func (m *Model) slashSuggestions() []slashSuggestion {
+func (m *Model) slashSuggestions() []quickReplySuggestion {
 	if m == nil || m.state != StateDashboard || m.filterActive || m.terminalFocus {
 		return nil
 	}
@@ -52,14 +67,14 @@ func (m *Model) slashSuggestions() []slashSuggestion {
 	if prefix != "" {
 		matchLen = len(prefix) + 1
 	}
-	suggestions := make([]slashSuggestion, 0, len(entries))
+	suggestions := make([]quickReplySuggestion, 0, len(entries))
 	for _, entry := range entries {
 		text := "/" + entry.Alias
 		current := matchLen
 		if current > len(text) {
 			current = len(text)
 		}
-		suggestions = append(suggestions, slashSuggestion{
+		suggestions = append(suggestions, quickReplySuggestion{
 			Text:     text,
 			MatchLen: current,
 			Desc:     entry.Desc,
@@ -101,51 +116,6 @@ func (m *Model) applySlashCompletion() bool {
 	return true
 }
 
-func (m *Model) updateSlashSelection() {
-	if m == nil {
-		return
-	}
-	ctx := slashInputForSuggestions(m.quickReplyInput.Value())
-	if !ctx.Active || ctx.HasArgs || m.state != StateDashboard || m.filterActive || m.terminalFocus {
-		m.resetSlashMenu()
-		return
-	}
-	prefix := strings.ToLower(ctx.Prefix)
-	if prefix != m.quickReplySlashPrefix {
-		m.quickReplySlashPrefix = prefix
-		m.quickReplySlashIndex = -1
-	}
-	suggestions := m.slashSuggestions()
-	if len(suggestions) == 0 {
-		m.quickReplySlashIndex = -1
-		return
-	}
-	if m.quickReplySlashIndex < 0 || m.quickReplySlashIndex >= len(suggestions) {
-		m.quickReplySlashIndex = 0
-	}
-}
-
-func (m *Model) moveSlashSelection(delta int) bool {
-	if m == nil {
-		return false
-	}
-	m.updateSlashSelection()
-	suggestions := m.slashSuggestions()
-	if len(suggestions) == 0 {
-		return false
-	}
-	if m.quickReplySlashIndex < 0 || m.quickReplySlashIndex >= len(suggestions) {
-		m.quickReplySlashIndex = 0
-	}
-	count := len(suggestions)
-	next := (m.quickReplySlashIndex + delta) % count
-	if next < 0 {
-		next += count
-	}
-	m.quickReplySlashIndex = next
-	return true
-}
-
 func (m *Model) selectedSlashAlias() (string, bool) {
 	if m == nil {
 		return "", false
@@ -154,19 +124,14 @@ func (m *Model) selectedSlashAlias() (string, bool) {
 	if len(suggestions) == 0 {
 		return "", false
 	}
-	if m.quickReplySlashIndex < 0 || m.quickReplySlashIndex >= len(suggestions) {
+	if m.quickReplyMenuIndex < 0 || m.quickReplyMenuIndex >= len(suggestions) {
 		return "", false
 	}
-	alias := strings.TrimPrefix(suggestions[m.quickReplySlashIndex].Text, "/")
+	alias := strings.TrimPrefix(suggestions[m.quickReplyMenuIndex].Text, "/")
 	if alias == "" {
 		return "", false
 	}
 	return alias, true
-}
-
-func (m *Model) resetSlashMenu() {
-	m.quickReplySlashIndex = -1
-	m.quickReplySlashPrefix = ""
 }
 
 type slashSuggestionEntry struct {

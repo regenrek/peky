@@ -3,6 +3,7 @@ package views
 import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 )
 
 // Model supplies all view state needed to render the TUI. ActiveView and Tab
@@ -29,8 +30,9 @@ type Model struct {
 	FilterActive             bool
 	FilterInput              textinput.Model
 	QuickReplyInput          textinput.Model
-	SlashSuggestions         []SlashSuggestion
-	SlashSelected            int
+	QuickReplyMode           string
+	QuickReplySuggestions    []QuickReplySuggestion
+	QuickReplySelected       int
 	TerminalFocus            bool
 	SupportsTerminalFocus    bool
 	ProjectPicker            list.Model
@@ -40,6 +42,9 @@ type Model struct {
 	SettingsMenu             list.Model
 	PerformanceMenu          list.Model
 	DebugMenu                list.Model
+	PekyDialogTitle          string
+	PekyDialogFooter         string
+	PekyDialogViewport       viewport.Model
 	ConfirmKill              ConfirmKill
 	ConfirmQuit              ConfirmQuit
 	ConfirmCloseProject      ConfirmCloseProject
@@ -129,10 +134,11 @@ type KeyHints struct {
 	Quit            string
 }
 
-type SlashSuggestion struct {
-	Text     string
-	MatchLen int
-	Desc     string
+type QuickReplySuggestion struct {
+	Text         string
+	MatchLen     int
+	MatchIndexes []int
+	Desc         string
 }
 
 type ConfirmKill struct {

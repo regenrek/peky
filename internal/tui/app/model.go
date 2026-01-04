@@ -10,10 +10,13 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
+	"charm.land/fantasy"
 	"github.com/muesli/termenv"
 
 	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/pekyconfig"
 	"github.com/regenrek/peakypanes/internal/sessiond"
 	"github.com/regenrek/peakypanes/internal/tui/mouse"
 	"github.com/regenrek/peakypanes/internal/tui/picker"
@@ -89,8 +92,11 @@ type Model struct {
 	quickReplyHistory      []string
 	quickReplyHistoryIndex int
 	quickReplyHistoryDraft string
-	quickReplySlashIndex   int
-	quickReplySlashPrefix  string
+	quickReplyMenuIndex    int
+	quickReplyMenuPrefix   string
+	quickReplyMenuKind     quickReplyMenuKind
+	quickReplyMode         quickReplyMode
+	quickReplyFileCache    quickReplyFileCache
 
 	mouse mouse.Handler
 
@@ -175,6 +181,17 @@ type Model struct {
 	panePerfLastPrune time.Time
 
 	lastUrgentRefreshAt time.Time
+
+	pekyConfigLoader *pekyconfig.Loader
+	pekyConfig       pekyconfig.Config
+	pekyConfigErr    error
+
+	pekyBusy            bool
+	pekyMessages        []fantasy.Message
+	pekyDialogTitle     string
+	pekyDialogFooter    string
+	pekyDialogPrevState ViewState
+	pekyViewport        viewport.Model
 }
 
 // NewModel creates a new peakypanes TUI model.
@@ -214,6 +231,7 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 		paneLastSize:           make(map[string]paneSize),
 		paneLastFallback:       make(map[string]time.Time),
 		cursorShapeNow:         time.Now,
+		pekyViewport:           viewport.New(0, 0),
 	}
 
 	m.filterInput = textinput.New()
@@ -236,7 +254,21 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 	m.quickReplyInput.Cursor.Style = qrStyle.Reverse(true)
 	m.quickReplyInput.Focus()
 	m.quickReplyHistoryIndex = -1
-	m.quickReplySlashIndex = -1
+	m.quickReplyMenuIndex = -1
+	m.quickReplyMode = quickReplyModePane
+
+	if pekyPath, err := pekyconfig.DefaultPath(); err == nil {
+		m.pekyConfigLoader = pekyconfig.NewLoader(pekyPath)
+		if cfg, loadErr := m.pekyConfigLoader.Load(); loadErr == nil {
+			m.pekyConfig = cfg
+		} else {
+			m.pekyConfig = pekyconfig.Defaults()
+			m.pekyConfigErr = loadErr
+		}
+	} else {
+		m.pekyConfig = pekyconfig.Defaults()
+		m.pekyConfigErr = err
+	}
 
 	m.setupProjectPicker()
 	m.setupLayoutPicker()

@@ -85,12 +85,12 @@ func TestViewQuickReplyRenders(t *testing.T) {
 	}
 }
 
-func TestViewQuickReplyKeepsHeightWithSlashSuggestions(t *testing.T) {
+func TestViewQuickReplyKeepsHeightWithSuggestions(t *testing.T) {
 	input := textinput.New()
 	input.SetValue("/")
 	m := Model{
 		QuickReplyInput: input,
-		SlashSuggestions: []SlashSuggestion{
+		QuickReplySuggestions: []QuickReplySuggestion{
 			{Text: "/kill", MatchLen: 2},
 			{Text: "/rename", MatchLen: 2},
 		},
@@ -102,14 +102,14 @@ func TestViewQuickReplyKeepsHeightWithSlashSuggestions(t *testing.T) {
 	}
 }
 
-func TestViewDashboardSlashMenuOverlay(t *testing.T) {
+func TestViewDashboardQuickReplyMenuOverlay(t *testing.T) {
 	input := textinput.New()
 	input.SetValue("/")
 	m := Model{
 		Width:           60,
 		Height:          16,
 		QuickReplyInput: input,
-		SlashSuggestions: []SlashSuggestion{
+		QuickReplySuggestions: []QuickReplySuggestion{
 			{Text: "/kill", MatchLen: 2, Desc: "Close pane"},
 			{Text: "/rename", MatchLen: 2, Desc: "Rename pane"},
 		},

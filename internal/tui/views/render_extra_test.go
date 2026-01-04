@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 )
 
 func TestViewDashboardContentRenders(t *testing.T) {
@@ -113,7 +114,11 @@ func TestViewStates(t *testing.T) {
 		CommandPalette:           list.New(nil, list.NewDefaultDelegate(), 10, 4),
 		ProjectRootInput:         textinput.New(),
 		Rename:                   Rename{Input: textinput.New()},
+		PekyDialogTitle:          "Peky",
+		PekyDialogFooter:         "esc close",
+		PekyDialogViewport:       viewport.New(10, 4),
 	}
+	base.PekyDialogViewport.SetContent("hello")
 
 	cases := []int{
 		viewHelp,
@@ -128,6 +133,7 @@ func TestViewStates(t *testing.T) {
 		viewLayoutPicker,
 		viewCommandPalette,
 		viewDashboard,
+		viewPekyDialog,
 	}
 	for _, view := range cases {
 		m := base

@@ -24,7 +24,7 @@ func newTestModelLite() *Model {
 		paneViewLastReq:        make(map[paneViewKey]time.Time),
 		paneViewFirst:          make(map[string]struct{}),
 		quickReplyHistoryIndex: -1,
-		quickReplySlashIndex:   -1,
+		quickReplyMenuIndex:    -1,
 		settings: DashboardConfig{
 			PreviewMode:  "grid",
 			PreviewLines: 12,
