@@ -67,7 +67,8 @@ Desktop.ini
 # Project-specific
 # Add any project-specific ignore patterns here
 /peakypanes
-devwatch
+/devwatch
+/devwatch.exe
 
 docs/internal
 .spezi
