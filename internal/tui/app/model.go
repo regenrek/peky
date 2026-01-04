@@ -7,12 +7,12 @@ import (
 	"os"
 	"time"
 
+	"charm.land/fantasy"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
-	"charm.land/fantasy"
 	"github.com/muesli/termenv"
 
 	"github.com/regenrek/peakypanes/internal/layout"
