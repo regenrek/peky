@@ -5,6 +5,8 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.0.11 - 2026-01-04
+
 ### Added
 - Canonical CLI command spec (`internal/cli/spec/commands.yaml`) with validated JSON output schema (`docs/schemas/cli.schema.json`).
 - Agent-grade CLI commands for sessions, panes, workspace projects, relays, events, context packs, and NL plan/run.
@@ -13,14 +15,23 @@ This format is based on Keep a Changelog.
 - Shared policy packages for session/path validation and workspace/project operations.
 - Daemon lifecycle subcommands (`daemon start|stop`).
 - CLI smoke script (`scripts/cli-smoke.sh`) to build, start the daemon, and exercise core commands.
+- CLI stress script (`scripts/cli-stress.sh`) plus a nightly stress workflow (`.github/workflows/nightly-stress.yml`).
 
 ### Changed
 - CLI now runs entirely on `urfave/cli/v3` with spec-driven help and slash command shortcuts.
 - TUI quick-reply slash commands are derived from the CLI spec for single-source-of-truth behavior.
+- VT screen representation now uses a flat cell grid with capacity retention to reduce allocations under resize.
+- Scrollback is byte-budgeted and paged, with a global scrollback budget enforced across panes.
+- Profiling harness now parses JSON perf logs and reports bytes consistently (`scripts/perf-profiler`).
 
 ### Fixed
 - Layout shorthand no longer overrides explicit top-level commands like `daemon`.
- 
+- Tool detection and CLI payload summaries only inspect a bounded prefix to avoid large `[]byte`→`string` copies.
+- Tool detection remains functional for oversize inputs by inspecting the prefix (instead of returning empty).
+- Runtime directory permissions are tightened (0700 by default) and debug logs sanitize command fields.
+- `LogEvery` avoids work when the level is disabled and caps internal key growth to prevent unbounded memory use.
+- Mouse handling fixes: wheel forwarding, OSC emission, and reduced work on high-frequency motion events.
+
 ## 0.0.10 - 2026-01-02
 
 ### Changed
