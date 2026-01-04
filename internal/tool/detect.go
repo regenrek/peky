@@ -121,7 +121,7 @@ func (r *Registry) DetectFromInputBytes(input []byte, limit int) string {
 	if len(trimmed) == 0 {
 		return ""
 	}
-	if bytes.IndexAny(trimmed, "\r\n") >= 0 {
+	if bytes.ContainsAny(trimmed, "\r\n") {
 		return ""
 	}
 	return r.DetectFromCommand(string(trimmed))

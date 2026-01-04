@@ -18,10 +18,7 @@ func TestLoadToolRegistryConfigPathDirectory(t *testing.T) {
 	if err := os.MkdirAll(path, 0o700); err != nil {
 		t.Fatalf("mkdir config path: %v", err)
 	}
-	if err := os.Setenv(runenv.ConfigDirEnv, configDir); err != nil {
-		t.Fatalf("setenv: %v", err)
-	}
-	defer os.Unsetenv(runenv.ConfigDirEnv)
+	t.Setenv(runenv.ConfigDirEnv, configDir)
 
 	_, err := loadToolRegistry()
 	if err == nil {

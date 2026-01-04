@@ -32,17 +32,6 @@ func isFocusedPaneToken(value string) bool {
 	return strings.EqualFold(strings.TrimSpace(value), focusedPaneToken)
 }
 
-func focusedPaneID(ctx context.Context, client *sessiond.Client) (string, error) {
-	if client == nil {
-		return "", fmt.Errorf("session client unavailable")
-	}
-	resp, err := client.SnapshotState(ctx, 0)
-	if err != nil {
-		return "", err
-	}
-	return resolvePaneIDFromSnapshot(focusedPaneToken, resp)
-}
-
 func resolvePaneIDFromSnapshot(value string, resp sessiond.SnapshotResponse) (string, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {

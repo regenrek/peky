@@ -65,10 +65,6 @@ func (m *Model) dashboardLayoutInternal(logCtx string) (dashboardLayout, bool) {
 	}, true
 }
 
-func (m *Model) dashboardLayout() (dashboardLayout, bool) {
-	return m.dashboardLayoutInternal("dashboardLayout")
-}
-
 func (m *Model) dashboardBodyRect() (mouse.Rect, bool) {
 	layout, ok := m.dashboardLayoutInternal("dashboardBodyRect")
 	if !ok {

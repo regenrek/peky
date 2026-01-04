@@ -86,9 +86,6 @@ func mergeConfig(base, override Config) Config {
 }
 
 func buildLogger(ctx context.Context, cfg Config, opts InitOptions) (initResult, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	level := parseLevel(cfg.Level)
 	sink := SinkStderr
 	if cfg.Sink != nil {
