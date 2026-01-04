@@ -7,11 +7,13 @@ import (
 	"io"
 	"log/slog"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	uv "github.com/charmbracelet/ultraviolet"
+	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"
 
 	"github.com/regenrek/peakypanes/internal/logging"
@@ -779,8 +781,8 @@ func keyFromCell(cell *uv.Cell) (k renderKey) {
 		return k
 	}
 
-	k.fg = colorToHex(cell.Style.Fg)
-	k.bg = colorToHex(cell.Style.Bg)
+	k.fg = colorToStyleToken(cell.Style.Fg)
+	k.bg = colorToStyleToken(cell.Style.Bg)
 
 	attrs := cell.Style.Attrs
 	// Reflective feature detection keeps this resilient across uv.Attrs implementations.
@@ -821,9 +823,23 @@ func attrsBool(attrs any, method string) bool {
 	return len(out) == 1 && out[0].Bool()
 }
 
-func colorToHex(c color.Color) string {
+func colorToStyleToken(c color.Color) string {
 	if c == nil {
 		return ""
+	}
+	switch v := c.(type) {
+	case xansi.BasicColor:
+		return strconv.Itoa(int(v))
+	case xansi.IndexedColor:
+		return strconv.Itoa(int(v))
+	case xansi.TrueColor:
+		return fmt.Sprintf("#%06x", uint32(v))
+	case xansi.RGBColor:
+		return fmt.Sprintf("#%02x%02x%02x", v.R, v.G, v.B)
+	case xansi.HexColor:
+		if hex := v.Hex(); hex != "" {
+			return hex
+		}
 	}
 	r, g, b, a := c.RGBA()
 	if a == 0 {
