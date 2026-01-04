@@ -247,6 +247,48 @@ func TestHandlerTerminalFocusMouse(t *testing.T) {
 	}
 }
 
+func TestHandlerWheelForwardsWithoutTerminalFocus(t *testing.T) {
+	var h Handler
+	hit := PaneHit{
+		PaneID: "pane-1",
+		Selection: Selection{
+			ProjectID: "proj",
+			Session:   "sess",
+			Pane:      "1",
+		},
+		Outer:   Rect{X: 0, Y: 0, W: 10, H: 10},
+		Content: Rect{X: 1, Y: 1, W: 8, H: 6},
+	}
+	forwardCalls := 0
+	selectionCalls := 0
+	focusCalls := 0
+
+	cb := DashboardCallbacks{
+		HitHeader:             func(int, int) (HeaderHit, bool) { return HeaderHit{}, false },
+		HitPane:               func(int, int) (PaneHit, bool) { return hit, true },
+		HitIsSelected:         func(PaneHit) bool { return false },
+		ApplySelection:        func(Selection) bool { selectionCalls++; return true },
+		SetTerminalFocus:      func(bool) { focusCalls++ },
+		TerminalFocus:         func() bool { return false },
+		SupportsTerminalFocus: func() bool { return true },
+		SelectionCmd:          func() tea.Cmd { return nil },
+		RefreshPaneViewsCmd:   func() tea.Cmd { return nil },
+		ForwardMouseEvent:     func(PaneHit, tea.MouseMsg) tea.Cmd { forwardCalls++; return nil },
+	}
+
+	h.UpdateDashboard(tea.MouseMsg{X: 2, Y: 2, Action: tea.MouseActionPress, Button: tea.MouseButtonWheelUp}, cb)
+
+	if forwardCalls != 1 {
+		t.Fatalf("expected wheel to be forwarded, got %d", forwardCalls)
+	}
+	if selectionCalls != 0 {
+		t.Fatalf("expected no selection changes, got %d", selectionCalls)
+	}
+	if focusCalls != 0 {
+		t.Fatalf("expected no focus changes, got %d", focusCalls)
+	}
+}
+
 func TestHandlerDoubleClickDetection(t *testing.T) {
 	var h Handler
 	msg := tea.MouseMsg{Action: tea.MouseActionPress, Button: tea.MouseButtonLeft}

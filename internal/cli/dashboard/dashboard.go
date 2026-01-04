@@ -68,6 +68,11 @@ func runMenuWith(ctx root.CommandContext, autoStart *app.AutoStartSpec, deps men
 	if err != nil {
 		return fmt.Errorf("failed to initialize: %w", err)
 	}
+	if ctx.Out != nil {
+		model.SetOSCWriter(ctx.Out)
+	} else {
+		model.SetOSCWriter(os.Stdout)
+	}
 	if autoStart != nil {
 		model.SetAutoStart(*autoStart)
 	}

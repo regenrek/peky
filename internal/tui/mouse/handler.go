@@ -47,6 +47,9 @@ func (h *Handler) UpdateDashboard(msg tea.MouseMsg, cb DashboardCallbacks) tea.C
 	if cmd, handled := h.handleHeaderClick(msg, cb); handled {
 		return cmd
 	}
+	if isWheelEvent(msg) {
+		return h.handleWheel(msg, cb)
+	}
 	if cb.TerminalFocus != nil && cb.TerminalFocus() {
 		hit, ok := cb.HitPane(msg.X, msg.Y)
 		return h.handleTerminalFocusMouse(msg, cb, hit, ok)
@@ -133,6 +136,20 @@ func (h *Handler) handleTerminalDrag(msg tea.MouseMsg, cb DashboardCallbacks) (t
 	}
 }
 
+func (h *Handler) handleWheel(msg tea.MouseMsg, cb DashboardCallbacks) tea.Cmd {
+	if cb.HitPane == nil || cb.ForwardMouseEvent == nil {
+		return nil
+	}
+	hit, ok := cb.HitPane(msg.X, msg.Y)
+	if !ok || hit.PaneID == "" {
+		return nil
+	}
+	if !hit.Content.Contains(msg.X, msg.Y) {
+		return nil
+	}
+	return cb.ForwardMouseEvent(hit, msg)
+}
+
 func (h *Handler) handlePaneClick(msg tea.MouseMsg, cb DashboardCallbacks, hit PaneHit) tea.Cmd {
 	if h.isDoubleClick(hit, msg) {
 		h.clearLastClick()
@@ -162,6 +179,15 @@ func (h *Handler) handlePaneClick(msg tea.MouseMsg, cb DashboardCallbacks, hit P
 
 func isPrimaryClick(msg tea.MouseMsg) bool {
 	return msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft
+}
+
+func isWheelEvent(msg tea.MouseMsg) bool {
+	switch msg.Button {
+	case tea.MouseButtonWheelUp, tea.MouseButtonWheelDown, tea.MouseButtonWheelLeft, tea.MouseButtonWheelRight:
+		return true
+	default:
+		return false
+	}
 }
 
 func (h *Handler) recordClick(hit PaneHit, msg tea.MouseMsg) {
