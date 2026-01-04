@@ -32,7 +32,10 @@ func (w *Window) adjustToNonContinuation(absY, x, dir int) int {
 }
 
 func (w *Window) adjustToNonContinuationScrollbackLocked(term vtEmulator, absY, x, dir int) int {
-	sbRow := make([]uv.Cell, w.cols)
+	if cap(w.scrollbackScratch) < w.cols {
+		w.scrollbackScratch = make([]uv.Cell, w.cols)
+	}
+	sbRow := w.scrollbackScratch[:w.cols]
 	if ok := term.CopyScrollbackRow(absY, sbRow); !ok {
 		return x
 	}

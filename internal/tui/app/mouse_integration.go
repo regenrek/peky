@@ -161,7 +161,7 @@ func (m *Model) updateTerminalMouseDrag(msg tea.MouseMsg) {
 	if m == nil {
 		return
 	}
-	if msg.Action == tea.MouseActionRelease && msg.Button == tea.MouseButtonLeft {
+	if msg.Action == tea.MouseActionRelease {
 		m.terminalMouseDrag = false
 		return
 	}

@@ -127,7 +127,7 @@ func (h *Handler) handleTerminalDrag(msg tea.MouseMsg, cb DashboardCallbacks) (t
 	case tea.MouseActionMotion, tea.MouseActionRelease:
 		clamped := clampMouseMsg(msg, h.dragHit.Content)
 		cmd := cb.ForwardMouseEvent(h.dragHit, clamped)
-		if msg.Action == tea.MouseActionRelease && msg.Button == tea.MouseButtonLeft {
+		if msg.Action == tea.MouseActionRelease {
 			h.dragActive = false
 		}
 		return cmd, true

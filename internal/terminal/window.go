@@ -99,6 +99,8 @@ type Window struct {
 	term   vtEmulator
 	termMu sync.Mutex // guards term.Write/Resize/Render/CellAt
 	ptyMu  sync.Mutex // guards pty pointer swaps during close
+	// scrollbackScratch is reused for scrollback row inspection (guarded by termMu).
+	scrollbackScratch []uv.Cell
 
 	cols int
 	rows int

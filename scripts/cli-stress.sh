@@ -78,6 +78,9 @@ cleanup() {
   if kill -0 "$DAEMON_PID" >/dev/null 2>&1; then
     kill -TERM "$DAEMON_PID" >/dev/null 2>&1 || true
   fi
+  if [[ -n "${PAYLOAD_FILE:-}" ]]; then
+    rm -f "$PAYLOAD_FILE" >/dev/null 2>&1 || true
+  fi
   rm -rf "$RUNTIME_DIR" "$CONFIG_DIR" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -107,7 +110,7 @@ if [[ -z "${PANE0_ID}" ]]; then
   exit 1
 fi
 
-PAYLOAD_FILE="${TMPDIR:-/tmp}/pp-block.txt"
+PAYLOAD_FILE="$(mktemp "$RUNTIME_DIR/pp-block.XXXXXX")"
 export PAYLOAD_FILE
 if command -v python3 >/dev/null 2>&1; then
   python3 - <<'PY'

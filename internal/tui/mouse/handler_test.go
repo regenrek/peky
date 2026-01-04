@@ -289,6 +289,30 @@ func TestHandlerWheelForwardsWithoutTerminalFocus(t *testing.T) {
 	}
 }
 
+func TestHandlerReleaseClearsDragWithoutButton(t *testing.T) {
+	var h Handler
+	h.dragActive = true
+	h.dragHit = PaneHit{
+		PaneID:  "pane-1",
+		Content: Rect{X: 0, Y: 0, W: 10, H: 10},
+	}
+	forwardCalls := 0
+	cb := DashboardCallbacks{
+		ForwardMouseEvent: func(PaneHit, tea.MouseMsg) tea.Cmd { forwardCalls++; return nil },
+		TerminalFocus:     func() bool { return true },
+		HitHeader:         func(int, int) (HeaderHit, bool) { return HeaderHit{}, false },
+	}
+
+	h.UpdateDashboard(tea.MouseMsg{X: 2, Y: 2, Action: tea.MouseActionRelease, Button: tea.MouseButtonNone}, cb)
+
+	if forwardCalls != 1 {
+		t.Fatalf("expected release forwarded, got %d", forwardCalls)
+	}
+	if h.dragActive {
+		t.Fatalf("expected dragActive cleared on release")
+	}
+}
+
 func TestHandlerDoubleClickDetection(t *testing.T) {
 	var h Handler
 	msg := tea.MouseMsg{Action: tea.MouseActionPress, Button: tea.MouseButtonLeft}

@@ -119,6 +119,18 @@ func TestMouseHeaderClickNewOpensProjectPicker(t *testing.T) {
 	}
 }
 
+func TestMouseReleaseClearsTerminalDrag(t *testing.T) {
+	m := newTestModel(t)
+	seedMouseTestData(m)
+	m.terminalMouseDrag = true
+
+	m.updateTerminalMouseDrag(tea.MouseMsg{Action: tea.MouseActionRelease, Button: tea.MouseButtonNone})
+
+	if m.terminalMouseDrag {
+		t.Fatalf("terminalMouseDrag should be false after release")
+	}
+}
+
 func seedMouseTestData(m *Model) {
 	m.tab = TabDashboard
 	m.data = DashboardData{Projects: []ProjectGroup{{
