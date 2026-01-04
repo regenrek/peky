@@ -285,6 +285,9 @@ func (f *paneFlow) mustSplitVerticalAndAssertFocus() {
 	f.otherPaneID = otherPaneID
 	f.swapIndexA = findPaneIndexByID(updated, f.paneID)
 	f.otherIndex = findPaneIndexByID(updated, otherPaneID)
+	if f.swapIndexA == "" || f.otherIndex == "" {
+		f.t.Fatalf("missing pane indices after split: swapIndexA=%q otherIndex=%q panes=%#v", f.swapIndexA, f.otherIndex, updated.Panes)
+	}
 
 	focusCheckCtx, focusCheckCancel := context.WithTimeout(context.Background(), 2*time.Second)
 	focusSnap, err := f.client.SnapshotState(focusCheckCtx, 0)
