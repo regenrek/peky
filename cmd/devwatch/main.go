@@ -268,15 +268,7 @@ func debounceEvents(w *fsnotify.Watcher, debounce time.Duration, out chan<- stru
 	}
 	pending := false
 
-	reset := func() {
-		if !timer.Stop() && pending {
-			select {
-			case <-timer.C:
-			default:
-			}
-		}
-		timer.Reset(debounce)
-	}
+	reset := func() { resetTimer(timer, debounce, pending) }
 
 	for {
 		select {
@@ -284,33 +276,62 @@ func debounceEvents(w *fsnotify.Watcher, debounce time.Duration, out chan<- stru
 			if !ok {
 				return
 			}
-			if ev.Op&(fsnotify.Create) != 0 {
-				if info, err := os.Stat(ev.Name); err == nil && info.IsDir() {
-					_ = addWatchTree(w, ev.Name)
-				}
+			if handleWatchEvent(w, ev) {
+				pending = true
+				reset()
 			}
-			if ev.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Remove|fsnotify.Rename) == 0 {
-				continue
-			}
-			if shouldIgnoreFile(ev.Name) {
-				continue
-			}
-			pending = true
-			reset()
 		case <-timer.C:
-			if pending {
-				pending = false
-				select {
-				case out <- struct{}{}:
-				default:
-				}
-			}
+			pending = flushPending(out, pending)
 		case _, ok := <-w.Errors:
 			if !ok {
 				return
 			}
 		}
 	}
+}
+
+func resetTimer(timer *time.Timer, debounce time.Duration, pending bool) {
+	if !timer.Stop() && pending {
+		select {
+		case <-timer.C:
+		default:
+		}
+	}
+	timer.Reset(debounce)
+}
+
+func handleWatchEvent(w *fsnotify.Watcher, ev fsnotify.Event) bool {
+	if ev.Op&fsnotify.Create != 0 {
+		if isDir(ev.Name) {
+			_ = addWatchTree(w, ev.Name)
+		}
+	}
+	if ev.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Remove|fsnotify.Rename) == 0 {
+		return false
+	}
+	if shouldIgnoreFile(ev.Name) {
+		return false
+	}
+	return true
+}
+
+func isDir(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return info.IsDir()
+}
+
+func flushPending(out chan<- struct{}, pending bool) bool {
+	if !pending {
+		return false
+	}
+	select {
+	case out <- struct{}{}:
+	default:
+	}
+	return false
 }
 
 func shouldIgnoreFile(path string) bool {
