@@ -5,7 +5,7 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
-## 0.0.13 - 2026-01-04
+## 0.0.14 - 2026-01-04
 
 ### Added
 - Pane-selection mouse routing to force host selection (distinct from term-capture app routing).
