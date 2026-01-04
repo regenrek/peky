@@ -24,6 +24,9 @@ func (m *Model) handleTerminalKeyCmd(msg tea.KeyMsg) tea.Cmd {
 	if pane == nil || strings.TrimSpace(pane.ID) == "" {
 		return nil
 	}
+	if pane.Disconnected {
+		return NewWarningCmd("Pane is offline (snapshot only)")
+	}
 	scrollToggle := key.Matches(msg, m.keys.scrollback)
 	copyToggle := key.Matches(msg, m.keys.copyMode)
 	keyStr := msg.String()
@@ -68,12 +71,20 @@ func (m *Model) sendPaneInputCmd(payload []byte, contextLabel string) tea.Cmd {
 			return newPaneClosedMsg(paneID, nil)
 		}
 	}
+	if pane.Disconnected {
+		return NewWarningCmd("Pane is offline (snapshot only)")
+	}
 	return func() tea.Msg {
 		if m.isPaneInputDisabled(paneID) {
 			return nil
 		}
-		if pane := m.paneByID(paneID); pane != nil && pane.Dead {
-			return newPaneClosedMsg(paneID, nil)
+		if pane := m.paneByID(paneID); pane != nil {
+			if pane.Disconnected {
+				return WarningMsg{Message: "Pane is offline (snapshot only)"}
+			}
+			if pane.Dead {
+				return newPaneClosedMsg(paneID, nil)
+			}
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), terminalActionTimeout)
 		defer cancel()
@@ -122,6 +133,9 @@ func (m *Model) handleTerminalKeyResponse(ctx context.Context, paneID string, pa
 	}
 	if pane := m.paneByID(paneID); pane == nil || pane.Dead {
 		return newPaneClosedMsg(paneID, nil)
+	}
+	if pane := m.paneByID(paneID); pane != nil && pane.Disconnected {
+		return WarningMsg{Message: "Pane is offline (snapshot only)"}
 	}
 	if err := m.client.SendInput(ctx, paneID, payload); err != nil {
 		if isPaneClosedError(err) {

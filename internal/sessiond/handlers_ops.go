@@ -456,6 +456,11 @@ func (d *Daemon) handleSendMouse(payload []byte) ([]byte, error) {
 		return nil, err
 	}
 	if err := manager.SendMouse(paneID, event, route); err != nil {
+		if d.restore != nil {
+			if _, ok := d.restore.Snapshot(paneID); ok {
+				return nil, nil
+			}
+		}
 		return nil, err
 	}
 	return nil, nil

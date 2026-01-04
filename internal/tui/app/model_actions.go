@@ -285,7 +285,7 @@ func (m *Model) openClosePaneConfirm() tea.Cmd {
 		m.setToast("No pane selected", toastWarning)
 		return nil
 	}
-	running := !pane.Dead
+	running := !(pane.Dead || pane.Disconnected)
 	if !running {
 		m.setState(StateDashboard)
 		m.setToast("Closing pane...", toastInfo)
@@ -542,7 +542,7 @@ func runningPaneCount(projects []ProjectGroup) int {
 	for _, project := range projects {
 		for _, session := range project.Sessions {
 			for _, pane := range session.Panes {
-				if !pane.Dead {
+				if !pane.Dead && !pane.Disconnected {
 					count++
 				}
 			}

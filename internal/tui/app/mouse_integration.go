@@ -130,6 +130,9 @@ func (m *Model) forwardMouseEvent(hit mouse.PaneHit, msg tea.MouseMsg) tea.Cmd {
 	if strings.TrimSpace(hit.PaneID) == "" {
 		return nil
 	}
+	if pane := m.paneByID(hit.PaneID); pane == nil || pane.Dead || pane.Disconnected {
+		return nil
+	}
 	if !hit.Content.Contains(msg.X, msg.Y) {
 		return nil
 	}
