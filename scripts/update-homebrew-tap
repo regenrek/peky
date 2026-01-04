@@ -54,7 +54,7 @@ fi
 if ! [[ $tap_git_author_name =~ ^[[:print:]]+$ ]]; then
   die "invalid TAP_GIT_AUTHOR_NAME"
 fi
-if ! [[ $tap_git_author_email =~ ^[A-Za-z0-9_.%+-]+@[A-Za-z0-9_.-]+$ ]]; then
+if ! [[ $tap_git_author_email =~ ^[A-Za-z0-9_.%+\\-\\[\\]]+@[A-Za-z0-9_.-]+$ ]]; then
   die "invalid TAP_GIT_AUTHOR_EMAIL"
 fi
 
