@@ -25,64 +25,98 @@ type Entry struct {
 	IsDir bool
 }
 
+type listWalker struct {
+	root      string
+	cfg       Config
+	matcher   *ignoreMatcher
+	entries   []Entry
+	truncated bool
+}
+
 // List returns a filtered directory listing rooted at path.
 func List(path string, cfg Config) ([]Entry, bool, error) {
 	root, err := sanitizeRoot(path)
 	if err != nil {
 		return nil, false, err
 	}
-	matcher := newIgnoreMatcher(root)
-	entries := make([]Entry, 0, 64)
-	truncated := false
-	err = filepath.WalkDir(root, func(curr string, d os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return nil
-		}
-		if curr == root {
-			return nil
-		}
-		rel, relErr := filepath.Rel(root, curr)
-		if relErr != nil {
-			return nil
-		}
-		if shouldSkip(rel, d.IsDir(), cfg.IncludeHidden) {
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if matcher.shouldIgnore(rel, d.IsDir()) {
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if cfg.MaxDepth > 0 && depth(rel) > cfg.MaxDepth {
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		entries = append(entries, Entry{
-			Path:  filepath.ToSlash(rel),
-			IsDir: d.IsDir(),
-		})
-		if cfg.MaxItems > 0 && len(entries) >= cfg.MaxItems {
-			truncated = true
-			return filepath.SkipAll
-		}
-		return nil
-	})
+	walker := &listWalker{
+		root:    root,
+		cfg:     cfg,
+		matcher: newIgnoreMatcher(root),
+		entries: make([]Entry, 0, 64),
+	}
+	err = filepath.WalkDir(root, walker.visit)
 	if err != nil && !errors.Is(err, filepath.SkipAll) {
 		return nil, false, err
 	}
-	sort.SliceStable(entries, func(i, j int) bool {
-		if entries[i].IsDir != entries[j].IsDir {
-			return entries[i].IsDir
+	sort.SliceStable(walker.entries, func(i, j int) bool {
+		if walker.entries[i].IsDir != walker.entries[j].IsDir {
+			return walker.entries[i].IsDir
 		}
-		return entries[i].Path < entries[j].Path
+		return walker.entries[i].Path < walker.entries[j].Path
 	})
-	return entries, truncated, nil
+	return walker.entries, walker.truncated, nil
+}
+
+func (w *listWalker) visit(curr string, d os.DirEntry, walkErr error) error {
+	if walkErr != nil {
+		return nil
+	}
+	rel, ok := w.relPath(curr)
+	if !ok {
+		return nil
+	}
+	if w.skipHidden(rel, d) {
+		return w.skipDir(d)
+	}
+	if w.skipIgnored(rel, d) {
+		return w.skipDir(d)
+	}
+	if w.skipDepth(rel, d) {
+		return w.skipDir(d)
+	}
+	w.entries = append(w.entries, Entry{
+		Path:  filepath.ToSlash(rel),
+		IsDir: d.IsDir(),
+	})
+	if w.cfg.MaxItems > 0 && len(w.entries) >= w.cfg.MaxItems {
+		w.truncated = true
+		return filepath.SkipAll
+	}
+	return nil
+}
+
+func (w *listWalker) relPath(curr string) (string, bool) {
+	if curr == w.root {
+		return "", false
+	}
+	rel, err := filepath.Rel(w.root, curr)
+	if err != nil {
+		return "", false
+	}
+	return rel, true
+}
+
+func (w *listWalker) skipHidden(rel string, d os.DirEntry) bool {
+	return shouldSkip(rel, d.IsDir(), w.cfg.IncludeHidden)
+}
+
+func (w *listWalker) skipIgnored(rel string, d os.DirEntry) bool {
+	return w.matcher.shouldIgnore(rel, d.IsDir())
+}
+
+func (w *listWalker) skipDepth(rel string, d os.DirEntry) bool {
+	if w.cfg.MaxDepth <= 0 {
+		return false
+	}
+	return depth(rel) > w.cfg.MaxDepth
+}
+
+func (w *listWalker) skipDir(d os.DirEntry) error {
+	if d.IsDir() {
+		return filepath.SkipDir
+	}
+	return nil
 }
 
 func sanitizeRoot(path string) (string, error) {
