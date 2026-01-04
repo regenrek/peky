@@ -121,6 +121,7 @@ See [docs/cli.md](docs/cli.md) for the full command list and examples.
 
 See [docs/testing.md](docs/testing.md) for the full test matrix and CI notes.
 For heavy concurrency/regression coverage, run `scripts/cli-stress.sh` locally.
+For profiling + benchmarks, see [docs/performance.md](docs/performance.md).
 
 ## Release
 

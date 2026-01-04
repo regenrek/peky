@@ -1,92 +1,74 @@
-# Performance Guide
+# Performance
 
-Peaky Panes exposes a small set of performance knobs for dashboard previews. These affect **dashboard tiles and previews**, not the full terminal view (Ctrl+k).
+This repo includes a set of reproducible performance/stress tools for PeakyPanes.
 
-## Summary
+## Goals (multipane-first)
 
-- **Presets**: control pane-view scheduling and throttling.
-- **Render policy**: decide whether only visible panes update or all panes update.
-- **Preview render mode**: choose cached vs direct vs off.
+We optimize for extreme fan-out workloads (hundreds of panes) where the daemon must remain responsive:
 
-## Presets
+- Bounded memory growth per pane (no unbounded scrollback growth; no runaway caches).
+- Low allocation rate on hot paths (PTY output ingest, view rendering, snapshotting).
+- Predictable latency under load (view storms, focus churn, broadcast sends).
+- Graceful degradation under abuse (bounded concurrency, backpressure, clear errors).
 
-Presets affect how often pane views are requested and how much work is done per refresh.
+## Local benchmarks (micro)
 
-- **low**: battery saver, conservative scheduling.
-- **medium**: balanced.
-- **high**: smoother updates, higher CPU.
-- **max**: no throttling. Highest CPU, default for new installs.
-- **custom**: override specific fields under `dashboard.performance.pane_views`.
+Run the Go microbenchmarks and save results to `.bench/`:
 
-## Render policy
-
-- **visible** (default): only panes currently visible on the dashboard update live.
-- **all**: update every pane, even off-screen. This is heavy at scale.
-
-## Preview render mode
-
-- **cached**: uses ANSI cache + background refresh. Best overall cost/perf.
-- **direct**: bypasses cache and renders synchronously. Smoothest, but CPU-heavy.
-- **direct** (default): prefer this when you want maximum smoothness.
-- **off**: disables live previews in the dashboard (reduces CPU). Ctrl+k still shows the live terminal.
-
-## Recommended settings
-
-- **Laptop / battery**:
-  - preset: low
-  - render_policy: visible
-  - preview_render: cached
-
-- **Balanced**:
-  - preset: medium
-  - render_policy: visible
-  - preview_render: cached
-
-- **High-end workstation**:
-  - preset: max
-  - render_policy: visible
-  - preview_render: direct
-
-## Example config
-
-```yaml
-dashboard:
-  performance:
-    preset: max            # low | medium | high | max | custom
-    render_policy: visible # visible | all
-    preview_render:
-      mode: direct         # cached | direct | off
+```bash
+scripts/perf-bench
 ```
 
-## Custom overrides
+Current benchmark areas:
+- `internal/terminal`: window render paths (ANSI cache + lipgloss view).
+- `internal/sessiond`: pane view response construction.
+- `internal/vt`: scrollback push/reflow behaviors.
 
-Use `preset: custom` to override specific values:
+## Profile a real session (macro)
 
-```yaml
-dashboard:
-  performance:
-    preset: custom
-    render_policy: visible
-    preview_render:
-      mode: direct
-    pane_views:
-      max_concurrency: 8
-      max_inflight_batches: 4
-      max_batch: 16
-      min_interval_focused_ms: 1
-      min_interval_selected_ms: 1
-      min_interval_background_ms: 1
-      timeout_focused_ms: 1000
-      timeout_selected_ms: 800
-      timeout_background_ms: 600
-      pump_base_delay_ms: 1
-      pump_max_delay_ms: 1
-      force_after_ms: 1
-      fallback_min_interval_ms: 1
+Run a fresh session with the profiler build tag enabled and capture CPU/heap profiles:
+
+```bash
+scripts/perf-profiler
 ```
 
-## Notes
+This captures a run directory under `.bench/` with:
+- daemon logs
+- pprof profiles (cpu/heap; optional block/mutex/trace/fgprof)
+- a summary report
 
-- `render_policy: all` and `preview_render: direct` are intentionally heavy.
-- Dashboard previews are independent from the full terminal view.
-- If you want perfectly smooth previews, prefer `preview_render: direct` and a higher preset.
+Useful flags:
+- `--layout <file>`: choose a workload layout
+- `--secs <n>`: CPU profile seconds
+- `--trace <n>` / `--fgprof <n>`: capture deeper traces sequentially
+- `--paneviews-all`: render all panes (worst-case dashboard)
+
+## Generate perf layouts
+
+Create reproducible perf layouts and run them via `peakypanes start --path`:
+
+```bash
+scripts/perf-12pane
+scripts/perf-40pane
+```
+
+Tune:
+- `GRID_ROWS`, `GRID_COLS`: pane count
+- `RATE_MS`: output cadence per pane
+- `ANSI_HEAVY=1`: use heavier ANSI output
+
+## Compare against tmux
+
+Use a similar workload under tmux for input->output timing checks:
+
+```bash
+scripts/perf-tmux --panes 40 --mode ping
+```
+
+## Minimum acceptance (release)
+
+For releases, we expect:
+- `scripts/cli-stress.sh` passes locally on a typical dev machine.
+- No sustained unbounded RSS growth when running `scripts/perf-40pane` for several minutes.
+- `scripts/perf-bench` does not regress materially vs the previous release tag (compare `.bench/bench-*.txt`).
+
