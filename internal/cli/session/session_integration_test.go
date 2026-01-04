@@ -120,175 +120,161 @@ func testCommand() *cli.Command {
 	}
 }
 
-func TestSessionCommandFlow(t *testing.T) {
+type sessionFlow struct {
+	t      *testing.T
+	td     *testDaemon
+	client *sessiond.Client
+}
+
+func newSessionFlow(t *testing.T) sessionFlow {
+	t.Helper()
 	t.Setenv("HOME", t.TempDir())
 	td := newTestDaemon(t)
 	client := dialTestClient(t, td)
+	return sessionFlow{t: t, td: td, client: client}
+}
 
+func (f sessionFlow) deps() root.Dependencies {
+	return root.Dependencies{Version: f.td.version, Connect: f.td.connect}
+}
+
+func (f sessionFlow) ctx(cmd *cli.Command, out io.Writer, json bool) root.CommandContext {
+	return root.CommandContext{
+		Context: context.Background(),
+		Cmd:     cmd,
+		Deps:    f.deps(),
+		Out:     out,
+		ErrOut:  io.Discard,
+		Stdin:   strings.NewReader(""),
+		JSON:    json,
+	}
+}
+
+func (f sessionFlow) mustStart(name, path string, env ...string) {
+	f.t.Helper()
+	cmd := testCommand()
+	_ = cmd.Set("name", name)
+	_ = cmd.Set("path", path)
+	for _, kv := range env {
+		_ = cmd.Set("env", kv)
+	}
+	if err := runStart(f.ctx(cmd, io.Discard, false)); err != nil {
+		f.t.Fatalf("runStart() error: %v", err)
+	}
+}
+
+func (f sessionFlow) mustStartJSON(name, path string) {
+	f.t.Helper()
+	cmd := testCommand()
+	_ = cmd.Set("name", name)
+	_ = cmd.Set("path", path)
+	if err := runStart(f.ctx(cmd, io.Discard, true)); err != nil {
+		f.t.Fatalf("runStart(json) error: %v", err)
+	}
+}
+
+func (f sessionFlow) mustListContains(name string) {
+	f.t.Helper()
+	var out bytes.Buffer
+	if err := runList(f.ctx(testCommand(), &out, false)); err != nil {
+		f.t.Fatalf("runList() error: %v", err)
+	}
+	if !strings.Contains(out.String(), name) {
+		f.t.Fatalf("runList output = %q", out.String())
+	}
+}
+
+func (f sessionFlow) mustListJSONHasSessions() {
+	f.t.Helper()
+	var out bytes.Buffer
+	if err := runList(f.ctx(testCommand(), &out, true)); err != nil {
+		f.t.Fatalf("runList(json) error: %v", err)
+	}
+	if !strings.Contains(out.String(), "\"sessions\"") {
+		f.t.Fatalf("runList(json) output = %q", out.String())
+	}
+}
+
+func (f sessionFlow) mustRename(oldName, newName string) {
+	f.t.Helper()
+	cmd := testCommand()
+	_ = cmd.Set("old", oldName)
+	_ = cmd.Set("new", newName)
+	if err := runRename(f.ctx(cmd, io.Discard, false)); err != nil {
+		f.t.Fatalf("runRename() error: %v", err)
+	}
+}
+
+func (f sessionFlow) mustFocus(name string, json bool) {
+	f.t.Helper()
+	cmd := testCommand()
+	_ = cmd.Set("name", name)
+	if err := runFocus(f.ctx(cmd, io.Discard, json)); err != nil {
+		f.t.Fatalf("runFocus(json=%v) error: %v", json, err)
+	}
+}
+
+func (f sessionFlow) mustAssertFocusedSession(name string) {
+	f.t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	resp, err := f.client.SnapshotState(ctx, 0)
+	if err != nil {
+		f.t.Fatalf("SnapshotState() error: %v", err)
+	}
+	if resp.FocusedSession != name {
+		f.t.Fatalf("FocusedSession = %q", resp.FocusedSession)
+	}
+}
+
+func (f sessionFlow) mustSnapshotContains(name string, json bool, want string) {
+	f.t.Helper()
+	var out bytes.Buffer
+	if err := runSnapshot(f.ctx(testCommand(), &out, json)); err != nil {
+		f.t.Fatalf("runSnapshot(json=%v) error: %v", json, err)
+	}
+	if !strings.Contains(out.String(), want) {
+		f.t.Fatalf("runSnapshot output = %q", out.String())
+	}
+}
+
+func (f sessionFlow) mustKill(name string, json bool) {
+	f.t.Helper()
+	cmd := testCommand()
+	_ = cmd.Set("name", name)
+	if err := runKill(f.ctx(cmd, io.Discard, json)); err != nil {
+		f.t.Fatalf("runKill(json=%v) error: %v", json, err)
+	}
+}
+
+func TestSessionCommandFlow(t *testing.T) {
+	flow := newSessionFlow(t)
 	path := t.TempDir()
 	name := "sess"
 	writeTestLayout(t, path, name)
 
-	startCmd := testCommand()
-	_ = startCmd.Set("name", name)
-	_ = startCmd.Set("path", path)
-	_ = startCmd.Set("env", "FOO=bar")
-	startCtx := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     startCmd,
-		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
-		Out:     io.Discard,
-		ErrOut:  io.Discard,
-		Stdin:   strings.NewReader(""),
-	}
-	if err := runStart(startCtx); err != nil {
-		t.Fatalf("runStart() error: %v", err)
-	}
+	flow.mustStart(name, path, "FOO=bar")
 	jsonPath := t.TempDir()
 	jsonName := "sess-json"
 	writeTestLayout(t, jsonPath, jsonName)
-	startJSONCmd := testCommand()
-	_ = startJSONCmd.Set("name", jsonName)
-	_ = startJSONCmd.Set("path", jsonPath)
-	startJSON := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     startJSONCmd,
-		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
-		Out:     io.Discard,
-		ErrOut:  io.Discard,
-		Stdin:   strings.NewReader(""),
-		JSON:    true,
-	}
-	if err := runStart(startJSON); err != nil {
-		t.Fatalf("runStart(json) error: %v", err)
-	}
+	flow.mustStartJSON(jsonName, jsonPath)
 
-	waitForSessionSnapshot(t, client, name)
+	waitForSessionSnapshot(t, flow.client, name)
 
-	var listOut bytes.Buffer
-	listCtx := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     testCommand(),
-		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
-		Out:     &listOut,
-		ErrOut:  io.Discard,
-		Stdin:   strings.NewReader(""),
-	}
-	if err := runList(listCtx); err != nil {
-		t.Fatalf("runList() error: %v", err)
-	}
-	if !strings.Contains(listOut.String(), name) {
-		t.Fatalf("runList output = %q", listOut.String())
-	}
-	var listJSON bytes.Buffer
-	listJSONCtx := listCtx
-	listJSONCtx.JSON = true
-	listJSONCtx.Out = &listJSON
-	if err := runList(listJSONCtx); err != nil {
-		t.Fatalf("runList(json) error: %v", err)
-	}
-	if !strings.Contains(listJSON.String(), "\"sessions\"") {
-		t.Fatalf("runList(json) output = %q", listJSON.String())
-	}
+	flow.mustListContains(name)
+	flow.mustListJSONHasSessions()
 
-	renameCmd := testCommand()
-	_ = renameCmd.Set("old", name)
-	_ = renameCmd.Set("new", "renamed")
-	renameCtx := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     renameCmd,
-		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
-		Out:     io.Discard,
-		ErrOut:  io.Discard,
-		Stdin:   strings.NewReader(""),
-	}
-	if err := runRename(renameCtx); err != nil {
-		t.Fatalf("runRename() error: %v", err)
-	}
+	flow.mustRename(name, "renamed")
 	name = "renamed"
-	waitForSessionSnapshot(t, client, name)
+	waitForSessionSnapshot(t, flow.client, name)
 
-	focusCmd := testCommand()
-	_ = focusCmd.Set("name", name)
-	focusCtx := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     focusCmd,
-		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
-		Out:     io.Discard,
-		ErrOut:  io.Discard,
-		Stdin:   strings.NewReader(""),
-	}
-	if err := runFocus(focusCtx); err != nil {
-		t.Fatalf("runFocus() error: %v", err)
-	}
-	focusJSON := focusCtx
-	focusJSON.JSON = true
-	focusJSON.Out = io.Discard
-	if err := runFocus(focusJSON); err != nil {
-		t.Fatalf("runFocus(json) error: %v", err)
-	}
+	flow.mustFocus(name, false)
+	flow.mustFocus(name, true)
+	flow.mustAssertFocusedSession(name)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	resp, err := client.SnapshotState(ctx, 0)
-	if err != nil {
-		t.Fatalf("SnapshotState() error: %v", err)
-	}
-	if resp.FocusedSession != name {
-		t.Fatalf("FocusedSession = %q", resp.FocusedSession)
-	}
+	flow.mustSnapshotContains(name, false, name)
+	flow.mustSnapshotContains(name, true, "\"snapshot\"")
 
-	var snapOut bytes.Buffer
-	snapshotCtx := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     testCommand(),
-		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
-		Out:     &snapOut,
-		ErrOut:  io.Discard,
-		Stdin:   strings.NewReader(""),
-	}
-	if err := runSnapshot(snapshotCtx); err != nil {
-		t.Fatalf("runSnapshot() error: %v", err)
-	}
-	if !strings.Contains(snapOut.String(), name) {
-		t.Fatalf("runSnapshot output = %q", snapOut.String())
-	}
-	var snapJSON bytes.Buffer
-	snapJSONCtx := snapshotCtx
-	snapJSONCtx.JSON = true
-	snapJSONCtx.Out = &snapJSON
-	if err := runSnapshot(snapJSONCtx); err != nil {
-		t.Fatalf("runSnapshot(json) error: %v", err)
-	}
-	if !strings.Contains(snapJSON.String(), "\"snapshot\"") {
-		t.Fatalf("runSnapshot(json) output = %q", snapJSON.String())
-	}
-
-	killCmd := testCommand()
-	_ = killCmd.Set("name", name)
-	killCtx := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     killCmd,
-		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
-		Out:     io.Discard,
-		ErrOut:  io.Discard,
-		Stdin:   strings.NewReader(""),
-	}
-	if err := runKill(killCtx); err != nil {
-		t.Fatalf("runKill() error: %v", err)
-	}
-	killJSONCmd := testCommand()
-	_ = killJSONCmd.Set("name", jsonName)
-	killJSON := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     killJSONCmd,
-		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
-		Out:     io.Discard,
-		ErrOut:  io.Discard,
-		Stdin:   strings.NewReader(""),
-		JSON:    true,
-	}
-	if err := runKill(killJSON); err != nil {
-		t.Fatalf("runKill(json) error: %v", err)
-	}
+	flow.mustKill(name, false)
+	flow.mustKill(jsonName, true)
 }

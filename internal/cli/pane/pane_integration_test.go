@@ -170,7 +170,20 @@ func testCommand() *cli.Command {
 	}
 }
 
-func TestPaneCommandFlow(t *testing.T) {
+type paneFlow struct {
+	t           *testing.T
+	td          *testDaemon
+	client      *sessiond.Client
+	sessionName string
+	paneID      string
+	paneIndex   string
+	otherPaneID string
+	otherIndex  string
+	swapIndexA  string
+}
+
+func newPaneFlow(t *testing.T) paneFlow {
+	t.Helper()
 	t.Setenv("HOME", t.TempDir())
 	td := newTestDaemon(t)
 	client := dialTestClient(t, td)
@@ -182,419 +195,361 @@ func TestPaneCommandFlow(t *testing.T) {
 		t.Fatalf("session snapshot missing panes")
 	}
 	pane := snap.Panes[0]
-
-	listCmd := testCommand()
-	if err := listCmd.Set("session", sessionName); err != nil {
-		t.Fatalf("listCmd.Set(session) error: %v", err)
+	return paneFlow{
+		t:           t,
+		td:          td,
+		client:      client,
+		sessionName: sessionName,
+		paneID:      pane.ID,
+		paneIndex:   pane.Index,
 	}
-	var listOut bytes.Buffer
-	listCtx := root.CommandContext{
+}
+
+func (f paneFlow) deps() root.Dependencies {
+	return root.Dependencies{Version: f.td.version, Connect: f.td.connect}
+}
+
+func (f paneFlow) ctx(cmd *cli.Command, out io.Writer, json bool) root.CommandContext {
+	return root.CommandContext{
 		Context: context.Background(),
-		Cmd:     listCmd,
-		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
-		Out:     &listOut,
+		Cmd:     cmd,
+		Deps:    f.deps(),
+		Out:     out,
 		ErrOut:  io.Discard,
 		Stdin:   strings.NewReader(""),
+		JSON:    json,
 	}
-	if err := runList(listCtx); err != nil {
-		t.Fatalf("runList() error: %v", err)
-	}
-	if !strings.Contains(listOut.String(), pane.ID) {
-		t.Fatalf("runList output = %q", listOut.String())
-	}
-	var listJSON bytes.Buffer
-	listJSONCtx := listCtx
-	listJSONCtx.JSON = true
-	listJSONCtx.Out = &listJSON
-	if err := runList(listJSONCtx); err != nil {
-		t.Fatalf("runList(json) error: %v", err)
-	}
-	if !strings.Contains(listJSON.String(), "\"panes\"") {
-		t.Fatalf("runList(json) output = %q", listJSON.String())
-	}
+}
 
-	renameCmd := testCommand()
-	_ = renameCmd.Set("session", sessionName)
-	_ = renameCmd.Set("index", pane.Index)
-	_ = renameCmd.Set("name", "renamed")
-	renameCtx := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     renameCmd,
-		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
-		Out:     io.Discard,
-		ErrOut:  io.Discard,
-		Stdin:   strings.NewReader(""),
+func (f paneFlow) mustList() {
+	f.t.Helper()
+	cmd := testCommand()
+	if err := cmd.Set("session", f.sessionName); err != nil {
+		f.t.Fatalf("listCmd.Set(session) error: %v", err)
 	}
-	if err := runRename(renameCtx); err != nil {
-		t.Fatalf("runRename() error: %v", err)
+	var out bytes.Buffer
+	if err := runList(f.ctx(cmd, &out, false)); err != nil {
+		f.t.Fatalf("runList() error: %v", err)
 	}
+	if !strings.Contains(out.String(), f.paneID) {
+		f.t.Fatalf("runList output = %q", out.String())
+	}
+}
 
-	updated := waitForSessionSnapshot(t, client, sessionName)
-	if len(updated.Panes) == 0 || updated.Panes[0].Title != "renamed" {
-		t.Fatalf("pane rename missing: %#v", updated.Panes)
+func (f paneFlow) mustListJSON() {
+	f.t.Helper()
+	cmd := testCommand()
+	_ = cmd.Set("session", f.sessionName)
+	var out bytes.Buffer
+	if err := runList(f.ctx(cmd, &out, true)); err != nil {
+		f.t.Fatalf("runList(json) error: %v", err)
 	}
+	if !strings.Contains(out.String(), "\"panes\"") {
+		f.t.Fatalf("runList(json) output = %q", out.String())
+	}
+}
 
-	splitCmd := testCommand()
-	_ = splitCmd.Set("session", sessionName)
-	_ = splitCmd.Set("index", pane.Index)
-	_ = splitCmd.Set("orientation", "vertical")
-	splitCtx := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     splitCmd,
-		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
-		Out:     io.Discard,
-		ErrOut:  io.Discard,
-		Stdin:   strings.NewReader(""),
+func (f paneFlow) mustRename(newName string) {
+	f.t.Helper()
+	cmd := testCommand()
+	_ = cmd.Set("session", f.sessionName)
+	_ = cmd.Set("index", f.paneIndex)
+	_ = cmd.Set("name", newName)
+	if err := runRename(f.ctx(cmd, io.Discard, false)); err != nil {
+		f.t.Fatalf("runRename() error: %v", err)
 	}
-	if err := runSplit(splitCtx); err != nil {
-		t.Fatalf("runSplit() error: %v", err)
+	updated := waitForSessionSnapshot(f.t, f.client, f.sessionName)
+	if len(updated.Panes) == 0 || updated.Panes[0].Title != newName {
+		f.t.Fatalf("pane rename missing: %#v", updated.Panes)
 	}
+}
 
-	updated = waitForSessionSnapshot(t, client, sessionName)
+func (f *paneFlow) mustSplitVerticalAndAssertFocus() {
+	f.t.Helper()
+	cmd := testCommand()
+	_ = cmd.Set("session", f.sessionName)
+	_ = cmd.Set("index", f.paneIndex)
+	_ = cmd.Set("orientation", "vertical")
+	if err := runSplit(f.ctx(cmd, io.Discard, false)); err != nil {
+		f.t.Fatalf("runSplit() error: %v", err)
+	}
+	updated := waitForSessionSnapshot(f.t, f.client, f.sessionName)
 	if len(updated.Panes) < 2 {
-		t.Fatalf("expected split pane, got %#v", updated.Panes)
+		f.t.Fatalf("expected split pane, got %#v", updated.Panes)
 	}
-	otherPane := updated.Panes[1]
-	newPaneID := ""
-	for _, p := range updated.Panes {
-		if p.ID != pane.ID {
-			newPaneID = p.ID
-			break
+	f.swapIndexA = updated.Panes[0].Index
+	f.otherIndex = updated.Panes[1].Index
+
+	otherPaneID, ok := findOtherPaneID(updated, f.paneID)
+	if !ok {
+		f.t.Fatalf("expected new pane id after split")
+	}
+	f.otherPaneID = otherPaneID
+
+	focusCheckCtx, focusCheckCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	focusSnap, err := f.client.SnapshotState(focusCheckCtx, 0)
+	focusCheckCancel()
+	if err != nil {
+		f.t.Fatalf("SnapshotState() error: %v", err)
+	}
+	if focusSnap.FocusedPaneID != otherPaneID {
+		f.t.Fatalf("expected focus %q, got %q", otherPaneID, focusSnap.FocusedPaneID)
+	}
+}
+
+func findOtherPaneID(snap native.SessionSnapshot, excludeID string) (string, bool) {
+	for _, p := range snap.Panes {
+		if p.ID != excludeID {
+			return p.ID, true
 		}
 	}
-	if newPaneID == "" {
-		t.Fatalf("expected new pane id after split")
-	}
-	{
-		focusCheckCtx, focusCheckCancel := context.WithTimeout(context.Background(), 2*time.Second)
-		focusSnap, err := client.SnapshotState(focusCheckCtx, 0)
-		focusCheckCancel()
-		if err != nil {
-			t.Fatalf("SnapshotState() error: %v", err)
-		}
-		if focusSnap.FocusedPaneID != newPaneID {
-			t.Fatalf("expected focus %q, got %q", newPaneID, focusSnap.FocusedPaneID)
-		}
-	}
+	return "", false
+}
 
-	sendCmd := testCommand()
-	_ = sendCmd.Set("pane-id", pane.ID)
-	_ = sendCmd.Set("text", "hello")
-	sendCtx := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     sendCmd,
-		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
-		Out:     io.Discard,
-		ErrOut:  io.Discard,
-		Stdin:   strings.NewReader(""),
+func (f paneFlow) mustSendText(paneID, text string) {
+	f.t.Helper()
+	cmd := testCommand()
+	_ = cmd.Set("pane-id", paneID)
+	_ = cmd.Set("text", text)
+	if err := runSend(f.ctx(cmd, io.Discard, false)); err != nil {
+		f.t.Fatalf("runSend() error: %v", err)
 	}
-	if err := runSend(sendCtx); err != nil {
-		t.Fatalf("runSend() error: %v", err)
+	var out bytes.Buffer
+	if err := runSend(f.ctx(cmd, &out, true)); err != nil {
+		f.t.Fatalf("runSend(json) error: %v", err)
 	}
-	var sendJSON bytes.Buffer
-	sendJSONCtx := sendCtx
-	sendJSONCtx.JSON = true
-	sendJSONCtx.Out = &sendJSON
-	if err := runSend(sendJSONCtx); err != nil {
-		t.Fatalf("runSend(json) error: %v", err)
+	if !strings.Contains(out.String(), "pane.send") {
+		f.t.Fatalf("runSend(json) output = %q", out.String())
 	}
-	if !strings.Contains(sendJSON.String(), "pane.send") {
-		t.Fatalf("runSend(json) output = %q", sendJSON.String())
-	}
+}
 
-	runCmd := testCommand()
-	_ = runCmd.Set("pane-id", pane.ID)
-	_ = runCmd.Set("command", "echo hi")
-	runCtx := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     runCmd,
-		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
-		Out:     io.Discard,
-		ErrOut:  io.Discard,
-		Stdin:   strings.NewReader(""),
+func (f paneFlow) mustRunCommand(paneID, command string) {
+	f.t.Helper()
+	cmd := testCommand()
+	_ = cmd.Set("pane-id", paneID)
+	_ = cmd.Set("command", command)
+	if err := runRun(f.ctx(cmd, io.Discard, false)); err != nil {
+		f.t.Fatalf("runRun() error: %v", err)
 	}
-	if err := runRun(runCtx); err != nil {
-		t.Fatalf("runRun() error: %v", err)
-	}
+}
 
-	viewCmd := testCommand()
-	_ = viewCmd.Set("pane-id", pane.ID)
-	_ = viewCmd.Set("rows", "5")
-	_ = viewCmd.Set("cols", "20")
-	_ = viewCmd.Set("mode", "plain")
-	viewCtx := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     viewCmd,
-		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
-		Out:     io.Discard,
-		ErrOut:  io.Discard,
-		Stdin:   strings.NewReader(""),
+func (f paneFlow) mustView(paneID string) {
+	f.t.Helper()
+	cmd := testCommand()
+	_ = cmd.Set("pane-id", paneID)
+	_ = cmd.Set("rows", "5")
+	_ = cmd.Set("cols", "20")
+	_ = cmd.Set("mode", "plain")
+	if err := runView(f.ctx(cmd, io.Discard, false)); err != nil {
+		f.t.Fatalf("runView() error: %v", err)
 	}
-	if err := runView(viewCtx); err != nil {
-		t.Fatalf("runView() error: %v", err)
+	var out bytes.Buffer
+	if err := runView(f.ctx(cmd, &out, true)); err != nil {
+		f.t.Fatalf("runView(json) error: %v", err)
 	}
-	var viewJSON bytes.Buffer
-	viewJSONCtx := viewCtx
-	viewJSONCtx.JSON = true
-	viewJSONCtx.Out = &viewJSON
-	if err := runView(viewJSONCtx); err != nil {
-		t.Fatalf("runView(json) error: %v", err)
+	if !strings.Contains(out.String(), "\"pane_id\"") {
+		f.t.Fatalf("runView(json) output = %q", out.String())
 	}
-	if !strings.Contains(viewJSON.String(), "\"pane_id\"") {
-		t.Fatalf("runView(json) output = %q", viewJSON.String())
-	}
+}
 
-	snapshotCmd := testCommand()
-	_ = snapshotCmd.Set("pane-id", pane.ID)
-	_ = snapshotCmd.Set("rows", "10")
-	snapshotCtx := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     snapshotCmd,
-		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
-		Out:     io.Discard,
-		ErrOut:  io.Discard,
-		Stdin:   strings.NewReader(""),
+func (f paneFlow) mustSnapshot(paneID string) {
+	f.t.Helper()
+	cmd := testCommand()
+	_ = cmd.Set("pane-id", paneID)
+	_ = cmd.Set("rows", "10")
+	if err := runSnapshot(f.ctx(cmd, io.Discard, false)); err != nil {
+		f.t.Fatalf("runSnapshot() error: %v", err)
 	}
-	if err := runSnapshot(snapshotCtx); err != nil {
-		t.Fatalf("runSnapshot() error: %v", err)
+	var out bytes.Buffer
+	if err := runSnapshot(f.ctx(cmd, &out, true)); err != nil {
+		f.t.Fatalf("runSnapshot(json) error: %v", err)
 	}
-	var snapJSON bytes.Buffer
-	snapJSONCtx := snapshotCtx
-	snapJSONCtx.JSON = true
-	snapJSONCtx.Out = &snapJSON
-	if err := runSnapshot(snapJSONCtx); err != nil {
-		t.Fatalf("runSnapshot(json) error: %v", err)
+	if !strings.Contains(out.String(), "\"pane_id\"") {
+		f.t.Fatalf("runSnapshot(json) output = %q", out.String())
 	}
-	if !strings.Contains(snapJSON.String(), "\"pane_id\"") {
-		t.Fatalf("runSnapshot(json) output = %q", snapJSON.String())
-	}
+}
 
-	historyCmd := testCommand()
-	_ = historyCmd.Set("pane-id", pane.ID)
-	_ = historyCmd.Set("limit", "5")
-	historyCtx := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     historyCmd,
-		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
-		Out:     io.Discard,
-		ErrOut:  io.Discard,
-		Stdin:   strings.NewReader(""),
+func (f paneFlow) mustHistory(paneID string) {
+	f.t.Helper()
+	cmd := testCommand()
+	_ = cmd.Set("pane-id", paneID)
+	_ = cmd.Set("limit", "5")
+	if err := runHistory(f.ctx(cmd, io.Discard, false)); err != nil {
+		f.t.Fatalf("runHistory() error: %v", err)
 	}
-	if err := runHistory(historyCtx); err != nil {
-		t.Fatalf("runHistory() error: %v", err)
+	var out bytes.Buffer
+	if err := runHistory(f.ctx(cmd, &out, true)); err != nil {
+		f.t.Fatalf("runHistory(json) error: %v", err)
 	}
-	var historyJSON bytes.Buffer
-	historyJSONCtx := historyCtx
-	historyJSONCtx.JSON = true
-	historyJSONCtx.Out = &historyJSON
-	if err := runHistory(historyJSONCtx); err != nil {
-		t.Fatalf("runHistory(json) error: %v", err)
+	if !strings.Contains(out.String(), "\"entries\"") {
+		f.t.Fatalf("runHistory(json) output = %q", out.String())
 	}
-	if !strings.Contains(historyJSON.String(), "\"entries\"") {
-		t.Fatalf("runHistory(json) output = %q", historyJSON.String())
-	}
+}
 
-	tagCmd := testCommand()
-	_ = tagCmd.Set("pane-id", pane.ID)
-	_ = tagCmd.Set("tag", "agent")
-	tagCtx := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     tagCmd,
-		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
-		Out:     io.Discard,
-		ErrOut:  io.Discard,
-		Stdin:   strings.NewReader(""),
+func (f paneFlow) mustTagLifecycle(paneID string) {
+	f.t.Helper()
+	cmd := testCommand()
+	_ = cmd.Set("pane-id", paneID)
+	_ = cmd.Set("tag", "agent")
+	if err := runTagAdd(f.ctx(cmd, io.Discard, false)); err != nil {
+		f.t.Fatalf("runTagAdd() error: %v", err)
 	}
-	if err := runTagAdd(tagCtx); err != nil {
-		t.Fatalf("runTagAdd() error: %v", err)
+	if err := runTagList(f.ctx(cmd, io.Discard, false)); err != nil {
+		f.t.Fatalf("runTagList() error: %v", err)
 	}
-	if err := runTagList(tagCtx); err != nil {
-		t.Fatalf("runTagList() error: %v", err)
+	var out bytes.Buffer
+	if err := runTagList(f.ctx(cmd, &out, true)); err != nil {
+		f.t.Fatalf("runTagList(json) error: %v", err)
 	}
-	var tagJSON bytes.Buffer
-	tagJSONCtx := tagCtx
-	tagJSONCtx.JSON = true
-	tagJSONCtx.Out = &tagJSON
-	if err := runTagList(tagJSONCtx); err != nil {
-		t.Fatalf("runTagList(json) error: %v", err)
+	if !strings.Contains(out.String(), "\"tags\"") {
+		f.t.Fatalf("runTagList(json) output = %q", out.String())
 	}
-	if !strings.Contains(tagJSON.String(), "\"tags\"") {
-		t.Fatalf("runTagList(json) output = %q", tagJSON.String())
+	if err := runTagRemove(f.ctx(cmd, io.Discard, false)); err != nil {
+		f.t.Fatalf("runTagRemove() error: %v", err)
 	}
-	if err := runTagRemove(tagCtx); err != nil {
-		t.Fatalf("runTagRemove() error: %v", err)
-	}
+}
 
-	actionCmd := testCommand()
-	_ = actionCmd.Set("pane-id", pane.ID)
-	_ = actionCmd.Set("action", "scroll-up")
-	_ = actionCmd.Set("lines", "1")
-	actionCtx := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     actionCmd,
-		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
-		Out:     io.Discard,
-		ErrOut:  io.Discard,
-		Stdin:   strings.NewReader(""),
+func (f paneFlow) mustActionScrollUp(paneID string) {
+	f.t.Helper()
+	cmd := testCommand()
+	_ = cmd.Set("pane-id", paneID)
+	_ = cmd.Set("action", "scroll-up")
+	_ = cmd.Set("lines", "1")
+	if err := runAction(f.ctx(cmd, io.Discard, false)); err != nil {
+		f.t.Fatalf("runAction() error: %v", err)
 	}
-	if err := runAction(actionCtx); err != nil {
-		t.Fatalf("runAction() error: %v", err)
+	var out bytes.Buffer
+	if err := runAction(f.ctx(cmd, &out, true)); err != nil {
+		f.t.Fatalf("runAction(json) error: %v", err)
 	}
-	var actionJSON bytes.Buffer
-	actionJSONCtx := actionCtx
-	actionJSONCtx.JSON = true
-	actionJSONCtx.Out = &actionJSON
-	if err := runAction(actionJSONCtx); err != nil {
-		t.Fatalf("runAction(json) error: %v", err)
+	if !strings.Contains(out.String(), "pane.action") {
+		f.t.Fatalf("runAction(json) output = %q", out.String())
 	}
-	if !strings.Contains(actionJSON.String(), "pane.action") {
-		t.Fatalf("runAction(json) output = %q", actionJSON.String())
-	}
+}
 
-	keyCmd := testCommand()
-	_ = keyCmd.Set("pane-id", pane.ID)
-	_ = keyCmd.Set("key", "k")
-	_ = keyCmd.Set("mods", "ctrl")
-	keyCtx := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     keyCmd,
-		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
-		Out:     io.Discard,
-		ErrOut:  io.Discard,
-		Stdin:   strings.NewReader(""),
+func (f paneFlow) mustKeyCtrlK(paneID string) {
+	f.t.Helper()
+	cmd := testCommand()
+	_ = cmd.Set("pane-id", paneID)
+	_ = cmd.Set("key", "k")
+	_ = cmd.Set("mods", "ctrl")
+	if err := runKey(f.ctx(cmd, io.Discard, false)); err != nil {
+		f.t.Fatalf("runKey() error: %v", err)
 	}
-	if err := runKey(keyCtx); err != nil {
-		t.Fatalf("runKey() error: %v", err)
+	var out bytes.Buffer
+	if err := runKey(f.ctx(cmd, &out, true)); err != nil {
+		f.t.Fatalf("runKey(json) error: %v", err)
 	}
-	var keyJSON bytes.Buffer
-	keyJSONCtx := keyCtx
-	keyJSONCtx.JSON = true
-	keyJSONCtx.Out = &keyJSON
-	if err := runKey(keyJSONCtx); err != nil {
-		t.Fatalf("runKey(json) error: %v", err)
+	if !strings.Contains(out.String(), "pane.key") {
+		f.t.Fatalf("runKey(json) output = %q", out.String())
 	}
-	if !strings.Contains(keyJSON.String(), "pane.key") {
-		t.Fatalf("runKey(json) output = %q", keyJSON.String())
-	}
+}
 
-	tailCmd := testCommand()
-	_ = tailCmd.Set("pane-id", pane.ID)
-	_ = tailCmd.Set("follow", "false")
-	_ = tailCmd.Set("lines", "5")
-	tailCtx := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     tailCmd,
-		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
-		Out:     io.Discard,
-		ErrOut:  io.Discard,
-		Stdin:   strings.NewReader(""),
+func (f paneFlow) mustTail(paneID string) {
+	f.t.Helper()
+	cmd := testCommand()
+	_ = cmd.Set("pane-id", paneID)
+	_ = cmd.Set("follow", "false")
+	_ = cmd.Set("lines", "5")
+	if err := runTail(f.ctx(cmd, io.Discard, false)); err != nil {
+		f.t.Fatalf("runTail() error: %v", err)
 	}
-	if err := runTail(tailCtx); err != nil {
-		t.Fatalf("runTail() error: %v", err)
+	var out bytes.Buffer
+	if err := runTail(f.ctx(cmd, &out, true)); err != nil {
+		f.t.Fatalf("runTail(json) error: %v", err)
 	}
-	var tailJSON bytes.Buffer
-	tailJSONCtx := tailCtx
-	tailJSONCtx.JSON = true
-	tailJSONCtx.Out = &tailJSON
-	if err := runTail(tailJSONCtx); err != nil {
-		t.Fatalf("runTail(json) error: %v", err)
+	if out.Len() == 0 {
+		f.t.Fatalf("runTail(json) empty output")
 	}
-	if tailJSON.Len() == 0 {
-		t.Fatalf("runTail(json) empty output")
-	}
+}
 
-	swapCmd := testCommand()
-	_ = swapCmd.Set("session", sessionName)
-	_ = swapCmd.Set("a", updated.Panes[0].Index)
-	_ = swapCmd.Set("b", otherPane.Index)
-	swapCtx := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     swapCmd,
-		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
-		Out:     io.Discard,
-		ErrOut:  io.Discard,
-		Stdin:   strings.NewReader(""),
+func (f paneFlow) mustSwap() {
+	f.t.Helper()
+	cmd := testCommand()
+	_ = cmd.Set("session", f.sessionName)
+	_ = cmd.Set("a", f.swapIndexA)
+	_ = cmd.Set("b", f.otherIndex)
+	if err := runSwap(f.ctx(cmd, io.Discard, false)); err != nil {
+		f.t.Fatalf("runSwap() error: %v", err)
 	}
-	if err := runSwap(swapCtx); err != nil {
-		t.Fatalf("runSwap() error: %v", err)
-	}
+}
 
-	resizeCmd := testCommand()
-	_ = resizeCmd.Set("pane-id", pane.ID)
-	_ = resizeCmd.Set("cols", "100")
-	_ = resizeCmd.Set("rows", "40")
-	resizeCtx := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     resizeCmd,
-		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
-		Out:     io.Discard,
-		ErrOut:  io.Discard,
-		Stdin:   strings.NewReader(""),
+func (f paneFlow) mustResize(paneID string) {
+	f.t.Helper()
+	cmd := testCommand()
+	_ = cmd.Set("pane-id", paneID)
+	_ = cmd.Set("cols", "100")
+	_ = cmd.Set("rows", "40")
+	if err := runResize(f.ctx(cmd, io.Discard, false)); err != nil {
+		f.t.Fatalf("runResize() error: %v", err)
 	}
-	if err := runResize(resizeCtx); err != nil {
-		t.Fatalf("runResize() error: %v", err)
-	}
+}
 
-	focusCmd := testCommand()
-	_ = focusCmd.Set("pane-id", pane.ID)
-	focusCtx := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     focusCmd,
-		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
-		Out:     io.Discard,
-		ErrOut:  io.Discard,
-		Stdin:   strings.NewReader(""),
-	}
-	if err := runFocus(focusCtx); err != nil {
-		t.Fatalf("runFocus() error: %v", err)
+func (f paneFlow) mustFocus(paneID string) {
+	f.t.Helper()
+	cmd := testCommand()
+	_ = cmd.Set("pane-id", paneID)
+	if err := runFocus(f.ctx(cmd, io.Discard, false)); err != nil {
+		f.t.Fatalf("runFocus() error: %v", err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	focusSnap, err := client.SnapshotState(ctx, 0)
+	focusSnap, err := f.client.SnapshotState(ctx, 0)
 	if err != nil {
-		t.Fatalf("SnapshotState() error: %v", err)
+		f.t.Fatalf("SnapshotState() error: %v", err)
 	}
-	if focusSnap.FocusedPaneID != pane.ID {
-		t.Fatalf("FocusedPaneID = %q", focusSnap.FocusedPaneID)
+	if focusSnap.FocusedPaneID != paneID {
+		f.t.Fatalf("FocusedPaneID = %q", focusSnap.FocusedPaneID)
 	}
+}
 
-	focusedSendCmd := testCommand()
-	_ = focusedSendCmd.Set("pane-id", "@focused")
-	_ = focusedSendCmd.Set("text", "ping")
-	focusedSendCtx := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     focusedSendCmd,
-		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
-		Out:     io.Discard,
-		ErrOut:  io.Discard,
-		Stdin:   strings.NewReader(""),
+func (f paneFlow) mustSendFocused(text string) {
+	f.t.Helper()
+	cmd := testCommand()
+	_ = cmd.Set("pane-id", "@focused")
+	_ = cmd.Set("text", text)
+	if err := runSend(f.ctx(cmd, io.Discard, false)); err != nil {
+		f.t.Fatalf("runSend(@focused) error: %v", err)
 	}
-	if err := runSend(focusedSendCtx); err != nil {
-		t.Fatalf("runSend(@focused) error: %v", err)
-	}
+}
 
-	closeCmd := testCommand()
-	_ = closeCmd.Set("pane-id", otherPane.ID)
-	closeCtx := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     closeCmd,
-		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
-		Out:     io.Discard,
-		ErrOut:  io.Discard,
-		Stdin:   strings.NewReader(""),
+func (f paneFlow) mustCloseOtherPane() {
+	f.t.Helper()
+	cmd := testCommand()
+	_ = cmd.Set("pane-id", f.otherPaneID)
+	if err := runClose(f.ctx(cmd, io.Discard, false)); err != nil {
+		f.t.Fatalf("runClose() error: %v", err)
 	}
-	if err := runClose(closeCtx); err != nil {
-		t.Fatalf("runClose() error: %v", err)
-	}
-	updated = waitForSessionSnapshot(t, client, sessionName)
+	updated := waitForSessionSnapshot(f.t, f.client, f.sessionName)
 	for _, p := range updated.Panes {
-		if p.ID == otherPane.ID {
-			t.Fatalf("expected pane %q to be closed", otherPane.ID)
+		if p.ID == f.otherPaneID {
+			f.t.Fatalf("expected pane %q to be closed", f.otherPaneID)
 		}
 	}
+}
 
-	if _, err := strconv.Atoi(pane.Index); err != nil {
-		t.Fatalf("pane index not numeric: %q", pane.Index)
+func TestPaneCommandFlow(t *testing.T) {
+	flow := newPaneFlow(t)
+	flow.mustList()
+	flow.mustListJSON()
+	flow.mustRename("renamed")
+	flow.mustSplitVerticalAndAssertFocus()
+	flow.mustSendText(flow.paneID, "hello")
+	flow.mustRunCommand(flow.paneID, "echo hi")
+	flow.mustView(flow.paneID)
+	flow.mustSnapshot(flow.paneID)
+	flow.mustHistory(flow.paneID)
+	flow.mustTagLifecycle(flow.paneID)
+	flow.mustActionScrollUp(flow.paneID)
+	flow.mustKeyCtrlK(flow.paneID)
+	flow.mustTail(flow.paneID)
+	flow.mustSwap()
+	flow.mustResize(flow.paneID)
+	flow.mustFocus(flow.paneID)
+	flow.mustSendFocused("ping")
+	flow.mustCloseOtherPane()
+	if _, err := strconv.Atoi(flow.paneIndex); err != nil {
+		t.Fatalf("pane index not numeric: %q", flow.paneIndex)
 	}
 }
 

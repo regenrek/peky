@@ -196,102 +196,22 @@ func sendToolInputWithContext(manager sessionManager, ctx context.Context, paneI
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	start := time.Time{}
-	if slog.Default().Enabled(context.Background(), slog.LevelDebug) {
-		start = time.Now()
-		slog.Debug(
-			"sessiond: send_tool start",
-			slog.String("pane_id", paneID),
-			slog.String("tool", plan.ToolID),
-			slog.Int("bytes", len(plan.Payload)),
-			slog.Int("submit_bytes", len(plan.Submit)),
-			slog.Bool("combine", plan.Combine),
-		)
-	}
-	if len(plan.Submit) > 0 && plan.Combine {
-		combined := make([]byte, 0, len(plan.Payload)+len(plan.Submit))
-		combined = append(combined, plan.Payload...)
-		combined = append(combined, plan.Submit...)
-		if err := manager.SendInput(ctx, paneID, combined); err != nil {
-			if !start.IsZero() {
-				slog.Debug(
-					"sessiond: send_tool done",
-					slog.String("pane_id", paneID),
-					slog.String("tool", plan.ToolID),
-					slog.Duration("dur", time.Since(start)),
-					slog.Any("err", err),
-				)
-			}
-			return sendInputError(ctx, err)
-		}
-		if !start.IsZero() {
-			slog.Debug(
-				"sessiond: send_tool done",
-				slog.String("pane_id", paneID),
-				slog.String("tool", plan.ToolID),
-				slog.Duration("dur", time.Since(start)),
-			)
+
+	trace := newToolSendTrace(paneID, plan)
+	var sendErr error
+	defer func() { trace.done(sendErr) }()
+
+	if plan.Combine && len(plan.Submit) > 0 {
+		sendErr = sendToolInputCombined(ctx, manager, paneID, plan)
+		if sendErr != nil {
+			return sendInputError(ctx, sendErr)
 		}
 		return "ok", ""
 	}
-	if err := manager.SendInput(ctx, paneID, plan.Payload); err != nil {
-		if !start.IsZero() {
-			slog.Debug(
-				"sessiond: send_tool done",
-				slog.String("pane_id", paneID),
-				slog.String("tool", plan.ToolID),
-				slog.Duration("dur", time.Since(start)),
-				slog.Any("err", err),
-			)
-		}
-		return sendInputError(ctx, err)
-	}
-	if len(plan.Submit) == 0 {
-		if !start.IsZero() {
-			slog.Debug(
-				"sessiond: send_tool done",
-				slog.String("pane_id", paneID),
-				slog.String("tool", plan.ToolID),
-				slog.Duration("dur", time.Since(start)),
-			)
-		}
-		return "ok", ""
-	}
-	if plan.SubmitDelay > 0 {
-		if err := sleepWithContext(ctx, plan.SubmitDelay); err != nil {
-			if !start.IsZero() {
-				slog.Debug(
-					"sessiond: send_tool done",
-					slog.String("pane_id", paneID),
-					slog.String("tool", plan.ToolID),
-					slog.Duration("dur", time.Since(start)),
-					slog.Any("err", err),
-				)
-			}
-			return "timeout", "send timed out"
-		}
-	}
-	if err := manager.SendInput(ctx, paneID, plan.Submit); err != nil {
-		if !start.IsZero() {
-			slog.Debug(
-				"sessiond: send_tool done",
-				slog.String("pane_id", paneID),
-				slog.String("tool", plan.ToolID),
-				slog.Duration("dur", time.Since(start)),
-				slog.Any("err", err),
-			)
-		}
-		return sendInputError(ctx, err)
-	}
-	if !start.IsZero() {
-		slog.Debug(
-			"sessiond: send_tool done",
-			slog.String("pane_id", paneID),
-			slog.String("tool", plan.ToolID),
-			slog.Duration("dur", time.Since(start)),
-		)
-	}
-	return "ok", ""
+
+	status, message, err := sendToolInputSeparate(ctx, manager, paneID, plan)
+	sendErr = err
+	return status, message
 }
 
 func sendToolInputWithTimeout(manager sessionManager, paneID string, plan toolSendPlan) (string, string) {
@@ -305,6 +225,76 @@ func sendToolInputWithTimeout(manager sessionManager, paneID string, plan toolSe
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	return sendToolInputWithContext(manager, ctx, paneID, plan)
+}
+
+type toolSendTrace struct {
+	enabled bool
+	start   time.Time
+	paneID  string
+	toolID  string
+}
+
+func newToolSendTrace(paneID string, plan toolSendPlan) toolSendTrace {
+	trace := toolSendTrace{
+		enabled: slog.Default().Enabled(context.Background(), slog.LevelDebug),
+		paneID:  paneID,
+		toolID:  plan.ToolID,
+	}
+	if !trace.enabled {
+		return trace
+	}
+	trace.start = time.Now()
+	slog.Debug(
+		"sessiond: send_tool start",
+		slog.String("pane_id", paneID),
+		slog.String("tool", plan.ToolID),
+		slog.Int("bytes", len(plan.Payload)),
+		slog.Int("submit_bytes", len(plan.Submit)),
+		slog.Bool("combine", plan.Combine),
+	)
+	return trace
+}
+
+func (t toolSendTrace) done(err error) {
+	if !t.enabled {
+		return
+	}
+	attrs := []slog.Attr{
+		slog.String("pane_id", t.paneID),
+		slog.String("tool", t.toolID),
+		slog.Duration("dur", time.Since(t.start)),
+	}
+	if err != nil {
+		attrs = append(attrs, slog.Any("err", err))
+	}
+	slog.LogAttrs(context.Background(), slog.LevelDebug, "sessiond: send_tool done", attrs...)
+}
+
+func sendToolInputCombined(ctx context.Context, manager sessionManager, paneID string, plan toolSendPlan) error {
+	combined := make([]byte, 0, len(plan.Payload)+len(plan.Submit))
+	combined = append(combined, plan.Payload...)
+	combined = append(combined, plan.Submit...)
+	return manager.SendInput(ctx, paneID, combined)
+}
+
+func sendToolInputSeparate(ctx context.Context, manager sessionManager, paneID string, plan toolSendPlan) (string, string, error) {
+	if err := manager.SendInput(ctx, paneID, plan.Payload); err != nil {
+		status, message := sendInputError(ctx, err)
+		return status, message, err
+	}
+	if len(plan.Submit) == 0 {
+		return "ok", "", nil
+	}
+	if plan.SubmitDelay > 0 {
+		if err := sleepWithContext(ctx, plan.SubmitDelay); err != nil {
+			return "timeout", "send timed out", err
+		}
+	}
+	if err := manager.SendInput(ctx, paneID, plan.Submit); err != nil {
+		status, message := sendInputError(ctx, err)
+		return status, message, err
+	}
+	return "ok", "", nil
 }
 
 func sendInputError(ctx context.Context, err error) (string, string) {

@@ -23,6 +23,10 @@ func WaitForSessionSnapshot(ctx context.Context, client *sessiond.Client, name s
 	} else if ok {
 		return snap, nil
 	}
+	return waitForSessionSnapshotEvents(ctx, client, name)
+}
+
+func waitForSessionSnapshotEvents(ctx context.Context, client *sessiond.Client, name string) (native.SessionSnapshot, error) {
 	events := client.Events()
 	if events == nil {
 		return native.SessionSnapshot{}, fmt.Errorf("session events unavailable")
@@ -35,14 +39,26 @@ func WaitForSessionSnapshot(ctx context.Context, client *sessiond.Client, name s
 			if !ok {
 				return native.SessionSnapshot{}, fmt.Errorf("session event channel closed while waiting for %q", name)
 			}
-			if evt.Type == sessiond.EventSessionChanged || evt.Type == sessiond.EventPaneUpdated || evt.Type == sessiond.EventPaneMetaChanged || evt.Type == sessiond.EventFocus {
-				if snap, ok, err := snapshotByName(ctx, client, name); err != nil {
-					return native.SessionSnapshot{}, err
-				} else if ok {
-					return snap, nil
-				}
+			if !shouldCheckSnapshotOnEvent(evt.Type) {
+				continue
+			}
+			snap, ok, err := snapshotByName(ctx, client, name)
+			if err != nil {
+				return native.SessionSnapshot{}, err
+			}
+			if ok {
+				return snap, nil
 			}
 		}
+	}
+}
+
+func shouldCheckSnapshotOnEvent(eventType sessiond.EventType) bool {
+	switch eventType {
+	case sessiond.EventSessionChanged, sessiond.EventPaneUpdated, sessiond.EventPaneMetaChanged, sessiond.EventFocus:
+		return true
+	default:
+		return false
 	}
 }
 

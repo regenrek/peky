@@ -3,6 +3,7 @@ package workspace
 import (
 	"bytes"
 	"context"
+	"io"
 	"strings"
 	"testing"
 
@@ -26,116 +27,149 @@ func testCommand() *cli.Command {
 
 func TestWorkspaceCommands(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	cfgPath, err := layout.DefaultConfigPath()
-	if err != nil {
-		t.Fatalf("DefaultConfigPath() error: %v", err)
-	}
+	cfgPath := mustDefaultConfigPath(t)
 	cfg := &layout.Config{
 		Projects: []layout.ProjectConfig{
 			{Name: "ProjA", Path: "/tmp/proja"},
 			{Name: "ProjB", Path: "/tmp/projb"},
 		},
 	}
+	mustSaveConfig(t, cfgPath, cfg)
+
+	deps := root.Dependencies{Version: "test"}
+	mustContainAll(t, mustRunWorkspaceList(t, deps, false), "ProjA", "ProjB")
+	mustContain(t, mustRunWorkspaceList(t, deps, true), "\"projects\"")
+
+	mustRunWorkspaceClose(t, deps, "ProjA", false)
+	mustRunWorkspaceClose(t, deps, "ProjA", true)
+	mustHiddenProjectsAtLeast(t, mustLoadConfig(t, cfgPath), 1)
+
+	mustRunWorkspaceOpen(t, deps, "ProjA")
+	mustHiddenProjectsExactly(t, mustLoadConfig(t, cfgPath), 0)
+
+	mustRunWorkspaceCloseAll(t, deps, false)
+	mustRunWorkspaceCloseAll(t, deps, true)
+	mustHiddenProjectsAtLeast(t, mustLoadConfig(t, cfgPath), 2)
+}
+
+func mustDefaultConfigPath(t *testing.T) string {
+	t.Helper()
+	cfgPath, err := layout.DefaultConfigPath()
+	if err != nil {
+		t.Fatalf("DefaultConfigPath() error: %v", err)
+	}
+	return cfgPath
+}
+
+func mustSaveConfig(t *testing.T, cfgPath string, cfg *layout.Config) {
+	t.Helper()
 	if err := ws.SaveConfig(cfgPath, cfg); err != nil {
 		t.Fatalf("SaveConfig() error: %v", err)
 	}
+}
 
-	var listOut bytes.Buffer
-	listCtx := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     testCommand(),
-		Deps:    root.Dependencies{Version: "test"},
-		Out:     &listOut,
-		ErrOut:  &listOut,
-		Stdin:   strings.NewReader(""),
-	}
-	if err := runList(listCtx); err != nil {
-		t.Fatalf("runList() error: %v", err)
-	}
-	if !strings.Contains(listOut.String(), "ProjA") || !strings.Contains(listOut.String(), "ProjB") {
-		t.Fatalf("runList output = %q", listOut.String())
-	}
-	var listJSON bytes.Buffer
-	listJSONCtx := listCtx
-	listJSONCtx.JSON = true
-	listJSONCtx.Out = &listJSON
-	if err := runList(listJSONCtx); err != nil {
-		t.Fatalf("runList(json) error: %v", err)
-	}
-	if !strings.Contains(listJSON.String(), "\"projects\"") {
-		t.Fatalf("runList(json) output = %q", listJSON.String())
-	}
-
-	closeCmd := testCommand()
-	_ = closeCmd.Set("name", "ProjA")
-	closeCtx := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     closeCmd,
-		Deps:    root.Dependencies{Version: "test"},
-		Out:     &listOut,
-		ErrOut:  &listOut,
-		Stdin:   strings.NewReader(""),
-	}
-	if err := runClose(closeCtx); err != nil {
-		t.Fatalf("runClose() error: %v", err)
-	}
-	closeJSON := closeCtx
-	closeJSON.JSON = true
-	closeJSON.Out = &listOut
-	if err := runClose(closeJSON); err != nil {
-		t.Fatalf("runClose(json) error: %v", err)
-	}
+func mustLoadConfig(t *testing.T, cfgPath string) *layout.Config {
+	t.Helper()
 	loaded, err := ws.LoadConfig(cfgPath)
 	if err != nil {
 		t.Fatalf("LoadConfig() error: %v", err)
 	}
-	if len(loaded.Dashboard.HiddenProjects) == 0 {
-		t.Fatalf("expected hidden project after close")
-	}
+	return loaded
+}
 
-	openCmd := testCommand()
-	_ = openCmd.Set("name", "ProjA")
-	openCtx := root.CommandContext{
-		Context: context.Background(),
-		Cmd:     openCmd,
-		Deps:    root.Dependencies{Version: "test"},
-		Out:     &listOut,
-		ErrOut:  &listOut,
-		Stdin:   strings.NewReader(""),
-	}
-	if err := runOpen(openCtx); err != nil {
-		t.Fatalf("runOpen() error: %v", err)
-	}
-	loaded, err = ws.LoadConfig(cfgPath)
-	if err != nil {
-		t.Fatalf("LoadConfig() error: %v", err)
-	}
-	if len(loaded.Dashboard.HiddenProjects) != 0 {
-		t.Fatalf("expected hidden projects cleared, got %#v", loaded.Dashboard.HiddenProjects)
-	}
-
-	closeAllCtx := root.CommandContext{
+func mustRunWorkspaceList(t *testing.T, deps root.Dependencies, json bool) string {
+	t.Helper()
+	var out bytes.Buffer
+	ctx := root.CommandContext{
 		Context: context.Background(),
 		Cmd:     testCommand(),
-		Deps:    root.Dependencies{Version: "test"},
-		Out:     &listOut,
-		ErrOut:  &listOut,
+		Deps:    deps,
+		Out:     &out,
+		ErrOut:  &out,
+		Stdin:   strings.NewReader(""),
+		JSON:    json,
+	}
+	if err := runList(ctx); err != nil {
+		t.Fatalf("runList(json=%v) error: %v", json, err)
+	}
+	return out.String()
+}
+
+func mustRunWorkspaceClose(t *testing.T, deps root.Dependencies, name string, json bool) {
+	t.Helper()
+	cmd := testCommand()
+	_ = cmd.Set("name", name)
+	ctx := root.CommandContext{
+		Context: context.Background(),
+		Cmd:     cmd,
+		Deps:    deps,
+		Out:     io.Discard,
+		ErrOut:  io.Discard,
+		Stdin:   strings.NewReader(""),
+		JSON:    json,
+	}
+	if err := runClose(ctx); err != nil {
+		t.Fatalf("runClose(json=%v) error: %v", json, err)
+	}
+}
+
+func mustRunWorkspaceOpen(t *testing.T, deps root.Dependencies, name string) {
+	t.Helper()
+	cmd := testCommand()
+	_ = cmd.Set("name", name)
+	ctx := root.CommandContext{
+		Context: context.Background(),
+		Cmd:     cmd,
+		Deps:    deps,
+		Out:     io.Discard,
+		ErrOut:  io.Discard,
 		Stdin:   strings.NewReader(""),
 	}
-	if err := runCloseAll(closeAllCtx); err != nil {
-		t.Fatalf("runCloseAll() error: %v", err)
+	if err := runOpen(ctx); err != nil {
+		t.Fatalf("runOpen() error: %v", err)
 	}
-	closeAllJSON := closeAllCtx
-	closeAllJSON.JSON = true
-	closeAllJSON.Out = &listOut
-	if err := runCloseAll(closeAllJSON); err != nil {
-		t.Fatalf("runCloseAll(json) error: %v", err)
+}
+
+func mustRunWorkspaceCloseAll(t *testing.T, deps root.Dependencies, json bool) {
+	t.Helper()
+	ctx := root.CommandContext{
+		Context: context.Background(),
+		Cmd:     testCommand(),
+		Deps:    deps,
+		Out:     io.Discard,
+		ErrOut:  io.Discard,
+		Stdin:   strings.NewReader(""),
+		JSON:    json,
 	}
-	loaded, err = ws.LoadConfig(cfgPath)
-	if err != nil {
-		t.Fatalf("LoadConfig() error: %v", err)
+	if err := runCloseAll(ctx); err != nil {
+		t.Fatalf("runCloseAll(json=%v) error: %v", json, err)
 	}
-	if len(loaded.Dashboard.HiddenProjects) < 2 {
-		t.Fatalf("expected hidden projects after close-all, got %#v", loaded.Dashboard.HiddenProjects)
+}
+
+func mustContain(t *testing.T, got, want string) {
+	t.Helper()
+	if !strings.Contains(got, want) {
+		t.Fatalf("output missing %q, got %q", want, got)
+	}
+}
+
+func mustContainAll(t *testing.T, got string, wants ...string) {
+	t.Helper()
+	for _, want := range wants {
+		mustContain(t, got, want)
+	}
+}
+
+func mustHiddenProjectsAtLeast(t *testing.T, cfg *layout.Config, wantMin int) {
+	t.Helper()
+	if len(cfg.Dashboard.HiddenProjects) < wantMin {
+		t.Fatalf("expected >= %d hidden projects, got %#v", wantMin, cfg.Dashboard.HiddenProjects)
+	}
+}
+
+func mustHiddenProjectsExactly(t *testing.T, cfg *layout.Config, want int) {
+	t.Helper()
+	if len(cfg.Dashboard.HiddenProjects) != want {
+		t.Fatalf("expected %d hidden projects, got %#v", want, cfg.Dashboard.HiddenProjects)
 	}
 }
