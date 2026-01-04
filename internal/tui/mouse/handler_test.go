@@ -338,6 +338,44 @@ func TestHandlerPressForwardsWithoutTerminalFocus(t *testing.T) {
 	}
 }
 
+func TestHandlerDragMotionWithoutTerminalFocus(t *testing.T) {
+	var h Handler
+	hit := PaneHit{
+		PaneID: "pane-1",
+		Selection: Selection{
+			ProjectID: "proj",
+			Session:   "sess",
+			Pane:      "1",
+		},
+		Outer:   Rect{X: 0, Y: 0, W: 10, H: 10},
+		Content: Rect{X: 1, Y: 1, W: 8, H: 6},
+	}
+	forwardCalls := 0
+
+	cb := DashboardCallbacks{
+		HitHeader:             func(int, int) (HeaderHit, bool) { return HeaderHit{}, false },
+		HitPane:               func(int, int) (PaneHit, bool) { return hit, true },
+		HitIsSelected:         func(PaneHit) bool { return false },
+		ApplySelection:        func(Selection) bool { return false },
+		SetTerminalFocus:      func(bool) {},
+		TerminalFocus:         func() bool { return false },
+		SupportsTerminalFocus: func() bool { return true },
+		SelectionCmd:          func() tea.Cmd { return nil },
+		RefreshPaneViewsCmd:   func() tea.Cmd { return nil },
+		ForwardMouseEvent:     func(PaneHit, tea.MouseMsg) tea.Cmd { forwardCalls++; return nil },
+	}
+
+	h.UpdateDashboard(tea.MouseMsg{X: 2, Y: 2, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft}, cb)
+	h.UpdateDashboard(tea.MouseMsg{X: 3, Y: 3, Action: tea.MouseActionMotion, Button: tea.MouseButtonNone}, cb)
+
+	if forwardCalls != 2 {
+		t.Fatalf("expected press + motion forwarded, got %d", forwardCalls)
+	}
+	if !h.dragActive {
+		t.Fatalf("expected dragActive to remain true during motion")
+	}
+}
+
 func TestHandlerReleaseClearsDragWithoutButton(t *testing.T) {
 	var h Handler
 	h.dragActive = true

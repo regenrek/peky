@@ -38,9 +38,6 @@ type DashboardCallbacks struct {
 
 // UpdateDashboard handles mouse input while on the dashboard view.
 func (h *Handler) UpdateDashboard(msg tea.MouseMsg, cb DashboardCallbacks) tea.Cmd {
-	if cb.TerminalFocus != nil && !cb.TerminalFocus() {
-		h.dragActive = false
-	}
 	if cmd, handled := h.handleTerminalDrag(msg, cb); handled {
 		return cmd
 	}
