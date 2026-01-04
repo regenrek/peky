@@ -101,3 +101,37 @@ func TestOutputLogWaitAndDisable(t *testing.T) {
 		t.Fatalf("expected no new lines after disable")
 	}
 }
+
+func TestOutputLogTrimPreservesSeqAndTail(t *testing.T) {
+	log := newOutputLog(3)
+	log.append([]byte("a\nb\nc\nd\ne\nf\ng\nh\ni\nj\n"))
+
+	log.mu.Lock()
+	seq := log.seq
+	log.mu.Unlock()
+	if seq != 10 {
+		t.Fatalf("expected seq=10, got %d", seq)
+	}
+
+	snapshot := log.snapshot(10)
+	if len(snapshot) != 3 {
+		t.Fatalf("expected 3 lines, got %d", len(snapshot))
+	}
+	if snapshot[0].Text != "h" || snapshot[2].Text != "j" {
+		t.Fatalf("unexpected snapshot tail: %+v", snapshot)
+	}
+
+	lines, next, truncated := log.linesSince(0)
+	if !truncated {
+		t.Fatalf("expected truncated")
+	}
+	if next != snapshot[2].Seq {
+		t.Fatalf("expected next to match last snapshot seq, got %d", next)
+	}
+	if len(lines) != 3 {
+		t.Fatalf("expected 3 lines, got %d", len(lines))
+	}
+	if lines[0].Text != "h" || lines[2].Text != "j" {
+		t.Fatalf("unexpected lines: %+v", lines)
+	}
+}

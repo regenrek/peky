@@ -86,6 +86,7 @@ func (o *outputLog) disable() {
 
 func (o *outputLog) splitLinesLocked(ts time.Time, data []byte) {
 	o.partial = append(o.partial, data...)
+	o.trimPartialLocked()
 	for {
 		idx := bytes.IndexByte(o.partial, '\n')
 		if idx < 0 {
@@ -100,6 +101,82 @@ func (o *outputLog) splitLinesLocked(ts time.Time, data []byte) {
 		o.appendLineLocked(ts, string(line))
 		o.partial = nil
 	}
+	o.compactPartialLocked()
+}
+
+func (o *outputLog) trimPartialLocked() {
+	if o == nil || o.max <= 0 || len(o.partial) == 0 {
+		return
+	}
+	// If we have more than o.max complete lines pending, only the last o.max
+	// lines can survive the ring buffer. Drop the prefix to avoid per-line
+	// allocations on floods.
+	if !hasMoreThanNNewlines(o.partial, o.max) {
+		return
+	}
+	total := bytes.Count(o.partial, []byte{'\n'})
+	if total <= o.max {
+		return
+	}
+	target := o.max
+	if o.partial[len(o.partial)-1] == '\n' {
+		target++
+	}
+	start := indexAfterNthNewlineFromEnd(o.partial, target)
+	if start <= 0 || start >= len(o.partial) {
+		return
+	}
+	dropped := total - o.max
+	o.seq += uint64(dropped)
+	o.partial = append([]byte(nil), o.partial[start:]...)
+}
+
+func (o *outputLog) compactPartialLocked() {
+	if o == nil || len(o.partial) == 0 {
+		return
+	}
+	// Avoid retaining a large backing array after slicing through a big burst.
+	if cap(o.partial) <= 1<<20 {
+		return
+	}
+	if len(o.partial) >= 64<<10 {
+		return
+	}
+	o.partial = append([]byte(nil), o.partial...)
+}
+
+func hasMoreThanNNewlines(buf []byte, n int) bool {
+	if n <= 0 {
+		return true
+	}
+	count := 0
+	for i := len(buf) - 1; i >= 0; i-- {
+		if buf[i] != '\n' {
+			continue
+		}
+		count++
+		if count > n {
+			return true
+		}
+	}
+	return false
+}
+
+func indexAfterNthNewlineFromEnd(buf []byte, n int) int {
+	if n <= 0 {
+		return len(buf)
+	}
+	count := 0
+	for i := len(buf) - 1; i >= 0; i-- {
+		if buf[i] != '\n' {
+			continue
+		}
+		count++
+		if count == n {
+			return i + 1
+		}
+	}
+	return 0
 }
 
 func (o *outputLog) appendLineLocked(ts time.Time, text string) {
