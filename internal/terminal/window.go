@@ -65,6 +65,11 @@ type Options struct {
 	Cols int
 	Rows int
 
+	// ScrollbackMaxBytes sets the scrollback byte budget for this pane.
+	// 0 uses limits.TerminalScrollbackMaxBytesDefault.
+	// Negative disables scrollback.
+	ScrollbackMaxBytes int64
+
 	// OnToast is called for terminal-originated toast messages.
 	OnToast func(message string)
 	// OnFirstRead is called once when the pane receives its first output.
@@ -161,6 +166,19 @@ type Window struct {
 	ansiDemandUntil atomic.Int64
 }
 
+// SetScrollbackMaxBytes updates the scrollback byte budget for the underlying VT.
+// This is safe to call while the pane is running; it takes effect immediately.
+func (w *Window) SetScrollbackMaxBytes(maxBytes int64) {
+	if w == nil {
+		return
+	}
+	w.termMu.Lock()
+	defer w.termMu.Unlock()
+	if w.term != nil {
+		w.term.SetScrollbackMaxBytes(maxBytes)
+	}
+}
+
 // NewWindow starts a new process attached to a PTY and backed by a VT emulator.
 func NewWindow(opts Options) (*Window, error) {
 	if strings.TrimSpace(opts.ID) == "" {
@@ -217,7 +235,11 @@ func NewWindow(opts Options) (*Window, error) {
 	setupPTYCommand(cmd)
 
 	term := vt.NewEmulator(cols, rows)
-	term.SetScrollbackMaxBytes(limits.TerminalScrollbackMaxBytesDefault)
+	scrollbackMax := opts.ScrollbackMaxBytes
+	if scrollbackMax == 0 {
+		scrollbackMax = limits.TerminalScrollbackMaxBytesDefault
+	}
+	term.SetScrollbackMaxBytes(scrollbackMax)
 
 	pty, err := xpty.NewPty(cols, rows)
 	if err != nil {

@@ -56,6 +56,7 @@ func (m *Manager) RestoreSession(ctx context.Context, spec SessionRestoreSpec) (
 	if err := m.commitRestoredSession(session, panes); err != nil {
 		return nil, err
 	}
+	m.applyScrollbackBudgets()
 	m.finishRestoredSession(panes)
 	return session, nil
 }

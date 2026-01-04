@@ -181,6 +181,7 @@ func (m *Manager) ClosePane(ctx context.Context, sessionName, paneIndex string) 
 	if lastPane {
 		return nil
 	}
+	m.applyScrollbackBudgets()
 	for _, id := range notifyIDs {
 		m.notifyPane(id)
 	}
@@ -308,6 +309,7 @@ func (m *Manager) SplitPane(ctx context.Context, sessionName, paneIndex string, 
 	m.panes[pane.ID] = pane
 	m.mu.Unlock()
 
+	m.applyScrollbackBudgets()
 	m.forwardUpdates(pane)
 	m.notifyPane(pane.ID)
 	m.version.Add(1)

@@ -94,6 +94,7 @@ func (m *Manager) KillSession(name string) error {
 	}
 	m.mu.Unlock()
 
+	m.applyScrollbackBudgets()
 	m.dropPreviewCache(paneIDs...)
 	m.clearOutputWaiters(paneIDs...)
 	m.closePanes(session.Panes)
@@ -157,6 +158,7 @@ func (m *Manager) StartSession(ctx context.Context, spec SessionSpec) (*Session,
 		m.closePanes(panes)
 		return nil, err
 	}
+	m.applyScrollbackBudgets()
 	m.forwardPaneUpdates(panes)
 	m.seedPaneUpdates(panes)
 	m.version.Add(1)
