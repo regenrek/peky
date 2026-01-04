@@ -6,6 +6,11 @@ BIN_DIR="$ROOT_DIR/bin"
 BIN="$BIN_DIR/peakypanes"
 SESSION_NAME="stress-$(date +%s)"
 RUN_TOOLS="${RUN_TOOLS:-0}"
+PANE_COUNT="${PANE_COUNT:-200}"
+VIEW_STORM_PANES="${VIEW_STORM_PANES:-50}"
+VIEW_STORM_PASSES="${VIEW_STORM_PASSES:-10}"
+VIEW_STORM_CONCURRENCY="${VIEW_STORM_CONCURRENCY:-8}"
+OUTPUT_FLOOD_LINES="${OUTPUT_FLOOD_LINES:-200000}"
 
 mkdir -p "$BIN_DIR"
 
@@ -49,6 +54,15 @@ done
 "$BIN" session focus --name "$SESSION_NAME" --yes
 "$BIN" pane add --session "$SESSION_NAME" --yes
 
+PANE0_ID=$("$BIN" pane list --session "$SESSION_NAME" --json 2>/dev/null | jq -r '.data.panes[0].id' 2>/dev/null || true)
+if [[ -z "${PANE0_ID}" ]]; then
+  PANE0_ID=$("$BIN" pane list --session "$SESSION_NAME" --json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["panes"][0]["id"])' 2>/dev/null || true)
+fi
+if [[ -z "${PANE0_ID}" ]]; then
+  echo "Failed to resolve initial pane id" >&2
+  exit 1
+fi
+
 PAYLOAD_FILE="${TMPDIR:-/tmp}/pp-block.txt"
 export PAYLOAD_FILE
 if command -v python3 >/dev/null 2>&1; then
@@ -73,6 +87,33 @@ else
 fi
 
 fail_total=0
+
+require_cmd() {
+  local cmd="$1"
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "Missing required command: $cmd" >&2
+    exit 1
+  fi
+}
+
+scale_to_panes() {
+  if [[ "$PANE_COUNT" -le 1 ]]; then
+    return
+  fi
+  echo "=== 0. Pane scale-up ($PANE_COUNT panes) ==="
+  local to_add=$((PANE_COUNT - 1))
+  if [[ "$to_add" -le 0 ]]; then
+    return
+  fi
+  seq 1 "$to_add" | xargs -n1 -P4 -I{} "$BIN" pane add --session "$SESSION_NAME" --yes >/dev/null
+  local got
+  got=$("$BIN" pane list --session "$SESSION_NAME" --json | jq '.data.panes | length')
+  echo "panes=$got"
+  if [[ "$got" -lt "$PANE_COUNT" ]]; then
+    echo "Expected at least $PANE_COUNT panes, got $got" >&2
+    fail_total=1
+  fi
+}
 
 run_snapshot_storm() {
   echo "=== 1. Sequential snapshot storm (200) ==="
@@ -170,11 +211,41 @@ run_mixed_fanout() {
   fi
 }
 
+run_view_storm() {
+  require_cmd jq
+  echo "=== 6. View storm (${VIEW_STORM_PASSES}x${VIEW_STORM_PANES} panes, -P${VIEW_STORM_CONCURRENCY}) ==="
+  local ids
+  ids=$("$BIN" pane list --session "$SESSION_NAME" --json | jq -r '.data.panes[].id' | head -n "$VIEW_STORM_PANES")
+  if [[ -z "$ids" ]]; then
+    echo "No panes available for view storm" >&2
+    fail_total=1
+    return
+  fi
+  local fail=0
+  for _ in $(seq 1 "$VIEW_STORM_PASSES"); do
+    if ! printf "%s\n" "$ids" | xargs -n1 -P"$VIEW_STORM_CONCURRENCY" -I{} "$BIN" pane view --pane-id {} --rows 40 --cols 160 --mode ansi --yes >/dev/null 2>&1; then
+      fail=$((fail + 1))
+    fi
+  done
+  echo "view-fail=$fail"
+  if [[ $fail -ne 0 ]]; then
+    fail_total=1
+  fi
+}
+
+run_output_flood() {
+  echo "=== 7. Output flood (${OUTPUT_FLOOD_LINES} lines) ==="
+  if ! "$BIN" pane run --pane-id "$PANE0_ID" --command "yes X | head -n ${OUTPUT_FLOOD_LINES}" --yes >/dev/null 2>&1; then
+    echo "output flood failed" >&2
+    fail_total=1
+  fi
+}
+
 run_tool_loop() {
   if [[ "$RUN_TOOLS" != "1" ]]; then
     return
   fi
-  echo "=== 6. Tool loop (Codex) ==="
+  echo "=== 8. Tool loop (Codex) ==="
   for i in {1..5}; do
     echo "--- Iteration $i ---"
     "$BIN" pane run --scope session --command "codex" --yes
@@ -185,18 +256,22 @@ run_tool_loop() {
 }
 
 run_scaleup() {
-  echo "=== 7. Scale-up fan-out ==="
+  echo "=== 9. Scale-up fan-out ==="
   for _ in {1..10}; do
     "$BIN" pane add --session "$SESSION_NAME" --yes
   done
   "$BIN" pane run --scope session --command "echo fanout-ok" --yes
 }
 
+scale_to_panes
 run_snapshot_storm
 run_parallel_snapshot
 run_osc_flood
 run_payload_send
 run_mixed_fanout
+run_view_storm
+run_output_flood
+run_view_storm
 run_tool_loop
 run_scaleup
 
