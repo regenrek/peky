@@ -5,6 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/regenrek/peakypanes/internal/sessiond"
 	"github.com/regenrek/peakypanes/internal/tui/mouse"
 )
 
@@ -128,6 +129,33 @@ func TestMouseReleaseClearsTerminalDrag(t *testing.T) {
 
 	if m.terminalMouseDrag {
 		t.Fatalf("terminalMouseDrag should be false after release")
+	}
+}
+
+func TestMouseDragStartsWithoutTerminalFocus(t *testing.T) {
+	m := newTestModelLite()
+	m.client = &sessiond.Client{}
+	m.terminalFocus = false
+
+	hits := m.paneHits()
+	if len(hits) == 0 {
+		t.Fatalf("expected pane hits")
+	}
+	hit := hits[0]
+	if hit.Content.Empty() {
+		t.Fatalf("expected pane content rect")
+	}
+
+	msg := tea.MouseMsg{
+		X:      hit.Content.X + 1,
+		Y:      hit.Content.Y + 1,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonLeft,
+	}
+	m.updateTerminalMouseDrag(msg)
+
+	if !m.terminalMouseDrag {
+		t.Fatalf("expected terminalMouseDrag true when press starts without focus")
 	}
 }
 

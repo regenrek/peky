@@ -168,12 +168,16 @@ func (m *Model) updateTerminalMouseDrag(msg tea.MouseMsg) {
 	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
 		return
 	}
-	if m.state != StateDashboard || !m.terminalFocus || !m.supportsTerminalFocus() {
+	if m.state != StateDashboard || !m.supportsTerminalFocus() {
 		m.terminalMouseDrag = false
 		return
 	}
 	hit, ok := m.hitTestPane(msg.X, msg.Y)
-	if !ok || !m.hitIsSelected(hit) || !hit.Content.Contains(msg.X, msg.Y) {
+	if !ok || !hit.Content.Contains(msg.X, msg.Y) {
+		m.terminalMouseDrag = false
+		return
+	}
+	if m.terminalFocus && !m.hitIsSelected(hit) {
 		m.terminalMouseDrag = false
 		return
 	}
