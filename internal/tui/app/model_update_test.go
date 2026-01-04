@@ -170,7 +170,7 @@ func TestStartNewSessionWithLayout(t *testing.T) {
 		}},
 	}}}
 	m.selection = selectionState{ProjectID: projectKey(root, "Proj"), Session: "sess"}
-	cmd := m.startNewSessionWithLayout("dev-3")
+	cmd := m.startNewSessionWithLayout(layout.DefaultLayoutName)
 	if cmd == nil {
 		t.Fatalf("startNewSessionWithLayout() returned nil")
 	}

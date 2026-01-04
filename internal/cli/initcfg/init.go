@@ -23,7 +23,7 @@ func runInit(ctx root.CommandContext) error {
 	local := ctx.Cmd.Bool("local")
 	layoutName := strings.TrimSpace(ctx.Cmd.String("layout"))
 	if layoutName == "" {
-		layoutName = "dev-3"
+		layoutName = layout.DefaultLayoutName
 	}
 	force := ctx.Cmd.Bool("force")
 	var err error
@@ -171,7 +171,7 @@ layout_dirs:
 #   - name: my-project
 #     session: myproj
 #     path: ~/projects/my-project
-#     layout: dev-3
+#     layout: auto
 #     vars:
 #       CUSTOM_VAR: value
 
@@ -179,10 +179,8 @@ layout_dirs:
 # layouts:
 #   my-custom:
 #     panes:
-#       - title: editor
-#         cmd: "${EDITOR:-}"
-#       - title: shell
-#         cmd: ""
+#       - cmd: "${EDITOR:-}"
+#       - cmd: ""
 
 tools:
   cursor_agent:

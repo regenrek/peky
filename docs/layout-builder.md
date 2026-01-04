@@ -330,7 +330,7 @@ Layouts are loaded in this order (first match wins):
 1. `--layout` flag on command line
 2. `.peakypanes.yml` in project directory
 3. Matching project in `~/.config/peakypanes/config.yml`
-4. Built-in `dev-3` layout (default)
+4. Built-in `auto` layout (default)
 
 ---
 

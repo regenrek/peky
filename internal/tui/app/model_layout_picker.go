@@ -47,7 +47,7 @@ func (m *Model) setLayoutPickerSize() {
 	if m.width <= 0 || m.height <= 0 {
 		return
 	}
-	hFrame, vFrame := dialogStyle.GetFrameSize()
+	hFrame, vFrame := dialogStyleCompact.GetFrameSize()
 	availableW := m.width - 6
 	availableH := m.height - 4
 	if availableW < 30 {
@@ -108,43 +108,49 @@ func (m *Model) loadLayoutChoices(projectPath string) ([]picker.LayoutChoice, er
 	}
 
 	choices := []picker.LayoutChoice{{
-		Label:      "auto (project/default)",
-		Desc:       "Use .peakypanes.yml or dev-3",
+		Label:      fmt.Sprintf("%s (project/default)", layout.DefaultLayoutName),
 		LayoutName: "",
 	}}
 
-	layouts := loader.ListLayouts()
-	seen := map[string]bool{}
-	for _, info := range layouts {
-		name := strings.TrimSpace(info.Name)
-		if info.Source == "project" && (name == "" || name == "(project)") {
-			continue
+	ordered := []struct {
+		name  string
+		label string
+	}{
+		{name: layout.LayoutSplitVertical, label: "two vertical panes"},
+		{name: layout.LayoutSplitHorizontal, label: "two horizontal panes"},
+		{name: layout.LayoutGrid3x3, label: "3x3"},
+		{name: layout.LayoutGrid4x3, label: "4x3"},
+	}
+	for _, item := range ordered {
+		cfg, _, err := loader.GetLayout(item.name)
+		if err != nil {
+			return nil, fmt.Errorf("load layout %q: %w", item.name, err)
 		}
-		if name == "" {
-			continue
-		}
-		if seen[name] {
-			continue
-		}
-		seen[name] = true
-
-		label := fmt.Sprintf("%s [%s]", name, info.Source)
-		desc := strings.TrimSpace(info.Description)
-		if desc == "" {
-			if cfg, _, err := loader.GetLayout(name); err == nil {
-				desc = layoutSummary(cfg)
-			}
-		}
-		if desc == "" {
-			desc = "layout"
+		label := item.label
+		if paneCount := layoutPaneCount(cfg); paneCount > 0 {
+			label = fmt.Sprintf("%s (%d panes)", item.label, paneCount)
 		}
 		choices = append(choices, picker.LayoutChoice{
 			Label:      label,
-			Desc:       desc,
-			LayoutName: name,
+			LayoutName: item.name,
 		})
 	}
 	return choices, nil
+}
+
+func layoutPaneCount(cfg *layout.LayoutConfig) int {
+	if cfg == nil {
+		return 0
+	}
+	if strings.TrimSpace(cfg.Grid) != "" {
+		if grid, err := layout.Parse(cfg.Grid); err == nil {
+			return grid.Panes()
+		}
+	}
+	if len(cfg.Panes) > 0 {
+		return len(cfg.Panes)
+	}
+	return 0
 }
 
 func layoutChoicesToItems(choices []picker.LayoutChoice) []list.Item {

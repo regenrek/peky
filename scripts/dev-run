@@ -54,7 +54,7 @@ window. Any args are forwarded to the peakypanes command.
 
 Examples:
   scripts/dev-run
-  scripts/dev-run start --layout dev-3
+  scripts/dev-run start --layout auto
   scripts/dev-run --debug-events
   scripts/dev-run --debug-events --daemon-log /tmp/peakypanes-daemon.log
   scripts/dev-run --debug-events --debug-log /tmp/peakypanes-ui.log

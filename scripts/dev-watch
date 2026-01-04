@@ -55,8 +55,8 @@ Pass any args after -- to forward to peakypanes.
 
 Examples:
   scripts/dev-watch
-  scripts/dev-watch -- --layout dev-3
-  scripts/dev-watch --watch cmd,internal -- --layout dev-3
+  scripts/dev-watch -- --layout auto
+  scripts/dev-watch --watch cmd,internal -- --layout auto
   scripts/dev-watch --debug-events
   scripts/dev-watch --debug-events --daemon-log /tmp/peakypanes-daemon.log
   scripts/dev-watch --debug-events --debug-log /tmp/peakypanes-ui.log

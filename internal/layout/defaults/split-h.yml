@@ -2,9 +2,7 @@ name: split-h
 description: "Two horizontal panes (top/bottom)"
 
 panes:
-  - title: top
-    cmd: ""
+  - cmd: ""
     size: "50%"
-  - title: bottom
-    cmd: ""
+  - cmd: ""
     split: vertical

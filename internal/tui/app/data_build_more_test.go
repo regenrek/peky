@@ -14,7 +14,7 @@ func TestDashboardGroupIndexMerge(t *testing.T) {
 			Name:    "Alpha",
 			Session: "alpha-1",
 			Path:    "/alpha",
-			Layout:  "dev-3",
+			Layout:  layout.DefaultLayoutName,
 		}},
 	}
 	settings := DashboardConfig{
@@ -30,7 +30,7 @@ func TestDashboardGroupIndexMerge(t *testing.T) {
 	nativeSessions := []native.SessionSnapshot{{
 		Name:       "alpha-1",
 		Path:       "/alpha",
-		LayoutName: "dev-3",
+		LayoutName: layout.DefaultLayoutName,
 		Panes: []native.PaneSnapshot{{
 			ID:     "p1",
 			Index:  "1",

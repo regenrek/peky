@@ -29,27 +29,21 @@ func NewProjectPicker() list.Model {
 
 // NewLayoutPicker builds the list model for selecting layouts.
 func NewLayoutPicker() list.Model {
-	delegate := list.NewDefaultDelegate()
-	delegate.Styles.SelectedTitle = delegate.Styles.SelectedTitle.
-		Foreground(theme.TextPrimary).
-		BorderLeftForeground(theme.AccentAlt)
-	delegate.Styles.SelectedDesc = delegate.Styles.SelectedDesc.
-		Foreground(theme.TextSecondary).
-		BorderLeftForeground(theme.AccentAlt)
-
-	l := list.New(nil, delegate, 0, 0)
+	l := newPaletteList(false)
 	l.Title = "🧩 New Session Layout"
 	l.Styles.Title = theme.TitleAlt
-	l.SetShowStatusBar(true)
-	l.SetFilteringEnabled(true)
 	l.SetStatusBarItemName("layout", "layouts")
 	return l
 }
 
 // NewCommandPalette builds the list model for the command palette.
 func NewCommandPalette() list.Model {
+	return newPaletteList(false)
+}
+
+func newPaletteList(showDescription bool) list.Model {
 	delegate := newCommandPaletteDelegate()
-	delegate.ShowDescription = false
+	delegate.ShowDescription = showDescription
 	delegate.SetSpacing(0)
 	delegate.Styles.NormalTitle = delegate.Styles.NormalTitle.
 		Foreground(theme.TextSecondary).

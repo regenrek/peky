@@ -1,0 +1,10 @@
+name: auto
+description: "Three-pane default layout"
+
+panes:
+  - cmd: "${EDITOR:-}"
+    size: "60%"
+  - cmd: ""
+    split: horizontal
+  - cmd: ""
+    split: vertical

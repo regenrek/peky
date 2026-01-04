@@ -11,13 +11,13 @@ fresh install. By default it runs the dashboard in a temp project directory.
 Options:
   version        npm tag or version to run (default: latest)
   --with-project create a .peakypanes.yml in the temp project
-  --cmd          custom command after version (e.g. "start --layout dev-3")
+  --cmd          custom command after version (e.g. "start --layout auto")
 
 Examples:
   scripts/fresh-run
   scripts/fresh-run latest
   scripts/fresh-run latest --with-project
-  scripts/fresh-run latest --cmd "start --layout dev-3"
+  scripts/fresh-run latest --cmd "start --layout auto"
 USAGE
 }
 

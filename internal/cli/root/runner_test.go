@@ -16,8 +16,8 @@ func TestApplyShorthandDefaultCommand(t *testing.T) {
 
 func TestApplyShorthandLayout(t *testing.T) {
 	specDoc := minimalSpec()
-	args := applyShorthand(specDoc, []string{"peakypanes", "dev-3"})
-	if len(args) != 4 || args[1] != "start" || args[2] != "--layout" || args[3] != "dev-3" {
+	args := applyShorthand(specDoc, []string{"peakypanes", "auto"})
+	if len(args) != 4 || args[1] != "start" || args[2] != "--layout" || args[3] != "auto" {
 		t.Fatalf("unexpected shorthand args: %v", args)
 	}
 }
@@ -33,8 +33,8 @@ func TestApplyShorthandSkipsKnownCommand(t *testing.T) {
 func TestApplyShorthandDisabled(t *testing.T) {
 	specDoc := minimalSpec()
 	specDoc.App.AllowLayoutShorthand = false
-	args := applyShorthand(specDoc, []string{"peakypanes", "dev-3"})
-	if len(args) != 2 || args[1] != "dev-3" {
+	args := applyShorthand(specDoc, []string{"peakypanes", "auto"})
+	if len(args) != 2 || args[1] != "auto" {
 		t.Fatalf("expected shorthand disabled, got %v", args)
 	}
 }

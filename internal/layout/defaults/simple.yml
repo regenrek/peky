@@ -1,6 +1,0 @@
-name: simple
-description: "Single pane - minimal setup"
-
-panes:
-  - title: shell
-    cmd: ""

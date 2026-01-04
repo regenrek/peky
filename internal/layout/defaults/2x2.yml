@@ -1,9 +1,0 @@
-name: 2x2
-description: "Generic 2x2 grid (4 panes)"
-
-grid: 2x2
-titles:
-  - pane-1
-  - pane-2
-  - pane-3
-  - pane-4

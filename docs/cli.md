@@ -52,7 +52,7 @@ peakypanes
 ## Config, layouts, and clone
 
 ```bash
-peakypanes init --local --layout default --force
+peakypanes init --local --layout auto --force
 peakypanes layouts
 peakypanes layouts export NAME
 peakypanes clone USER/REPO --session NAME --layout LAYOUT --path ./dest

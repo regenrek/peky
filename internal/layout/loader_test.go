@@ -20,12 +20,12 @@ func TestBuiltinLayouts(t *testing.T) {
 		t.Fatalf("ListBuiltinLayouts() not sorted: %#v", names)
 	}
 
-	layout, err := GetBuiltinLayout("dev-3")
+	layout, err := GetBuiltinLayout(DefaultLayoutName)
 	if err != nil {
-		t.Fatalf("GetBuiltinLayout(dev-3) error: %v", err)
+		t.Fatalf("GetBuiltinLayout(%s) error: %v", DefaultLayoutName, err)
 	}
 	if layout.Name == "" {
-		t.Fatalf("GetBuiltinLayout(dev-3) missing name")
+		t.Fatalf("GetBuiltinLayout(%s) missing name", DefaultLayoutName)
 	}
 }
 
@@ -39,7 +39,7 @@ func TestLoaderGlobalAndProjectPrecedence(t *testing.T) {
 	loader := NewLoaderWithPaths(globalConfigPath, globalDir, projectDir)
 	requireLoadAll(t, loader)
 	assertLayout(t, loader, "custom", "global", "1x2")
-	assertLayout(t, loader, "dev-3", "global", "1x2")
+	assertLayout(t, loader, DefaultLayoutName, "global", "1x2")
 	assertProjectLayout(t, loader, "project-layout")
 	assertProjectLayoutListed(t, loader)
 	assertExportContains(t, loader, "custom", "name: custom")

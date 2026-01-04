@@ -117,7 +117,7 @@ projects:
   - name: webapp
     session: webapp
     path: ~/projects/webapp
-    layout: fullstack
+    layout: auto
 
 # Tool detection + input profiles (CLI + TUI sends)
 # tool_detection:
@@ -162,27 +162,18 @@ layout:
 ## Built-in layouts
 
 Core layouts:
-- auto (default) - auto-detects .peakypanes.yml or falls back to dev-3
-- simple - single pane
+- auto (default) - auto-detects .peakypanes.yml or falls back to the 3-pane default
 - split-v - two vertical panes (left/right)
 - split-h - two horizontal panes (top/bottom)
-- 2x2 - 4-pane grid
-- 3x4 - 12-pane grid
-- codex-dev - 2x3 grid (shell + 5 codex)
-
-Additional built-ins:
-- dev-2 - editor + shell
-- dev-3 - editor + server + shell (default fallback)
-- fullstack - editor + server + shell + logs
-- go-dev - code/run/test + git
-- codex-grid - 2x4 grid running codex in every pane
+- 3x3 - 9-pane grid
+- 4x3 - 12-pane grid
 
 ```bash
 # List all layouts
 peakypanes layouts
 
 # Export a layout to customize
-peakypanes layouts export codex-dev > .peakypanes.yml
+peakypanes layouts export 3x3 > .peakypanes.yml
 ```
 
 ## Layout detection order
@@ -190,4 +181,4 @@ peakypanes layouts export codex-dev > .peakypanes.yml
 1. --layout flag (highest priority)
 2. .peakypanes.yml in current directory
 3. Project entry in ~/.config/peakypanes/config.yml
-4. Built-in dev-3 layout (fallback)
+4. Built-in auto layout (fallback)

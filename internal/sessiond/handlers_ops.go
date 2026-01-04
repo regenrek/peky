@@ -604,7 +604,7 @@ func selectStartSessionLayout(loader *layout.Loader, layoutName string) (*layout
 			return selectedLayout, nil
 		}
 	}
-	selectedLayout, _, _ := loader.GetLayout("dev-3")
+	selectedLayout, _, _ := loader.GetLayout("")
 	if selectedLayout == nil {
 		return nil, errors.New("sessiond: no layout found")
 	}

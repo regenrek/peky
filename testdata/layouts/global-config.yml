@@ -1,4 +1,4 @@
 layouts:
-  dev-3:
-    name: dev-3
+  auto:
+    name: auto
     grid: 1x2

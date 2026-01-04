@@ -11,14 +11,7 @@ import (
 )
 
 func (m Model) viewLayoutPicker() string {
-	listW := m.LayoutPicker.Width()
-	listH := m.LayoutPicker.Height()
-	content := lipgloss.NewStyle().Width(listW).Height(listH).Render(m.LayoutPicker.View())
-	return m.renderDialog(dialogSpec{
-		Content:         content,
-		Size:            dialogSizeForContent(listW, listH),
-		RequireViewport: true,
-	})
+	return m.renderDialogList(m.LayoutPicker.View(), m.LayoutPicker.Width(), m.LayoutPicker.Height(), "New Session Layout")
 }
 
 func (m Model) viewPaneSplitPicker() string {

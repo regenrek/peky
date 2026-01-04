@@ -228,7 +228,7 @@ func (l *Loader) GetLayout(name string) (*LayoutConfig, string, error) {
 
 	if name == "" {
 		// Return default layout
-		if layout, ok := l.builtinLayouts["dev-3"]; ok {
+		if layout, ok := l.builtinLayouts[DefaultLayoutName]; ok {
 			return layout, "builtin", nil
 		}
 	}

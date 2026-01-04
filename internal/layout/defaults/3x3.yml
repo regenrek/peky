@@ -1,0 +1,4 @@
+name: 3x3
+description: "3x3 grid (9 panes)"
+
+grid: 3x3
