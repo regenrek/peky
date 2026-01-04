@@ -1,9 +1,5 @@
 package terminal
 
-import (
-	uv "github.com/charmbracelet/ultraviolet"
-)
-
 type CopyMode struct {
 	Active bool
 
@@ -35,7 +31,7 @@ func (w *Window) CopySelectionActive() bool {
 func (w *Window) CopySelectionFromMouseActive() bool {
 	w.stateMu.Lock()
 	defer w.stateMu.Unlock()
-	return w.CopyMode != nil && w.CopyMode.Active && w.CopyMode.Selecting && w.mouseSelection
+	return w.CopyMode != nil && w.CopyMode.Active && w.CopyMode.Selecting && w.mouseSel.fromMouse
 }
 
 func (w *Window) ScrollbackModeActive() bool {
@@ -273,7 +269,7 @@ func (w *Window) EnterCopyMode() {
 	cm.SelEndX, cm.SelEndAbsY = cm.CursorX, cm.CursorAbsY
 
 	w.CopyMode = cm
-	w.mouseSelection = false
+	w.mouseSel.clearSelectionFlags()
 	w.ensureCopyCursorVisibleLocked(sbLen)
 	w.stateMu.Unlock()
 
@@ -286,7 +282,7 @@ func (w *Window) ExitCopyMode() {
 	}
 	w.stateMu.Lock()
 	w.CopyMode = nil
-	w.mouseSelection = false
+	w.mouseSel.clearSelectionFlags()
 	// Auto-exit scrollback mode if at live view.
 	if w.ScrollbackOffset == 0 {
 		w.ScrollbackMode = false
@@ -305,7 +301,7 @@ func (w *Window) CopyToggleSelect() {
 		w.stateMu.Unlock()
 		return
 	}
-	w.mouseSelection = false
+	w.mouseSel.clearSelectionFlags()
 	if !cm.Selecting {
 		cm.Selecting = true
 		cm.SelStartX, cm.SelStartAbsY = cm.CursorX, cm.CursorAbsY
@@ -427,61 +423,6 @@ func (w *Window) ensureCopyCursorVisibleLocked(sbLen int) {
 	}
 
 	w.ScrollbackOffset = clampInt(sbLen-topAbsY, 0, sbLen)
-}
-
-func (w *Window) adjustToNonContinuation(absY, x, dir int) int {
-	if w == nil {
-		return x
-	}
-	if x < 0 {
-		x = 0
-	}
-	if x >= w.cols {
-		x = maxInt(0, w.cols-1)
-	}
-	if dir == 0 {
-		dir = -1
-	}
-
-	w.termMu.Lock()
-	defer w.termMu.Unlock()
-	term := w.term
-	if term == nil {
-		return x
-	}
-	sbLen := term.ScrollbackLen()
-
-	var sbRow []uv.Cell
-	if absY < sbLen {
-		sbRow = make([]uv.Cell, w.cols)
-		if ok := term.CopyScrollbackRow(absY, sbRow); !ok {
-			return x
-		}
-	}
-
-	for x > 0 && x < w.cols {
-		var cell *uv.Cell
-		if absY < sbLen {
-			cell = &sbRow[x]
-		} else {
-			screenY := absY - sbLen
-			if screenY < 0 || screenY >= w.rows {
-				return x
-			}
-			cell = term.CellAt(x, screenY)
-		}
-		if cell == nil || cell.Width != 0 {
-			return x
-		}
-		x += dir
-		if x < 0 {
-			return 0
-		}
-		if x >= w.cols {
-			return maxInt(0, w.cols-1)
-		}
-	}
-	return x
 }
 
 func clampInt(v, lo, hi int) int {

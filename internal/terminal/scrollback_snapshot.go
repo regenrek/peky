@@ -21,6 +21,17 @@ func (w *Window) SnapshotScrollback(rows int) (string, bool) {
 	if term == nil {
 		return "", false
 	}
+	return snapshotScrollbackFromTerm(term, rows)
+}
+
+func snapshotScrollbackFromTerm(term vtEmulator, rows int) (string, bool) {
+	if term == nil || rows == 0 {
+		return "", false
+	}
+	if rows < 0 {
+		rows = 0
+	}
+
 	cols := term.Width()
 	if cols < 0 {
 		cols = 0
@@ -30,37 +41,79 @@ func (w *Window) SnapshotScrollback(rows int) (string, bool) {
 	if screenRows < 0 {
 		screenRows = 0
 	}
+
 	total := sbLen + screenRows
-	if total == 0 {
+	if total <= 0 {
 		return "", false
 	}
 	if rows <= 0 || rows > total {
 		rows = total
 	}
+
 	start := total - rows
 	truncated := rows < total
-	lines := make([]string, 0, rows)
-	var sbRow []uv.Cell
-	if sbLen > 0 && cols > 0 {
-		sbRow = make([]uv.Cell, cols)
-	}
-	for i := 0; i < rows; i++ {
-		abs := start + i
-		if abs < sbLen {
-			if sbRow == nil || len(sbRow) != cols {
-				sbRow = make([]uv.Cell, cols)
-			}
-			if ok := term.CopyScrollbackRow(abs, sbRow); ok {
-				lines = append(lines, lineFromCells(sbRow, cols))
-			} else {
-				lines = append(lines, "")
-			}
-			continue
-		}
-		row := abs - sbLen
-		lines = append(lines, screenLine(term, cols, row))
-	}
+	lines := snapshotScrollbackLines(term, cols, sbLen, start, rows)
 	return strings.Join(lines, "\n"), truncated
+}
+
+func snapshotScrollbackLines(term vtEmulator, cols, sbLen, start, rows int) []string {
+	if term == nil || rows <= 0 {
+		return nil
+	}
+
+	end := start + rows
+	lines := make([]string, 0, rows)
+
+	sbEnd := end
+	if sbEnd > sbLen {
+		sbEnd = sbLen
+	}
+	if start < sbEnd {
+		lines = append(lines, snapshotScrollbackSegment(term, cols, start, sbEnd)...)
+	}
+
+	screenStart := start
+	if screenStart < sbLen {
+		screenStart = sbLen
+	}
+	if screenStart < end {
+		lines = append(lines, snapshotScreenSegment(term, cols, sbLen, screenStart, end)...)
+	}
+
+	return lines
+}
+
+func snapshotScrollbackSegment(term vtEmulator, cols, startAbs, endAbs int) []string {
+	if term == nil || startAbs >= endAbs {
+		return nil
+	}
+	out := make([]string, 0, endAbs-startAbs)
+	if cols <= 0 {
+		for i := startAbs; i < endAbs; i++ {
+			out = append(out, "")
+		}
+		return out
+	}
+	sbRow := make([]uv.Cell, cols)
+	for abs := startAbs; abs < endAbs; abs++ {
+		if ok := term.CopyScrollbackRow(abs, sbRow); ok {
+			out = append(out, lineFromCells(sbRow, cols))
+		} else {
+			out = append(out, "")
+		}
+	}
+	return out
+}
+
+func snapshotScreenSegment(term vtEmulator, cols, sbLen, startAbs, endAbs int) []string {
+	if term == nil || startAbs >= endAbs {
+		return nil
+	}
+	out := make([]string, 0, endAbs-startAbs)
+	for abs := startAbs; abs < endAbs; abs++ {
+		out = append(out, screenLine(term, cols, abs-sbLen))
+	}
+	return out
 }
 
 func screenLine(term vtEmulator, cols, row int) string {

@@ -66,23 +66,11 @@ func (w *Window) handleMouseWheel(event uv.MouseWheelEvent) bool {
 		return w.forwardMouseToTerm(event)
 	}
 
-	// Copy mode always consumes the wheel and moves the copy cursor.
-	if w.CopyModeActive() {
-		step := w.mouseWheelStep(event.Mod)
-		switch event.Button {
-		case uv.MouseWheelUp:
-			w.CopyMove(0, -step)
-			return true
-		case uv.MouseWheelDown:
-			w.CopyMove(0, step)
-			return true
-		default:
-			return false
-		}
-	}
-
-	// Normal screen: use wheel to scroll terminal history, regardless of mouse reporting.
-	if w.ScrollbackLen() <= 0 {
+	// Normal screen: wheel always scrolls the viewport (history), regardless of
+	// copy mode or mouse reporting. This keeps selections anchored and avoids
+	// "selection grows while scrolling" behavior.
+	sbLen := w.ScrollbackLen()
+	if sbLen <= 0 && w.GetScrollbackOffset() == 0 {
 		return false
 	}
 
@@ -148,172 +136,6 @@ func (w *Window) shouldCaptureMouseForSelection(mod uv.KeyMod) bool {
 		return false
 	}
 
-	return true
-}
-
-func (w *Window) handleMouseSelectClick(event uv.MouseClickEvent) bool {
-	if w == nil {
-		return false
-	}
-	if event.Button != uv.MouseLeft {
-		return false
-	}
-	if !w.shouldCaptureMouseForSelection(event.Mod) {
-		return false
-	}
-
-	// Ensure copy mode is active so selection can be highlighted.
-	wasCopyActive := w.CopyModeActive()
-	if !wasCopyActive {
-		w.EnterCopyMode()
-	}
-	if !w.CopyModeActive() {
-		return false
-	}
-
-	absX, absY, sbLen, ok := w.mouseAbsFromViewport(event.X, event.Y)
-	if !ok {
-		return false
-	}
-	absX = w.adjustToNonContinuation(absY, absX, -1)
-
-	w.stateMu.Lock()
-	cm := w.CopyMode
-	if cm == nil || !cm.Active {
-		w.stateMu.Unlock()
-		return false
-	}
-
-	cm.CursorX = absX
-	cm.CursorAbsY = absY
-	cm.Selecting = true
-	cm.SelStartX, cm.SelStartAbsY = absX, absY
-	cm.SelEndX, cm.SelEndAbsY = absX, absY
-	w.mouseSelectActive = true
-	w.mouseSelectStartedCopy = !wasCopyActive
-	w.mouseSelectMoved = false
-	w.mouseSelection = true
-
-	w.ensureCopyCursorVisibleLocked(sbLen)
-	w.stateMu.Unlock()
-
-	w.markDirty()
-	return true
-}
-
-func (w *Window) handleMouseSelectMotion(event uv.MouseMotionEvent) bool {
-	if w == nil {
-		return false
-	}
-	if event.Button != uv.MouseLeft {
-		w.stateMu.Lock()
-		active := w.mouseSelectActive
-		w.stateMu.Unlock()
-		if !active {
-			return false
-		}
-	}
-	if !w.CopyModeActive() {
-		return false
-	}
-
-	absX, absY, _, ok := w.mouseAbsFromViewport(event.X, event.Y)
-	if !ok {
-		w.stateMu.Lock()
-		active := w.mouseSelectActive
-		w.stateMu.Unlock()
-		return active
-	}
-
-	w.stateMu.Lock()
-	cm := w.CopyMode
-	if cm == nil || !cm.Active {
-		w.stateMu.Unlock()
-		return false
-	}
-	curX := cm.CursorX
-	curY := cm.CursorAbsY
-	if !cm.Selecting {
-		cm.Selecting = true
-		cm.SelStartX, cm.SelStartAbsY = curX, curY
-		cm.SelEndX, cm.SelEndAbsY = curX, curY
-	}
-	w.stateMu.Unlock()
-
-	dx := absX - curX
-	dy := absY - curY
-	if dx == 0 && dy == 0 {
-		return true
-	}
-
-	w.CopyMove(dx, dy)
-	w.stateMu.Lock()
-	if w.mouseSelectActive {
-		w.mouseSelectMoved = true
-	}
-	w.stateMu.Unlock()
-	return true
-}
-
-func (w *Window) handleMouseSelectRelease(event uv.MouseReleaseEvent) bool {
-	if w == nil {
-		return false
-	}
-	if event.Button != uv.MouseLeft {
-		w.stateMu.Lock()
-		active := w.mouseSelectActive
-		w.stateMu.Unlock()
-		if !active {
-			return false
-		}
-	}
-	if !w.CopyModeActive() {
-		w.stateMu.Lock()
-		w.mouseSelectActive = false
-		w.mouseSelectStartedCopy = false
-		w.mouseSelectMoved = false
-		w.stateMu.Unlock()
-		return true
-	}
-
-	absX, absY, _, ok := w.mouseAbsFromViewport(event.X, event.Y)
-	moved := false
-	if ok {
-		w.stateMu.Lock()
-		cm := w.CopyMode
-		if cm == nil || !cm.Active {
-			w.stateMu.Unlock()
-			return false
-		}
-		curX := cm.CursorX
-		curY := cm.CursorAbsY
-		w.stateMu.Unlock()
-
-		dx := absX - curX
-		dy := absY - curY
-		if dx != 0 || dy != 0 {
-			moved = true
-			w.CopyMove(dx, dy)
-		}
-	}
-
-	w.stateMu.Lock()
-	if moved {
-		w.mouseSelectMoved = true
-	}
-	startedCopy := w.mouseSelectStartedCopy
-	movedFinal := w.mouseSelectMoved
-	w.mouseSelectActive = false
-	w.mouseSelectStartedCopy = false
-	w.mouseSelectMoved = false
-	w.stateMu.Unlock()
-
-	if movedFinal && w.copyMouseSelectionToClipboard() {
-		w.notifyToast(mouseSelectionCopiedToast)
-	}
-	if startedCopy && !movedFinal {
-		w.ExitCopyMode()
-	}
 	return true
 }
 
@@ -420,26 +242,13 @@ func (w *Window) handleMouseInHostModes(event uv.MouseEvent) bool {
 	}
 	switch ev := event.(type) {
 	case uv.MouseClickEvent:
-		_ = w.handleMouseSelectClick(ev)
+		_ = w.handleMouseSelectPress(ev)
 	case uv.MouseMotionEvent:
 		_ = w.handleMouseSelectMotion(ev)
 	case uv.MouseReleaseEvent:
 		_ = w.handleMouseSelectRelease(ev)
 	}
 	return true
-}
-
-func (w *Window) handleMouseSelection(event uv.MouseEvent) bool {
-	switch ev := event.(type) {
-	case uv.MouseClickEvent:
-		return w.handleMouseSelectClick(ev)
-	case uv.MouseMotionEvent:
-		return w.handleMouseSelectMotion(ev)
-	case uv.MouseReleaseEvent:
-		return w.handleMouseSelectRelease(ev)
-	default:
-		return false
-	}
 }
 
 func (w *Window) allowMouseForwarding(event uv.MouseEvent) bool {

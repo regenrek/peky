@@ -94,6 +94,14 @@ type Model struct {
 
 	mouse mouse.Handler
 
+	oscPending string
+
+	cursorShape               cursorShape
+	cursorShapePending        cursorShape
+	cursorShapeLastSentAt     time.Time
+	cursorShapeFlushScheduled bool
+	cursorShapeNow            func() time.Time
+
 	projectPicker  list.Model
 	layoutPicker   list.Model
 	paneSwapPicker list.Model
@@ -205,6 +213,7 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 		paneViewInFlightByPane: make(map[string]struct{}),
 		paneLastSize:           make(map[string]paneSize),
 		paneLastFallback:       make(map[string]time.Time),
+		cursorShapeNow:         time.Now,
 	}
 
 	m.filterInput = textinput.New()

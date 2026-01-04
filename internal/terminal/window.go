@@ -142,10 +142,11 @@ type Window struct {
 	ScrollbackOffset int
 
 	// Mouse selection drag state (guarded by stateMu).
-	mouseSelectActive      bool
-	mouseSelectStartedCopy bool
-	mouseSelectMoved       bool
-	mouseSelection         bool
+	mouseSel mouseSelectionState
+
+	// mouseNow is used for mouse multi-click detection. Defaults to time.Now.
+	// This is not guarded by stateMu because it should only be set at construction/tests.
+	mouseNow func() time.Time
 
 	toastFn     func(string)
 	onFirstRead func()

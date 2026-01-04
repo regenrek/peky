@@ -51,7 +51,7 @@ func TestSendInputClearsMouseSelection(t *testing.T) {
 	pty := &fakePty{}
 	w := &Window{pty: pty, writeCh: make(chan writeRequest, 1)}
 	w.CopyMode = &CopyMode{Active: true, Selecting: true}
-	w.mouseSelection = true
+	w.mouseSel.fromMouse = true
 	w.ScrollbackMode = true
 	w.ScrollbackOffset = 3
 

@@ -19,6 +19,11 @@ func selectionFromMouse(sel mouse.Selection) selectionState {
 }
 
 func (m *Model) updateDashboardMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	cursorCmd := m.updateCursorShape(msg)
+	if _, handled := m.handleQuickReplyClick(msg); handled {
+		m.updateTerminalMouseDrag(msg)
+		return m, cursorCmd
+	}
 	m.updateTerminalMouseDrag(msg)
 	cmd := m.mouse.UpdateDashboard(msg, mouse.DashboardCallbacks{
 		HitHeader:             m.hitTestHeader,
@@ -39,15 +44,40 @@ func (m *Model) updateDashboardMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			m.setToast("Terminal focus is only available for PeakyPanes-managed sessions", toastInfo)
 		},
 	})
-	return m, cmd
+	return m, tea.Batch(cursorCmd, cmd)
+}
+
+func (m *Model) handleQuickReplyClick(msg tea.MouseMsg) (tea.Cmd, bool) {
+	if m == nil {
+		return nil, false
+	}
+	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
+		return nil, false
+	}
+	rect, ok := m.quickReplyRect()
+	if !ok || !rect.Contains(msg.X, msg.Y) {
+		return nil, false
+	}
+	if m.terminalFocus {
+		m.setTerminalFocus(false)
+	}
+	if m.filterActive {
+		m.filterActive = false
+		m.filterInput.Blur()
+	}
+	m.quickReplyInput.Focus()
+	return nil, true
 }
 
 func (m *Model) allowMouseMotion() bool {
 	if m == nil {
 		return false
 	}
-	if m.state != StateDashboard || !m.terminalFocus {
+	if m.state != StateDashboard {
 		return false
+	}
+	if !m.terminalFocus {
+		return true
 	}
 	if !m.supportsTerminalFocus() {
 		return false

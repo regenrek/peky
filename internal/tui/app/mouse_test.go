@@ -191,3 +191,60 @@ func findHeaderRect(t *testing.T, m *Model, kind headerPartKind, projectID strin
 	}
 	return mouse.Rect{}, false
 }
+
+func TestMouseQuickReplyClickExitsTerminalFocus(t *testing.T) {
+	m := newTestModel(t)
+	seedMouseTestData(m)
+	m.setTerminalFocus(true)
+
+	rect, ok := m.quickReplyRect()
+	if !ok {
+		t.Fatalf("quick reply rect unavailable")
+	}
+	msg := tea.MouseMsg{X: rect.X + 2, Y: rect.Y + 1, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft}
+
+	_, _ = m.updateDashboardMouse(msg)
+
+	if m.terminalFocus {
+		t.Fatalf("terminalFocus should be false after quick reply click")
+	}
+	m.quickReplyInput.SetValue("")
+	m.updateDashboard(keyRune('x'))
+	if got := m.quickReplyInput.Value(); got != "x" {
+		t.Fatalf("quickReplyInput=%q want %q", got, "x")
+	}
+}
+
+func TestMouseMotionSetsCursorShapeTextOverDashboardBody(t *testing.T) {
+	m := newTestModel(t)
+	seedMouseTestData(m)
+
+	body, ok := m.dashboardBodyRect()
+	if !ok {
+		t.Fatalf("dashboard body rect unavailable")
+	}
+	msg := tea.MouseMsg{X: body.X + 1, Y: body.Y + 1, Action: tea.MouseActionMotion, Button: tea.MouseButtonNone}
+
+	_, _ = m.updateDashboardMouse(msg)
+
+	if got := m.oscPending; got != "\x1b]22;text\x07" {
+		t.Fatalf("oscPending=%q want %q", got, "\x1b]22;text\x07")
+	}
+}
+
+func TestMouseMotionSetsCursorShapePointerOverHeader(t *testing.T) {
+	m := newTestModel(t)
+	seedMouseTestData(m)
+
+	header, ok := m.headerRect()
+	if !ok {
+		t.Fatalf("header rect unavailable")
+	}
+	msg := tea.MouseMsg{X: header.X + 1, Y: header.Y, Action: tea.MouseActionMotion, Button: tea.MouseButtonNone}
+
+	_, _ = m.updateDashboardMouse(msg)
+
+	if got := m.oscPending; got != "\x1b]22;pointer\x07" {
+		t.Fatalf("oscPending=%q want %q", got, "\x1b]22;pointer\x07")
+	}
+}
