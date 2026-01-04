@@ -474,7 +474,9 @@ func buildViewRenderState(w *Window, term vtEmulator, snapshot viewSnapshot, sho
 	if term.IsAltScreen() {
 		offset = 0
 		sbMode = false
-		cm = nil
+		if cm == nil || !cm.Active || !w.mouseSel.fromMouse {
+			cm = nil
+		}
 	}
 
 	sbLen := term.ScrollbackLen()

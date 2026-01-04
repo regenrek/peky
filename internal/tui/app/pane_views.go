@@ -869,10 +869,12 @@ func (m *Model) paneViewRenderSettings(paneID string) (sessiond.PaneViewMode, bo
 	if isSelected {
 		priority = sessiond.PaneViewPriorityNormal
 	}
-	if isSelected && m.terminalFocus && m.supportsTerminalFocus() {
+	if isSelected && m.supportsTerminalFocus() {
 		mode = sessiond.PaneViewLipgloss
-		showCursor = true
-		priority = sessiond.PaneViewPriorityFocused
+		showCursor = m.terminalFocus
+		if showCursor {
+			priority = sessiond.PaneViewPriorityFocused
+		}
 	}
 	return mode, showCursor, priority
 }
