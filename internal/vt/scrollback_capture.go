@@ -40,52 +40,13 @@ func appendGlyphsFromCells(dst *cellStore, line []uv.Cell) int {
 	return n
 }
 
-func appendGlyphsFromBuffer(dst *cellStore, buf *uv.Buffer, y, width int) int {
-	if buf == nil || width <= 0 {
-		return 0
-	}
-
-	endX := -1
-	for x := width - 1; x >= 0; x-- {
-		c := cellAtOrEmpty(buf, x, y)
-		if c.Width == 0 {
-			continue
-		}
-		if isBlankCell(c) {
-			continue
-		}
-		endX = x
-		break
-	}
-	if endX < 0 {
-		return 0
-	}
-
-	n := 0
-	for x := 0; x <= endX; x++ {
-		c := cellAtOrEmpty(buf, x, y)
-		if c.Width == 0 {
-			continue
-		}
-		if c.Width <= 0 {
-			c.Width = 1
-		}
-		if c.Content == "" {
-			c.Content = " "
-		}
-		dst.AppendCell(c)
-		n++
-	}
-	return n
-}
-
-func guessSoftWrappedRow(buf *uv.Buffer, y, width int) bool {
-	if buf == nil || width <= 0 {
+func guessSoftWrappedLine(line []uv.Cell, width int) bool {
+	if width <= 0 || len(line) == 0 {
 		return false
 	}
 
 	for x := width - 1; x >= 0; x-- {
-		c := cellAtOrEmpty(buf, x, y)
+		c := line[x]
 		if c.Width == 0 {
 			continue
 		}
@@ -100,16 +61,6 @@ func guessSoftWrappedRow(buf *uv.Buffer, y, width int) bool {
 		return end >= width-1
 	}
 	return false
-}
-
-func cellAtOrEmpty(buf *uv.Buffer, x, y int) uv.Cell {
-	if buf == nil {
-		return uv.EmptyCell
-	}
-	if cell := buf.CellAt(x, y); cell != nil {
-		return *cell
-	}
-	return uv.EmptyCell
 }
 
 func isBlankCell(c uv.Cell) bool {

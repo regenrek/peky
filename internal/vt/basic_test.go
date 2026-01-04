@@ -12,42 +12,49 @@ import (
 )
 
 func TestBufferInsertDelete(t *testing.T) {
-	buf := &Buffer{Buffer: *uv.NewBuffer(3, 3)}
-	setLine(buf, 0, "abc")
-	setLine(buf, 1, "def")
-	setLine(buf, 2, "ghi")
+	s := NewScreen(3, 3)
+	setLine(s, 0, "abc")
+	setLine(s, 1, "def")
+	setLine(s, 2, "ghi")
 
-	buf.InsertLine(1, 1, nil)
-	if got := lineText(buf, 0); got != "abc" {
+	s.setCursor(0, 1, false)
+	if ok := s.InsertLine(1); !ok {
+		t.Fatalf("expected InsertLine to succeed")
+	}
+	if got := lineText(s, 0); got != "abc" {
 		t.Fatalf("line0 = %q", got)
 	}
-	if got := lineText(buf, 1); got != "   " {
+	if got := lineText(s, 1); got != "   " {
 		t.Fatalf("line1 = %q", got)
 	}
-	if got := lineText(buf, 2); got != "def" {
+	if got := lineText(s, 2); got != "def" {
 		t.Fatalf("line2 = %q", got)
 	}
 
-	buf = &Buffer{Buffer: *uv.NewBuffer(3, 3)}
-	setLine(buf, 0, "abc")
-	setLine(buf, 1, "def")
-	setLine(buf, 2, "ghi")
-	buf.DeleteLine(1, 1, nil)
-	if got := lineText(buf, 1); got != "ghi" {
+	s = NewScreen(3, 3)
+	setLine(s, 0, "abc")
+	setLine(s, 1, "def")
+	setLine(s, 2, "ghi")
+	s.setCursor(0, 1, false)
+	if ok := s.DeleteLine(1); !ok {
+		t.Fatalf("expected DeleteLine to succeed")
+	}
+	if got := lineText(s, 1); got != "ghi" {
 		t.Fatalf("delete line: %q", got)
 	}
-	if got := lineText(buf, 2); got != "   " {
+	if got := lineText(s, 2); got != "   " {
 		t.Fatalf("delete line tail: %q", got)
 	}
 
-	buf = &Buffer{Buffer: *uv.NewBuffer(3, 1)}
-	setLine(buf, 0, "abc")
-	buf.InsertCell(1, 0, 1, nil)
-	if got := lineText(buf, 0); got != "a b" {
+	s = NewScreen(3, 1)
+	setLine(s, 0, "abc")
+	s.setCursor(1, 0, false)
+	s.InsertCell(1)
+	if got := lineText(s, 0); got != "a b" {
 		t.Fatalf("insert cell: %q", got)
 	}
-	buf.DeleteCell(1, 0, 1, nil)
-	if got := lineText(buf, 0); got != "ab " {
+	s.DeleteCell(1)
+	if got := lineText(s, 0); got != "ab " {
 		t.Fatalf("delete cell: %q", got)
 	}
 }
@@ -124,7 +131,7 @@ func TestScreenBasics(t *testing.T) {
 		t.Fatalf("expected cursor callbacks")
 	}
 
-	setLine(&Buffer{Buffer: s.buf}, 0, "abc")
+	setLine(s, 0, "abc")
 	s.cur = Cursor{Position: uv.Pos(1, 0)}
 	s.InsertCell(1)
 	if got := s.CellAt(1, 0).Content; got != " " {
@@ -277,7 +284,6 @@ func TestSafeEmulator(t *testing.T) {
 	se.SetIndexedColor(1, color.White)
 	_ = se.IndexedColor(1)
 	se.Render()
-	se.Touched()
 	se.CursorPosition()
 
 	screen := &fakeScreen{buf: uv.NewBuffer(3, 2)}
@@ -406,33 +412,34 @@ func (s *fakeScreen) SetCell(x, y int, c *uv.Cell) {
 }
 func (s *fakeScreen) WidthMethod() uv.WidthMethod { return ansi.WcWidth }
 
-func setLine(buf *Buffer, y int, text string) {
-	if y < 0 || y >= len(buf.Lines) {
+func setLine(s *Screen, y int, text string) {
+	if s == nil || y < 0 || y >= s.Height() {
 		return
 	}
-	for x := range buf.Lines[y] {
-		buf.Lines[y][x] = uv.EmptyCell
+	for x := 0; x < s.Width(); x++ {
+		s.SetCell(x, y, nil)
 	}
 	runes := []rune(text)
-	for i := 0; i < len(runes) && i < len(buf.Lines[y]); i++ {
+	for i := 0; i < len(runes) && i < s.Width(); i++ {
 		c := uv.Cell{Content: string(runes[i]), Width: 1}
-		buf.SetCell(i, y, &c)
+		s.SetCell(i, y, &c)
 	}
 }
 
-func lineText(buf *Buffer, y int) string {
-	if y < 0 || y >= len(buf.Lines) {
+func lineText(s *Screen, y int) string {
+	if s == nil || y < 0 || y >= s.Height() {
 		return ""
 	}
 	var b strings.Builder
-	for _, c := range buf.Lines[y] {
-		if c.Width == 0 {
+	for x := 0; x < s.Width(); x++ {
+		cell := s.CellAt(x, y)
+		if cell == nil || cell.Width == 0 {
 			continue
 		}
-		if c.Content == "" {
+		if cell.Content == "" {
 			b.WriteByte(' ')
 		} else {
-			b.WriteString(c.Content)
+			b.WriteString(cell.Content)
 		}
 	}
 	return b.String()

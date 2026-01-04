@@ -44,7 +44,6 @@ func (e *Emulator) setAltScreenMode(on bool) {
 		e.scr = &e.scrs[1]
 		e.scrs[1].cur = e.scrs[0].cur
 		e.scr.Clear()
-		e.scr.buf.Touched = nil
 		e.setCursor(0, 0)
 	} else {
 		e.scr = &e.scrs[0]

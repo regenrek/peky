@@ -1,0 +1,470 @@
+package vt
+
+import (
+	"strings"
+
+	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/charmbracelet/x/ansi"
+)
+
+type cellGrid struct {
+	cols  int
+	rows  int
+	cells []uv.Cell
+}
+
+func newCellGrid(cols, rows int) cellGrid {
+	var g cellGrid
+	g.Resize(cols, rows)
+	return g
+}
+
+func (g *cellGrid) Width() int  { return g.cols }
+func (g *cellGrid) Height() int { return g.rows }
+
+func (g *cellGrid) Bounds() uv.Rectangle {
+	return uv.Rect(0, 0, g.cols, g.rows)
+}
+
+func (g *cellGrid) Row(y int) []uv.Cell {
+	if y < 0 || y >= g.rows || g.cols <= 0 {
+		return nil
+	}
+	start := y * g.cols
+	return g.cells[start : start+g.cols]
+}
+
+func (g *cellGrid) CellAt(x, y int) *uv.Cell {
+	if x < 0 || y < 0 || x >= g.cols || y >= g.rows {
+		return nil
+	}
+	return &g.cells[y*g.cols+x]
+}
+
+func (g *cellGrid) SetCell(x, y int, c *uv.Cell) {
+	if x < 0 || y < 0 || x >= g.cols || y >= g.rows {
+		return
+	}
+	row := uv.Line(g.Row(y))
+	row.Set(x, c)
+}
+
+func (g *cellGrid) Clear() { g.ClearArea(g.Bounds()) }
+
+func (g *cellGrid) ClearArea(area uv.Rectangle) {
+	if g.cols <= 0 || g.rows <= 0 || area.Empty() {
+		return
+	}
+	area = area.Intersect(g.Bounds())
+	if area.Empty() {
+		return
+	}
+	for y := area.Min.Y; y < area.Max.Y; y++ {
+		if area.Min.X == 0 && area.Max.X == g.cols {
+			start := y * g.cols
+			row := g.cells[start : start+g.cols]
+			fillEmptyCells(row)
+			continue
+		}
+		row := uv.Line(g.Row(y))
+		for x := area.Min.X; x < area.Max.X; x++ {
+			row.Set(x, nil)
+		}
+	}
+}
+
+func (g *cellGrid) FillArea(c *uv.Cell, area uv.Rectangle) {
+	if g.cols <= 0 || g.rows <= 0 || area.Empty() {
+		return
+	}
+	area = area.Intersect(g.Bounds())
+	if area.Empty() {
+		return
+	}
+
+	cellWidth := 1
+	if c != nil && c.Width > 1 {
+		cellWidth = c.Width
+	}
+	for y := area.Min.Y; y < area.Max.Y; y++ {
+		row := uv.Line(g.Row(y))
+		for x := area.Min.X; x < area.Max.X; x += cellWidth {
+			row.Set(x, c)
+		}
+	}
+}
+
+func (g *cellGrid) Resize(cols, rows int) {
+	if cols < 0 {
+		cols = 0
+	}
+	if rows < 0 {
+		rows = 0
+	}
+	if cols == g.cols && rows == g.rows {
+		return
+	}
+
+	oldCols := g.cols
+	oldRows := g.rows
+	oldCells := g.cells
+
+	g.cols = cols
+	g.rows = rows
+
+	if cols == 0 || rows == 0 {
+		g.cells = nil
+		return
+	}
+
+	newSize := cols * rows
+	if oldCols == cols && len(oldCells) > 0 {
+		if cap(oldCells) >= newSize {
+			g.cells = oldCells[:newSize]
+			if len(g.cells) > len(oldCells) {
+				fillEmptyCells(g.cells[len(oldCells):])
+			}
+			return
+		}
+	}
+
+	newCells := make([]uv.Cell, newSize)
+	fillEmptyCells(newCells)
+
+	if len(oldCells) > 0 && oldCols > 0 && oldRows > 0 {
+		minRows := oldRows
+		if rows < minRows {
+			minRows = rows
+		}
+		minCols := oldCols
+		if cols < minCols {
+			minCols = cols
+		}
+		for y := 0; y < minRows; y++ {
+			src := y * oldCols
+			dst := y * cols
+			copy(newCells[dst:dst+minCols], oldCells[src:src+minCols])
+		}
+	}
+	g.cells = newCells
+}
+
+func (g *cellGrid) InsertLineArea(y, n int, c *uv.Cell, area uv.Rectangle) {
+	if g.cols <= 0 || g.rows <= 0 || n <= 0 {
+		return
+	}
+	area = area.Intersect(g.Bounds())
+	if area.Empty() || y < area.Min.Y || y >= area.Max.Y {
+		return
+	}
+	if y+n > area.Max.Y {
+		n = area.Max.Y - y
+	}
+	if n <= 0 {
+		return
+	}
+
+	for row := area.Max.Y - 1; row >= y+n; row-- {
+		dstRow := g.Row(row)[area.Min.X:area.Max.X]
+		srcRow := g.Row(row - n)[area.Min.X:area.Max.X]
+		copy(dstRow, srcRow)
+	}
+
+	for row := y; row < y+n; row++ {
+		if area.Min.X == 0 && area.Max.X == g.cols && (c == nil || c.Width <= 1) {
+			dst := g.Row(row)
+			fillCells(dst, c)
+		} else {
+			fillRowArea(g.Row(row), area.Min.X, area.Max.X, c)
+		}
+	}
+}
+
+func (g *cellGrid) DeleteLineArea(y, n int, c *uv.Cell, area uv.Rectangle) {
+	if g.cols <= 0 || g.rows <= 0 || n <= 0 {
+		return
+	}
+	area = area.Intersect(g.Bounds())
+	if area.Empty() || y < area.Min.Y || y >= area.Max.Y {
+		return
+	}
+	if n > area.Max.Y-y {
+		n = area.Max.Y - y
+	}
+	if n <= 0 {
+		return
+	}
+
+	for row := y; row < area.Max.Y-n; row++ {
+		dstRow := g.Row(row)[area.Min.X:area.Max.X]
+		srcRow := g.Row(row + n)[area.Min.X:area.Max.X]
+		copy(dstRow, srcRow)
+	}
+
+	for row := area.Max.Y - n; row < area.Max.Y; row++ {
+		if area.Min.X == 0 && area.Max.X == g.cols && (c == nil || c.Width <= 1) {
+			dst := g.Row(row)
+			fillCells(dst, c)
+		} else {
+			fillRowArea(g.Row(row), area.Min.X, area.Max.X, c)
+		}
+	}
+}
+
+func (g *cellGrid) InsertCellArea(x, y, n int, c *uv.Cell, area uv.Rectangle) {
+	if g.cols <= 0 || g.rows <= 0 || n <= 0 {
+		return
+	}
+	area = area.Intersect(g.Bounds())
+	if area.Empty() || y < area.Min.Y || y >= area.Max.Y || x < area.Min.X || x >= area.Max.X {
+		return
+	}
+	if x+n > area.Max.X {
+		n = area.Max.X - x
+	}
+	if n <= 0 {
+		return
+	}
+
+	row := g.Row(y)
+	shiftStart := x + n
+	if shiftStart < area.Max.X {
+		src := row[x : area.Max.X-n]
+		dst := row[shiftStart:area.Max.X]
+		copy(dst, src)
+	}
+
+	line := uv.Line(row)
+	cellWidth := 1
+	if c != nil && c.Width > 1 {
+		cellWidth = c.Width
+	}
+	for pos := x; pos < x+n; pos += cellWidth {
+		line.Set(pos, c)
+	}
+	normalizeWideRow(row)
+}
+
+func (g *cellGrid) DeleteCellArea(x, y, n int, c *uv.Cell, area uv.Rectangle) {
+	if g.cols <= 0 || g.rows <= 0 || n <= 0 {
+		return
+	}
+	area = area.Intersect(g.Bounds())
+	if area.Empty() || y < area.Min.Y || y >= area.Max.Y || x < area.Min.X || x >= area.Max.X {
+		return
+	}
+	if n > area.Max.X-x {
+		n = area.Max.X - x
+	}
+	if n <= 0 {
+		return
+	}
+
+	row := g.Row(y)
+	if x >= 0 && x < len(row) {
+		prev := row[x]
+		if prev.IsZero() || prev.Width > 1 {
+			uv.Line(row).Set(x, c)
+		}
+	}
+	if x+n < area.Max.X {
+		src := row[x+n : area.Max.X]
+		dst := row[x : area.Max.X-n]
+		copy(dst, src)
+	}
+	fillRowArea(row, area.Max.X-n, area.Max.X, c)
+	normalizeWideRow(row)
+}
+
+func (g *cellGrid) String() string {
+	if g.cols <= 0 || g.rows <= 0 {
+		return ""
+	}
+	var b strings.Builder
+	for y := 0; y < g.rows; y++ {
+		line := uv.Line(g.Row(y))
+		b.WriteString(line.String())
+		if y < g.rows-1 {
+			b.WriteByte('\n')
+		}
+	}
+	return b.String()
+}
+
+func (g *cellGrid) Render() string {
+	if g.cols <= 0 || g.rows <= 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	// Conservative pre-grow: each cell may contribute at least 1 byte; ANSI adds more.
+	b.Grow(g.cols * g.rows)
+
+	for y := 0; y < g.rows; y++ {
+		renderLine(&b, g.Row(y))
+		if y < g.rows-1 {
+			_ = b.WriteByte('\n')
+		}
+	}
+	return b.String()
+}
+
+func renderLine(b *strings.Builder, line []uv.Cell) {
+	var pen uv.Style
+	var link uv.Link
+	pendingSpaces := 0
+
+	flushSpaces := func() {
+		for pendingSpaces > 0 {
+			_ = b.WriteByte(' ')
+			pendingSpaces--
+		}
+	}
+
+	for i := range line {
+		c := line[i]
+		if c.IsZero() {
+			continue
+		}
+		if c.Equal(&uv.EmptyCell) {
+			if !pen.IsZero() {
+				b.WriteString(ansi.ResetStyle)
+				pen = uv.Style{}
+			}
+			if !link.IsZero() {
+				b.WriteString(ansi.ResetHyperlink())
+				link = uv.Link{}
+			}
+			pendingSpaces++
+			continue
+		}
+
+		if pendingSpaces > 0 {
+			flushSpaces()
+		}
+
+		if c.Style.IsZero() && !pen.IsZero() {
+			b.WriteString(ansi.ResetStyle)
+			pen = uv.Style{}
+		}
+		if !c.Style.Equal(&pen) {
+			seq := c.Style.Diff(&pen)
+			b.WriteString(seq)
+			pen = c.Style
+		}
+
+		if c.Link != link && link.URL != "" {
+			b.WriteString(ansi.ResetHyperlink())
+			link = uv.Link{}
+		}
+		if c.Link != link {
+			b.WriteString(ansi.SetHyperlink(c.Link.URL, c.Link.Params))
+			link = c.Link
+		}
+
+		b.WriteString(c.String())
+	}
+
+	if link.URL != "" {
+		b.WriteString(ansi.ResetHyperlink())
+	}
+	if !pen.IsZero() {
+		b.WriteString(ansi.ResetStyle)
+	}
+}
+
+func fillEmptyCells(dst []uv.Cell) {
+	for i := range dst {
+		dst[i] = uv.EmptyCell
+	}
+}
+
+func fillCells(dst []uv.Cell, c *uv.Cell) {
+	if c == nil {
+		fillEmptyCells(dst)
+		return
+	}
+	val := *c
+	for i := range dst {
+		dst[i] = val
+	}
+}
+
+func fillRowArea(row []uv.Cell, start, end int, c *uv.Cell) {
+	if start < 0 {
+		start = 0
+	}
+	if end > len(row) {
+		end = len(row)
+	}
+	if start >= end {
+		return
+	}
+	line := uv.Line(row)
+	step := 1
+	if c != nil && c.Width > 1 {
+		step = c.Width
+	}
+	for x := start; x < end; x += step {
+		line.Set(x, c)
+	}
+}
+
+func normalizeWideRow(row []uv.Cell) {
+	if len(row) == 0 {
+		return
+	}
+	basePos := -1
+	baseWidth := 0
+	cover := 0
+
+	for x := 0; x < len(row); x++ {
+		c := row[x]
+		if cover > 0 {
+			if c.IsZero() {
+				cover--
+				if cover == 0 {
+					basePos = -1
+					baseWidth = 0
+				}
+				continue
+			}
+			blankWide(row, basePos, baseWidth)
+			basePos = -1
+			baseWidth = 0
+			cover = 0
+			x--
+			continue
+		}
+
+		if c.IsZero() {
+			row[x] = uv.EmptyCell
+			continue
+		}
+
+		w := c.Width
+		if w <= 1 {
+			continue
+		}
+		if x+w > len(row) {
+			row[x] = uv.EmptyCell
+			continue
+		}
+		basePos = x
+		baseWidth = w
+		cover = w - 1
+	}
+
+	if cover > 0 && basePos >= 0 {
+		blankWide(row, basePos, baseWidth)
+	}
+}
+
+func blankWide(row []uv.Cell, basePos, width int) {
+	if basePos < 0 || width <= 0 {
+		return
+	}
+	for i := 0; i < width && basePos+i < len(row); i++ {
+		row[basePos+i] = uv.EmptyCell
+	}
+}

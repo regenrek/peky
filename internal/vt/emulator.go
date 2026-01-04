@@ -154,11 +154,6 @@ func (e *Emulator) SetCallbacks(cb Callbacks) {
 	e.scrs[1].cb = &e.cb
 }
 
-// Touched returns the touched lines in the current screen buffer.
-func (e *Emulator) Touched() []*uv.LineData {
-	return e.scr.Touched()
-}
-
 func (e *Emulator) ConsumeDamage() DamageState {
 	if e == nil || e.scr == nil {
 		return DamageState{}
@@ -168,13 +163,18 @@ func (e *Emulator) ConsumeDamage() DamageState {
 
 // String returns a string representation of the underlying screen buffer.
 func (e *Emulator) String() string {
-	s := e.scr.buf.String()
-	return uv.TrimSpace(s)
+	if e == nil || e.scr == nil {
+		return ""
+	}
+	return uv.TrimSpace(e.scr.buf.String())
 }
 
 // Render renders a snapshot of the terminal screen as a string with styles and
 // links encoded as ANSI escape codes.
 func (e *Emulator) Render() string {
+	if e == nil || e.scr == nil {
+		return ""
+	}
 	return e.scr.buf.Render()
 }
 
@@ -249,26 +249,25 @@ func (e *Emulator) Draw(scr uv.Screen, area uv.Rectangle) {
 	bg := uv.EmptyCell
 	bg.Style.Bg = e.BackgroundColor()
 	screen.FillArea(scr, &bg, area)
-	for y := range e.Touched() {
-		if y < 0 || y >= e.Height() {
-			continue
-		}
-		for x := 0; x < e.Width(); {
+	for y := area.Min.Y; y < area.Max.Y; y++ {
+		for x := area.Min.X; x < area.Max.X; {
 			w := 1
-			cell := e.CellAt(x, y)
-			if cell != nil {
-				cell = cell.Clone()
-				if cell.Width > 1 {
-					w = cell.Width
-				}
-				if cell.Style.Bg == nil && e.bgColor != nil {
-					cell.Style.Bg = e.bgColor
-				}
-				if cell.Style.Fg == nil && e.fgColor != nil {
-					cell.Style.Fg = e.fgColor
-				}
-				scr.SetCell(x+area.Min.X, y+area.Min.Y, cell)
+			cell := e.CellAt(x-area.Min.X, y-area.Min.Y)
+			if cell == nil {
+				x++
+				continue
 			}
+			c := cell.Clone()
+			if c.Width > 1 {
+				w = c.Width
+			}
+			if c.Style.Bg == nil && e.bgColor != nil {
+				c.Style.Bg = e.bgColor
+			}
+			if c.Style.Fg == nil && e.fgColor != nil {
+				c.Style.Fg = e.fgColor
+			}
+			scr.SetCell(x, y, c)
 			x += w
 		}
 	}

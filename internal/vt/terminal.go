@@ -48,7 +48,6 @@ type Terminal interface {
 	SetIndexedColor(i int, c color.Color)
 	SetLogger(l Logger)
 	String() string
-	Touched() []*uv.LineData
 	Width() int
 	WidthMethod() uv.WidthMethod
 	Write(p []byte) (n int, err error)

@@ -125,13 +125,6 @@ func (se *SafeEmulator) IndexedColor(index int) color.Color {
 	return se.Emulator.IndexedColor(index)
 }
 
-// Touched returns the touched lines in a concurrency-safe manner.
-func (se *SafeEmulator) Touched() []*uv.LineData {
-	se.mu.RLock()
-	defer se.mu.RUnlock()
-	return se.Emulator.Touched()
-}
-
 // Height returns the height of the emulator in a concurrency-safe manner.
 func (se *SafeEmulator) Height() int {
 	se.mu.RLock()

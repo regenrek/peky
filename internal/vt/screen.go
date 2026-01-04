@@ -10,7 +10,7 @@ type Screen struct {
 	// cb is the callbacks struct to use.
 	cb *Callbacks
 	// The buffer of the screen.
-	buf uv.Buffer
+	buf cellGrid
 	// The cur of the screen.
 	cur, saved Cursor
 	// scroll is the scroll region.
@@ -25,6 +25,7 @@ type Screen struct {
 func NewScreen(w, h int) *Screen {
 	s := Screen{}
 	s.scrollback = NewScrollback(0)
+	s.buf = newCellGrid(0, 0)
 	s.Resize(w, h)
 	return &s
 }
@@ -43,11 +44,6 @@ func (s *Screen) Reset() {
 // Bounds returns the bounds of the screen.
 func (s *Screen) Bounds() uv.Rectangle {
 	return s.buf.Bounds()
-}
-
-// Touched returns touched lines in the screen buffer.
-func (s *Screen) Touched() []*uv.LineData {
-	return s.buf.Touched
 }
 
 func (s *Screen) ConsumeDamage() DamageState {
@@ -135,7 +131,7 @@ func (s *Screen) setCursor(x, y int, margins bool) {
 	}
 	s.cur.X, s.cur.Y = x, y
 
-	if s.cb.CursorPosition != nil && (old.X != x || old.Y != y) {
+	if s.cb != nil && s.cb.CursorPosition != nil && (old.X != x || old.Y != y) {
 		s.cb.CursorPosition(old, uv.Pos(x, y))
 	}
 }
@@ -168,7 +164,7 @@ func (s *Screen) moveCursor(dx, dy int) {
 
 	s.cur.X, s.cur.Y = x, y
 
-	if s.cb.CursorPosition != nil && (old.X != x || old.Y != y) {
+	if s.cb != nil && s.cb.CursorPosition != nil && (old.X != x || old.Y != y) {
 		s.cb.CursorPosition(old, uv.Pos(x, y))
 	}
 }
@@ -236,7 +232,7 @@ func (s *Screen) RestoreCursor() {
 	old := s.cur.Position
 	s.cur = s.saved
 
-	if s.cb.CursorPosition != nil && (old.X != s.cur.X || old.Y != s.cur.Y) {
+	if s.cb != nil && s.cb.CursorPosition != nil && (old.X != s.cur.X || old.Y != s.cur.Y) {
 		s.cb.CursorPosition(old, s.cur.Position)
 	}
 }
@@ -245,7 +241,7 @@ func (s *Screen) RestoreCursor() {
 func (s *Screen) setCursorHidden(hidden bool) {
 	changed := s.cur.Hidden != hidden
 	s.cur.Hidden = hidden
-	if changed && s.cb.CursorVisibility != nil {
+	if changed && s.cb != nil && s.cb.CursorVisibility != nil {
 		s.cb.CursorVisibility(!hidden)
 	}
 }
@@ -255,7 +251,7 @@ func (s *Screen) setCursorStyle(style CursorStyle, blink bool) {
 	changed := s.cur.Style != style || s.cur.Steady != !blink
 	s.cur.Style = style
 	s.cur.Steady = !blink
-	if changed && s.cb.CursorStyle != nil {
+	if changed && s.cb != nil && s.cb.CursorStyle != nil {
 		s.cb.CursorStyle(style, !blink)
 	}
 }
@@ -322,7 +318,7 @@ func (s *Screen) ScrollUp(n int) {
 	if s.scrollback != nil && scroll.Min.Y == 0 && scroll.Min.X == 0 && scroll.Dx() == width {
 		for i := 0; i < n && i < scroll.Dy(); i++ {
 			y := scroll.Min.Y + i
-			s.scrollback.CaptureRowFromBuffer(&s.buf, y)
+			s.scrollback.CaptureRowFromCells(s.buf.Row(y))
 		}
 	}
 

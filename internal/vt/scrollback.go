@@ -170,7 +170,7 @@ func (sb *Scrollback) CopyRow(index int, dst []uv.Cell) bool {
 }
 
 // PushLineWithWrap captures a physical line with wrap metadata. This is primarily
-// used by tests; production capture should use CaptureRowFromBuffer.
+// used by tests; production capture should use CaptureRowFromCells.
 func (sb *Scrollback) PushLineWithWrap(line []uv.Cell, isSoftWrapped bool) {
 	if sb == nil || sb.maxBytes <= 0 || sb.wrapW <= 0 {
 		return
@@ -178,20 +178,20 @@ func (sb *Scrollback) PushLineWithWrap(line []uv.Cell, isSoftWrapped bool) {
 	sb.pushFromCells(line, isSoftWrapped)
 }
 
-// CaptureRowFromBuffer captures the row y from buf into scrollback.
+// CaptureRowFromCells captures a physical screen row into scrollback.
 // It derives soft-wrap metadata from the row’s last visible cell and maintains
 // logical-line grouping for correct rewrapping on resize.
-func (sb *Scrollback) CaptureRowFromBuffer(buf *uv.Buffer, y int) {
-	if sb == nil || sb.maxBytes <= 0 || buf == nil {
+func (sb *Scrollback) CaptureRowFromCells(line []uv.Cell) {
+	if sb == nil || sb.maxBytes <= 0 || len(line) == 0 {
 		return
 	}
-	width := buf.Width()
+	width := len(line)
 	if width <= 0 {
 		return
 	}
 	sb.SetWrapWidth(width)
-	soft := guessSoftWrappedRow(buf, y, width)
-	sb.pushFromBuffer(buf, y, width, soft)
+	soft := guessSoftWrappedLine(line, width)
+	sb.pushFromCells(line, soft)
 }
 
 func normalizeScrollbackMaxBytes(maxBytes int64) int64 {
@@ -210,13 +210,6 @@ func normalizeScrollbackMaxBytes(maxBytes int64) int64 {
 func (sb *Scrollback) pushFromCells(line []uv.Cell, isSoftWrapped bool) {
 	startAbs := sb.store.NextAbs()
 	n := appendGlyphsFromCells(&sb.store, line)
-	sb.appendLogicalLine(startAbs, n, isSoftWrapped)
-	sb.enforceBudget()
-}
-
-func (sb *Scrollback) pushFromBuffer(buf *uv.Buffer, y, width int, isSoftWrapped bool) {
-	startAbs := sb.store.NextAbs()
-	n := appendGlyphsFromBuffer(&sb.store, buf, y, width)
 	sb.appendLogicalLine(startAbs, n, isSoftWrapped)
 	sb.enforceBudget()
 }
