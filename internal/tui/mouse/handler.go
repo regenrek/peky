@@ -50,6 +50,9 @@ func (h *Handler) UpdateDashboard(msg tea.MouseMsg, cb DashboardCallbacks) tea.C
 	if isWheelEvent(msg) {
 		return h.handleWheel(msg, cb)
 	}
+	if cmd, handled := h.handlePanePressPassthrough(msg, cb); handled {
+		return cmd
+	}
 	if cb.TerminalFocus != nil && cb.TerminalFocus() {
 		hit, ok := cb.HitPane(msg.X, msg.Y)
 		return h.handleTerminalFocusMouse(msg, cb, hit, ok)
@@ -148,6 +151,36 @@ func (h *Handler) handleWheel(msg tea.MouseMsg, cb DashboardCallbacks) tea.Cmd {
 		return nil
 	}
 	return cb.ForwardMouseEvent(hit, msg)
+}
+
+func (h *Handler) handlePanePressPassthrough(msg tea.MouseMsg, cb DashboardCallbacks) (tea.Cmd, bool) {
+	if cb.TerminalFocus != nil && cb.TerminalFocus() {
+		return nil, false
+	}
+	if !isPrimaryClick(msg) {
+		return nil, false
+	}
+	if cb.HitPane == nil || cb.ForwardMouseEvent == nil {
+		return nil, false
+	}
+	hit, ok := cb.HitPane(msg.X, msg.Y)
+	if !ok || hit.PaneID == "" {
+		return nil, false
+	}
+	if !hit.Content.Contains(msg.X, msg.Y) {
+		return nil, false
+	}
+	h.dragActive = true
+	h.dragHit = hit
+	forwardCmd := cb.ForwardMouseEvent(hit, msg)
+	selectCmd := h.handlePaneClick(msg, cb, hit)
+	if forwardCmd == nil {
+		return selectCmd, true
+	}
+	if selectCmd == nil {
+		return forwardCmd, true
+	}
+	return tea.Batch(forwardCmd, selectCmd), true
 }
 
 func (h *Handler) handlePaneClick(msg tea.MouseMsg, cb DashboardCallbacks, hit PaneHit) tea.Cmd {
