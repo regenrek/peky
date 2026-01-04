@@ -857,7 +857,7 @@ if [[ -f "$daemon_log" ]]; then
 
   tui_skips="$out_root/timings.tui_skips.txt"
   if [[ -f "$run_log" ]]; then
-    awk '
+    LC_ALL=C awk '
     function strip_esc(s) {
       gsub(/\x1b\[[0-9;]*[A-Za-z]/, "", s)
       return s
@@ -906,7 +906,7 @@ if [[ -f "$daemon_log" ]]; then
     if grep -q "tui: pane view response " "$run_log"; then
       use_resp_issued=1
     fi
-    awk -v use_req_issued="$use_req_issued" -v use_resp_issued="$use_resp_issued" '
+    LC_ALL=C awk -v use_req_issued="$use_req_issued" -v use_resp_issued="$use_resp_issued" '
     function dur_ms(s) {
       if (s == "" || s == "-") { return "" }
       if (s ~ /µs$/) { sub(/µs$/, "", s); return (s + 0) / 1000 }
