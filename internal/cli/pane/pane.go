@@ -17,6 +17,7 @@ import (
 	"github.com/regenrek/peakypanes/internal/cli/output"
 	"github.com/regenrek/peakypanes/internal/cli/root"
 	"github.com/regenrek/peakypanes/internal/cli/transform"
+	"github.com/regenrek/peakypanes/internal/limits"
 	"github.com/regenrek/peakypanes/internal/native"
 	"github.com/regenrek/peakypanes/internal/sessiond"
 )
@@ -98,7 +99,11 @@ func runRename(ctx root.CommandContext) error {
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
 	defer cancel()
 	if paneID != "" {
-		if err := client.RenamePaneByID(ctxTimeout, paneID, newName); err != nil {
+		resolved, err := resolvePaneID(ctxTimeout, client, paneID)
+		if err != nil {
+			return err
+		}
+		if err := client.RenamePaneByID(ctxTimeout, resolved, newName); err != nil {
 			return err
 		}
 	} else {
@@ -111,6 +116,8 @@ func runRename(ctx root.CommandContext) error {
 		target := paneID
 		if target == "" {
 			target = fmt.Sprintf("%s:%s", sessionName, paneIndex)
+		} else if resolved, err := resolvePaneID(ctxTimeout, client, paneID); err == nil {
+			target = resolved
 		}
 		return output.WriteSuccess(ctx.Out, meta, output.ActionResult{
 			Action:  "pane.rename",
@@ -119,6 +126,9 @@ func runRename(ctx root.CommandContext) error {
 		})
 	}
 	if paneID != "" {
+		if resolved, err := resolvePaneID(ctxTimeout, client, paneID); err == nil {
+			paneID = resolved
+		}
 		return writef(ctx.Out, "Renamed pane %s\n", paneID)
 	}
 	return writef(ctx.Out, "Renamed pane %s:%s\n", sessionName, paneIndex)
@@ -143,14 +153,25 @@ func runSplit(ctx root.CommandContext) error {
 	if err != nil {
 		return err
 	}
+	var focusedPaneID string
+	if ctx.Cmd.Bool("focus") {
+		focusedPaneID, err = focusPaneByIndex(ctxTimeout, client, sessionName, newIndex)
+		if err != nil {
+			return err
+		}
+	}
 	if ctx.JSON {
 		meta = output.WithDuration(meta, start)
+		details := map[string]any{
+			"new_index": newIndex,
+		}
+		if focusedPaneID != "" {
+			details["focused_pane_id"] = focusedPaneID
+		}
 		return output.WriteSuccess(ctx.Out, meta, output.ActionResult{
-			Action: "pane.split",
-			Status: "ok",
-			Details: map[string]any{
-				"new_index": newIndex,
-			},
+			Action:  "pane.split",
+			Status:  "ok",
+			Details: details,
 		})
 	}
 	return writef(ctx.Out, "Split pane created %s\n", newIndex)
@@ -170,7 +191,11 @@ func runClose(ctx root.CommandContext) error {
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
 	defer cancel()
 	if paneID != "" {
-		if err := client.ClosePaneByID(ctxTimeout, paneID); err != nil {
+		resolved, err := resolvePaneID(ctxTimeout, client, paneID)
+		if err != nil {
+			return err
+		}
+		if err := client.ClosePaneByID(ctxTimeout, resolved); err != nil {
 			return err
 		}
 	} else {
@@ -183,6 +208,8 @@ func runClose(ctx root.CommandContext) error {
 		target := paneID
 		if target == "" {
 			target = fmt.Sprintf("%s:%s", sessionName, paneIndex)
+		} else if resolved, err := resolvePaneID(ctxTimeout, client, paneID); err == nil {
+			target = resolved
 		}
 		return output.WriteSuccess(ctx.Out, meta, output.ActionResult{
 			Action:  "pane.close",
@@ -191,6 +218,9 @@ func runClose(ctx root.CommandContext) error {
 		})
 	}
 	if paneID != "" {
+		if resolved, err := resolvePaneID(ctxTimeout, client, paneID); err == nil {
+			paneID = resolved
+		}
 		return writef(ctx.Out, "Closed pane %s\n", paneID)
 	}
 	return writef(ctx.Out, "Closed pane %s:%s\n", sessionName, paneIndex)
@@ -235,6 +265,11 @@ func runResize(ctx root.CommandContext) error {
 	rows := ctx.Cmd.Int("rows")
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
 	defer cancel()
+	resolved, err := resolvePaneID(ctxTimeout, client, paneID)
+	if err != nil {
+		return err
+	}
+	paneID = resolved
 	if err := client.ResizePane(ctxTimeout, paneID, cols, rows); err != nil {
 		return err
 	}
@@ -346,19 +381,37 @@ func resolveSendTarget(ctx root.CommandContext) (sendTarget, error) {
 }
 
 func sendPayloadToTarget(ctx root.CommandContext, client *sessiond.Client, target sendTarget, payload payloadData, action string, withNewline bool) ([]output.TargetResult, []string, error) {
-	submitDelay := ctx.Cmd.Duration("submit-delay")
 	if target.PaneID != "" {
-		results := []output.TargetResult{{Target: output.TargetRef{Type: "pane", ID: target.PaneID}, Status: "ok"}}
 		ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
-		err := sendPayload(ctxTimeout, client, target.PaneID, payload.Data, payload.Summary, action, withNewline, submitDelay)
+		resolved, err := resolvePaneID(ctxTimeout, client, target.PaneID)
 		cancel()
 		if err != nil {
 			return nil, nil, err
 		}
-		return results, sendWarnings(withNewline, submitDelay), nil
+		target.PaneID = resolved
+	}
+	var submitDelayMS *int
+	submitDelay := time.Duration(0)
+	if withNewline && ctx.Cmd.IsSet("submit-delay") {
+		submitDelay = ctx.Cmd.Duration("submit-delay")
+		ms := int(submitDelay / time.Millisecond)
+		submitDelayMS = &ms
+	}
+	req := sessiond.SendInputToolRequest{
+		PaneID:        target.PaneID,
+		Scope:         target.Scope,
+		Input:         payload.Data,
+		RecordAction:  true,
+		Action:        action,
+		Summary:       payload.Summary,
+		Submit:        withNewline,
+		SubmitDelayMS: submitDelayMS,
+		Raw:           ctx.Cmd.Bool("raw"),
+		ToolFilter:    ctx.Cmd.String("tool"),
+		DetectTool:    withNewline,
 	}
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
-	resp, err := sendPayloadScope(ctxTimeout, client, target.Scope, payload.Data, payload.Summary, action, withNewline, submitDelay)
+	resp, err := client.SendInputTool(ctxTimeout, req)
 	cancel()
 	if err != nil {
 		return nil, nil, err
@@ -421,6 +474,11 @@ func runView(ctx root.CommandContext) error {
 	req := sessiond.PaneViewRequest{PaneID: paneID, Rows: rows, Cols: cols, Mode: viewMode}
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
 	defer cancel()
+	resolved, err := resolvePaneID(ctxTimeout, client, paneID)
+	if err != nil {
+		return err
+	}
+	req.PaneID = resolved
 	resp, err := client.GetPaneView(ctxTimeout, req)
 	if err != nil {
 		return err
@@ -454,6 +512,15 @@ func runTail(ctx root.CommandContext) error {
 	opts, err := parseTailOptions(ctx)
 	if err != nil {
 		return err
+	}
+	if opts.PaneID != "" {
+		ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
+		resolved, err := resolvePaneID(ctxTimeout, client, opts.PaneID)
+		cancel()
+		if err != nil {
+			return err
+		}
+		opts.PaneID = resolved
 	}
 	if err := tailLoop(ctx, client, opts); err != nil {
 		return err
@@ -598,7 +665,11 @@ func runSnapshot(ctx root.CommandContext) error {
 	}
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
 	defer cancel()
-	resp, err := client.PaneSnapshot(ctxTimeout, paneID, rows)
+	resolved, err := resolvePaneID(ctxTimeout, client, paneID)
+	if err != nil {
+		return err
+	}
+	resp, err := client.PaneSnapshot(ctxTimeout, resolved, rows)
 	if err != nil {
 		return err
 	}
@@ -635,7 +706,11 @@ func runHistory(ctx root.CommandContext) error {
 	}
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
 	defer cancel()
-	resp, err := client.PaneHistory(ctxTimeout, sessiond.PaneHistoryRequest{PaneID: paneID, Limit: limit, Since: sinceTime})
+	resolved, err := resolvePaneID(ctxTimeout, client, paneID)
+	if err != nil {
+		return err
+	}
+	resp, err := client.PaneHistory(ctxTimeout, sessiond.PaneHistoryRequest{PaneID: resolved, Limit: limit, Since: sinceTime})
 	if err != nil {
 		return err
 	}
@@ -679,7 +754,11 @@ func runWait(ctx root.CommandContext) error {
 	timeout := ctx.Cmd.Duration("timeout")
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
 	defer cancel()
-	resp, err := client.PaneWait(ctxTimeout, sessiond.PaneWaitRequest{PaneID: ctx.Cmd.String("pane-id"), Pattern: pattern, Timeout: timeout})
+	resolved, err := resolvePaneID(ctxTimeout, client, ctx.Cmd.String("pane-id"))
+	if err != nil {
+		return err
+	}
+	resp, err := client.PaneWait(ctxTimeout, sessiond.PaneWaitRequest{PaneID: resolved, Pattern: pattern, Timeout: timeout})
 	if err != nil {
 		return err
 	}
@@ -720,10 +799,14 @@ func runTagMutation(ctx root.CommandContext, action string, add bool) error {
 	tags := ctx.Cmd.StringSlice("tag")
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
 	defer cancel()
+	resolved, err := resolvePaneID(ctxTimeout, client, paneID)
+	if err != nil {
+		return err
+	}
 	if add {
-		_, err = client.AddPaneTags(ctxTimeout, paneID, tags)
+		_, err = client.AddPaneTags(ctxTimeout, resolved, tags)
 	} else {
-		_, err = client.RemovePaneTags(ctxTimeout, paneID, tags)
+		_, err = client.RemovePaneTags(ctxTimeout, resolved, tags)
 	}
 	if err != nil {
 		return err
@@ -733,7 +816,7 @@ func runTagMutation(ctx root.CommandContext, action string, add bool) error {
 		return output.WriteSuccess(ctx.Out, meta, output.ActionResult{
 			Action:  action,
 			Status:  "ok",
-			Targets: []output.TargetRef{{Type: "pane", ID: paneID}},
+			Targets: []output.TargetRef{{Type: "pane", ID: resolved}},
 		})
 	}
 	return nil
@@ -750,13 +833,17 @@ func runTagList(ctx root.CommandContext) error {
 	paneID := ctx.Cmd.String("pane-id")
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
 	defer cancel()
-	tags, err := client.PaneTags(ctxTimeout, paneID)
+	resolved, err := resolvePaneID(ctxTimeout, client, paneID)
+	if err != nil {
+		return err
+	}
+	tags, err := client.PaneTags(ctxTimeout, resolved)
 	if err != nil {
 		return err
 	}
 	if ctx.JSON {
 		meta = output.WithDuration(meta, start)
-		return output.WriteSuccess(ctx.Out, meta, output.PaneTagList{PaneID: paneID, Tags: tags})
+		return output.WriteSuccess(ctx.Out, meta, output.PaneTagList{PaneID: resolved, Tags: tags})
 	}
 	for _, tag := range tags {
 		if err := writeLine(ctx.Out, tag); err != nil {
@@ -783,8 +870,12 @@ func runAction(ctx root.CommandContext) error {
 	input := parseTerminalActionInput(ctx, action)
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
 	defer cancel()
+	resolved, err := resolvePaneID(ctxTimeout, client, paneID)
+	if err != nil {
+		return err
+	}
 	resp, err := client.TerminalAction(ctxTimeout, sessiond.TerminalActionRequest{
-		PaneID: paneID,
+		PaneID: resolved,
 		Action: action,
 		Lines:  input.Lines,
 		DeltaX: input.DeltaX,
@@ -798,7 +889,7 @@ func runAction(ctx root.CommandContext) error {
 		return output.WriteSuccess(ctx.Out, meta, output.ActionResult{
 			Action:  "pane.action",
 			Status:  "ok",
-			Targets: []output.TargetRef{{Type: "pane", ID: paneID}},
+			Targets: []output.TargetRef{{Type: "pane", ID: resolved}},
 			Details: buildTerminalActionDetails(actionName, input, resp.Text),
 		})
 	}
@@ -870,8 +961,12 @@ func runKey(ctx root.CommandContext) error {
 	}
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
 	defer cancel()
+	resolved, err := resolvePaneID(ctxTimeout, client, paneID)
+	if err != nil {
+		return err
+	}
 	resp, err := client.HandleTerminalKey(ctxTimeout, sessiond.TerminalKeyRequest{
-		PaneID:           paneID,
+		PaneID:           resolved,
 		Key:              fullKey,
 		ScrollbackToggle: ctx.Cmd.Bool("scrollback-toggle"),
 		CopyToggle:       ctx.Cmd.Bool("copy-toggle"),
@@ -894,7 +989,7 @@ func runKey(ctx root.CommandContext) error {
 		return output.WriteSuccess(ctx.Out, meta, output.ActionResult{
 			Action:  "pane.key",
 			Status:  "ok",
-			Targets: []output.TargetRef{{Type: "pane", ID: paneID}},
+			Targets: []output.TargetRef{{Type: "pane", ID: resolved}},
 			Details: details,
 		})
 	}
@@ -923,7 +1018,11 @@ func runSignal(ctx root.CommandContext) error {
 	signal := strings.TrimSpace(ctx.Cmd.String("signal"))
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
 	defer cancel()
-	if err := client.SignalPane(ctxTimeout, paneID, signal); err != nil {
+	resolved, err := resolvePaneID(ctxTimeout, client, paneID)
+	if err != nil {
+		return err
+	}
+	if err := client.SignalPane(ctxTimeout, resolved, signal); err != nil {
 		return err
 	}
 	if ctx.JSON {
@@ -931,7 +1030,7 @@ func runSignal(ctx root.CommandContext) error {
 		return output.WriteSuccess(ctx.Out, meta, output.ActionResult{
 			Action:  "pane.signal",
 			Status:  "ok",
-			Targets: []output.TargetRef{{Type: "pane", ID: paneID}},
+			Targets: []output.TargetRef{{Type: "pane", ID: resolved}},
 			Details: map[string]any{"signal": signal},
 		})
 	}
@@ -949,7 +1048,11 @@ func runFocus(ctx root.CommandContext) error {
 	paneID := ctx.Cmd.String("pane-id")
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
 	defer cancel()
-	if err := client.FocusPane(ctxTimeout, paneID); err != nil {
+	resolved, err := resolvePaneID(ctxTimeout, client, paneID)
+	if err != nil {
+		return err
+	}
+	if err := client.FocusPane(ctxTimeout, resolved); err != nil {
 		return err
 	}
 	if ctx.JSON {
@@ -957,7 +1060,7 @@ func runFocus(ctx root.CommandContext) error {
 		return output.WriteSuccess(ctx.Out, meta, output.ActionResult{
 			Action:  "pane.focus",
 			Status:  "ok",
-			Targets: []output.TargetRef{{Type: "pane", ID: paneID}},
+			Targets: []output.TargetRef{{Type: "pane", ID: resolved}},
 		})
 	}
 	return nil
@@ -1034,7 +1137,17 @@ func trimTrailingNewline(data []byte) []byte {
 }
 
 func summarizePayload(data []byte) string {
-	trimmed := strings.TrimSpace(string(data))
+	if len(data) == 0 {
+		return ""
+	}
+	limit := limits.PayloadInspectLimit
+	if limit <= 0 {
+		return ""
+	}
+	if limit > len(data) {
+		limit = len(data)
+	}
+	trimmed := strings.TrimSpace(string(data[:limit]))
 	if trimmed == "" {
 		return ""
 	}
@@ -1060,42 +1173,6 @@ func safePath(path string) (string, error) {
 	return abs, nil
 }
 
-func sendPayload(ctx context.Context, client *sessiond.Client, paneID string, data []byte, summary, action string, withNewline bool, submitDelay time.Duration) error {
-	payload := append([]byte(nil), data...)
-	if withNewline && submitDelay <= 0 {
-		payload = append(payload, '\n')
-		return client.SendInputAction(ctx, paneID, payload, action, summary)
-	}
-	if err := client.SendInputAction(ctx, paneID, payload, action, summary); err != nil {
-		return err
-	}
-	if withNewline && submitDelay > 0 {
-		time.Sleep(submitDelay)
-		return client.SendInput(ctx, paneID, []byte("\n"))
-	}
-	return nil
-}
-
-func sendPayloadScope(ctx context.Context, client *sessiond.Client, scope string, data []byte, summary, action string, withNewline bool, submitDelay time.Duration) (sessiond.SendInputResponse, error) {
-	payload := append([]byte(nil), data...)
-	if withNewline && submitDelay <= 0 {
-		payload = append(payload, '\n')
-		return client.SendInputScopeAction(ctx, scope, payload, action, summary)
-	}
-	resp, err := client.SendInputScopeAction(ctx, scope, payload, action, summary)
-	if err != nil {
-		return sessiond.SendInputResponse{}, err
-	}
-	if withNewline && submitDelay > 0 {
-		time.Sleep(submitDelay)
-		_, err = client.SendInputScope(ctx, scope, []byte("\n"))
-		if err != nil {
-			return resp, err
-		}
-	}
-	return resp, nil
-}
-
 func mapSendResults(resp sessiond.SendInputResponse) []output.TargetResult {
 	results := make([]output.TargetResult, 0, len(resp.Results))
 	for _, res := range resp.Results {
@@ -1118,7 +1195,7 @@ func actionStatus(results []output.TargetResult) string {
 	}
 	okCount := 0
 	for _, res := range results {
-		if res.Status == "ok" {
+		if res.Status == "ok" || res.Status == "skipped" {
 			okCount++
 		}
 	}

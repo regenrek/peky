@@ -26,6 +26,18 @@ CLI smoke run (builds `./bin/peakypanes`, starts daemon, runs core commands):
 scripts/cli-smoke.sh
 ```
 
+CLI stress battery (builds `./bin/peakypanes`, isolated runtime/config, heavy concurrency):
+
+```bash
+scripts/cli-stress.sh
+```
+
+Run tool loops (Codex/Claude) during stress:
+
+```bash
+RUN_TOOLS=1 scripts/cli-stress.sh
+```
+
 Profiling (dev-only):
 
 ```bash
@@ -71,6 +83,11 @@ When to use which mode:
 - **`--trace-all`**: logs every pane view timing to compute accurate averages.
 
 GitHub Actions runs gofmt checks, go vet, go test with coverage, and race on Linux.
+
+Nightly self-hosted stress (Geekom A8 / Linux runner):
+
+- Workflow: `.github/workflows/nightly-stress.yml`
+- Runs `scripts/cli-stress.sh` on `self-hosted, Linux, X64`
 
 ## Release Safety Checklist (pre-release, no tagging)
 

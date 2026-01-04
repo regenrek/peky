@@ -195,7 +195,7 @@ func (r *relay) runLine(ctx context.Context, mgr sessionManager) error {
 				return nil
 			}
 			payload := []byte(r.cfg.Prefix + line.Text + "\n")
-			if err := r.sendToTargets(mgr, payload); err != nil {
+			if err := r.sendToTargets(ctx, mgr, payload); err != nil {
 				return err
 			}
 			r.bumpStats(true, uint64(len(payload)))
@@ -230,7 +230,7 @@ func (r *relay) runRaw(ctx context.Context, mgr sessionManager) error {
 			if len(chunk.Data) == 0 {
 				continue
 			}
-			if err := r.sendToTargets(mgr, chunk.Data); err != nil {
+			if err := r.sendToTargets(ctx, mgr, chunk.Data); err != nil {
 				return err
 			}
 			r.bumpStats(false, uint64(len(chunk.Data)))
@@ -247,9 +247,12 @@ func (r *relay) runRaw(ctx context.Context, mgr sessionManager) error {
 	}
 }
 
-func (r *relay) sendToTargets(mgr sessionManager, payload []byte) error {
+func (r *relay) sendToTargets(ctx context.Context, mgr sessionManager, payload []byte) error {
 	if mgr == nil {
 		return errors.New("sessiond: manager unavailable")
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 	targets := r.cfg.ToPaneIDs
 	if len(targets) == 0 {
@@ -257,7 +260,9 @@ func (r *relay) sendToTargets(mgr sessionManager, payload []byte) error {
 	}
 	remaining := targets[:0]
 	for _, paneID := range targets {
-		err := mgr.SendInput(paneID, payload)
+		sendCtx, cancel := context.WithTimeout(ctx, defaultOpTimeout)
+		err := mgr.SendInput(sendCtx, paneID, payload)
+		cancel()
 		if err == nil {
 			remaining = append(remaining, paneID)
 			continue

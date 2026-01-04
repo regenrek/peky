@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/muesli/termenv"
+
+	"github.com/regenrek/peakypanes/internal/logging"
 )
 
 const (
@@ -401,7 +404,7 @@ func (d *Daemon) paneViewResponseEnvelope(client *clientConn, job paneViewJob, p
 	if client != nil && client.paneViews != nil {
 		defer client.paneViews.clearCancel(paneID)
 	}
-	perf := perfDebugEnabled()
+	perf := slog.Default().Enabled(context.Background(), slog.LevelDebug)
 	var computeStart time.Time
 	if perf {
 		computeStart = time.Now()
@@ -479,12 +482,24 @@ func (d *Daemon) paneViewResponse(ctx context.Context, client *clientConn, paneI
 	}
 
 	var view string
-	if perfDebugEnabled() {
+	perf := slog.Default().Enabled(context.Background(), slog.LevelDebug)
+	if perf {
 		start := time.Now()
 		view, err = paneViewString(ctx, win, info.renderReq)
 		dur := time.Since(start)
 		if dur > paneViewSlowThreshold {
-			logPerfEvery("sessiond.paneview.render", perfLogInterval, "sessiond: pane view render slow pane=%s mode=%v dur=%s cols=%d rows=%d", paneID, info.renderMode, dur, info.cols, info.rows)
+			logging.LogEvery(
+				context.Background(),
+				"sessiond.paneview.render",
+				2*time.Second,
+				slog.LevelDebug,
+				"sessiond: pane view render slow",
+				slog.String("pane_id", paneID),
+				slog.Any("mode", info.renderMode),
+				slog.Duration("dur", dur),
+				slog.Int("cols", info.cols),
+				slog.Int("rows", info.rows),
+			)
 		}
 	} else {
 		view, err = paneViewString(ctx, win, info.renderReq)

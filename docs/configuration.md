@@ -118,6 +118,26 @@ projects:
     session: webapp
     path: ~/projects/webapp
     layout: fullstack
+
+# Tool detection + input profiles (CLI + TUI sends)
+# tool_detection:
+#   enabled: true
+#   allow:
+#     codex: true
+#     claude: true
+#     lazygit: true
+#     gh-dash: true
+#   profiles:
+#     codex:
+#       bracketed_paste: true
+#       submit: "\r"
+#       submit_delay_ms: 30
+#   tools:
+#     - name: my-tool
+#       command_regex: ["(?i)mytool"]
+#       title_regex: ["(?i)mytool"]
+#       input:
+#         submit: "\r"
 ```
 
 ## Variable expansion

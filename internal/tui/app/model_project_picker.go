@@ -73,11 +73,12 @@ func (m *Model) updateProjectPicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.projectPicker.ResetFilter()
 			m.setState(StateDashboard)
 			m.rememberSelection(m.selection)
-			m.selection.ProjectID = projectID
-			m.selection.Session = sessionName
-			m.selection.Pane = ""
+			sel := m.selection
+			sel.ProjectID = projectID
+			sel.Session = sessionName
+			sel.Pane = ""
+			m.applySelection(sel)
 			m.selectionVersion++
-			m.rememberSelection(m.selection)
 			return m, tea.Batch(m.startSessionAtPathDetached(item.Path), m.selectionRefreshCmd())
 		}
 		m.projectPicker.ResetFilter()

@@ -457,6 +457,15 @@ func (c *Client) SendInputAction(ctx context.Context, paneID string, input []byt
 	return err
 }
 
+// SendInputTool forwards input using tool-aware profiles.
+func (c *Client) SendInputTool(ctx context.Context, req SendInputToolRequest) (SendInputResponse, error) {
+	var resp SendInputResponse
+	if _, err := c.call(ctx, OpSendInputTool, req, &resp); err != nil {
+		return SendInputResponse{}, err
+	}
+	return resp, nil
+}
+
 // SendInputScope forwards raw input to a scope and returns per-pane results.
 func (c *Client) SendInputScope(ctx context.Context, scope string, input []byte) (SendInputResponse, error) {
 	var resp SendInputResponse

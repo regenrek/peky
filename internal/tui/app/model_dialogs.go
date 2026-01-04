@@ -13,10 +13,8 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/regenrek/peakypanes/internal/agenttool"
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/runenv"
-	"github.com/regenrek/peakypanes/internal/sessiond"
 )
 
 // ===== Rename dialogs =====
@@ -120,15 +118,16 @@ func (m *Model) applyRenameSession(newName string) tea.Cmd {
 		m.setToast("Rename failed: "+err.Error(), toastError)
 		return nil
 	}
-	if m.selection.Session == m.renameSession {
-		m.selection.Session = newName
+	sel := m.selection
+	if sel.Session == m.renameSession {
+		sel.Session = newName
 	}
 	if m.expandedSessions[m.renameSession] {
 		delete(m.expandedSessions, m.renameSession)
 		m.expandedSessions[newName] = true
 	}
+	m.applySelection(sel)
 	m.selectionVersion++
-	m.rememberSelection(m.selection)
 	m.setState(StateDashboard)
 	m.setToast("Renamed session to "+newName, toastSuccess)
 	return m.requestRefreshCmd()
@@ -365,10 +364,9 @@ func (m *Model) sendQuickReply() tea.Cmd {
 }
 
 type quickReplyPlan struct {
-	paneID  string
-	payload []byte
-	label   string
-	tool    agenttool.Tool
+	paneID string
+	text   string
+	label  string
 }
 
 func (m *Model) quickReplyPlan() (quickReplyPlan, tea.Cmd, bool) {
@@ -389,13 +387,11 @@ func (m *Model) quickReplyPlan() (quickReplyPlan, tea.Cmd, bool) {
 	if pane.Dead {
 		return quickReplyPlan{}, func() tea.Msg { return newPaneClosedMsg(paneID, nil) }, false
 	}
-	payload := quickReplyTextBytes(*pane, text)
-	tool := quickReplyToolFromText(text)
 	label := strings.TrimSpace(pane.Title)
 	if label == "" {
 		label = fmt.Sprintf("pane %s", pane.Index)
 	}
-	return quickReplyPlan{paneID: paneID, payload: payload, label: label, tool: tool}, nil, true
+	return quickReplyPlan{paneID: paneID, text: text, label: label}, nil, true
 }
 
 func (m *Model) sendQuickReplyToPane(plan quickReplyPlan) tea.Msg {
@@ -411,46 +407,15 @@ func (m *Model) sendQuickReplyToPane(plan quickReplyPlan) tea.Msg {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), terminalActionTimeout)
 	defer cancel()
-	submit := quickReplySubmitBytes(*pane)
-	if quickReplyTargetCombineSubmit(*pane) && len(submit) > 0 {
-		combined := make([]byte, 0, len(plan.payload)+len(submit))
-		combined = append(combined, plan.payload...)
-		combined = append(combined, submit...)
-		logQuickReplySendAttempt(*pane, combined)
-		if msg := sendPaneInput(ctx, m.client, plan.paneID, combined); msg != nil {
-			return msg
+	if err := m.sendQuickReplyText(ctx, *pane, plan.paneID, plan.text); err != nil {
+		logQuickReplySendError(plan.paneID, err)
+		if isPaneClosedError(err) {
+			return newPaneClosedMsg(plan.paneID, err)
 		}
-	} else {
-		logQuickReplySendAttempt(*pane, plan.payload)
-		if msg := sendPaneInput(ctx, m.client, plan.paneID, plan.payload); msg != nil {
-			return msg
-		}
-		if len(submit) > 0 {
-			if delay := quickReplySubmitDelay(*pane); delay > 0 {
-				time.Sleep(delay)
-			}
-			logQuickReplySendAttempt(*pane, submit)
-			if msg := sendPaneInput(ctx, m.client, plan.paneID, submit); msg != nil {
-				return msg
-			}
-		}
-	}
-	if plan.tool != "" {
-		m.setPaneTool(plan.paneID, plan.tool)
+		return ErrorMsg{Err: err, Context: "send to pane"}
 	}
 	if plan.label != "" {
 		return SuccessMsg{Message: "Sent to " + plan.label}
 	}
 	return SuccessMsg{Message: "Sent"}
-}
-
-func sendPaneInput(ctx context.Context, client *sessiond.Client, paneID string, payload []byte) tea.Msg {
-	if err := client.SendInput(ctx, paneID, payload); err != nil {
-		logQuickReplySendError(paneID, err)
-		if isPaneClosedError(err) {
-			return newPaneClosedMsg(paneID, err)
-		}
-		return ErrorMsg{Err: err, Context: "send to pane"}
-	}
-	return nil
 }

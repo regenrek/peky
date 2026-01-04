@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"syscall"
 	"time"
+
+	"github.com/regenrek/peakypanes/internal/logging"
 )
 
 const (
@@ -23,7 +26,7 @@ type writeRequest struct {
 
 // SendInput writes bytes to the underlying PTY.
 // This is what your Bubble Tea model should call for focused pane input.
-func (w *Window) SendInput(input []byte) error {
+func (w *Window) SendInput(ctx context.Context, input []byte) error {
 	if w == nil {
 		return errors.New("terminal: nil window")
 	}
@@ -51,7 +54,7 @@ func (w *Window) SendInput(input []byte) error {
 	if pty == nil {
 		return &PaneClosedError{Reason: PaneClosedPTYClosed}
 	}
-	return w.enqueueWrite(input, true)
+	return w.enqueueWrite(ctx, input, true)
 }
 
 func isPTYClosedWriteError(err error) bool {
@@ -136,18 +139,21 @@ func (w *Window) startVtToPty(ctx context.Context) {
 	go func() {
 		defer w.wg.Done()
 
+		term := w.currentTerminal()
+		if term == nil {
+			return
+		}
+
 		buf := make([]byte, 4096)
 		for {
-			term := w.currentTerminal()
-			pty := w.currentPTY()
-			if term == nil || pty == nil {
+			if w.currentPTY() == nil {
 				return
 			}
 
 			n, err := term.Read(buf)
 			if n > 0 {
 				data := w.translateCPR(term, buf[:n])
-				_ = w.enqueueWrite(data, false)
+				_ = w.enqueueWriteBestEffort(data, false)
 			}
 			if err != nil {
 				// Best-effort: treat read errors as exit.
@@ -179,12 +185,11 @@ func (w *Window) handleTerminalWrite(data []byte) {
 	if len(data) > 0 {
 		w.bytesOut.Add(uint64(len(data)))
 		if w.outputFn != nil {
-			payload := append([]byte(nil), data...)
-			w.outputFn(payload)
+			w.outputFn(data)
 		}
 	}
 
-	perf := perfDebugEnabled()
+	perf := slog.Default().Enabled(context.Background(), slog.LevelDebug)
 	var start time.Time
 	if perf {
 		start = time.Now()
@@ -202,7 +207,15 @@ func (w *Window) handleTerminalWrite(data []byte) {
 			_, _ = w.term.Write(data)
 			writeDur := time.Since(writeStart)
 			if writeDur > perfSlowWrite {
-				logPerfEvery("term.write.apply", perfLogInterval, "terminal: term.Write dur=%s bytes=%d", writeDur, len(data))
+				logging.LogEvery(
+					context.Background(),
+					"term.write.apply",
+					perfLogInterval,
+					slog.LevelDebug,
+					"terminal: term.Write slow",
+					slog.Duration("dur", writeDur),
+					slog.Int("bytes", len(data)),
+				)
 			}
 		} else {
 			_, _ = w.term.Write(data)
@@ -225,10 +238,26 @@ func (w *Window) handleTerminalWrite(data []byte) {
 	if perf {
 		total := time.Since(start)
 		if lockWait > perfSlowLock {
-			logPerfEvery("term.write.lock", perfLogInterval, "terminal: termMu wait=%s bytes=%d", lockWait, len(data))
+			logging.LogEvery(
+				context.Background(),
+				"term.write.lock",
+				perfLogInterval,
+				slog.LevelDebug,
+				"terminal: termMu slow",
+				slog.Duration("wait", lockWait),
+				slog.Int("bytes", len(data)),
+			)
 		}
 		if total > perfSlowWrite {
-			logPerfEvery("term.write.total", perfLogInterval, "terminal: handleTerminalWrite dur=%s bytes=%d", total, len(data))
+			logging.LogEvery(
+				context.Background(),
+				"term.write.total",
+				perfLogInterval,
+				slog.LevelDebug,
+				"terminal: handleTerminalWrite slow",
+				slog.Duration("dur", total),
+				slog.Int("bytes", len(data)),
+			)
 		}
 	}
 
@@ -248,7 +277,36 @@ func (w *Window) translateCPR(term vtEmulator, data []byte) []byte {
 	return []byte(fmt.Sprintf("\x1b[%d;%dR", pos.Y+1, pos.X+1))
 }
 
-func (w *Window) enqueueWrite(data []byte, markDirty bool) error {
+func (w *Window) enqueueWrite(ctx context.Context, data []byte, markDirty bool) error {
+	if w == nil {
+		return errors.New("terminal: nil window")
+	}
+	if len(data) == 0 {
+		return nil
+	}
+	if w.closed.Load() {
+		return &PaneClosedError{Reason: PaneClosedWindowClosed}
+	}
+	if w.exited.Load() {
+		return &PaneClosedError{Reason: PaneClosedProcessExited}
+	}
+	if w.inputClosed.Load() {
+		return &PaneClosedError{Reason: w.inputClosedReasonValue()}
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	buf := append([]byte(nil), data...)
+	req := writeRequest{data: buf, markDirty: markDirty}
+	select {
+	case w.writeCh <- req:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (w *Window) enqueueWriteBestEffort(data []byte, markDirty bool) error {
 	if w == nil {
 		return errors.New("terminal: nil window")
 	}

@@ -109,6 +109,8 @@ func (m Model) refreshCmd(seq uint64) tea.Cmd {
 			keys = currentKeys
 		}
 		var sessions []native.SessionSnapshot
+		focusedSession := ""
+		focusedPaneID := ""
 		if client != nil {
 			previewLines := settings.PreviewLines
 			if dashboard := dashboardPreviewLines(settings); dashboard > previewLines {
@@ -118,7 +120,12 @@ func (m Model) refreshCmd(seq uint64) tea.Cmd {
 			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			defer cancel()
 			snapshotStart := time.Now()
-			sessions, _, err = client.Snapshot(ctx, previewLines)
+			snapshot, err := client.SnapshotState(ctx, previewLines)
+			if err == nil {
+				sessions = snapshot.Sessions
+				focusedSession = snapshot.FocusedSession
+				focusedPaneID = snapshot.FocusedPaneID
+			}
 			if perfDebugEnabled() {
 				snapshotDur := time.Since(snapshotStart)
 				if snapshotDur > perfSlowSnapshot {
@@ -127,13 +134,15 @@ func (m Model) refreshCmd(seq uint64) tea.Cmd {
 			}
 			if err != nil {
 				result := buildDashboardData(dashboardSnapshotInput{
-					Selection:  selection,
-					Tab:        currentTab,
-					Version:    version,
-					RefreshSeq: seq,
-					Config:     cfg,
-					Settings:   settings,
-					Sessions:   nil,
+					Selection:      selection,
+					Tab:            currentTab,
+					Version:        version,
+					RefreshSeq:     seq,
+					Config:         cfg,
+					Settings:       settings,
+					Sessions:       nil,
+					FocusedSession: focusedSession,
+					FocusedPaneID:  focusedPaneID,
 				})
 				result.Keymap = keys
 				result.Warning = warning
@@ -143,13 +152,15 @@ func (m Model) refreshCmd(seq uint64) tea.Cmd {
 		}
 		buildStart := time.Now()
 		result := buildDashboardData(dashboardSnapshotInput{
-			Selection:  selection,
-			Tab:        currentTab,
-			Version:    version,
-			RefreshSeq: seq,
-			Config:     cfg,
-			Settings:   settings,
-			Sessions:   sessions,
+			Selection:      selection,
+			Tab:            currentTab,
+			Version:        version,
+			RefreshSeq:     seq,
+			Config:         cfg,
+			Settings:       settings,
+			Sessions:       sessions,
+			FocusedSession: focusedSession,
+			FocusedPaneID:  focusedPaneID,
 		})
 		if perfDebugEnabled() {
 			buildDur := time.Since(buildStart)

@@ -1,14 +1,16 @@
 package app
 
 import (
-	"log"
+	"context"
+	"fmt"
+	"log/slog"
 	"os"
 	"strings"
-	"sync"
 	"time"
+
+	"github.com/regenrek/peakypanes/internal/logging"
 )
 
-const perfDebugEnv = "PEAKYPANES_PERF_DEBUG"
 const perfTraceAllEnv = "PEAKYPANES_PERF_TRACE_ALL"
 
 const (
@@ -24,62 +26,30 @@ const (
 	perfUrgentRefreshMinInterval = 100 * time.Millisecond
 )
 
-var (
-	perfMu           sync.Mutex
-	perfLastByKey    = map[string]time.Time{}
-	perfTraceAllOnce sync.Once
-	perfTraceAll     bool
-)
-
 func perfDebugEnabled() bool {
-	value := strings.TrimSpace(os.Getenv(perfDebugEnv))
-	if value == "" {
-		return false
-	}
-	switch strings.ToLower(value) {
-	case "0", "false", "no", "off":
-		return false
-	default:
-		return true
-	}
+	return slog.Default().Enabled(context.Background(), slog.LevelDebug)
 }
 
 func perfTraceAllEnabled() bool {
 	if !perfDebugEnabled() {
 		return false
 	}
-	perfTraceAllOnce.Do(func() {
-		value := strings.TrimSpace(os.Getenv(perfTraceAllEnv))
-		if value == "" {
-			perfTraceAll = false
-			return
-		}
-		switch strings.ToLower(value) {
-		case "1", "true", "yes", "on":
-			perfTraceAll = true
-		default:
-			perfTraceAll = false
-		}
-	})
-	return perfTraceAll
+	value := strings.TrimSpace(os.Getenv(perfTraceAllEnv))
+	if value == "" {
+		return false
+	}
+	switch strings.ToLower(value) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }
 
 func logPerfEvery(key string, interval time.Duration, format string, args ...any) {
 	if !perfDebugEnabled() {
 		return
 	}
-	if interval <= 0 {
-		log.Printf(format, args...)
-		return
-	}
-	now := time.Now()
-	perfMu.Lock()
-	last := perfLastByKey[key]
-	if !last.IsZero() && now.Sub(last) < interval {
-		perfMu.Unlock()
-		return
-	}
-	perfLastByKey[key] = now
-	perfMu.Unlock()
-	log.Printf(format, args...)
+	msg := fmt.Sprintf(format, args...)
+	logging.LogEvery(context.Background(), key, interval, slog.LevelDebug, msg)
 }

@@ -2,6 +2,7 @@ package vt
 
 import (
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/regenrek/peakypanes/internal/limits"
 )
 
 // Scrollback represents a scrollback buffer that stores lines that have
@@ -24,9 +25,7 @@ type Scrollback struct {
 }
 
 func NewScrollback(maxLines int) *Scrollback {
-	if maxLines <= 0 {
-		maxLines = 10000
-	}
+	maxLines = normalizeScrollbackMaxLines(maxLines)
 	return &Scrollback{
 		lines:       make([][]uv.Cell, maxLines),
 		maxLines:    maxLines,
@@ -117,10 +116,15 @@ func (sb *Scrollback) CaptureWidth() int { return sb.lastWidthCaptured }
 func (sb *Scrollback) MaxLines() int     { return sb.maxLines }
 
 func (sb *Scrollback) SetMaxLines(maxLines int) {
-	if maxLines <= 0 {
-		maxLines = 10000
-	}
+	maxLines = normalizeScrollbackMaxLines(maxLines)
 	if maxLines == sb.maxLines {
+		return
+	}
+	if maxLines == 0 {
+		sb.lines = nil
+		sb.softWrapped = nil
+		sb.maxLines = 0
+		sb.head, sb.tail, sb.full = 0, 0, false
 		return
 	}
 
@@ -150,11 +154,28 @@ func (sb *Scrollback) SetMaxLines(maxLines int) {
 	sb.full = len(old.lines) == sb.maxLines
 }
 
+func normalizeScrollbackMaxLines(maxLines int) int {
+	switch {
+	case maxLines == 0:
+		maxLines = limits.TerminalScrollbackMaxLinesDefault
+	case maxLines < 0:
+		maxLines = 0
+	}
+	if maxLines > limits.TerminalScrollbackMaxLinesMax {
+		maxLines = limits.TerminalScrollbackMaxLinesMax
+	}
+	return maxLines
+}
+
 // Reflow reconstructs scrollback lines for a different terminal width.
 // This merges soft-wrapped groups back into logical lines, then re-wraps them
 // at newWidth while preserving uv.Cell styles.
 func (sb *Scrollback) Reflow(newWidth int) {
 	if newWidth <= 0 {
+		return
+	}
+	if sb.maxLines <= 0 {
+		sb.lastWidthCaptured = newWidth
 		return
 	}
 

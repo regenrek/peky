@@ -67,6 +67,9 @@ var requestHandlers = map[Op]requestHandler{
 	OpSendInput: func(d *Daemon, payload []byte) ([]byte, error) {
 		return d.handleSendInput(payload)
 	},
+	OpSendInputTool: func(d *Daemon, payload []byte) ([]byte, error) {
+		return d.handleSendInputTool(payload)
+	},
 	OpSendMouse: func(d *Daemon, payload []byte) ([]byte, error) {
 		return d.handleSendMouse(payload)
 	},

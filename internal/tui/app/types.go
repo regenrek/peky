@@ -234,13 +234,15 @@ const (
 
 // dashboardSnapshotInput carries the state needed for refresh.
 type dashboardSnapshotInput struct {
-	Selection  selectionState
-	Tab        DashboardTab
-	Version    uint64
-	RefreshSeq uint64
-	Config     *layout.Config
-	Settings   DashboardConfig
-	Sessions   []native.SessionSnapshot
+	Selection      selectionState
+	Tab            DashboardTab
+	Version        uint64
+	RefreshSeq     uint64
+	Config         *layout.Config
+	Settings       DashboardConfig
+	Sessions       []native.SessionSnapshot
+	FocusedSession string
+	FocusedPaneID  string
 }
 
 // dashboardSnapshotResult is returned by a refresh.

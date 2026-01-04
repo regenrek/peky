@@ -368,7 +368,7 @@ commands:
             description: Pane index.
           - name: pane-id
             type: string
-            description: Pane id.
+            description: Pane id (use @focused for current focus).
           - name: name
             type: string
             required: true
@@ -395,7 +395,7 @@ commands:
             description: Pane index to split (defaults to active pane).
           - name: pane-id
             type: string
-            description: Pane id to split.
+            description: Pane id to split (use @focused for current focus).
           - name: orientation
             type: enum
             enum: [vertical, horizontal]
@@ -404,6 +404,10 @@ commands:
           - name: percent
             type: int
             description: Size percentage for the new pane.
+          - name: focus
+            type: bool
+            default: true
+            description: Focus the newly added pane.
         json:
           supported: true
           schema_ref: "#/$defs/ActionResponse"
@@ -429,6 +433,10 @@ commands:
           - name: percent
             type: int
             description: Size percentage for the new pane.
+          - name: focus
+            type: bool
+            default: true
+            description: Focus the newly added pane.
         json:
           supported: true
           schema_ref: "#/$defs/ActionResponse"
@@ -446,7 +454,7 @@ commands:
             description: Pane index.
           - name: pane-id
             type: string
-            description: Pane id.
+            description: Pane id (use @focused for current focus).
         constraints:
           - type: exactly_one
             fields: [pane-id, session]
@@ -485,7 +493,7 @@ commands:
           - name: pane-id
             type: string
             required: true
-            description: Pane id.
+            description: Pane id (use @focused for current focus).
           - name: cols
             type: int
             description: Columns to resize to.
@@ -503,11 +511,17 @@ commands:
         flags:
           - name: pane-id
             type: string
-            description: Pane id.
+            description: Pane id (use @focused for current focus).
           - name: scope
             type: enum
             enum: [session, project, all]
             description: Broadcast scope.
+          - name: tool
+            type: string
+            description: Only target panes matching this tool.
+          - name: raw
+            type: bool
+            description: Disable tool-aware formatting for this send.
           - name: text
             type: string
             description: Raw text to send.
@@ -539,11 +553,17 @@ commands:
         flags:
           - name: pane-id
             type: string
-            description: Pane id.
+            description: Pane id (use @focused for current focus).
           - name: scope
             type: enum
             enum: [session, project, all]
             description: Broadcast scope.
+          - name: tool
+            type: string
+            description: Only target panes matching this tool.
+          - name: raw
+            type: bool
+            description: Disable tool-aware formatting for this run.
           - name: command
             type: string
             description: Command string to run.
@@ -580,7 +600,7 @@ commands:
           - name: pane-id
             type: string
             required: true
-            description: Pane id.
+            description: Pane id (use @focused for current focus).
           - name: rows
             type: int
             description: Rows to render.
@@ -601,7 +621,7 @@ commands:
           - name: pane-id
             type: string
             required: true
-            description: Pane id.
+            description: Pane id (use @focused for current focus).
           - name: follow
             type: bool
             description: Follow output (default true).
@@ -628,7 +648,7 @@ commands:
           - name: pane-id
             type: string
             required: true
-            description: Pane id.
+            description: Pane id (use @focused for current focus).
           - name: rows
             type: int
             description: Number of rows to capture.
@@ -642,7 +662,7 @@ commands:
           - name: pane-id
             type: string
             required: true
-            description: Pane id.
+            description: Pane id (use @focused for current focus).
           - name: limit
             type: int
             description: Max entries.
@@ -659,7 +679,7 @@ commands:
           - name: pane-id
             type: string
             required: true
-            description: Pane id.
+            description: Pane id (use @focused for current focus).
           - name: for
             type: string
             required: true
@@ -685,7 +705,7 @@ commands:
               - name: pane-id
                 type: string
                 required: true
-                description: Pane id.
+                description: Pane id (use @focused for current focus).
               - name: tag
                 type: string_list
                 repeatable: true
@@ -703,7 +723,7 @@ commands:
               - name: pane-id
                 type: string
                 required: true
-                description: Pane id.
+                description: Pane id (use @focused for current focus).
               - name: tag
                 type: string_list
                 repeatable: true
@@ -719,7 +739,7 @@ commands:
               - name: pane-id
                 type: string
                 required: true
-                description: Pane id.
+                description: Pane id (use @focused for current focus).
             json:
               supported: true
               schema_ref: "#/$defs/PaneTagListResponse"
@@ -732,7 +752,7 @@ commands:
           - name: pane-id
             type: string
             required: true
-            description: Pane id.
+            description: Pane id (use @focused for current focus).
           - name: action
             type: string
             required: true
@@ -761,7 +781,7 @@ commands:
           - name: pane-id
             type: string
             required: true
-            description: Pane id.
+            description: Pane id (use @focused for current focus).
           - name: key
             type: string
             required: true
@@ -788,7 +808,7 @@ commands:
           - name: pane-id
             type: string
             required: true
-            description: Pane id.
+            description: Pane id (use @focused for current focus).
           - name: signal
             type: string
             description: Signal name (INT, TERM, KILL).
@@ -804,7 +824,7 @@ commands:
           - name: pane-id
             type: string
             required: true
-            description: Pane id.
+            description: Pane id (use @focused for current focus).
         json:
           supported: true
           schema_ref: "#/$defs/ActionResponse"

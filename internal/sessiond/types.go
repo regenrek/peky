@@ -25,6 +25,7 @@ const (
 	OpSwapPanes      Op = "swap_panes"
 	OpSetPaneTool    Op = "set_pane_tool"
 	OpSendInput      Op = "send_input"
+	OpSendInputTool  Op = "send_input_tool"
 	OpSendMouse      Op = "send_mouse"
 	OpResizePane     Op = "resize_pane"
 	OpPaneView       Op = "pane_view"
@@ -187,6 +188,21 @@ type SendInputRequest struct {
 	RecordAction bool
 	Action       string
 	Summary      string
+}
+
+// SendInputToolRequest forwards input using tool-aware profiles.
+type SendInputToolRequest struct {
+	PaneID        string
+	Scope         string
+	Input         []byte
+	RecordAction  bool
+	Action        string
+	Summary       string
+	Submit        bool
+	SubmitDelayMS *int
+	Raw           bool
+	ToolFilter    string
+	DetectTool    bool
 }
 
 // SendInputResult captures a send attempt result.

@@ -6,7 +6,7 @@ import (
 )
 
 func TestWaitForPaneOutputSignals(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	result := make(chan bool, 1)
 	go func() {
 		result <- m.waitForPaneOutput("p-1", 200*time.Millisecond)
@@ -25,7 +25,7 @@ func TestWaitForPaneOutputSignals(t *testing.T) {
 }
 
 func TestWaitForPaneOutputAlreadyReady(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	m.markPaneOutputReady("p-2")
 	if ok := m.waitForPaneOutput("p-2", 0); !ok {
 		t.Fatalf("expected ready pane to return true")
@@ -33,7 +33,7 @@ func TestWaitForPaneOutputAlreadyReady(t *testing.T) {
 }
 
 func TestWaitForPaneOutputTimeout(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	start := time.Now()
 	if ok := m.waitForPaneOutput("p-3", 25*time.Millisecond); ok {
 		t.Fatalf("expected timeout to return false")

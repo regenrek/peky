@@ -6,7 +6,7 @@ import (
 )
 
 func TestManagerSetPaneToolDoesNotDeadlock(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 
 	pane := &Pane{ID: "p-1"}
 	m.mu.Lock()

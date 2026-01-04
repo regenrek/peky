@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/regenrek/peakypanes/internal/logging"
 	"github.com/regenrek/peakypanes/internal/runenv"
 	"gopkg.in/yaml.v3"
 )
@@ -74,6 +75,32 @@ type ToolsConfig struct {
 	CursorAgent ToolConfig `yaml:"cursor_agent,omitempty"`
 	CodexNew    ToolConfig `yaml:"codex_new,omitempty"`
 	CodexResume ToolConfig `yaml:"codex_resume,omitempty"`
+}
+
+// ToolInputConfig configures tool-specific input handling.
+type ToolInputConfig struct {
+	BracketedPaste *bool   `yaml:"bracketed_paste,omitempty"`
+	Submit         *string `yaml:"submit,omitempty"`
+	SubmitDelayMS  *int    `yaml:"submit_delay_ms,omitempty"`
+	CombineSubmit  *bool   `yaml:"combine_submit,omitempty"`
+}
+
+// ToolDefinitionConfig declares a custom tool detector.
+type ToolDefinitionConfig struct {
+	Name         string          `yaml:"name"`
+	Aliases      []string        `yaml:"aliases,omitempty"`
+	CommandNames []string        `yaml:"command_names,omitempty"`
+	CommandRegex []string        `yaml:"command_regex,omitempty"`
+	TitleRegex   []string        `yaml:"title_regex,omitempty"`
+	Input        ToolInputConfig `yaml:"input,omitempty"`
+}
+
+// ToolDetectionConfig controls tool detection and input profiles.
+type ToolDetectionConfig struct {
+	Enabled  *bool                      `yaml:"enabled,omitempty"`
+	Allow    map[string]bool            `yaml:"allow,omitempty"`
+	Tools    []ToolDefinitionConfig     `yaml:"tools,omitempty"`
+	Profiles map[string]ToolInputConfig `yaml:"profiles,omitempty"`
 }
 
 // StatusRegexConfig holds regex patterns for dashboard status detection.
@@ -191,13 +218,15 @@ type GhosttySection struct {
 
 // Config is the root configuration structure for Peaky Panes.
 type Config struct {
-	Zellij     ZellijSection            `yaml:"zellij,omitempty"`
-	Ghostty    GhosttySection           `yaml:"ghostty,omitempty"`
-	LayoutDirs []string                 `yaml:"layout_dirs,omitempty"`
-	Layouts    map[string]*LayoutConfig `yaml:"layouts,omitempty"`
-	Projects   []ProjectConfig          `yaml:"projects,omitempty"`
-	Tools      ToolsConfig              `yaml:"tools,omitempty"`
-	Dashboard  DashboardConfig          `yaml:"dashboard,omitempty"`
+	Zellij        ZellijSection            `yaml:"zellij,omitempty"`
+	Ghostty       GhosttySection           `yaml:"ghostty,omitempty"`
+	LayoutDirs    []string                 `yaml:"layout_dirs,omitempty"`
+	Layouts       map[string]*LayoutConfig `yaml:"layouts,omitempty"`
+	Projects      []ProjectConfig          `yaml:"projects,omitempty"`
+	Tools         ToolsConfig              `yaml:"tools,omitempty"`
+	ToolDetection ToolDetectionConfig      `yaml:"tool_detection,omitempty"`
+	Logging       logging.Config           `yaml:"logging,omitempty"`
+	Dashboard     DashboardConfig          `yaml:"dashboard,omitempty"`
 }
 
 // ProjectDashboardConfig configures dashboard overrides in .peakypanes.yml.

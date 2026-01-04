@@ -13,6 +13,7 @@ import (
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/native"
 	"github.com/regenrek/peakypanes/internal/sessiond"
+	"github.com/regenrek/peakypanes/internal/sessiond/testkit"
 )
 
 func newTestModel(t *testing.T) *Model {
@@ -95,25 +96,13 @@ func newTestDaemon(t *testing.T) (*sessiond.Client, *sessiond.Daemon) {
 
 func waitForSessionSnapshot(t *testing.T, client *sessiond.Client, name string) native.SessionSnapshot {
 	t.Helper()
-	if client == nil {
-		t.Fatalf("session client unavailable")
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	for start := time.Now(); time.Since(start) < 2*time.Second; {
-		sessions, _, err := client.Snapshot(ctx, 2)
-		if err != nil {
-			t.Fatalf("Snapshot() error: %v", err)
-		}
-		for _, snap := range sessions {
-			if snap.Name == name {
-				return snap
-			}
-		}
-		time.Sleep(50 * time.Millisecond)
+	snap, err := testkit.WaitForSessionSnapshot(ctx, client, name)
+	if err != nil {
+		t.Fatalf("waitForSessionSnapshot() error: %v", err)
 	}
-	t.Fatalf("session snapshot missing for %q", name)
-	return native.SessionSnapshot{}
+	return snap
 }
 
 func sessionExists(t *testing.T, client *sessiond.Client, name string) bool {
@@ -123,11 +112,11 @@ func sessionExists(t *testing.T, client *sessiond.Client, name string) bool {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	sessions, _, err := client.Snapshot(ctx, 1)
+	resp, err := client.SnapshotState(ctx, 0)
 	if err != nil {
-		t.Fatalf("Snapshot() error: %v", err)
+		t.Fatalf("SnapshotState() error: %v", err)
 	}
-	for _, snap := range sessions {
+	for _, snap := range resp.Sessions {
 		if snap.Name == name {
 			return true
 		}

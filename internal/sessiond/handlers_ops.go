@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	uv "github.com/charmbracelet/ultraviolet"
 
@@ -309,8 +311,35 @@ func (d *Daemon) sendInputToPane(manager sessionManager, req SendInputRequest, p
 	if err != nil {
 		return nil, err
 	}
-	if err := manager.SendInput(paneID, req.Input); err != nil {
+	start := time.Time{}
+	if slog.Default().Enabled(context.Background(), slog.LevelDebug) {
+		start = time.Now()
+		slog.Debug(
+			"sessiond: send_input start",
+			slog.String("pane_id", paneID),
+			slog.Int("bytes", len(req.Input)),
+		)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
+	err = manager.SendInput(ctx, paneID, req.Input)
+	cancel()
+	if err != nil {
+		if !start.IsZero() {
+			slog.Debug(
+				"sessiond: send_input done",
+				slog.String("pane_id", paneID),
+				slog.Duration("dur", time.Since(start)),
+				slog.Any("err", err),
+			)
+		}
 		return nil, err
+	}
+	if !start.IsZero() {
+		slog.Debug(
+			"sessiond: send_input done",
+			slog.String("pane_id", paneID),
+			slog.Duration("dur", time.Since(start)),
+		)
 	}
 	d.recordSendInputAction(paneID, req, "ok")
 	return encodePayload(SendInputResponse{
@@ -367,8 +396,8 @@ func (d *Daemon) sendInputToScope(manager sessionManager, req SendInputRequest, 
 	return encodePayload(SendInputResponse{Results: results})
 }
 
-func sendInputToTarget(manager sessionManager, paneID string, input []byte) (string, string) {
-	if err := manager.SendInput(paneID, input); err != nil {
+func sendInputToTarget(manager sessionManager, ctx context.Context, paneID string, input []byte) (string, string) {
+	if err := manager.SendInput(ctx, paneID, input); err != nil {
 		return "failed", err.Error()
 	}
 	return "ok", ""

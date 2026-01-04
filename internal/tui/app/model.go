@@ -70,6 +70,8 @@ type Model struct {
 	data               DashboardData
 	selection          selectionState
 	selectionByProject map[string]selectionState
+	focusPending       bool
+	focusSelection     selectionState
 	settings           DashboardConfig
 	config             *layout.Config
 	projectConfigState map[string]projectConfigState

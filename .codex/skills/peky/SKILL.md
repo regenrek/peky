@@ -14,6 +14,7 @@ Use this skill to operate PeakyPanes safely and predictably from the CLI, especi
 - **Scopes are only `session|project|all`.** Never pass project names to `--scope`.
 - **Project scope requires focus.** If you see "focused project unavailable," run `peakypanes session focus --name <session>` first.
 - **Prefer pane IDs for precision.** Use `pane list --json` and pick the pane `id`.
+- **Shortcut:** use `--pane-id @focused` to target the currently focused pane.
 - **`pane add` defaults to active pane.** For deterministic automation, pass `--pane-id` or `--session` + `--index`.
 
 ## Targeting: Session vs Project vs Pane ID
@@ -43,10 +44,29 @@ peakypanes pane send --scope all --text "hello all" --yes
 If `--scope project` fails, the focused session is missing or has no project path. **Fix by focusing a session with a valid path.**
 
 ## Run vs Send
-- `pane send` sends raw input (no newline)
-- `pane run` sends input + newline  
+Use this to avoid confusion in Codex/Claude sessions:
+- **`pane run` = execute now.** Sends the command and a newline. Best for shell commands or anything you want to run immediately.
+- **`pane send` = type only.** Sends raw input without pressing Enter. Best when you need to compose input step‑by‑step or control submission.
+- **Submitting after `send`:** use `pane key` to press Enter when you decide to submit.
+- **Tool-aware input (default):** send/run uses pane tool metadata (Codex/Claude/etc) to format input (bracketed paste + submit). Use `--raw` to bypass. Use `--tool` to target only panes running a specific tool.
+
+Examples:
 ```bash
+# Run a shell command (executes immediately)
 peakypanes pane run --pane-id "<pane-id>" --command "ls -la" --yes
+
+# Run on the currently focused pane (no lookup needed)
+peakypanes pane run --pane-id @focused --command "ls -la" --yes
+
+# Type into a prompt without submitting yet
+peakypanes pane send --pane-id "<pane-id>" --text "draft message" --yes
+peakypanes pane key --pane-id "<pane-id>" --key enter --yes
+
+# Target only Codex panes in a broadcast
+peakypanes pane run --scope all --command "hello" --tool codex --yes
+
+# Send raw bytes (no tool formatting)
+peakypanes pane send --pane-id "<pane-id>" --text "raw bytes" --raw --yes
 ```
 
 ## Adding Panes
@@ -83,6 +103,29 @@ Use `--json` for machine output and `--timeout` to avoid hangs:
 peakypanes pane list --json
 peakypanes events watch --json
 peakypanes pane tail --json --lines 50
+```
+
+## Stress + E2E (local + self-hosted)
+Use the built-in stress battery for regression protection:
+```bash
+scripts/cli-stress.sh
+```
+
+Enable tool loops during stress (Codex/Claude):
+```bash
+RUN_TOOLS=1 scripts/cli-stress.sh
+```
+
+Tip: when using a local binary alias, always call `$PP`, not `PP`:
+```bash
+PP=./bin/peakypanes
+$PP version
+```
+
+## Logs (macOS default)
+If you need daemon logs:
+```bash
+tail -n 200 "$HOME/Library/Application Support/peakypanes/daemon.log"
 ```
 
 ## Troubleshooting Checklist (fast)

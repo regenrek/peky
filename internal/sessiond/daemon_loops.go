@@ -1,6 +1,8 @@
 package sessiond
 
 import (
+	"context"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -91,17 +93,44 @@ func (d *Daemon) readLoop(client *clientConn) {
 		if env.Kind != EnvelopeRequest {
 			continue
 		}
+		start := time.Time{}
+		if slog.Default().Enabled(context.Background(), slog.LevelDebug) {
+			start = time.Now()
+			slog.Debug(
+				"sessiond: op start",
+				slog.String("op", string(env.Op)),
+				slog.Uint64("id", env.ID),
+				slog.Int("bytes", len(env.Payload)),
+			)
+		}
 		if env.Op == OpPaneView && client.paneViews != nil {
 			var req PaneViewRequest
 			if err := decodePayload(env.Payload, &req); err == nil {
 				if paneID, err := requirePaneID(req.PaneID); err == nil {
 					d.logPaneViewRequest(paneID, req)
 					client.paneViews.enqueue(paneID, env, req)
+					if slog.Default().Enabled(context.Background(), slog.LevelDebug) {
+						slog.Debug(
+							"sessiond: op queued",
+							slog.String("op", string(env.Op)),
+							slog.Uint64("id", env.ID),
+							slog.String("pane_id", paneID),
+						)
+					}
 					continue
 				}
 			}
 		}
 		resp := d.handleRequest(env)
+		if !start.IsZero() {
+			slog.Debug(
+				"sessiond: op done",
+				slog.String("op", string(env.Op)),
+				slog.Uint64("id", env.ID),
+				slog.Duration("dur", time.Since(start)),
+				slog.String("err", resp.Error),
+			)
+		}
 		timeout := d.responseTimeout(env)
 		if err := sendEnvelope(client, resp, timeout); err != nil {
 			return

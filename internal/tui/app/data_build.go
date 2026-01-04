@@ -23,7 +23,18 @@ func buildDashboardData(input dashboardSnapshotInput) dashboardSnapshotResult {
 
 	groups := index.groups
 	sortProjectGroups(groups, input.Config)
-	resolved := resolveSelectionForTab(input.Tab, groups, input.Selection)
+	selection := input.Selection
+	if selectionEmpty(selection) {
+		focusedSession := strings.TrimSpace(input.FocusedSession)
+		focusedPane := strings.TrimSpace(input.FocusedPaneID)
+		if focusedSession != "" || focusedPane != "" {
+			focusIndex := buildFocusIndex(groups)
+			if focused := selectionFromFocus(focusIndex, focusedSession, focusedPane); !selectionEmpty(focused) {
+				selection = focused
+			}
+		}
+	}
+	resolved := resolveSelectionForTab(input.Tab, groups, selection)
 	resolved = resolveProjectPaneSelection(input.Tab, groups, resolved)
 
 	result.Data = DashboardData{Projects: groups, RefreshedAt: time.Now()}

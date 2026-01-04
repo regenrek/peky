@@ -18,7 +18,7 @@ func TestBuildGridPanesWithStubWindow(t *testing.T) {
 		return &terminal.Window{}, nil
 	}
 
-	m := NewManager()
+	m := newTestManager(t)
 	cfg := &layout.LayoutConfig{
 		Grid:     "1x2",
 		Commands: []string{"echo a", "echo b"},
@@ -59,7 +59,7 @@ func TestBuildSplitPanesWithStubWindow(t *testing.T) {
 		return &terminal.Window{}, nil
 	}
 
-	m := NewManager()
+	m := newTestManager(t)
 	defs := []layout.PaneDef{
 		{Title: "one", Cmd: "echo a"},
 		{Title: "two", Cmd: "echo b", Split: "vertical", Size: "50%"},
@@ -86,7 +86,7 @@ func TestCreatePaneInvalidCommand(t *testing.T) {
 		return &terminal.Window{}, nil
 	}
 
-	m := NewManager()
+	m := newTestManager(t)
 	if _, err := m.createPane(context.Background(), "/tmp", "title", "'", nil); err == nil {
 		t.Fatalf("expected error for invalid command")
 	}
@@ -99,7 +99,7 @@ func TestStartSessionWithStubWindow(t *testing.T) {
 		return &terminal.Window{}, nil
 	}
 
-	m := NewManager()
+	m := newTestManager(t)
 	cfg := &layout.LayoutConfig{
 		Panes: []layout.PaneDef{
 			{Title: "one", Cmd: "echo a"},

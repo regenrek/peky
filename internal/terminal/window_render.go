@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image/color"
 	"io"
+	"log/slog"
 	"reflect"
 	"strings"
 	"time"
@@ -12,6 +13,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/muesli/termenv"
+
+	"github.com/regenrek/peakypanes/internal/logging"
 )
 
 // ViewANSI returns the VT's own ANSI-rendered screen.
@@ -183,7 +186,7 @@ func (w *Window) refreshANSICache() {
 
 	startSeq := w.UpdateSeq()
 
-	perf := perfDebugEnabled()
+	perf := slog.Default().Enabled(context.Background(), slog.LevelDebug)
 	var start time.Time
 	if perf {
 		start = time.Now()
@@ -223,13 +226,40 @@ func (w *Window) refreshANSICache() {
 	if perf {
 		total := time.Since(start)
 		if lockWait > perfSlowLock {
-			logPerfEvery("term.ansi.lock", perfLogInterval, "terminal: ansi lock wait=%s cols=%d rows=%d", lockWait, cols, rows)
+			logging.LogEvery(
+				context.Background(),
+				"term.ansi.lock",
+				perfLogInterval,
+				slog.LevelDebug,
+				"terminal: ansi lock slow",
+				slog.Duration("wait", lockWait),
+				slog.Int("cols", cols),
+				slog.Int("rows", rows),
+			)
 		}
 		if renderDur > perfSlowANSIRender {
-			logPerfEvery("term.ansi.render", perfLogInterval, "terminal: ansi render dur=%s cols=%d rows=%d", renderDur, cols, rows)
+			logging.LogEvery(
+				context.Background(),
+				"term.ansi.render",
+				perfLogInterval,
+				slog.LevelDebug,
+				"terminal: ansi render slow",
+				slog.Duration("dur", renderDur),
+				slog.Int("cols", cols),
+				slog.Int("rows", rows),
+			)
 		}
 		if total > perfSlowANSIRender {
-			logPerfEvery("term.ansi.total", perfLogInterval, "terminal: ansi total dur=%s cols=%d rows=%d", total, cols, rows)
+			logging.LogEvery(
+				context.Background(),
+				"term.ansi.total",
+				perfLogInterval,
+				slog.LevelDebug,
+				"terminal: ansi total slow",
+				slog.Duration("dur", total),
+				slog.Int("cols", cols),
+				slog.Int("rows", rows),
+			)
 		}
 	}
 
@@ -266,7 +296,7 @@ func (w *Window) ViewLipglossCtx(ctx context.Context, showCursor bool, profile t
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	perf := perfDebugEnabled()
+	perf := slog.Default().Enabled(context.Background(), slog.LevelDebug)
 	var start time.Time
 	if perf {
 		start = time.Now()
@@ -289,7 +319,16 @@ func (w *Window) ViewLipglossCtx(ctx context.Context, showCursor bool, profile t
 	if perf {
 		collectDur = time.Since(start)
 		if collectDur > perfSlowLipgloss {
-			logPerfEvery("term.lipgloss.collect", perfLogInterval, "terminal: lipgloss collect dur=%s cols=%d rows=%d", collectDur, cols, rows)
+			logging.LogEvery(
+				context.Background(),
+				"term.lipgloss.collect",
+				perfLogInterval,
+				slog.LevelDebug,
+				"terminal: lipgloss collect slow",
+				slog.Duration("dur", collectDur),
+				slog.Int("cols", cols),
+				slog.Int("rows", rows),
+			)
 		}
 	}
 	renderStart := time.Now()
@@ -297,11 +336,29 @@ func (w *Window) ViewLipglossCtx(ctx context.Context, showCursor bool, profile t
 	if perf {
 		renderDur := time.Since(renderStart)
 		if renderDur > perfSlowLipgloss {
-			logPerfEvery("term.lipgloss.render", perfLogInterval, "terminal: lipgloss render dur=%s cols=%d rows=%d", renderDur, cols, rows)
+			logging.LogEvery(
+				context.Background(),
+				"term.lipgloss.render",
+				perfLogInterval,
+				slog.LevelDebug,
+				"terminal: lipgloss render slow",
+				slog.Duration("dur", renderDur),
+				slog.Int("cols", cols),
+				slog.Int("rows", rows),
+			)
 		}
 		total := time.Since(start)
 		if total > perfSlowLipglossAll {
-			logPerfEvery("term.lipgloss.total", perfLogInterval, "terminal: lipgloss total dur=%s cols=%d rows=%d", total, cols, rows)
+			logging.LogEvery(
+				context.Background(),
+				"term.lipgloss.total",
+				perfLogInterval,
+				slog.LevelDebug,
+				"terminal: lipgloss total slow",
+				slog.Duration("dur", total),
+				slog.Int("cols", cols),
+				slog.Int("rows", rows),
+			)
 		}
 	}
 	return out, renderErr

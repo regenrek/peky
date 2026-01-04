@@ -1,7 +1,8 @@
 package native
 
 import (
-	"log"
+	"context"
+	"log/slog"
 	"time"
 )
 
@@ -27,7 +28,7 @@ type panePerfSnapshot struct {
 }
 
 func (m *Manager) logPanePerf(pane *Pane) {
-	if m == nil || pane == nil || !perfDebugEnabled() {
+	if m == nil || pane == nil || !slog.Default().Enabled(context.Background(), slog.LevelDebug) {
 		return
 	}
 	w := pane.window
@@ -51,20 +52,20 @@ func (m *Manager) logPanePerf(pane *Pane) {
 	}
 	flags := m.perfLogged[pane.ID]
 	flags = logPanePerfStage(flags, perfPanePtyCreated, snap.ptyCreated, func() {
-		log.Printf("native: pane pty ready pane=%s since_start=%s", pane.ID, snap.ptyCreated.Sub(snap.created))
+		slog.Debug("native: pane pty ready", slog.String("pane_id", pane.ID), slog.Duration("since_start", snap.ptyCreated.Sub(snap.created)))
 	})
 	flags = logPanePerfStage(flags, perfPaneProcStart, snap.procStarted, func() {
-		log.Printf("native: pane process started pane=%s pid=%d since_start=%s", pane.ID, pane.PID, snap.procStarted.Sub(snap.created))
+		slog.Debug("native: pane process started", slog.String("pane_id", pane.ID), slog.Int("pid", pane.PID), slog.Duration("since_start", snap.procStarted.Sub(snap.created)))
 	})
 	flags = logPanePerfStage(flags, perfPaneIOStart, snap.ioStarted, func() {
-		log.Printf("native: pane io started pane=%s since_start=%s", pane.ID, snap.ioStarted.Sub(snap.created))
+		slog.Debug("native: pane io started", slog.String("pane_id", pane.ID), slog.Duration("since_start", snap.ioStarted.Sub(snap.created)))
 	})
 	flags = logPanePerfStage(flags, perfPaneFirstUpdate, snap.firstUpdate, func() {
-		log.Printf("native: pane first update pane=%s since_start=%s", pane.ID, snap.firstUpdate.Sub(snap.created))
+		slog.Debug("native: pane first update", slog.String("pane_id", pane.ID), slog.Duration("since_start", snap.firstUpdate.Sub(snap.created)))
 	})
 	flags = logPanePerfFirstRead(flags, pane.ID, snap)
 	flags = logPanePerfStage(flags, perfPaneFirstWrite, snap.firstWrite, func() {
-		log.Printf("native: pane first input sent pane=%s since_start=%s", pane.ID, snap.firstWrite.Sub(snap.created))
+		slog.Debug("native: pane first input sent", slog.String("pane_id", pane.ID), slog.Duration("since_start", snap.firstWrite.Sub(snap.created)))
 	})
 	flags = logPanePerfFirstReadAfterWrite(flags, pane.ID, snap)
 	m.perfLogged[pane.ID] = flags
@@ -85,13 +86,13 @@ func logPanePerfFirstRead(flags uint8, paneID string, snap panePerfSnapshot) uin
 		return flags
 	}
 	flags |= perfPaneFirstRead
-	log.Printf("native: pane first output pane=%s since_start=%s", paneID, snap.firstRead.Sub(snap.created))
+	slog.Debug("native: pane first output", slog.String("pane_id", paneID), slog.Duration("since_start", snap.firstRead.Sub(snap.created)))
 	if !snap.ptyCreated.IsZero() {
 		delta := snap.firstRead.Sub(snap.ptyCreated)
 		if delta < 0 {
 			delta = 0
 		}
-		log.Printf("native: pane first output after pty ready pane=%s since_pty_ready=%s", paneID, delta)
+		slog.Debug("native: pane first output after pty ready", slog.String("pane_id", paneID), slog.Duration("since_pty_ready", delta))
 	}
 	return flags
 }
@@ -105,6 +106,11 @@ func logPanePerfFirstReadAfterWrite(flags uint8, paneID string, snap panePerfSna
 	if !snap.firstWrite.IsZero() {
 		delta = snap.firstReadAfterWrite.Sub(snap.firstWrite)
 	}
-	log.Printf("native: pane first output after input pane=%s since_start=%s since_input=%s", paneID, snap.firstReadAfterWrite.Sub(snap.created), delta)
+	slog.Debug(
+		"native: pane first output after input",
+		slog.String("pane_id", paneID),
+		slog.Duration("since_start", snap.firstReadAfterWrite.Sub(snap.created)),
+		slog.Duration("since_input", delta),
+	)
 	return flags
 }

@@ -1,13 +1,16 @@
 package native
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/regenrek/peakypanes/internal/diag"
+	"github.com/regenrek/peakypanes/internal/logging"
+	"github.com/regenrek/peakypanes/internal/tool"
 )
 
 // LayoutBaseSize is the normalized coordinate space for pane layouts.
@@ -41,6 +44,7 @@ type Manager struct {
 	nextID       atomic.Uint64
 	version      atomic.Uint64
 	closed       atomic.Bool
+	toolRegistry atomic.Value
 
 	previewMu     sync.Mutex
 	previewCache  map[string]previewState
@@ -55,13 +59,21 @@ type Manager struct {
 }
 
 // NewManager creates a new native session manager.
-func NewManager() *Manager {
-	return &Manager{
+func NewManager() (*Manager, error) {
+	mgr := &Manager{
 		sessions:     make(map[string]*Session),
 		panes:        make(map[string]*Pane),
 		events:       make(chan PaneEvent, 128),
 		previewCache: make(map[string]previewState),
 	}
+	reg, err := tool.DefaultRegistry()
+	if err != nil {
+		return nil, err
+	}
+	if err := mgr.SetToolRegistry(reg); err != nil {
+		return nil, err
+	}
+	return mgr, nil
 }
 
 // Events returns pane update events.
@@ -208,7 +220,16 @@ func (m *Manager) emitEvent(event PaneEvent) {
 	select {
 	case m.events <- event:
 	default:
-		diag.LogEvery("native.events.drop", 2*time.Second, "native: drop pane event id=%s seq=%d type=%d", event.PaneID, event.Seq, event.Type)
+		logging.LogEvery(
+			context.Background(),
+			"native.events.drop",
+			2*time.Second,
+			slog.LevelWarn,
+			"native: drop pane event",
+			slog.String("pane_id", event.PaneID),
+			slog.Uint64("seq", event.Seq),
+			slog.Int("type", int(event.Type)),
+		)
 	}
 }
 

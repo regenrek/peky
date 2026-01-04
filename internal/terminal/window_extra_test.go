@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"context"
 	"image/color"
 	"os"
 	"runtime"
@@ -38,7 +39,7 @@ func TestTranslateCPR(t *testing.T) {
 
 func TestEnqueueWrite(t *testing.T) {
 	w := &Window{writeCh: make(chan writeRequest, 1)}
-	if err := w.enqueueWrite([]byte("hi"), false); err != nil {
+	if err := w.enqueueWrite(context.Background(), []byte("hi"), false); err != nil {
 		t.Fatalf("enqueueWrite: %v", err)
 	}
 	req := <-w.writeCh

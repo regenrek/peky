@@ -61,9 +61,6 @@ func renderPaneLayout(panes []Pane, width, height int, targetPane string) string
 		if pane.Index == targetPane {
 			title = "TARGET " + title
 		}
-		if pane.Active {
-			title = "▶ " + title
-		}
 		c.write(x1+1, y1+1, title, w-2)
 		c.write(x1+1, y1+2, pane.Command, w-2)
 		status := ansi.LastNonEmpty(pane.Preview)
@@ -78,7 +75,6 @@ func renderPaneLayout(panes []Pane, width, height int, targetPane string) string
 
 const (
 	borderLevelDefault = iota
-	borderLevelActive
 	borderLevelTarget
 	borderLevelFocus
 )
@@ -90,9 +86,6 @@ func borderLevelForPane(pane Pane, targetPane string, terminalFocus bool) int {
 		}
 		return borderLevelTarget
 	}
-	if pane.Active {
-		return borderLevelActive
-	}
 	return borderLevelDefault
 }
 
@@ -102,8 +95,6 @@ func borderColorFor(level int) lipgloss.TerminalColor {
 		return theme.BorderTarget
 	case borderLevelFocus:
 		return theme.BorderFocus
-	case borderLevelActive:
-		return theme.BorderFocused
 	default:
 		return theme.Border
 	}
@@ -260,9 +251,6 @@ func renderPaneTile(pane Pane, width, height int, compact bool, target bool, bor
 	if target {
 		title = "TARGET " + title
 	}
-	if pane.Active {
-		title = "▶ " + title
-	}
 
 	style := lipgloss.NewStyle().
 		BorderStyle(lipgloss.NormalBorder()).
@@ -346,9 +334,6 @@ func paneTileTitle(pane Pane, target bool) string {
 	title := pane.Title
 	if target {
 		title = "TARGET " + title
-	}
-	if pane.Active {
-		title = "▶ " + title
 	}
 	return title
 }

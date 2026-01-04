@@ -6,6 +6,7 @@ import (
 	"io"
 	"os/exec"
 	"testing"
+	"time"
 )
 
 type fakePty struct {
@@ -28,20 +29,20 @@ func (f *fakePty) Start(cmd *exec.Cmd) error            { return nil }
 
 func TestSendInputErrorPaths(t *testing.T) {
 	var nilWindow *Window
-	if err := nilWindow.SendInput([]byte("hi")); err == nil {
+	if err := nilWindow.SendInput(context.Background(), []byte("hi")); err == nil {
 		t.Fatalf("expected error for nil window")
 	}
 
 	w := &Window{}
-	if err := w.SendInput(nil); err != nil {
+	if err := w.SendInput(context.Background(), nil); err != nil {
 		t.Fatalf("expected nil error for empty input, got %v", err)
 	}
 	w.closed.Store(true)
-	if err := w.SendInput([]byte("hi")); err == nil || !errors.Is(err, ErrPaneClosed) {
+	if err := w.SendInput(context.Background(), []byte("hi")); err == nil || !errors.Is(err, ErrPaneClosed) {
 		t.Fatalf("expected pane closed error for closed window, got %v", err)
 	}
 	w.closed.Store(false)
-	if err := w.SendInput([]byte("hi")); err == nil || !errors.Is(err, ErrPaneClosed) {
+	if err := w.SendInput(context.Background(), []byte("hi")); err == nil || !errors.Is(err, ErrPaneClosed) {
 		t.Fatalf("expected pane closed error for missing pty, got %v", err)
 	}
 }
@@ -54,7 +55,7 @@ func TestSendInputClearsMouseSelection(t *testing.T) {
 	w.ScrollbackMode = true
 	w.ScrollbackOffset = 3
 
-	if err := w.SendInput([]byte("h")); err != nil {
+	if err := w.SendInput(context.Background(), []byte("h")); err != nil {
 		t.Fatalf("SendInput: %v", err)
 	}
 	if w.CopyMode != nil {
@@ -62,6 +63,19 @@ func TestSendInputClearsMouseSelection(t *testing.T) {
 	}
 	if w.ScrollbackOffset != 0 || w.ScrollbackMode {
 		t.Fatalf("expected scrollback cleared after input, offset=%d mode=%v", w.ScrollbackOffset, w.ScrollbackMode)
+	}
+}
+
+func TestSendInputRespectsContextWhenQueueFull(t *testing.T) {
+	pty := &fakePty{}
+	w := &Window{pty: pty, writeCh: make(chan writeRequest, 1)}
+	w.writeCh <- writeRequest{data: []byte("busy"), markDirty: true}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+	defer cancel()
+	err := w.SendInput(ctx, []byte("hi"))
+	if err == nil || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected deadline exceeded, got %v", err)
 	}
 }
 

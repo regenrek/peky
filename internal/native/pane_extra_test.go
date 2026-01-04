@@ -14,7 +14,7 @@ func TestSplitPaneWithStubWindow(t *testing.T) {
 		return &terminal.Window{}, nil
 	}
 
-	m := NewManager()
+	m := newTestManager(t)
 	session := &Session{Name: "sess", Path: t.TempDir()}
 	pane := &Pane{ID: "p-1", Index: "0", Width: LayoutBaseSize, Height: LayoutBaseSize}
 	session.Panes = []*Pane{pane}
@@ -34,7 +34,7 @@ func TestSplitPaneWithStubWindow(t *testing.T) {
 }
 
 func TestClosePanesNoWindow(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	panes := []*Pane{
 		{window: nil},
 	}
@@ -42,7 +42,7 @@ func TestClosePanesNoWindow(t *testing.T) {
 }
 
 func TestSessionLookup(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	m.sessions["demo"] = &Session{Name: "demo"}
 	if m.Session("demo") == nil {
 		t.Fatalf("Session() should return stored session")

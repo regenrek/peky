@@ -25,7 +25,7 @@ func drainEvents(ch <-chan PaneEvent) int {
 }
 
 func TestSessionNamesAndRenameSession(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	m.sessions["alpha"] = &Session{Name: "alpha"}
 	m.sessions["beta"] = &Session{Name: "beta"}
 
@@ -52,7 +52,7 @@ func TestSessionNamesAndRenameSession(t *testing.T) {
 }
 
 func TestKillSessionRemovesPanes(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	paneA := &Pane{ID: "p-1", Index: "0"}
 	paneB := &Pane{ID: "p-2", Index: "1"}
 	session := &Session{Name: "sess", Panes: []*Pane{paneA, paneB}}
@@ -78,7 +78,7 @@ func TestKillSessionRemovesPanes(t *testing.T) {
 }
 
 func TestRenamePaneUpdatesTitle(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	pane := &Pane{ID: "p-1", Index: "0", Title: "old"}
 	session := &Session{Name: "sess", Panes: []*Pane{pane}}
 	m.sessions["sess"] = session
@@ -98,7 +98,7 @@ func TestRenamePaneUpdatesTitle(t *testing.T) {
 }
 
 func TestClosePaneRetilesAndActivates(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	paneA := &Pane{ID: "p-1", Index: "0", Active: false, Width: 10, Height: 10}
 	paneB := &Pane{ID: "p-2", Index: "1", Active: false, Width: 10, Height: 10}
 	session := &Session{Name: "sess", Panes: []*Pane{paneA, paneB}}
@@ -124,7 +124,7 @@ func TestClosePaneRetilesAndActivates(t *testing.T) {
 }
 
 func TestSwapPanesSwapsGeometry(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	paneA := &Pane{ID: "p-1", Index: "0", Left: 0, Top: 0, Width: 100, Height: 100}
 	paneB := &Pane{ID: "p-2", Index: "1", Left: 100, Top: 0, Width: 100, Height: 100}
 	session := &Session{Name: "sess", Panes: []*Pane{paneA, paneB}}
@@ -142,8 +142,8 @@ func TestSwapPanesSwapsGeometry(t *testing.T) {
 }
 
 func TestSendInputMouseErrors(t *testing.T) {
-	m := NewManager()
-	if err := m.SendInput("missing", []byte("hi")); err == nil {
+	m := newTestManager(t)
+	if err := m.SendInput(context.Background(), "missing", []byte("hi")); err == nil {
 		t.Fatalf("SendInput() should fail on missing pane")
 	}
 	if err := m.SendMouse("missing", nil); err == nil {
@@ -152,13 +152,13 @@ func TestSendInputMouseErrors(t *testing.T) {
 
 	pane := &Pane{ID: "p-1", Index: "0"}
 	m.panes[pane.ID] = pane
-	if err := m.SendInput("p-1", []byte("hi")); err == nil {
+	if err := m.SendInput(context.Background(), "p-1", []byte("hi")); err == nil {
 		t.Fatalf("SendInput() should fail without window")
 	}
 }
 
 func TestSplitPaneErrors(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	if _, err := m.SplitPane(context.Background(), "missing", "0", true, 50); err == nil {
 		t.Fatalf("SplitPane() should fail on missing session")
 	}
@@ -180,7 +180,7 @@ func TestSplitPaneErrors(t *testing.T) {
 }
 
 func TestBuildPanesErrors(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	if _, err := m.buildPanes(context.Background(), SessionSpec{}); err == nil {
 		t.Fatalf("buildPanes() should fail on nil layout")
 	}
@@ -197,7 +197,7 @@ func TestBuildPanesErrors(t *testing.T) {
 }
 
 func TestBuildSplitPanesCanceledContext(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	defs := []layout.PaneDef{{Title: "one", Cmd: "echo hi"}}
@@ -207,7 +207,7 @@ func TestBuildSplitPanesCanceledContext(t *testing.T) {
 }
 
 func TestNextPaneIDAndWindow(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	if got := m.nextPaneID(); got != "p-1" {
 		t.Fatalf("nextPaneID() = %q", got)
 	}
@@ -223,7 +223,7 @@ func TestNextPaneIDAndWindow(t *testing.T) {
 }
 
 func TestMarkActiveAndForwardUpdates(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	m.forwardUpdates(nil)
 	m.forwardUpdates(&Pane{ID: "p-1"})
 
@@ -242,7 +242,7 @@ func TestMarkActiveAndForwardUpdates(t *testing.T) {
 }
 
 func TestStartSessionLayoutNoPanes(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	layoutCfg := &layout.LayoutConfig{Name: "empty"}
 	_, err := m.StartSession(context.Background(), SessionSpec{
 		Name:   "demo",
@@ -293,7 +293,7 @@ func TestSplitRect(t *testing.T) {
 }
 
 func TestSnapshotWithNilWindow(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	pane := &Pane{ID: "p-1", Index: "0", Title: "t", Command: "cmd"}
 	session := &Session{Name: "sess", Panes: []*Pane{pane}}
 	m.sessions["sess"] = session
@@ -341,7 +341,7 @@ func TestManagerHelpers(t *testing.T) {
 }
 
 func TestManagerCloseClosesEvents(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(t)
 	m.Close()
 	select {
 	case _, ok := <-m.Events():

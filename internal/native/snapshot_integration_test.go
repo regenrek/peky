@@ -45,7 +45,7 @@ func TestSnapshotUsesDirtyANSICache(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 
-	m := NewManager()
+	m := newTestManager(t)
 	pane := &Pane{ID: "pane-1", Index: "0", window: win}
 	session := &Session{Name: "sess", Panes: []*Pane{pane}}
 	m.sessions["sess"] = session

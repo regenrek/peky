@@ -3,10 +3,11 @@ package app
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"reflect"
 	"time"
 
-	"github.com/regenrek/peakypanes/internal/diag"
+	"github.com/regenrek/peakypanes/internal/logging"
 	"github.com/regenrek/peakypanes/internal/sessiond"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -15,12 +16,22 @@ import (
 // Update handles all incoming messages and returns the updated model.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if model, cmd, handled := m.handleUpdateMsg(msg); handled {
-		return model, cmd
+		return m.appendFocusResult(model, cmd)
 	}
 	if model, cmd, handled := m.handlePassiveUpdates(msg); handled {
-		return model, cmd
+		return m.appendFocusResult(model, cmd)
 	}
 	return m, nil
+}
+
+func (m *Model) appendFocusResult(model tea.Model, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	if updated, ok := model.(*Model); ok && updated != nil {
+		return updated, updated.appendFocusCmd(cmd)
+	}
+	if m != nil {
+		return model, m.appendFocusCmd(cmd)
+	}
+	return model, cmd
 }
 
 func (m *Model) handleUpdateMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
@@ -201,10 +212,25 @@ func (m *Model) applyWindowSize(msg tea.WindowSizeMsg) {
 
 func (m *Model) handleRefreshTick(msg refreshTickMsg) tea.Cmd {
 	if m.refreshInFlight == 0 {
-		diag.LogEvery("tui.refresh.start", 2*time.Second, "tui: refresh tick start next_seq=%d", m.refreshSeq+1)
+		logging.LogEvery(
+			context.Background(),
+			"tui.refresh.start",
+			2*time.Second,
+			slog.LevelDebug,
+			"tui: refresh tick start",
+			slog.Uint64("next_seq", m.refreshSeq+1),
+		)
 		return tea.Batch(m.startRefreshCmd(), tickCmd(m.settings.RefreshInterval))
 	}
-	diag.LogEvery("tui.refresh.skip", 2*time.Second, "tui: refresh tick skipped in_flight=%d seq=%d", m.refreshInFlight, m.refreshSeq)
+	logging.LogEvery(
+		context.Background(),
+		"tui.refresh.skip",
+		2*time.Second,
+		slog.LevelDebug,
+		"tui: refresh tick skipped",
+		slog.Int("in_flight", m.refreshInFlight),
+		slog.Uint64("seq", m.refreshSeq),
+	)
 	return tickCmd(m.settings.RefreshInterval)
 }
 
@@ -217,7 +243,16 @@ func (m *Model) handleSelectionRefresh(msg selectionRefreshMsg) tea.Cmd {
 
 func (m *Model) handleDashboardSnapshot(msg dashboardSnapshotMsg) tea.Cmd {
 	m.endRefresh()
-	diag.LogEvery("tui.snapshot.recv", 2*time.Second, "tui: snapshot recv seq=%d err=%v in_flight=%d", msg.Result.RefreshSeq, msg.Result.Err, m.refreshInFlight)
+	logging.LogEvery(
+		context.Background(),
+		"tui.snapshot.recv",
+		2*time.Second,
+		slog.LevelDebug,
+		"tui: snapshot recv",
+		slog.Uint64("seq", msg.Result.RefreshSeq),
+		slog.Any("err", msg.Result.Err),
+		slog.Int("in_flight", m.refreshInFlight),
+	)
 	m.noteRefreshTiming(msg)
 	if cmd, handled := m.handleSnapshotStale(msg); handled {
 		return cmd
@@ -359,7 +394,16 @@ func (m *Model) handleDaemonEvent(msg daemonEventMsg) tea.Cmd {
 		}
 	}
 	paneIDs, refresh, toastMsg, toastLevel := summarizeDaemonEvents(events)
-	diag.LogEvery("tui.event", 2*time.Second, "tui: events batch=%d panes=%d refresh=%v", len(events), len(paneIDs), refresh)
+	logging.LogEvery(
+		context.Background(),
+		"tui.event",
+		2*time.Second,
+		slog.LevelDebug,
+		"tui: events batch",
+		slog.Int("batch", len(events)),
+		slog.Int("panes", len(paneIDs)),
+		slog.Bool("refresh", refresh),
+	)
 	cmds := []tea.Cmd{waitDaemonEvent(m.client)}
 	if refresh {
 		if cmd := m.requestRefreshCmd(); cmd != nil {
@@ -439,7 +483,17 @@ func toastLevelFromSessiond(level sessiond.ToastLevel) toastLevel {
 
 func (m *Model) handlePaneViews(msg paneViewsMsg) tea.Cmd {
 	var cmd tea.Cmd
-	diag.LogEvery("tui.paneviews.recv", 2*time.Second, "tui: paneViews recv count=%d err=%v in_flight=%d pending=%d", len(msg.Views), msg.Err, m.paneViewInFlight, len(m.paneViewQueuedIDs))
+	logging.LogEvery(
+		context.Background(),
+		"tui.paneviews.recv",
+		2*time.Second,
+		slog.LevelDebug,
+		"tui: paneViews recv",
+		slog.Int("count", len(msg.Views)),
+		slog.Any("err", msg.Err),
+		slog.Int("in_flight", m.paneViewInFlight),
+		slog.Int("pending", len(m.paneViewQueuedIDs)),
+	)
 	if msg.Err != nil && len(msg.Views) == 0 && !errors.Is(msg.Err, context.DeadlineExceeded) && !errors.Is(msg.Err, context.Canceled) {
 		m.setToast("Pane view failed: "+msg.Err.Error(), toastWarning)
 	}
@@ -504,13 +558,14 @@ func (m *Model) handleSessionStarted(msg sessionStartedMsg) tea.Cmd {
 		m.setToast("Session started: "+msg.Name, toastSuccess)
 		projectName := m.projectNameForPath(msg.Path)
 		projectID := projectKey(msg.Path, projectName)
+		sel := m.selection
 		if projectID != "" {
-			m.selection.ProjectID = projectID
+			sel.ProjectID = projectID
 		}
-		m.selection.Session = msg.Name
-		m.selection.Pane = ""
+		sel.Session = msg.Name
+		sel.Pane = ""
+		m.applySelection(sel)
 		m.selectionVersion++
-		m.rememberSelection(m.selection)
 	} else {
 		m.setToast("Session started", toastSuccess)
 	}

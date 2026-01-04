@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -16,6 +16,7 @@ import (
 
 	"github.com/regenrek/peakypanes/internal/native"
 	"github.com/regenrek/peakypanes/internal/sessiond/state"
+	"github.com/regenrek/peakypanes/internal/tool"
 )
 
 const (
@@ -47,6 +48,7 @@ type pprofServer interface {
 // Daemon owns persistent sessions and serves clients over a local socket.
 type Daemon struct {
 	manager       sessionManager
+	toolRegistry  *tool.Registry
 	listener      net.Listener
 	listenerMu    sync.RWMutex
 	socketPath    string
@@ -129,22 +131,37 @@ func NewDaemon(cfg DaemonConfig) (*Daemon, error) {
 		})
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	registry, err := loadToolRegistry()
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	nativeMgr, err := native.NewManager()
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	if err := nativeMgr.SetToolRegistry(registry); err != nil {
+		cancel()
+		return nil, err
+	}
 	d := &Daemon{
-		manager:     wrapManager(native.NewManager()),
-		socketPath:  socketPath,
-		pidPath:     pidPath,
-		statePath:   statePath,
-		pprofAddr:   strings.TrimSpace(cfg.PprofAddr),
-		stateWriter: stateWriter,
-		version:     cfg.Version,
-		skipRestore: cfg.SkipRestore,
-		ctx:         ctx,
-		cancel:      cancel,
-		clients:     make(map[uint64]*clientConn),
-		actionLogs:  make(map[string]*actionLog),
-		eventLog:    newEventLog(0),
-		relays:      newRelayManager(),
-		started:     make(chan struct{}),
+		manager:      wrapManager(nativeMgr),
+		toolRegistry: registry,
+		socketPath:   socketPath,
+		pidPath:      pidPath,
+		statePath:    statePath,
+		pprofAddr:    strings.TrimSpace(cfg.PprofAddr),
+		stateWriter:  stateWriter,
+		version:      cfg.Version,
+		skipRestore:  cfg.SkipRestore,
+		ctx:          ctx,
+		cancel:       cancel,
+		clients:      make(map[uint64]*clientConn),
+		actionLogs:   make(map[string]*actionLog),
+		eventLog:     newEventLog(0),
+		relays:       newRelayManager(),
+		started:      make(chan struct{}),
 	}
 	if cfg.HandleSignals {
 		d.handleSignals()
@@ -194,7 +211,7 @@ func (d *Daemon) Start() error {
 	}
 	if !d.skipRestore {
 		if err := d.restorePersistedState(); err != nil {
-			log.Printf("sessiond: restore state: %v", err)
+			slog.Warn("sessiond: restore state failed", slog.Any("err", err))
 		}
 	}
 	d.startProfiler()
@@ -203,7 +220,7 @@ func (d *Daemon) Start() error {
 	go d.acceptLoop()
 	go d.eventLoop()
 
-	log.Printf("sessiond: daemon listening on %s", d.socketPath)
+	slog.Info("sessiond: daemon listening", slog.String("socket", d.socketPath))
 	return nil
 }
 
@@ -253,7 +270,7 @@ func (d *Daemon) shutdown() error {
 	if d.stateWriter != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
 		if err := d.stateWriter.Close(ctx); err != nil {
-			log.Printf("sessiond: flush state: %v", err)
+			slog.Warn("sessiond: flush state failed", slog.Any("err", err))
 		}
 		cancel()
 	}

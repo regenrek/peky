@@ -7,7 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -42,10 +42,10 @@ func (d *Daemon) startPprofServer() error {
 	d.pprofServer = server
 	go func() {
 		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("sessiond: pprof server error: %v", err)
+			slog.Warn("sessiond: pprof server error", slog.Any("err", err))
 		}
 	}()
-	log.Printf("sessiond: pprof server listening on %s", addr)
+	slog.Info("sessiond: pprof server listening", slog.String("addr", addr))
 	return nil
 }
 
@@ -55,7 +55,7 @@ func (d *Daemon) stopPprofServer() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
 	if err := d.pprofServer.Shutdown(ctx); err != nil {
-		log.Printf("sessiond: pprof shutdown: %v", err)
+		slog.Warn("sessiond: pprof shutdown failed", slog.Any("err", err))
 	}
 	cancel()
 	if d.pprofListener != nil {

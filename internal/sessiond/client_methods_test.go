@@ -295,6 +295,36 @@ func TestClientSendInput(t *testing.T) {
 	})
 }
 
+func TestClientSendInputTool(t *testing.T) {
+	runClientCase(t, clientCase{
+		name: "SendInputTool",
+		op:   OpSendInputTool,
+		check: func(env Envelope) error {
+			var req SendInputToolRequest
+			if err := decodePayload(env.Payload, &req); err != nil {
+				return err
+			}
+			if req.PaneID != "pane" || string(req.Input) != "hi" || !req.Submit {
+				return fmt.Errorf("unexpected send input tool request")
+			}
+			if req.ToolFilter != "codex" || !req.DetectTool {
+				return fmt.Errorf("unexpected send input tool options")
+			}
+			return nil
+		},
+		call: func(c *Client) error {
+			_, err := c.SendInputTool(context.Background(), SendInputToolRequest{
+				PaneID:     "pane",
+				Input:      []byte("hi"),
+				Submit:     true,
+				ToolFilter: "codex",
+				DetectTool: true,
+			})
+			return err
+		},
+	})
+}
+
 func TestClientSendMouse(t *testing.T) {
 	runClientCase(t, clientCase{
 		name: "SendMouse",

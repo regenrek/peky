@@ -71,6 +71,7 @@ type Options struct {
 	OnFirstRead func()
 
 	// OnOutput receives raw output bytes from the pane.
+	// The payload is only valid until the callback returns; copy it if you retain it.
 	OnOutput func(payload []byte)
 }
 
@@ -79,6 +80,7 @@ type Options struct {
 type Window struct {
 	id    string
 	title atomic.Value // string
+	cwd   atomic.Value // string
 
 	createdAt time.Time
 	// Stage timing probes (unix nanos).
@@ -215,6 +217,7 @@ func NewWindow(opts Options) (*Window, error) {
 	setupPTYCommand(cmd)
 
 	term := vt.NewEmulator(cols, rows)
+	term.SetScrollbackMaxLines(limits.TerminalScrollbackMaxLinesDefault)
 
 	pty, err := xpty.NewPty(cols, rows)
 	if err != nil {
@@ -250,6 +253,7 @@ func NewWindow(opts Options) (*Window, error) {
 	w.ptyCreatedAt.Store(ptyCreatedAt.UnixNano())
 	w.processStartedAt.Store(processStartedAt.UnixNano())
 	w.title.Store(opts.Title)
+	w.cwd.Store("")
 	w.cursorVisible.Store(true)
 	w.lastUpdate.Store(time.Now().UnixNano())
 	term.SetCallbacks(vt.Callbacks{
@@ -275,6 +279,9 @@ func NewWindow(opts Options) (*Window, error) {
 		},
 		DisableMode: func(mode ansi.Mode) {
 			w.updateMouseMode(mode, false)
+		},
+		WorkingDirectory: func(path string) {
+			w.cwd.Store(path)
 		},
 	})
 
@@ -419,13 +426,12 @@ func (w *Window) Cwd() string {
 	if w == nil {
 		return ""
 	}
-	w.termMu.Lock()
-	term := w.term
-	w.termMu.Unlock()
-	if term == nil {
-		return ""
+	if v := w.cwd.Load(); v != nil {
+		if s, ok := v.(string); ok {
+			return s
+		}
 	}
-	return term.Cwd()
+	return ""
 }
 
 func (w *Window) Cols() int { return w.cols }

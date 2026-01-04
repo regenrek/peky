@@ -45,17 +45,28 @@ func runAdd(ctx root.CommandContext) error {
 	if err != nil {
 		return err
 	}
+	var focusedPaneID string
+	if ctx.Cmd.Bool("focus") {
+		focusedPaneID, err = focusPaneByIndex(ctxTimeout, client, targetSession, newIndex)
+		if err != nil {
+			return err
+		}
+	}
 	if ctx.JSON {
 		meta = output.WithDuration(meta, start)
+		details := map[string]any{
+			"session":     targetSession,
+			"split_from":  targetIndex,
+			"new_index":   newIndex,
+			"orientation": orientation,
+		}
+		if focusedPaneID != "" {
+			details["focused_pane_id"] = focusedPaneID
+		}
 		return output.WriteSuccess(ctx.Out, meta, output.ActionResult{
-			Action: "pane.add",
-			Status: "ok",
-			Details: map[string]any{
-				"session":     targetSession,
-				"split_from":  targetIndex,
-				"new_index":   newIndex,
-				"orientation": orientation,
-			},
+			Action:  "pane.add",
+			Status:  "ok",
+			Details: details,
 		})
 	}
 	return writef(ctx.Out, "Pane added %s\n", newIndex)
@@ -67,6 +78,10 @@ func resolveAddTarget(ctx context.Context, client *sessiond.Client, sessionName,
 			return "", "", fmt.Errorf("pane-id cannot be combined with session or index")
 		}
 		resp, err := client.SnapshotState(ctx, 0)
+		if err != nil {
+			return "", "", err
+		}
+		paneID, err = resolvePaneIDFromSnapshot(paneID, resp)
 		if err != nil {
 			return "", "", err
 		}
@@ -130,4 +145,38 @@ func findPaneByID(sessions []native.SessionSnapshot, paneID string) (string, str
 		}
 	}
 	return "", "", false
+}
+
+func focusPaneByIndex(ctx context.Context, client *sessiond.Client, sessionName, paneIndex string) (string, error) {
+	resp, err := client.SnapshotState(ctx, 0)
+	if err != nil {
+		return "", err
+	}
+	paneID, ok := findPaneIDByIndex(resp.Sessions, sessionName, paneIndex)
+	if !ok {
+		return "", fmt.Errorf("pane index %q not found in session %q", paneIndex, sessionName)
+	}
+	if err := client.FocusPane(ctx, paneID); err != nil {
+		return "", err
+	}
+	return paneID, nil
+}
+
+func findPaneIDByIndex(sessions []native.SessionSnapshot, sessionName, paneIndex string) (string, bool) {
+	sessionName = strings.TrimSpace(sessionName)
+	paneIndex = strings.TrimSpace(paneIndex)
+	if sessionName == "" || paneIndex == "" {
+		return "", false
+	}
+	for _, session := range sessions {
+		if session.Name != sessionName {
+			continue
+		}
+		for _, pane := range session.Panes {
+			if pane.Index == paneIndex && strings.TrimSpace(pane.ID) != "" {
+				return pane.ID, true
+			}
+		}
+	}
+	return "", false
 }

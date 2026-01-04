@@ -5,11 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/regenrek/peakypanes/internal/agenttool"
+	"github.com/regenrek/peakypanes/internal/sessiond"
 )
 
 type quickReplyTarget struct {
@@ -57,21 +56,20 @@ func (m *Model) sendQuickReplyBroadcast(scope quickReplyScope, text string) tea.
 	if len(targets) == 0 {
 		return NewWarningCmd("No panes to send to")
 	}
-	tool := quickReplyToolFromText(message)
 	return func() tea.Msg {
 		result := quickReplySendResult{
 			ScopeLabel: label,
 			Total:      len(targets),
 		}
 		for _, target := range targets {
-			targetResult := m.sendQuickReplyToTarget(target, message, tool)
+			targetResult := m.sendQuickReplyToTarget(target, message)
 			applyQuickReplyTargetResult(&result, targetResult)
 		}
 		return quickReplySendMsg{Result: result}
 	}
 }
 
-func (m *Model) sendQuickReplyToTarget(target quickReplyTarget, message string, tool agenttool.Tool) quickReplyTargetResult {
+func (m *Model) sendQuickReplyToTarget(target quickReplyTarget, message string) quickReplyTargetResult {
 	paneID := strings.TrimSpace(target.Pane.ID)
 	if paneID == "" {
 		return quickReplyTargetResult{Status: quickReplyTargetSkipped}
@@ -82,46 +80,27 @@ func (m *Model) sendQuickReplyToTarget(target quickReplyTarget, message string, 
 	if pane := m.paneByID(paneID); pane == nil || pane.Dead {
 		return quickReplyTargetResult{Status: quickReplyTargetClosed, PaneID: paneID}
 	}
-	payload := quickReplyTextBytes(target.Pane, message)
-	submit := quickReplySubmitBytes(target.Pane)
 	ctx, cancel := context.WithTimeout(context.Background(), terminalActionTimeout)
 	defer cancel()
-	if quickReplyTargetCombineSubmit(target.Pane) && len(submit) > 0 {
-		combined := make([]byte, 0, len(payload)+len(submit))
-		combined = append(combined, payload...)
-		combined = append(combined, submit...)
-		if err := m.sendQuickReplyPayload(ctx, target.Pane, paneID, combined); err != nil {
-			return quickReplyResultForSendError(paneID, err)
-		}
-		if tool != "" {
-			m.setPaneTool(paneID, tool)
-		}
-		return quickReplyTargetResult{Status: quickReplyTargetSent, PaneID: paneID}
-	}
-	if err := m.sendQuickReplyPayload(ctx, target.Pane, paneID, payload); err != nil {
+	if err := m.sendQuickReplyText(ctx, target.Pane, paneID, message); err != nil {
 		return quickReplyResultForSendError(paneID, err)
-	}
-	if len(submit) == 0 {
-		if tool != "" {
-			m.setPaneTool(paneID, tool)
-		}
-		return quickReplyTargetResult{Status: quickReplyTargetSent, PaneID: paneID}
-	}
-	if delay := quickReplySubmitDelay(target.Pane); delay > 0 {
-		time.Sleep(delay)
-	}
-	if err := m.sendQuickReplyPayload(ctx, target.Pane, paneID, submit); err != nil {
-		return quickReplyResultForSendError(paneID, err)
-	}
-	if tool != "" {
-		m.setPaneTool(paneID, tool)
 	}
 	return quickReplyTargetResult{Status: quickReplyTargetSent, PaneID: paneID}
 }
 
-func (m *Model) sendQuickReplyPayload(ctx context.Context, pane PaneItem, paneID string, payload []byte) error {
-	logQuickReplySendAttempt(pane, payload)
-	return m.client.SendInput(ctx, paneID, payload)
+func (m *Model) sendQuickReplyText(ctx context.Context, pane PaneItem, paneID, message string) error {
+	logQuickReplySendAttempt(pane, []byte(message))
+	req := sessiond.SendInputToolRequest{
+		PaneID:       paneID,
+		Input:        []byte(message),
+		RecordAction: true,
+		Action:       "send",
+		Summary:      quickReplySummary(message),
+		Submit:       true,
+		DetectTool:   true,
+	}
+	_, err := m.client.SendInputTool(ctx, req)
+	return err
 }
 
 func quickReplyResultForSendError(paneID string, err error) quickReplyTargetResult {
@@ -148,6 +127,18 @@ func applyQuickReplyTargetResult(result *quickReplySendResult, targetResult quic
 			result.FirstError = targetResult.Err.Error()
 		}
 	}
+}
+
+func quickReplySummary(text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+	const max = 120
+	if len(text) <= max {
+		return text
+	}
+	return text[:max-3] + "..."
 }
 
 func (m *Model) quickReplyBroadcastTargets(scope quickReplyScope) ([]quickReplyTarget, string) {

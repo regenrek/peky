@@ -1,18 +1,12 @@
 package sessiond
 
 import (
-	"log"
-	"os"
-	"strings"
-	"sync"
+	"context"
+	"log/slog"
 	"time"
 
 	"github.com/regenrek/peakypanes/internal/native"
 )
-
-const perfDebugEnv = "PEAKYPANES_PERF_DEBUG"
-
-const perfLogInterval = 2 * time.Second
 
 const (
 	perfPaneViewFirst = 1 << iota
@@ -21,46 +15,8 @@ const (
 	perfPaneViewFirstAfterOutput
 )
 
-var (
-	perfMu        sync.Mutex
-	perfLastByKey = map[string]time.Time{}
-)
-
-func perfDebugEnabled() bool {
-	value := strings.TrimSpace(os.Getenv(perfDebugEnv))
-	if value == "" {
-		return false
-	}
-	switch strings.ToLower(value) {
-	case "0", "false", "no", "off":
-		return false
-	default:
-		return true
-	}
-}
-
-func logPerfEvery(key string, interval time.Duration, format string, args ...any) {
-	if !perfDebugEnabled() {
-		return
-	}
-	if interval <= 0 {
-		log.Printf(format, args...)
-		return
-	}
-	now := time.Now()
-	perfMu.Lock()
-	last := perfLastByKey[key]
-	if !last.IsZero() && now.Sub(last) < interval {
-		perfMu.Unlock()
-		return
-	}
-	perfLastByKey[key] = now
-	perfMu.Unlock()
-	log.Printf(format, args...)
-}
-
 func (d *Daemon) debugSnapshot(previewLines int, sessions []native.SessionSnapshot) {
-	if d == nil || !perfDebugEnabled() {
+	if d == nil || !slog.Default().Enabled(context.Background(), slog.LevelDebug) {
 		return
 	}
 	now := time.Now().UnixNano()
@@ -82,7 +38,13 @@ func (d *Daemon) debugSnapshot(previewLines int, sessions []native.SessionSnapsh
 			}
 		}
 	}
-	log.Printf("sessiond: snapshot preview_lines=%d sessions=%d panes=%d dead=%d", previewLines, sessionCount, paneCount, deadCount)
+	slog.Debug(
+		"sessiond: snapshot",
+		slog.Int("preview_lines", previewLines),
+		slog.Int("sessions", sessionCount),
+		slog.Int("panes", paneCount),
+		slog.Int("dead", deadCount),
+	)
 }
 
 type paneViewTiming interface {
@@ -110,7 +72,7 @@ func (d *Daemon) paneTimingSnapshot(paneID string) (time.Time, time.Time, bool) 
 }
 
 func (d *Daemon) logPaneViewRequest(paneID string, req PaneViewRequest) {
-	if d == nil || !perfDebugEnabled() {
+	if d == nil || !slog.Default().Enabled(context.Background(), slog.LevelDebug) {
 		return
 	}
 	created, firstRead, ok := d.paneTimingSnapshot(paneID)
@@ -134,15 +96,22 @@ func (d *Daemon) logPaneViewRequest(paneID string, req PaneViewRequest) {
 	flags := d.perfPaneView[paneID]
 	if flags&perfPaneViewFirstRequest == 0 {
 		flags |= perfPaneViewFirstRequest
-		log.Printf("sessiond: pane view first request pane=%s mode=%v cols=%d rows=%d since_start=%s since_output=%s",
-			paneID, req.Mode, req.Cols, req.Rows, sinceStart, sinceOutput)
+		slog.Debug(
+			"sessiond: pane view first request",
+			slog.String("pane_id", paneID),
+			slog.Any("mode", req.Mode),
+			slog.Int("cols", req.Cols),
+			slog.Int("rows", req.Rows),
+			slog.String("since_start", sinceStart),
+			slog.String("since_output", sinceOutput),
+		)
 	}
 	d.perfPaneView[paneID] = flags
 	d.perfPaneViewMu.Unlock()
 }
 
 func (d *Daemon) logPaneViewFirstAfterOutput(paneID string, requestAt, computeStart, renderedAt time.Time, resp PaneViewResponse) {
-	if d == nil || !perfDebugEnabled() {
+	if d == nil || !slog.Default().Enabled(context.Background(), slog.LevelDebug) {
 		return
 	}
 	if !paneViewAfterOutputReady(paneID, requestAt, computeStart, renderedAt, resp) {
@@ -157,8 +126,20 @@ func (d *Daemon) logPaneViewFirstAfterOutput(paneID string, requestAt, computeSt
 		return
 	}
 	timing := buildPaneViewAfterOutputTiming(created, firstRead, requestAt, computeStart, renderedAt)
-	log.Printf("sessiond: pane view first render after output pane=%s mode=%v view_bytes=%d cols=%d rows=%d since_start=%s output_to_view_req=%s view_req_to_render=%s output_to_render=%s queue_wait=%s compute=%s",
-		paneID, resp.Mode, len(resp.View), resp.Cols, resp.Rows, timing.sinceStart, timing.outputToViewReq, timing.viewReqToRender, timing.outputToRender, timing.queueWait, timing.computeDur)
+	slog.Debug(
+		"sessiond: pane view first render after output",
+		slog.String("pane_id", paneID),
+		slog.Any("mode", resp.Mode),
+		slog.Int("view_bytes", len(resp.View)),
+		slog.Int("cols", resp.Cols),
+		slog.Int("rows", resp.Rows),
+		slog.String("since_start", timing.sinceStart),
+		slog.Duration("output_to_view_req", timing.outputToViewReq),
+		slog.Duration("view_req_to_render", timing.viewReqToRender),
+		slog.Duration("output_to_render", timing.outputToRender),
+		slog.Duration("queue_wait", timing.queueWait),
+		slog.Duration("compute", timing.computeDur),
+	)
 }
 
 func paneViewAfterOutputReady(paneID string, requestAt, computeStart, renderedAt time.Time, resp PaneViewResponse) bool {
@@ -222,7 +203,7 @@ func clampDuration(d time.Duration) time.Duration {
 }
 
 func (d *Daemon) logPaneViewFirst(win paneViewWindow, paneID string, mode PaneViewMode, viewLen, cols, rows int) {
-	if d == nil || !perfDebugEnabled() {
+	if d == nil || !slog.Default().Enabled(context.Background(), slog.LevelDebug) {
 		return
 	}
 	now := time.Now()
@@ -248,13 +229,30 @@ func (d *Daemon) logPaneViewFirst(win paneViewWindow, paneID string, mode PaneVi
 	flags := d.perfPaneView[paneID]
 	if flags&perfPaneViewFirst == 0 {
 		flags |= perfPaneViewFirst
-		log.Printf("sessiond: pane view first render pane=%s mode=%v view_bytes=%d cols=%d rows=%d since_start=%s since_output=%s empty=%t",
-			paneID, mode, viewLen, cols, rows, sinceStart, sinceOutput, viewLen == 0)
+		slog.Debug(
+			"sessiond: pane view first render",
+			slog.String("pane_id", paneID),
+			slog.Any("mode", mode),
+			slog.Int("view_bytes", viewLen),
+			slog.Int("cols", cols),
+			slog.Int("rows", rows),
+			slog.String("since_start", sinceStart),
+			slog.String("since_output", sinceOutput),
+			slog.Bool("empty", viewLen == 0),
+		)
 	}
 	if viewLen > 0 && flags&perfPaneViewFirstNonEmpty == 0 {
 		flags |= perfPaneViewFirstNonEmpty
-		log.Printf("sessiond: pane view first non-empty pane=%s mode=%v view_bytes=%d cols=%d rows=%d since_start=%s since_output=%s",
-			paneID, mode, viewLen, cols, rows, sinceStart, sinceOutput)
+		slog.Debug(
+			"sessiond: pane view first non-empty",
+			slog.String("pane_id", paneID),
+			slog.Any("mode", mode),
+			slog.Int("view_bytes", viewLen),
+			slog.Int("cols", cols),
+			slog.Int("rows", rows),
+			slog.String("since_start", sinceStart),
+			slog.String("since_output", sinceOutput),
+		)
 	}
 	d.perfPaneView[paneID] = flags
 	d.perfPaneViewMu.Unlock()

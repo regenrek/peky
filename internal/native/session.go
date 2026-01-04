@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -149,8 +149,8 @@ func (m *Manager) StartSession(ctx context.Context, spec SessionSpec) (*Session,
 		return nil, err
 	}
 	session.Panes = panes
-	if perfDebugEnabled() {
-		log.Printf("native: session %s panes=%d layout=%s", session.Name, len(panes), session.LayoutName)
+	if slog.Default().Enabled(ctx, slog.LevelDebug) {
+		slog.Debug("native: session started", slog.String("session", session.Name), slog.Int("panes", len(panes)), slog.String("layout", session.LayoutName))
 	}
 
 	if err := m.registerSession(session, panes); err != nil {

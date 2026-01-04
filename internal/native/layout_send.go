@@ -1,19 +1,20 @@
 package native
 
 import (
+	"context"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/regenrek/peakypanes/internal/agenttool"
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/profiling"
 )
 
 const (
-	defaultSendDelay = 750 * time.Millisecond
-	maxSendDelay     = 5 * time.Minute
-	maxSendBytes     = 64 * 1024
+	defaultSendDelay   = 750 * time.Millisecond
+	defaultSendTimeout = 10 * time.Second
+	maxSendDelay       = 5 * time.Minute
+	maxSendBytes       = 64 * 1024
 )
 
 type paneSendAction struct {
@@ -182,7 +183,10 @@ func (m *Manager) runPaneSendQueue(paneID string, actions []paneSendAction) {
 			continue
 		}
 		profiling.Trigger("layout-send")
-		if err := m.SendInput(paneID, payload); err != nil {
+		sendCtx, cancel := context.WithTimeout(context.Background(), defaultSendTimeout)
+		err := m.SendInput(sendCtx, paneID, payload)
+		cancel()
+		if err != nil {
 			m.notifyToast(paneID, "Automation send failed: "+err.Error())
 			continue
 		}
@@ -191,7 +195,10 @@ func (m *Manager) runPaneSendQueue(paneID string, actions []paneSendAction) {
 			if action.submitDelay > 0 {
 				time.Sleep(action.submitDelay)
 			}
-			if err := m.SendInput(paneID, []byte{'\r'}); err != nil {
+			submitCtx, cancel := context.WithTimeout(context.Background(), defaultSendTimeout)
+			err := m.SendInput(submitCtx, paneID, []byte{'\r'})
+			cancel()
+			if err != nil {
 				m.notifyToast(paneID, "Automation submit failed: "+err.Error())
 			}
 		}
@@ -202,11 +209,15 @@ func (m *Manager) maybeSetPaneToolFromSend(paneID string, action paneSendAction)
 	if m == nil || paneID == "" || !action.submit {
 		return
 	}
-	tool := agenttool.DetectFromCommand(action.text)
-	if tool == "" {
+	reg := m.toolRegistryRef()
+	if reg == nil {
 		return
 	}
-	_ = m.SetPaneTool(paneID, string(tool))
+	toolID := reg.DetectFromCommand(action.text)
+	if toolID == "" {
+		return
+	}
+	_ = m.SetPaneTool(paneID, toolID)
 }
 
 func buildSendPayload(text string, appendNewline bool) ([]byte, bool) {

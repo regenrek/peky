@@ -1,6 +1,7 @@
 package sessiond
 
 import (
+	"context"
 	"runtime"
 	"time"
 )
@@ -42,22 +43,15 @@ func scopeSendConcurrency(targets int) int {
 }
 
 func sendInputToTargetWithTimeout(manager sessionManager, paneID string, input []byte, timeout time.Duration) (string, string) {
-	if timeout <= 0 {
-		return sendInputToTarget(manager, paneID, input)
+	ctx := context.Background()
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
 	}
-	done := make(chan struct{})
-	var status string
-	var message string
-	go func() {
-		status, message = sendInputToTarget(manager, paneID, input)
-		close(done)
-	}()
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-	select {
-	case <-done:
-		return status, message
-	case <-timer.C:
+	status, message := sendInputToTarget(manager, ctx, paneID, input)
+	if timeout > 0 && ctx.Err() != nil && status == "failed" {
 		return "timeout", "send timed out"
 	}
+	return status, message
 }

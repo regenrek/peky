@@ -82,7 +82,7 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 					ID:      "pane_close",
 					Label:   "Pane: Close pane",
 					Desc:    "Close the selected pane",
-					Aliases: []string{"kill", "close", "close-pane", "pane close", "pane kill"},
+					Aliases: []string{"kill", "close-pane", "pane close", "pane kill"},
 					Run: func(m *Model, _ commandArgs) tea.Cmd {
 						return m.openClosePaneConfirm()
 					},

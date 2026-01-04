@@ -23,6 +23,7 @@ type fakeManager struct {
 	lastSnapshotPreview  int
 	lastSnapshotDeadline time.Time
 	lastInput            []byte
+	inputs               [][]byte
 	lastMouse            uv.MouseEvent
 	lastKilled           string
 	lastRename           [2]string
@@ -72,8 +73,9 @@ func (m *fakeManager) SetPaneTool(paneID, tool string) error {
 	m.lastTool = [2]string{paneID, tool}
 	return nil
 }
-func (m *fakeManager) SendInput(paneID string, input []byte) error {
+func (m *fakeManager) SendInput(_ context.Context, paneID string, input []byte) error {
 	m.lastInput = append([]byte(nil), input...)
+	m.inputs = append(m.inputs, append([]byte(nil), input...))
 	return nil
 }
 func (m *fakeManager) SendMouse(paneID string, event uv.MouseEvent) error {

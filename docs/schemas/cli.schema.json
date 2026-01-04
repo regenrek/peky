@@ -204,6 +204,7 @@
         "title": {"type": "string"},
         "command": {"type": "string"},
         "start_command": {"type": "string"},
+        "tool": {"type": "string"},
         "cwd": {"type": "string"},
         "dead": {"type": "boolean"},
         "tags": {"type": "array", "items": {"type": "string"}},

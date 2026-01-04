@@ -3,11 +3,10 @@
 package sessiond
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
-	"github.com/regenrek/peakypanes/internal/runenv"
+	"github.com/regenrek/peakypanes/internal/appdirs"
 )
 
 const (
@@ -53,19 +52,5 @@ func DefaultLogPath() (string, error) {
 }
 
 func runtimeDir() (string, error) {
-	if override := runenv.RuntimeDir(); override != "" {
-		if err := os.MkdirAll(override, 0o755); err != nil {
-			return "", fmt.Errorf("create runtime dir: %w", err)
-		}
-		return override, nil
-	}
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve config dir: %w", err)
-	}
-	dir = filepath.Join(dir, "peakypanes")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", fmt.Errorf("create runtime dir: %w", err)
-	}
-	return dir, nil
+	return appdirs.RuntimeDir()
 }

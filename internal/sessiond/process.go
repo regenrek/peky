@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -206,7 +207,8 @@ func startDaemonProcessWith(socketPath string, deps daemonProcessDeps) error {
 
 	logPath, err := defaultLog()
 	if err == nil && logPath != "" {
-		if file, openErr := openFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600); openErr == nil {
+		stderrPath := filepath.Join(filepath.Dir(logPath), "daemon.stderr.log")
+		if file, openErr := openFile(stderrPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600); openErr == nil {
 			cmd.Stdout = file
 			cmd.Stderr = file
 		}

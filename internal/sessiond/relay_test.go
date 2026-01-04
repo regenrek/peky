@@ -40,7 +40,7 @@ func (m *fakeRelayManager) SplitPane(context.Context, string, string, bool, int)
 func (m *fakeRelayManager) ClosePane(context.Context, string, string) error { return nil }
 func (m *fakeRelayManager) SwapPanes(string, string, string) error          { return nil }
 func (m *fakeRelayManager) SetPaneTool(string, string) error                { return nil }
-func (m *fakeRelayManager) SendInput(paneID string, input []byte) error {
+func (m *fakeRelayManager) SendInput(_ context.Context, paneID string, input []byte) error {
 	if m.sent == nil {
 		m.sent = make(map[string][][]byte)
 	}
@@ -122,7 +122,7 @@ func TestRelayManagerCreateListStop(t *testing.T) {
 func TestRelaySendToTargetsFiltersClosed(t *testing.T) {
 	mgr := &fakeRelayManager{sendErr: map[string]error{"p1": terminal.ErrPaneClosed}}
 	r := &relay{cfg: RelayConfig{ToPaneIDs: []string{"p1", "p2"}}}
-	if err := r.sendToTargets(mgr, []byte("hi")); err != nil {
+	if err := r.sendToTargets(context.Background(), mgr, []byte("hi")); err != nil {
 		t.Fatalf("sendToTargets: %v", err)
 	}
 	if len(r.cfg.ToPaneIDs) != 1 || r.cfg.ToPaneIDs[0] != "p2" {
@@ -133,7 +133,7 @@ func TestRelaySendToTargetsFiltersClosed(t *testing.T) {
 func TestRelaySendToTargetsAllClosed(t *testing.T) {
 	mgr := &fakeRelayManager{sendErr: map[string]error{"p1": terminal.ErrPaneClosed}}
 	r := &relay{cfg: RelayConfig{ToPaneIDs: []string{"p1"}}}
-	if err := r.sendToTargets(mgr, []byte("hi")); err == nil {
+	if err := r.sendToTargets(context.Background(), mgr, []byte("hi")); err == nil {
 		t.Fatalf("expected error when all targets closed")
 	}
 }

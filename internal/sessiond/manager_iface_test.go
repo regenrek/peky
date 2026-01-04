@@ -16,7 +16,10 @@ func TestWrapManagerAndWindowNil(t *testing.T) {
 		t.Fatalf("expected nil window for nil manager")
 	}
 
-	mgr := native.NewManager()
+	mgr, err := native.NewManager()
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
 	defer mgr.Close()
 	adapter = nativeManagerAdapter{Manager: mgr}
 	if adapter.Window("missing") != nil {

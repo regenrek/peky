@@ -13,7 +13,6 @@ import (
 
 	uv "github.com/charmbracelet/ultraviolet"
 
-	"github.com/regenrek/peakypanes/internal/agenttool"
 	"github.com/regenrek/peakypanes/internal/terminal"
 )
 
@@ -123,10 +122,16 @@ func (m *Manager) SetPaneTool(paneID string, tool string) error {
 	tool = strings.TrimSpace(tool)
 	var normalized string
 	if tool != "" {
-		if detected := agenttool.Normalize(tool); detected != "" {
-			normalized = string(detected)
-		} else {
+		reg := m.toolRegistryRef()
+		if reg == nil {
+			return errors.New("native: tool registry unavailable")
+		}
+		normalized = reg.Normalize(tool)
+		if normalized == "" {
 			return fmt.Errorf("native: unknown tool %q", tool)
+		}
+		if !reg.Allowed(normalized) {
+			return fmt.Errorf("native: tool %q is disabled", normalized)
 		}
 	}
 	var changed bool
@@ -361,9 +366,12 @@ func (m *Manager) SwapPanes(sessionName, paneA, paneB string) error {
 }
 
 // SendInput writes input to a pane and updates activity timestamp.
-func (m *Manager) SendInput(id string, input []byte) error {
+func (m *Manager) SendInput(ctx context.Context, id string, input []byte) error {
 	if m == nil {
 		return errors.New("native: manager is nil")
+	}
+	if err := checkContext(ctx); err != nil {
+		return err
 	}
 	m.mu.RLock()
 	pane := m.panes[id]
@@ -371,7 +379,7 @@ func (m *Manager) SendInput(id string, input []byte) error {
 	if pane == nil || pane.window == nil {
 		return fmt.Errorf("native: pane %q not found", id)
 	}
-	if err := pane.window.SendInput(input); err != nil {
+	if err := pane.window.SendInput(ctx, input); err != nil {
 		if errors.Is(err, terminal.ErrPaneClosed) {
 			m.notifyPane(id)
 		}

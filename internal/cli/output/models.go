@@ -38,6 +38,7 @@ type PaneSummary struct {
 	Title        string    `json:"title,omitempty"`
 	Command      string    `json:"command,omitempty"`
 	StartCmd     string    `json:"start_command,omitempty"`
+	Tool         string    `json:"tool,omitempty"`
 	Cwd          string    `json:"cwd,omitempty"`
 	Dead         bool      `json:"dead,omitempty"`
 	Tags         []string  `json:"tags,omitempty"`

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -10,7 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/muesli/termenv"
 
-	"github.com/regenrek/peakypanes/internal/diag"
+	"github.com/regenrek/peakypanes/internal/logging"
 	"github.com/regenrek/peakypanes/internal/sessiond"
 	"github.com/regenrek/peakypanes/internal/tui/mouse"
 )
@@ -931,7 +932,15 @@ func (m *Model) allowPaneViewRequest(key paneViewKey, minInterval time.Duration,
 	now := time.Now()
 	if last, ok := m.paneViewLastReq[key]; ok {
 		if !force && minInterval > 0 && now.Sub(last) < minInterval {
-			diag.LogEvery("tui.paneviews.throttle", 2*time.Second, "tui: pane view throttled pane=%s interval=%s", key.PaneID, minInterval)
+			logging.LogEvery(
+				context.Background(),
+				"tui.paneviews.throttle",
+				2*time.Second,
+				slog.LevelDebug,
+				"tui: pane view throttled",
+				slog.String("pane_id", key.PaneID),
+				slog.Duration("interval", minInterval),
+			)
 			m.logPaneViewSkip(key.PaneID, "throttled", fmt.Sprintf("interval=%s %s", minInterval, m.paneViewSkipContext()))
 			return false
 		}

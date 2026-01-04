@@ -2,7 +2,7 @@ package app
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/regenrek/peakypanes/internal/sessiond"
@@ -126,7 +126,16 @@ func (m *Model) perfNotePaneViewRequest(req sessiond.PaneViewRequest, now time.T
 	if !trace.pendingAt.IsZero() {
 		delay := now.Sub(trace.pendingAt)
 		if perfTraceAllEnabled() {
-			log.Printf("tui: pane view request issued pane=%s event_to_req=%s pending_count=%d last_seq=%d cols=%d rows=%d mode=%v", req.PaneID, delay, trace.pendingCount, trace.pendingLastSeq, req.Cols, req.Rows, req.Mode)
+			slog.Debug(
+				"tui: pane view request issued",
+				slog.String("pane_id", req.PaneID),
+				slog.Duration("event_to_req", delay),
+				slog.Int("pending_count", trace.pendingCount),
+				slog.Uint64("last_seq", trace.pendingLastSeq),
+				slog.Int("cols", req.Cols),
+				slog.Int("rows", req.Rows),
+				slog.Any("mode", req.Mode),
+			)
 		} else if delay >= perfSlowPaneEventToReq {
 			logPerfEvery("tui.paneviews.req."+req.PaneID, perfLogInterval, "tui: pane view req slow pane=%s delay_event_to_req=%s pending_count=%d last_seq=%d cols=%d rows=%d mode=%v", req.PaneID, delay, trace.pendingCount, trace.pendingLastSeq, req.Cols, req.Rows, req.Mode)
 		}
@@ -161,7 +170,14 @@ func (m *Model) perfNotePaneViewResponse(view sessiond.PaneViewResponse, now tim
 		eventToResp := now.Sub(trace.lastReqPendingAt)
 		reqToResp := now.Sub(trace.lastReqAt)
 		if perfTraceAllEnabled() {
-			log.Printf("tui: pane view response pane=%s event_to_resp=%s req_dur=%s resp_seq=%d last_event_seq=%d", view.PaneID, eventToResp, reqToResp, view.UpdateSeq, trace.lastEventSeq)
+			slog.Debug(
+				"tui: pane view response",
+				slog.String("pane_id", view.PaneID),
+				slog.Duration("event_to_resp", eventToResp),
+				slog.Duration("req_dur", reqToResp),
+				slog.Uint64("resp_seq", view.UpdateSeq),
+				slog.Uint64("last_event_seq", trace.lastEventSeq),
+			)
 		} else if eventToResp >= perfSlowPaneEventToResp {
 			logPerfEvery("tui.paneviews.resp."+view.PaneID, perfLogInterval, "tui: pane view resp slow pane=%s delay_event_to_resp=%s delay_req_to_resp=%s resp_seq=%d last_event_seq=%d", view.PaneID, eventToResp, reqToResp, view.UpdateSeq, trace.lastEventSeq)
 		}

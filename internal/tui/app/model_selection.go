@@ -127,11 +127,13 @@ func (m *Model) spatialDashboardSelection(columns []DashboardProjectColumn, targ
 }
 
 func (m *Model) applySelection(sel selectionState) {
+	prev := m.selection
 	m.selection = sel
 	m.rememberSelection(sel)
 	if m.terminalFocus && !m.supportsTerminalFocus() {
 		m.setTerminalFocus(false)
 	}
+	m.queueFocusSync(prev, sel)
 }
 
 func (m *Model) refreshSelectionForProjectConfig() bool {
@@ -247,10 +249,11 @@ func (m *Model) selectSession(delta int) {
 	}
 	idx := sessionIndex(filtered, m.selection.Session)
 	idx = wrapIndex(idx+delta, len(filtered))
-	m.selection.Session = filtered[idx].Name
-	m.selection.Pane = ""
+	sel := m.selection
+	sel.Session = filtered[idx].Name
+	sel.Pane = ""
+	m.applySelection(sel)
 	m.selectionVersion++
-	m.rememberSelection(m.selection)
 }
 
 func (m *Model) selectSessionOrPane(delta int) {
@@ -269,10 +272,11 @@ func (m *Model) selectSessionOrPane(delta int) {
 
 	current := findSessionPaneIndex(items, m.selection)
 	next := items[wrapIndex(current+delta, len(items))]
-	m.selection.Session = next.session
-	m.selection.Pane = next.pane
+	sel := m.selection
+	sel.Session = next.session
+	sel.Pane = next.pane
+	m.applySelection(sel)
 	m.selectionVersion++
-	m.rememberSelection(m.selection)
 }
 
 type sessionPaneEntry struct {
@@ -340,11 +344,12 @@ func (m *Model) selectDashboardPane(delta int) {
 	}
 	idx = wrapIndex(idx+delta, len(column.Panes))
 	pane := column.Panes[idx]
-	m.selection.ProjectID = column.ProjectID
-	m.selection.Session = pane.SessionName
-	m.selection.Pane = pane.Pane.Index
+	sel := m.selection
+	sel.ProjectID = column.ProjectID
+	sel.Session = pane.SessionName
+	sel.Pane = pane.Pane.Index
+	m.applySelection(sel)
 	m.selectionVersion++
-	m.rememberSelection(m.selection)
 }
 
 func (m *Model) selectDashboardProject(delta int) {
@@ -406,8 +411,9 @@ func (m *Model) selectPane(delta int) {
 	}
 	idx = wrapIndex(idx+delta, len(session.Panes))
 	next := session.Panes[idx]
-	m.selection.Pane = next.Index
-	m.rememberSelection(m.selection)
+	sel := m.selection
+	sel.Pane = next.Index
+	m.applySelection(sel)
 }
 
 func (m *Model) togglePanes() {

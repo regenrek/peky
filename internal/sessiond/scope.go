@@ -24,6 +24,17 @@ func (d *Daemon) resolveScopeTargets(scope string) ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
 	defer cancel()
 	sessions := d.manager.Snapshot(ctx, 0)
+	return d.resolveScopeTargetsWithSnapshot(scope, sessions)
+}
+
+func (d *Daemon) resolveScopeTargetsWithSnapshot(scope string, sessions []native.SessionSnapshot) ([]string, error) {
+	if d == nil {
+		return nil, errors.New("sessiond: daemon unavailable")
+	}
+	scope = strings.TrimSpace(scope)
+	if scope == "" {
+		return nil, errors.New("sessiond: scope is required")
+	}
 	if len(sessions) == 0 {
 		return nil, errors.New("sessiond: no sessions available")
 	}

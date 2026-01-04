@@ -141,7 +141,11 @@ func TestWindowFromRequestErrors(t *testing.T) {
 	if _, _, err := d.windowFromRequest("pane"); err == nil {
 		t.Fatalf("expected error for nil manager")
 	}
-	d.manager = wrapManager(native.NewManager())
+	mgr, err := native.NewManager()
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+	d.manager = wrapManager(mgr)
 	t.Cleanup(func() { d.manager.Close() })
 	if _, _, err := d.windowFromRequest("missing"); err == nil {
 		t.Fatalf("expected error for missing pane")
@@ -155,9 +159,13 @@ func TestStartSessionProjectLayoutNoPanes(t *testing.T) {
 		t.Fatalf("write project config: %v", err)
 	}
 
-	d := &Daemon{manager: wrapManager(native.NewManager())}
+	mgr, err := native.NewManager()
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+	d := &Daemon{manager: wrapManager(mgr)}
 	t.Cleanup(func() { d.manager.Close() })
-	_, err := d.startSession(StartSessionRequest{Name: "demo", Path: dir})
+	_, err = d.startSession(StartSessionRequest{Name: "demo", Path: dir})
 	if err == nil {
 		t.Fatalf("expected error for empty layout")
 	}

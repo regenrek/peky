@@ -7,7 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -154,7 +154,7 @@ func (p *daemonProfiler) resolveProfileDurations() profileDurations {
 func (p *daemonProfiler) runProfileSchedule(ctx context.Context, d profileDurations, startOnSend bool) {
 	if startOnSend {
 		if !profiling.Wait(ctx, d.waitFor) {
-			log.Printf("sessiond: profiler trigger timeout; starting anyway")
+			slog.Warn("sessiond: profiler trigger timeout; starting anyway")
 		}
 	}
 	total := p.profileTotalDuration(d)
@@ -207,23 +207,23 @@ func (p *daemonProfiler) startCPU(ctx context.Context, duration, delay time.Dura
 		}
 		path, err := sanitizeProfilePath(p.cpuPath)
 		if err != nil {
-			log.Printf("sessiond: cpu profile path invalid: %v", err)
+			slog.Warn("sessiond: cpu profile path invalid", slog.Any("err", err))
 			return
 		}
 		file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 		if err != nil {
-			log.Printf("sessiond: open cpu profile: %v", err)
+			slog.Warn("sessiond: open cpu profile failed", slog.Any("err", err))
 			return
 		}
 		if err := pprof.StartCPUProfile(file); err != nil {
 			_ = file.Close()
-			log.Printf("sessiond: start cpu profile: %v", err)
+			slog.Warn("sessiond: start cpu profile failed", slog.Any("err", err))
 			return
 		}
 		p.stopMu.Lock()
 		p.cpuFile = file
 		p.stopMu.Unlock()
-		log.Printf("sessiond: cpu profile started: %s", path)
+		slog.Info("sessiond: cpu profile started", slog.String("path", path))
 		if duration <= 0 {
 			return
 		}
@@ -248,12 +248,12 @@ func (p *daemonProfiler) startFgprof(ctx context.Context, duration, delay time.D
 		}
 		path, err := sanitizeProfilePath(p.fgPath)
 		if err != nil {
-			log.Printf("sessiond: fgprof profile path invalid: %v", err)
+			slog.Warn("sessiond: fgprof profile path invalid", slog.Any("err", err))
 			return
 		}
 		file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 		if err != nil {
-			log.Printf("sessiond: open fgprof profile: %v", err)
+			slog.Warn("sessiond: open fgprof profile failed", slog.Any("err", err))
 			return
 		}
 		stop := fgprof.Start(file, fgprof.FormatPprof)
@@ -261,7 +261,7 @@ func (p *daemonProfiler) startFgprof(ctx context.Context, duration, delay time.D
 		p.fgFile = file
 		p.fgStop = stop
 		p.stopMu.Unlock()
-		log.Printf("sessiond: fgprof profile started: %s", path)
+		slog.Info("sessiond: fgprof profile started", slog.String("path", path))
 		if !sleepWithContext(ctx, duration) {
 			p.stopFgprof()
 			return
@@ -280,23 +280,23 @@ func (p *daemonProfiler) startTrace(ctx context.Context, duration, delay time.Du
 		}
 		path, err := sanitizeProfilePath(p.tracePath)
 		if err != nil {
-			log.Printf("sessiond: trace profile path invalid: %v", err)
+			slog.Warn("sessiond: trace profile path invalid", slog.Any("err", err))
 			return
 		}
 		file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 		if err != nil {
-			log.Printf("sessiond: open trace profile: %v", err)
+			slog.Warn("sessiond: open trace profile failed", slog.Any("err", err))
 			return
 		}
 		if err := trace.Start(file); err != nil {
 			_ = file.Close()
-			log.Printf("sessiond: start trace: %v", err)
+			slog.Warn("sessiond: start trace failed", slog.Any("err", err))
 			return
 		}
 		p.stopMu.Lock()
 		p.traceFile = file
 		p.stopMu.Unlock()
-		log.Printf("sessiond: trace started: %s", path)
+		slog.Info("sessiond: trace started", slog.String("path", path))
 		if !sleepWithContext(ctx, duration) {
 			p.stopTrace()
 			return
@@ -345,7 +345,7 @@ func (p *daemonProfiler) stopFgprof() {
 	}
 	if p.fgStop != nil {
 		if err := p.fgStop(); err != nil {
-			log.Printf("sessiond: fgprof stop: %v", err)
+			slog.Warn("sessiond: fgprof stop failed", slog.Any("err", err))
 		}
 	}
 	_ = p.fgFile.Close()
@@ -371,23 +371,23 @@ func (p *daemonProfiler) stop() {
 		p.stopTrace()
 		if p.memPath != "" {
 			if err := writeHeapProfile(p.memPath); err != nil {
-				log.Printf("sessiond: heap profile: %v", err)
+				slog.Warn("sessiond: heap profile failed", slog.Any("err", err))
 			}
 		}
 		if p.blockPath != "" {
 			if err := writeBlockProfile(p.blockPath); err != nil {
-				log.Printf("sessiond: block profile: %v", err)
+				slog.Warn("sessiond: block profile failed", slog.Any("err", err))
 			}
 		}
 		if p.mutexPath != "" {
 			if err := writeMutexProfile(p.mutexPath); err != nil {
-				log.Printf("sessiond: mutex profile: %v", err)
+				slog.Warn("sessiond: mutex profile failed", slog.Any("err", err))
 			}
 		}
 		p.disableBlockingProfiles()
 		if p.donePath != "" {
 			if err := writeDoneMarker(p.donePath); err != nil {
-				log.Printf("sessiond: profiler done: %v", err)
+				slog.Warn("sessiond: profiler done hook failed", slog.Any("err", err))
 			}
 		}
 	})
@@ -403,7 +403,7 @@ func profileDuration() time.Duration {
 	}
 	secs, err := strconv.Atoi(raw)
 	if err != nil {
-		log.Printf("sessiond: invalid %s: %v", cpuProfileSecsEnv, err)
+		slog.Warn("sessiond: invalid env", slog.String("env", cpuProfileSecsEnv), slog.Any("err", err))
 		return time.Duration(defaultProfileSecs) * time.Second
 	}
 	return time.Duration(secs) * time.Second
@@ -419,7 +419,7 @@ func profileDurationFromEnv(env string, fallback time.Duration) time.Duration {
 	}
 	secs, err := strconv.Atoi(raw)
 	if err != nil {
-		log.Printf("sessiond: invalid %s: %v", env, err)
+		slog.Warn("sessiond: invalid env", slog.String("env", env), slog.Any("err", err))
 		return fallback
 	}
 	return time.Duration(secs) * time.Second
@@ -441,7 +441,7 @@ func profileRateFromEnv(env string, fallback time.Duration) int {
 	}
 	value, err := strconv.Atoi(raw)
 	if err != nil {
-		log.Printf("sessiond: invalid %s: %v", env, err)
+		slog.Warn("sessiond: invalid env", slog.String("env", env), slog.Any("err", err))
 		if fallback <= 0 {
 			return 0
 		}
@@ -460,7 +460,7 @@ func profileFractionFromEnv(env string, fallback int) int {
 	}
 	value, err := strconv.Atoi(raw)
 	if err != nil {
-		log.Printf("sessiond: invalid %s: %v", env, err)
+		slog.Warn("sessiond: invalid env", slog.String("env", env), slog.Any("err", err))
 		return fallback
 	}
 	if value < 1 {
@@ -499,14 +499,14 @@ func (p *daemonProfiler) configureBlockingProfiles() {
 		p.blockRate = profileRateFromEnv(blockProfileRate, defaultBlockRate)
 		if p.blockRate > 0 {
 			runtime.SetBlockProfileRate(p.blockRate)
-			log.Printf("sessiond: block profile enabled (rate=%dns)", p.blockRate)
+			slog.Info("sessiond: block profile enabled", slog.Int64("rate_ns", int64(p.blockRate)))
 		}
 	}
 	if p.mutexPath != "" {
 		p.mutexRate = profileFractionFromEnv(mutexProfileRate, defaultMutexRate)
 		if p.mutexRate > 0 {
 			runtime.SetMutexProfileFraction(p.mutexRate)
-			log.Printf("sessiond: mutex profile enabled (fraction=1/%d)", p.mutexRate)
+			slog.Info("sessiond: mutex profile enabled", slog.Int("fraction", p.mutexRate))
 		}
 	}
 }
@@ -555,14 +555,14 @@ func writeHeapProfile(raw string) error {
 	}
 	defer func() {
 		if cerr := file.Close(); cerr != nil {
-			log.Printf("sessiond: close heap profile: %v", cerr)
+			slog.Warn("sessiond: close heap profile failed", slog.Any("err", cerr))
 		}
 	}()
 	runtime.GC()
 	if err := pprof.WriteHeapProfile(file); err != nil {
 		return err
 	}
-	log.Printf("sessiond: heap profile written: %s", path)
+	slog.Info("sessiond: heap profile written", slog.String("path", path))
 	return nil
 }
 
@@ -577,7 +577,7 @@ func writeBlockProfile(raw string) error {
 	}
 	defer func() {
 		if cerr := file.Close(); cerr != nil {
-			log.Printf("sessiond: close block profile: %v", cerr)
+			slog.Warn("sessiond: close block profile failed", slog.Any("err", cerr))
 		}
 	}()
 	profile := pprof.Lookup("block")
@@ -587,7 +587,7 @@ func writeBlockProfile(raw string) error {
 	if err := profile.WriteTo(file, 0); err != nil {
 		return err
 	}
-	log.Printf("sessiond: block profile written: %s", path)
+	slog.Info("sessiond: block profile written", slog.String("path", path))
 	return nil
 }
 
@@ -602,7 +602,7 @@ func writeMutexProfile(raw string) error {
 	}
 	defer func() {
 		if cerr := file.Close(); cerr != nil {
-			log.Printf("sessiond: close mutex profile: %v", cerr)
+			slog.Warn("sessiond: close mutex profile failed", slog.Any("err", cerr))
 		}
 	}()
 	profile := pprof.Lookup("mutex")
@@ -612,7 +612,7 @@ func writeMutexProfile(raw string) error {
 	if err := profile.WriteTo(file, 0); err != nil {
 		return err
 	}
-	log.Printf("sessiond: mutex profile written: %s", path)
+	slog.Info("sessiond: mutex profile written", slog.String("path", path))
 	return nil
 }
 
@@ -625,7 +625,7 @@ func writeDoneMarker(raw string) error {
 	if err := os.WriteFile(path, payload, 0o600); err != nil {
 		return err
 	}
-	log.Printf("sessiond: profiler done: %s", path)
+	slog.Info("sessiond: profiler done", slog.String("path", path))
 	return nil
 }
 
@@ -677,17 +677,17 @@ func (p *daemonProfiler) startGopsAgent() {
 		if addr, err := sanitizeAddr(addrRaw); err == nil {
 			opts.Addr = addr
 		} else {
-			log.Printf("sessiond: gops addr invalid: %v", err)
+			slog.Warn("sessiond: gops addr invalid", slog.Any("err", err))
 		}
 	}
 	if dirRaw := strings.TrimSpace(os.Getenv(gopsConfigDirEnv)); dirRaw != "" {
 		if dir, err := sanitizeDirPath(dirRaw); err == nil {
 			opts.ConfigDir = dir
 		} else {
-			log.Printf("sessiond: gops config dir invalid: %v", err)
+			slog.Warn("sessiond: gops config dir invalid", slog.Any("err", err))
 		}
 	}
 	if err := agent.Listen(opts); err != nil {
-		log.Printf("sessiond: gops agent: %v", err)
+		slog.Warn("sessiond: gops agent failed", slog.Any("err", err))
 	}
 }

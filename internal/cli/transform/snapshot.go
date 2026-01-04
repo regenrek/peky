@@ -132,6 +132,7 @@ func paneSummaryFromNative(pane native.PaneSnapshot) output.PaneSummary {
 		Title:        pane.Title,
 		Command:      pane.Command,
 		StartCmd:     pane.StartCommand,
+		Tool:         pane.Tool,
 		Cwd:          pane.Cwd,
 		Dead:         pane.Dead,
 		Tags:         append([]string(nil), pane.Tags...),

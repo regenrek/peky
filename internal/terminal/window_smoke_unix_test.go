@@ -3,6 +3,7 @@
 package terminal
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -20,7 +21,7 @@ func TestWindowScrollbackCopySmoke(t *testing.T) {
 
 	for i := 0; i < 9; i++ {
 		line := fmt.Sprintf("line%02d\n", i)
-		if err := w.SendInput([]byte(line)); err != nil {
+		if err := w.SendInput(context.Background(), []byte(line)); err != nil {
 			t.Fatalf("send input: %v", err)
 		}
 	}
@@ -51,7 +52,7 @@ func TestWindowScrollbackAnchorsOnNewOutput(t *testing.T) {
 
 	for i := 0; i < 6; i++ {
 		line := fmt.Sprintf("line%02d\n", i)
-		if err := w.SendInput([]byte(line)); err != nil {
+		if err := w.SendInput(context.Background(), []byte(line)); err != nil {
 			t.Fatalf("send input: %v", err)
 		}
 	}
@@ -67,7 +68,7 @@ func TestWindowScrollbackAnchorsOnNewOutput(t *testing.T) {
 		t.Fatalf("expected scrollback state, offset=%d sb=%d", oldOffset, oldSB)
 	}
 
-	if err := w.SendInput([]byte("line99\n")); err != nil {
+	if err := w.SendInput(context.Background(), []byte("line99\n")); err != nil {
 		t.Fatalf("send input: %v", err)
 	}
 

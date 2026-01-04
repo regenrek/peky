@@ -1,0 +1,30 @@
+name: nightly-stress
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-stress-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  stress:
+    name: cli stress (self-hosted)
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Run CLI stress battery
+        env:
+          RUN_TOOLS: "0"
+        run: scripts/cli-stress.sh

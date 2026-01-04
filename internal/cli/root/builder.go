@@ -119,9 +119,15 @@ func runHandler(ctx context.Context, cliCmd *cli.Command, cmdSpec spec.Command, 
 	if handler == nil {
 		return nil
 	}
+	args := []string{}
+	if cliCmd != nil {
+		if parsed := cliCmd.Args(); parsed != nil {
+			args = parsed.Slice()
+		}
+	}
 	commandCtx := CommandContext{
 		Context: ctx,
-		Args:    cliCmd.Args().Slice(),
+		Args:    args,
 		Spec:    cmdSpec,
 		Cmd:     cliCmd,
 		Deps:    deps,

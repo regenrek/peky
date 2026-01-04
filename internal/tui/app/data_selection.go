@@ -1,5 +1,7 @@
 package app
 
+import "strings"
+
 func resolveSelection(groups []ProjectGroup, desired selectionState) selectionState {
 	resolved := selectionState{}
 	if len(groups) == 0 {
@@ -100,6 +102,82 @@ func resolvePaneSelection(desired string, panes []PaneItem) string {
 		return panes[0].Index
 	}
 	return ""
+}
+
+func selectionEmpty(sel selectionState) bool {
+	return sel.ProjectID == "" && sel.Session == "" && sel.Pane == ""
+}
+
+type focusIndex struct {
+	byPaneID  map[string]selectionState
+	bySession map[string]selectionState
+}
+
+func buildFocusIndex(groups []ProjectGroup) focusIndex {
+	if len(groups) == 0 {
+		return focusIndex{}
+	}
+	idx := focusIndex{
+		byPaneID:  make(map[string]selectionState),
+		bySession: make(map[string]selectionState),
+	}
+	for gi := range groups {
+		group := &groups[gi]
+		projectID := group.ID
+		for si := range group.Sessions {
+			session := &group.Sessions[si]
+			sessionName := strings.TrimSpace(session.Name)
+			if sessionName == "" {
+				continue
+			}
+			if _, exists := idx.bySession[sessionName]; !exists {
+				selected := selectionState{ProjectID: projectID, Session: sessionName}
+				if len(session.Panes) > 0 {
+					selected.Pane = resolvePaneSelection("", session.Panes)
+				}
+				idx.bySession[sessionName] = selected
+			}
+			for pi := range session.Panes {
+				pane := &session.Panes[pi]
+				paneID := strings.TrimSpace(pane.ID)
+				if paneID == "" {
+					continue
+				}
+				if _, exists := idx.byPaneID[paneID]; !exists {
+					idx.byPaneID[paneID] = selectionState{
+						ProjectID: projectID,
+						Session:   sessionName,
+						Pane:      pane.Index,
+					}
+				}
+			}
+		}
+	}
+	if len(idx.byPaneID) == 0 {
+		idx.byPaneID = nil
+	}
+	if len(idx.bySession) == 0 {
+		idx.bySession = nil
+	}
+	return idx
+}
+
+func selectionFromFocus(index focusIndex, focusedSession, focusedPaneID string) selectionState {
+	paneID := strings.TrimSpace(focusedPaneID)
+	if paneID != "" && index.byPaneID != nil {
+		if sel, ok := index.byPaneID[paneID]; ok {
+			return sel
+		}
+	}
+
+	sessionName := strings.TrimSpace(focusedSession)
+	if sessionName == "" || index.bySession == nil {
+		return selectionState{}
+	}
+	if sel, ok := index.bySession[sessionName]; ok {
+		return sel
+	}
+	return selectionState{}
 }
 
 func findProjectByID(groups []ProjectGroup, id string) *ProjectGroup {

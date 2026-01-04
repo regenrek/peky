@@ -5,10 +5,23 @@ import (
 	"testing"
 
 	"github.com/regenrek/peakypanes/internal/native"
+	"github.com/regenrek/peakypanes/internal/tool"
 )
 
 func newTestDaemon(t *testing.T) *Daemon {
-	d := &Daemon{manager: wrapManager(native.NewManager()), version: "test"}
+	t.Helper()
+	mgr, err := native.NewManager()
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+	reg, err := tool.DefaultRegistry()
+	if err != nil {
+		t.Fatalf("DefaultRegistry: %v", err)
+	}
+	if err := mgr.SetToolRegistry(reg); err != nil {
+		t.Fatalf("SetToolRegistry: %v", err)
+	}
+	d := &Daemon{manager: wrapManager(mgr), toolRegistry: reg, version: "test"}
 	t.Cleanup(func() {
 		if d.manager != nil {
 			d.manager.Close()

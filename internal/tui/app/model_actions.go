@@ -400,9 +400,8 @@ func (m *Model) applyCloseAllProjects() tea.Cmd {
 		m.setToast("Projects already hidden", toastInfo)
 		return nil
 	}
-	m.selection = selectionState{}
+	m.applySelection(selectionState{})
 	m.selectionVersion++
-	m.rememberSelection(m.selection)
 	m.setToast("Closed all projects", toastSuccess)
 	return m.requestRefreshCmd()
 }
@@ -445,9 +444,10 @@ func (m *Model) closePane(sessionName, paneIndex, paneID string) tea.Cmd {
 		m.setToast("Close pane failed: "+err.Error(), toastError)
 		return nil
 	}
-	m.selection.Pane = ""
+	sel := m.selection
+	sel.Pane = ""
+	m.applySelection(sel)
 	m.selectionVersion++
-	m.rememberSelection(m.selection)
 	m.setToast("Closed pane", toastSuccess)
 	return m.requestRefreshCmd()
 }
@@ -627,10 +627,11 @@ func (m *Model) addPaneSplit(vertical bool) tea.Cmd {
 		m.setToast("Add pane failed: "+err.Error(), toastError)
 		return nil
 	}
-	m.selection.Session = session.Name
-	m.selection.Pane = newIndex
+	sel := m.selection
+	sel.Session = session.Name
+	sel.Pane = newIndex
+	m.applySelection(sel)
 	m.selectionVersion++
-	m.rememberSelection(m.selection)
 	m.setToast("Added pane", toastSuccess)
 	return m.requestRefreshCmd()
 }
@@ -670,10 +671,11 @@ func (m *Model) swapPaneWith(target PaneSwapChoice) tea.Cmd {
 		m.setToast("Swap pane failed: "+err.Error(), toastError)
 		return nil
 	}
-	m.selection.Session = session.Name
-	m.selection.Pane = target.PaneIndex
+	sel := m.selection
+	sel.Session = session.Name
+	sel.Pane = target.PaneIndex
+	m.applySelection(sel)
 	m.selectionVersion++
-	m.rememberSelection(m.selection)
 	m.setToast("Swapped panes", toastSuccess)
 	return m.requestRefreshCmd()
 }

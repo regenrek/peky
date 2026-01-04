@@ -96,13 +96,15 @@ peakypanes pane history --pane-id PANE [--limit 50] [--since RFC3339]
 peakypanes pane wait --pane-id PANE --for REGEX [--timeout 10s]
 ```
 
+Use `--pane-id @focused` to target the currently focused pane.
+
 Lifecycle and layout:
 
 ```bash
 peakypanes pane rename --pane-id PANE --name NAME
 peakypanes pane rename --session NAME --index INDEX --name NAME
-peakypanes pane add [--session NAME] [--index INDEX] [--pane-id PANE] [--orientation vertical|horizontal] [--percent 50]
-peakypanes pane split --session NAME --index INDEX --orientation vertical|horizontal [--percent 50]
+peakypanes pane add [--session NAME] [--index INDEX] [--pane-id PANE] [--orientation vertical|horizontal] [--percent 50] [--focus=false]
+peakypanes pane split --session NAME --index INDEX --orientation vertical|horizontal [--percent 50] [--focus=false]
 peakypanes pane close --pane-id PANE
 peakypanes pane close --session NAME --index INDEX
 peakypanes pane swap --session NAME --a INDEX --b INDEX
@@ -111,20 +113,29 @@ peakypanes pane focus --pane-id PANE
 peakypanes pane signal --pane-id PANE --signal TERM
 ```
 
+By default, `pane add` and `pane split` focus the newly created pane. Use `--focus=false` to keep the current focus.
+
 Input send/run:
 
 ```bash
 # exactly one of --text/--stdin/--file, and exactly one of --pane-id/--scope
+# tool-aware by default (codex/claude/etc) based on pane metadata
 peakypanes pane send --pane-id PANE --text "raw bytes"
 peakypanes pane send --scope all --text "hello"
 peakypanes pane send --pane-id PANE --stdin < payload.txt
 peakypanes pane send --pane-id PANE --file ./payload.txt
 
-# run sends payload + newline
+# run sends payload + submit bytes (tool-aware)
 peakypanes pane run --pane-id PANE --command "ls -la"
 peakypanes pane run --scope session --command "git status"
 peakypanes pane run --pane-id PANE --stdin < cmd.txt
 peakypanes pane run --pane-id PANE --file ./cmd.txt
+
+# target only panes running a tool
+peakypanes pane run --scope all --command "hello" --tool codex
+
+# bypass tool-aware formatting
+peakypanes pane send --pane-id PANE --text "raw bytes" --raw
 
 # delays
 peakypanes pane send --pane-id PANE --text "hi" --delay 250ms

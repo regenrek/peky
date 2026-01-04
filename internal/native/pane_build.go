@@ -13,7 +13,6 @@ import (
 
 	"github.com/kballard/go-shellquote"
 
-	"github.com/regenrek/peakypanes/internal/agenttool"
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/terminal"
 )
@@ -250,7 +249,11 @@ func (m *Manager) createPane(ctx context.Context, path, title, command string, e
 		m.markPaneOutputReady(id)
 	}
 	startCommand := strings.TrimSpace(command)
-	tool := agenttool.DetectFromCommand(startCommand)
+	reg := m.toolRegistryRef()
+	if reg == nil {
+		return nil, errors.New("native: tool registry unavailable")
+	}
+	toolID := reg.DetectFromCommand(startCommand)
 	if startCommand == "" {
 		opts.Command = ""
 	} else {
@@ -278,7 +281,7 @@ func (m *Manager) createPane(ctx context.Context, path, title, command string, e
 		Title:        strings.TrimSpace(title),
 		Command:      startCommand,
 		StartCommand: startCommand,
-		Tool:         string(tool),
+		Tool:         toolID,
 		window:       win,
 		output:       output,
 	}

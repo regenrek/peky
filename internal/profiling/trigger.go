@@ -5,7 +5,7 @@ package profiling
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -31,7 +31,7 @@ func Trigger(reason string) {
 		if strings.TrimSpace(reason) == "" {
 			reason = "trigger"
 		}
-		log.Printf("sessiond: profiler trigger: %s", reason)
+		slog.Info("sessiond: profiler trigger", slog.String("reason", reason))
 	})
 }
 
