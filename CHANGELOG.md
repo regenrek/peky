@@ -5,6 +5,16 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.0.20 - 2026-01-04
+
+### Added
+- First-class `peky` CLI entrypoint with `peakypanes` preserved as an alias.
+- npm bin alias for `peky` alongside `peakypanes`.
+
+### Changed
+- Docs and scripts now default to `peky` in command examples.
+- Homebrew formula generation installs both `peky` and `peakypanes` binaries.
+
 ## 0.0.19 - 2026-01-04
 
 ### Added
