@@ -144,7 +144,7 @@ func (m *Model) forwardMouseEvent(hit mouse.PaneHit, msg tea.MouseMsg) tea.Cmd {
 		return nil
 	}
 	if m.terminalFocus {
-		payload.Route = sessiond.MouseRouteApp
+		payload.Route = sessiond.MouseRouteAuto
 	} else {
 		payload.Route = sessiond.MouseRouteHostSelection
 	}
