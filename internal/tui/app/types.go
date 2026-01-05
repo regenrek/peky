@@ -33,10 +33,6 @@ const (
 	StatePerformanceMenu
 	StateDebugMenu
 	StatePekyDialog
-	StateAuthProviderPicker
-	StateAuthMethodPicker
-	StateAuthPrompt
-	StateAuthProgress
 )
 
 // DashboardTab represents the active tab within the dashboard view.

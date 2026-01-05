@@ -218,7 +218,16 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 					Desc:    "Connect an AI provider for Peky",
 					Aliases: []string{"auth", "login", "agent auth"},
 					Run: func(m *Model, _ commandArgs) tea.Cmd {
-						return m.openAuthProviderPicker()
+						return m.prefillQuickReplyInput("/auth ")
+					},
+				},
+				{
+					ID:      "agent_model",
+					Label:   "Agent: Model",
+					Desc:    "Select the model used by Peky",
+					Aliases: []string{"model", "agent model"},
+					Run: func(m *Model, _ commandArgs) tea.Cmd {
+						return m.prefillQuickReplyInput("/model ")
 					},
 				},
 			},

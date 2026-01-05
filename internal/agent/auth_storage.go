@@ -36,6 +36,8 @@ type authStore struct {
 	override map[string]string
 }
 
+var ErrAuthMissing = errors.New("no auth configured")
+
 func newAuthStore(path string) (*authStore, error) {
 	store := &authStore{
 		path:     path,
@@ -187,5 +189,5 @@ func (s *authStore) getAPIKey(provider string, now time.Time) (string, *oauthCre
 	if envKey := envAPIKey(provider); envKey != "" {
 		return envKey, nil, nil
 	}
-	return "", nil, errors.New("no auth configured")
+	return "", nil, ErrAuthMissing
 }

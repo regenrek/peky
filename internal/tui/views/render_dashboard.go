@@ -413,11 +413,11 @@ func (m Model) viewQuickReply(width int) string {
 	base := lipgloss.NewStyle().
 		Foreground(theme.TextPrimary).
 		Background(theme.QuickReplyBg)
-	accent := base.Foreground(theme.QuickReplyAcc).Render("▌ ")
+	accent := base.Foreground(theme.Accent).Render("▌ ")
 	label := ""
 	labelWidth := 0
 	if mode := strings.TrimSpace(m.QuickReplyMode); mode != "" {
-		label = base.Foreground(theme.QuickReplyAcc).Bold(true).Render(mode) + base.Render(" ")
+		label = base.Foreground(theme.Accent).Bold(true).Render(mode) + base.Render(" ")
 		labelWidth = lipgloss.Width(label)
 	}
 	inputWidth := contentWidth - lipgloss.Width(accent) - labelWidth

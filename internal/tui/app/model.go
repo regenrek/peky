@@ -106,25 +106,16 @@ type Model struct {
 	cursorShapeFlushScheduled bool
 	cursorShapeNow            func() time.Time
 
-	projectPicker      list.Model
-	layoutPicker       list.Model
-	paneSwapPicker     list.Model
-	commandPalette     list.Model
-	settingsMenu       list.Model
-	perfMenu           list.Model
-	debugMenu          list.Model
-	authPickersReady   bool
-	authProviderPicker list.Model
-	authMethodPicker   list.Model
-	authPromptInput    textinput.Model
-	authPromptTitle    string
-	authPromptNote     string
-	authProgressTitle  string
-	authProgressBody   string
-	authProgressFooter string
-	authFlow           authFlowState
-	gitProjects        []picker.ProjectItem
-	dialogHelpOpen     bool
+	projectPicker  list.Model
+	layoutPicker   list.Model
+	paneSwapPicker list.Model
+	commandPalette list.Model
+	settingsMenu   list.Model
+	perfMenu       list.Model
+	debugMenu      list.Model
+	authFlow       authFlowState
+	gitProjects    []picker.ProjectItem
+	dialogHelpOpen bool
 
 	confirmSession     string
 	confirmProject     string
@@ -268,7 +259,6 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 	m.setupSettingsMenu()
 	m.setupPerformanceMenu()
 	m.setupDebugMenu()
-	m.setupAuthPickers()
 
 	configExists := true
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {

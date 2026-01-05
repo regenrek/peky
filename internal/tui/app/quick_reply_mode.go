@@ -37,11 +37,11 @@ func (m *Model) quickReplyModeLabel() string {
 	switch m.quickReplyMode {
 	case quickReplyModePeky:
 		if m.pekyBusy {
-			return "peky*"
+			return "agent*"
 		}
-		return "peky"
+		return "agent"
 	default:
-		return "pane"
+		return "quick reply"
 	}
 }
 

@@ -110,6 +110,15 @@ func (m *Model) handleQuickReplySubmit(msg tea.KeyMsg) (bool, tea.Cmd) {
 		return true, m.attachOrStart()
 	}
 	if m.quickReplyMode == quickReplyModePeky {
+		if outcome := m.handleAgentSlashCommand(text); outcome.Handled {
+			if outcome.RecordPrompt {
+				m.rememberQuickReply(text)
+			}
+			if outcome.ClearInput {
+				m.resetQuickReplyInputState()
+			}
+			return true, outcome.Cmd
+		}
 		m.rememberQuickReply(text)
 		m.resetQuickReplyHistory()
 		return true, m.sendPekyPrompt(text)

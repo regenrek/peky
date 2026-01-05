@@ -28,6 +28,12 @@ func (m *Model) quickReplyMenuState() quickReplyMenu {
 	if m == nil || m.state != StateDashboard || m.filterActive || m.terminalFocus {
 		return quickReplyMenu{}
 	}
+	if menu := m.authMenuState(); menu.kind != quickReplyMenuNone {
+		return menu
+	}
+	if menu := m.modelMenuState(); menu.kind != quickReplyMenuNone {
+		return menu
+	}
 	if menu := m.slashMenuState(); menu.kind != quickReplyMenuNone {
 		return menu
 	}
@@ -39,7 +45,10 @@ func (m *Model) quickReplyMenuState() quickReplyMenu {
 
 func (m *Model) slashMenuState() quickReplyMenu {
 	if m.quickReplyMode == quickReplyModePeky {
-		return quickReplyMenu{}
+		value := strings.ToLower(strings.TrimSpace(m.quickReplyInput.Value()))
+		if !strings.HasPrefix(value, "/") || (!strings.HasPrefix(value, "/auth") && !strings.HasPrefix(value, "/model")) {
+			return quickReplyMenu{}
+		}
 	}
 	ctx := slashInputForSuggestions(m.quickReplyInput.Value())
 	if !ctx.Active || ctx.HasArgs {
@@ -101,6 +110,12 @@ func (m *Model) applyQuickReplyMenuCompletion() bool {
 		applied = m.applySlashCompletion()
 	case quickReplyMenuAt:
 		applied = m.applyAtCompletion()
+	case quickReplyMenuAuthProvider:
+		applied = m.applyAuthProviderCompletion()
+	case quickReplyMenuAuthMethod:
+		applied = m.applyAuthMethodCompletion()
+	case quickReplyMenuModel:
+		applied = m.applyModelCompletion()
 	}
 	if applied {
 		m.updateQuickReplyMenuSelection()

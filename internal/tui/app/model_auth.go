@@ -7,225 +7,438 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/regenrek/peakypanes/internal/agent"
-	"github.com/regenrek/peakypanes/internal/tui/picker"
-)
-
-type authMode int
-
-type authPromptKind int
-
-const (
-	authModeAPIKey authMode = iota
-	authModeOAuth
-	authModeLogout
-)
-
-const (
-	authPromptAPIKey authPromptKind = iota
-	authPromptAnthropicCode
-	authPromptCopilotDomain
+	"github.com/regenrek/peakypanes/internal/workspace"
 )
 
 type authFlowState struct {
-	Provider      agent.Provider
-	Mode          authMode
-	Prompt        authPromptKind
-	Verifier      string
-	CopilotDomain string
-	CopilotDevice agent.CopilotDeviceInfo
-	Callback      *agent.CallbackServer
-}
-
-type authProviderItem struct {
 	Provider agent.Provider
-	Name     string
-	Desc     string
+	Verifier string
+	Callback *agent.CallbackServer
 }
 
-func (a authProviderItem) Title() string       { return a.Name }
-func (a authProviderItem) Description() string { return a.Desc }
-func (a authProviderItem) FilterValue() string { return strings.ToLower(a.Name + " " + a.Desc) }
-
-type authMethodItem struct {
-	Mode authMode
-	Name string
-	Desc string
+type slashCommandInput struct {
+	Command       string
+	Args          []string
+	TrailingSpace bool
 }
 
-func (a authMethodItem) Title() string       { return a.Name }
-func (a authMethodItem) Description() string { return a.Desc }
-func (a authMethodItem) FilterValue() string { return strings.ToLower(a.Name + " " + a.Desc) }
-
-func (m *Model) setupAuthPickers() {
-	m.authProviderPicker = picker.NewDialogMenu()
-	m.authProviderPicker.Title = "Auth Providers"
-	m.authProviderPicker.SetFilteringEnabled(true)
-
-	m.authMethodPicker = picker.NewDialogMenu()
-	m.authMethodPicker.Title = "Auth Method"
-	m.authMethodPicker.SetFilteringEnabled(false)
-	m.authPickersReady = true
-}
-
-func (m *Model) ensureAuthPickers() {
-	if !m.authPickersReady {
-		m.setupAuthPickers()
+func parseSlashCommandInput(input string) (slashCommandInput, bool) {
+	trimmed := strings.TrimSpace(input)
+	if !strings.HasPrefix(trimmed, "/") {
+		return slashCommandInput{}, false
 	}
+	parts := strings.Fields(trimmed)
+	if len(parts) == 0 {
+		return slashCommandInput{}, false
+	}
+	cmd := strings.TrimPrefix(parts[0], "/")
+	if cmd == "" {
+		return slashCommandInput{}, false
+	}
+	args := []string{}
+	if len(parts) > 1 {
+		args = parts[1:]
+	}
+	trailing := false
+	if len(input) > 0 {
+		last := input[len(input)-1]
+		trailing = last == ' ' || last == '\t'
+	}
+	return slashCommandInput{
+		Command:       strings.ToLower(cmd),
+		Args:          args,
+		TrailingSpace: trailing,
+	}, true
 }
 
-func (m *Model) openAuthProviderPicker() tea.Cmd {
-	m.ensureAuthPickers()
-	providers := agent.Providers()
-	items := make([]list.Item, 0, len(providers))
-	for _, p := range providers {
-		desc := []string{}
-		if p.SupportsAPIKey {
-			desc = append(desc, "api key")
+func (m *Model) authMenuState() quickReplyMenu {
+	cmd, ok := parseSlashCommandInput(m.quickReplyInput.Value())
+	if !ok || cmd.Command != "auth" {
+		return quickReplyMenu{}
+	}
+	if len(cmd.Args) == 0 {
+		if !cmd.TrailingSpace {
+			return quickReplyMenu{}
 		}
-		if p.SupportsOAuth {
-			desc = append(desc, "oauth")
+		return authProviderMenu("")
+	}
+	if len(cmd.Args) == 1 {
+		prefix := strings.ToLower(cmd.Args[0])
+		if cmd.TrailingSpace {
+			info, ok := agent.FindProviderInfo(cmd.Args[0])
+			if !ok {
+				return quickReplyMenu{}
+			}
+			return m.authMethodMenu(info, "")
 		}
-		items = append(items, authProviderItem{
-			Provider: p.ID,
-			Name:     p.Name,
-			Desc:     strings.Join(desc, ", "),
+		return authProviderMenu(prefix)
+	}
+	info, ok := agent.FindProviderInfo(cmd.Args[0])
+	if !ok {
+		return quickReplyMenu{}
+	}
+	if len(cmd.Args) == 2 && !cmd.TrailingSpace {
+		return m.authMethodMenu(info, strings.ToLower(cmd.Args[1]))
+	}
+	return quickReplyMenu{}
+}
+
+func (m *Model) modelMenuState() quickReplyMenu {
+	cmd, ok := parseSlashCommandInput(m.quickReplyInput.Value())
+	if !ok || cmd.Command != "model" {
+		return quickReplyMenu{}
+	}
+	if len(cmd.Args) == 0 {
+		if !cmd.TrailingSpace {
+			return quickReplyMenu{}
+		}
+		return m.modelMenu("")
+	}
+	if len(cmd.Args) == 1 && !cmd.TrailingSpace {
+		return m.modelMenu(strings.ToLower(cmd.Args[0]))
+	}
+	return quickReplyMenu{}
+}
+
+func authProviderMenu(prefix string) quickReplyMenu {
+	entries := agent.Providers()
+	suggestions := make([]quickReplySuggestion, 0, len(entries))
+	for _, entry := range entries {
+		token := string(entry.ID)
+		label := entry.Name
+		desc := authProviderDesc(entry)
+		if prefix != "" {
+			if !strings.HasPrefix(strings.ToLower(token), prefix) && !strings.HasPrefix(strings.ToLower(label), prefix) {
+				continue
+			}
+		}
+		matchLen := 0
+		if strings.HasPrefix(strings.ToLower(label), prefix) {
+			matchLen = len(prefix)
+		}
+		suggestions = append(suggestions, quickReplySuggestion{
+			Text:     label,
+			Value:    token,
+			MatchLen: matchLen,
+			Desc:     desc,
 		})
 	}
-	m.authProviderPicker.SetItems(items)
-	m.authProviderPicker.ResetFilter()
-	m.setState(StateAuthProviderPicker)
-	return nil
+	if len(suggestions) == 0 {
+		return quickReplyMenu{}
+	}
+	return quickReplyMenu{
+		kind:        quickReplyMenuAuthProvider,
+		prefix:      prefix,
+		suggestions: suggestions,
+	}
 }
 
-func (m *Model) openAuthMethodPicker(provider agent.Provider) {
-	m.ensureAuthPickers()
-	items := []list.Item{}
-	manager, err := agent.NewAuthManager()
-	if err != nil {
-		m.setToast("Auth error: "+err.Error(), toastError)
-		m.setState(StateDashboard)
-		return
-	}
-	var info *agent.ProviderInfo
-	for _, entry := range manager.ProviderList() {
-		if entry.ID == provider {
-			copy := entry
-			info = &copy
-			break
-		}
-	}
-	if info == nil {
-		m.setToast("Unknown provider", toastWarning)
-		m.setState(StateDashboard)
-		return
-	}
+func (m *Model) authMethodMenu(info agent.ProviderInfo, prefix string) quickReplyMenu {
+	suggestions := make([]quickReplySuggestion, 0, 3)
 	if info.SupportsAPIKey {
-		items = append(items, authMethodItem{Mode: authModeAPIKey, Name: "API key", Desc: "Store an API key"})
+		suggestions = append(suggestions, authMethodSuggestion("api-key", "Use an API key", prefix))
 	}
 	if info.SupportsOAuth {
-		items = append(items, authMethodItem{Mode: authModeOAuth, Name: "OAuth login", Desc: "Authenticate in browser"})
+		suggestions = append(suggestions, authMethodSuggestion("oauth", "Login via OAuth", prefix))
 	}
-	if manager.HasAuth(provider) {
-		items = append(items, authMethodItem{Mode: authModeLogout, Name: "Logout", Desc: "Remove stored credentials"})
+	if m.providerHasAuth(info.ID) {
+		suggestions = append(suggestions, authMethodSuggestion("logout", "Remove stored credentials", prefix))
 	}
-	m.authMethodPicker.SetItems(items)
-	m.setState(StateAuthMethodPicker)
-}
-
-func (m *Model) openAuthPrompt(title, note, placeholder string, kind authPromptKind) {
-	input := textinput.New()
-	input.Prompt = ""
-	input.Placeholder = placeholder
-	input.CharLimit = 200
-	input.Width = 50
-	input.Focus()
-	m.authPromptInput = input
-	m.authPromptTitle = title
-	m.authPromptNote = note
-	m.authFlow.Prompt = kind
-	m.setState(StateAuthPrompt)
-}
-
-func (m *Model) openAuthProgress(title, body, footer string) {
-	m.authProgressTitle = title
-	m.authProgressBody = body
-	m.authProgressFooter = footer
-	m.setState(StateAuthProgress)
-}
-
-func (m *Model) updateAuthProviderPicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if msg.String() == "esc" {
-		m.setState(StateDashboard)
-		return m, nil
-	}
-	if msg.String() == "enter" {
-		if item, ok := m.authProviderPicker.SelectedItem().(authProviderItem); ok {
-			m.authFlow = authFlowState{Provider: item.Provider}
-			m.openAuthMethodPicker(item.Provider)
-			return m, nil
+	out := make([]quickReplySuggestion, 0, len(suggestions))
+	for _, suggestion := range suggestions {
+		if suggestion.Text == "" {
+			continue
 		}
-		m.setState(StateDashboard)
-		return m, nil
+		out = append(out, suggestion)
 	}
-	var cmd tea.Cmd
-	m.authProviderPicker, cmd = m.authProviderPicker.Update(msg)
-	return m, cmd
+	if len(out) == 0 {
+		return quickReplyMenu{}
+	}
+	return quickReplyMenu{
+		kind:        quickReplyMenuAuthMethod,
+		prefix:      prefix,
+		suggestions: out,
+	}
 }
 
-func (m *Model) updateAuthMethodPicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		return m, m.openAuthProviderPicker()
-	case "enter":
-		item, ok := m.authMethodPicker.SelectedItem().(authMethodItem)
-		if !ok {
-			m.setState(StateDashboard)
-			return m, nil
-		}
-		m.authFlow.Mode = item.Mode
-		provider := m.authFlow.Provider
-		switch item.Mode {
-		case authModeAPIKey:
-			m.openAuthPrompt("API Key", "Paste the API key for "+string(provider), "api-key", authPromptAPIKey)
-			return m, nil
-		case authModeLogout:
-			return m, authRemoveCmd(provider)
-		case authModeOAuth:
-			return m, m.startOAuthFlow(provider)
-		}
+func authMethodSuggestion(value, desc, prefix string) quickReplySuggestion {
+	label := value
+	if prefix != "" && !strings.HasPrefix(strings.ToLower(label), prefix) {
+		return quickReplySuggestion{}
 	}
-	var cmd tea.Cmd
-	m.authMethodPicker, cmd = m.authMethodPicker.Update(msg)
-	return m, cmd
+	matchLen := 0
+	if strings.HasPrefix(strings.ToLower(label), prefix) {
+		matchLen = len(prefix)
+	}
+	return quickReplySuggestion{
+		Text:     label,
+		Value:    value,
+		MatchLen: matchLen,
+		Desc:     desc,
+	}
 }
 
-func (m *Model) startOAuthFlow(provider agent.Provider) tea.Cmd {
+func (m *Model) modelMenu(prefix string) quickReplyMenu {
+	cfg := m.pekyConfig().Agent
+	provider := agent.Provider(strings.ToLower(strings.TrimSpace(cfg.Provider)))
+	models := agent.ProviderModels(provider)
+	current := strings.TrimSpace(cfg.Model)
+	if current != "" && !stringSliceContains(models, current) {
+		models = append([]string{current}, models...)
+	}
+	suggestions := make([]quickReplySuggestion, 0, len(models))
+	for _, model := range models {
+		if prefix != "" && !strings.HasPrefix(strings.ToLower(model), prefix) {
+			continue
+		}
+		matchLen := 0
+		if strings.HasPrefix(strings.ToLower(model), prefix) {
+			matchLen = len(prefix)
+		}
+		suggestions = append(suggestions, quickReplySuggestion{
+			Text:     model,
+			Value:    model,
+			MatchLen: matchLen,
+			Desc:     "Model",
+		})
+	}
+	if len(suggestions) == 0 {
+		return quickReplyMenu{}
+	}
+	return quickReplyMenu{
+		kind:        quickReplyMenuModel,
+		prefix:      prefix,
+		suggestions: suggestions,
+	}
+}
+
+func (m *Model) applyAuthProviderCompletion() bool {
+	selection, ok := m.selectedQuickReplySuggestion()
+	if !ok {
+		return false
+	}
+	value := suggestionValue(selection)
+	if value == "" {
+		return false
+	}
+	m.quickReplyInput.SetValue("/auth " + value + " ")
+	m.quickReplyInput.CursorEnd()
+	return true
+}
+
+func (m *Model) applyAuthMethodCompletion() bool {
+	selection, ok := m.selectedQuickReplySuggestion()
+	if !ok {
+		return false
+	}
+	value := suggestionValue(selection)
+	if value == "" {
+		return false
+	}
+	cmd, ok := parseSlashCommandInput(m.quickReplyInput.Value())
+	if !ok || cmd.Command != "auth" || len(cmd.Args) == 0 {
+		return false
+	}
+	provider := cmd.Args[0]
+	m.quickReplyInput.SetValue("/auth " + provider + " " + value + " ")
+	m.quickReplyInput.CursorEnd()
+	return true
+}
+
+func (m *Model) applyModelCompletion() bool {
+	selection, ok := m.selectedQuickReplySuggestion()
+	if !ok {
+		return false
+	}
+	value := suggestionValue(selection)
+	if value == "" {
+		return false
+	}
+	m.quickReplyInput.SetValue("/model " + value + " ")
+	m.quickReplyInput.CursorEnd()
+	return true
+}
+
+func (m *Model) selectedQuickReplySuggestion() (quickReplySuggestion, bool) {
+	menu := m.quickReplyMenuState()
+	if len(menu.suggestions) == 0 {
+		return quickReplySuggestion{}, false
+	}
+	if m.quickReplyMenuIndex < 0 || m.quickReplyMenuIndex >= len(menu.suggestions) {
+		return quickReplySuggestion{}, false
+	}
+	return menu.suggestions[m.quickReplyMenuIndex], true
+}
+
+func suggestionValue(entry quickReplySuggestion) string {
+	if strings.TrimSpace(entry.Value) != "" {
+		return entry.Value
+	}
+	return entry.Text
+}
+
+func (m *Model) handleAuthSlashCommand(input string) quickReplyCommandOutcome {
+	cmd, ok := parseSlashCommandInput(input)
+	if !ok || cmd.Command != "auth" {
+		return quickReplyCommandOutcome{}
+	}
+	if len(cmd.Args) == 0 {
+		return quickReplyCommandOutcome{
+			Cmd:     m.prefillQuickReplyInput("/auth "),
+			Handled: true,
+		}
+	}
+	info, ok := agent.FindProviderInfo(cmd.Args[0])
+	if !ok {
+		return quickReplyCommandOutcome{
+			Cmd:     NewWarningCmd("Unknown provider"),
+			Handled: true,
+		}
+	}
+	providerToken := string(info.ID)
+	setProvider := m.setAgentProvider(info.ID)
+	if len(cmd.Args) == 1 {
+		if info.SupportsAPIKey && !info.SupportsOAuth {
+			return quickReplyCommandOutcome{
+				Cmd:     tea.Batch(setProvider, m.prefillQuickReplyInput("/auth "+providerToken+" api-key ")),
+				Handled: true,
+			}
+		}
+		if info.SupportsOAuth && !info.SupportsAPIKey {
+			return quickReplyCommandOutcome{
+				Cmd:        tea.Batch(setProvider, m.startOAuthFlow(info.ID, "")),
+				Handled:    true,
+				ClearInput: true,
+			}
+		}
+		return quickReplyCommandOutcome{
+			Cmd:     tea.Batch(setProvider, m.prefillQuickReplyInput("/auth "+providerToken+" ")),
+			Handled: true,
+		}
+	}
+	method := strings.ToLower(cmd.Args[1])
+	switch method {
+	case "api-key", "apikey", "key":
+		if len(cmd.Args) < 3 {
+			return quickReplyCommandOutcome{
+				Cmd:     tea.Batch(setProvider, m.prefillQuickReplyInput("/auth "+providerToken+" api-key ")),
+				Handled: true,
+			}
+		}
+		key := strings.TrimSpace(strings.Join(cmd.Args[2:], " "))
+		if key == "" {
+			return quickReplyCommandOutcome{
+				Cmd:     NewWarningCmd("API key required"),
+				Handled: true,
+			}
+		}
+		return quickReplyCommandOutcome{
+			Cmd:        tea.Batch(setProvider, authSetAPIKeyCmd(info.ID, key)),
+			Handled:    true,
+			ClearInput: true,
+		}
+	case "oauth":
+		if info.ID == agent.ProviderAnthropic {
+			if len(cmd.Args) < 3 {
+				return quickReplyCommandOutcome{
+					Cmd:     tea.Batch(setProvider, m.startAnthropicOAuth()),
+					Handled: true,
+				}
+			}
+			code, state, ok := splitAuthCode(cmd.Args[2])
+			if !ok {
+				return quickReplyCommandOutcome{
+					Cmd:     NewWarningCmd("Expected code#state"),
+					Handled: true,
+				}
+			}
+			if strings.TrimSpace(m.authFlow.Verifier) == "" {
+				return quickReplyCommandOutcome{
+					Cmd:     NewWarningCmd("Run /auth anthropic oauth first"),
+					Handled: true,
+				}
+			}
+			return quickReplyCommandOutcome{
+				Cmd:        tea.Batch(setProvider, authAnthropicExchangeCmd(code, state, m.authFlow.Verifier)),
+				Handled:    true,
+				ClearInput: true,
+			}
+		}
+		domain := ""
+		if len(cmd.Args) >= 3 {
+			domain = strings.TrimSpace(cmd.Args[2])
+		}
+		return quickReplyCommandOutcome{
+			Cmd:        tea.Batch(setProvider, m.startOAuthFlow(info.ID, domain)),
+			Handled:    true,
+			ClearInput: true,
+		}
+	case "logout", "remove", "signout":
+		return quickReplyCommandOutcome{
+			Cmd:        tea.Batch(setProvider, authRemoveCmd(info.ID)),
+			Handled:    true,
+			ClearInput: true,
+		}
+	default:
+		return quickReplyCommandOutcome{
+			Cmd:     NewWarningCmd("Unknown auth method"),
+			Handled: true,
+		}
+	}
+}
+
+func (m *Model) handleModelSlashCommand(input string) quickReplyCommandOutcome {
+	cmd, ok := parseSlashCommandInput(input)
+	if !ok || cmd.Command != "model" {
+		return quickReplyCommandOutcome{}
+	}
+	if len(cmd.Args) == 0 {
+		return quickReplyCommandOutcome{
+			Cmd:     m.prefillQuickReplyInput("/model "),
+			Handled: true,
+		}
+	}
+	model := strings.TrimSpace(strings.Join(cmd.Args, " "))
+	if model == "" {
+		return quickReplyCommandOutcome{
+			Cmd:     NewWarningCmd("Model required"),
+			Handled: true,
+		}
+	}
+	return quickReplyCommandOutcome{
+		Cmd:        m.setAgentModel(model),
+		Handled:    true,
+		ClearInput: true,
+	}
+}
+
+func (m *Model) startAnthropicOAuth() tea.Cmd {
 	manager, err := agent.NewAuthManager()
 	if err != nil {
-		m.setToast("Auth error: "+err.Error(), toastError)
-		m.setState(StateDashboard)
-		return nil
+		return NewErrorCmd(err, "auth manager")
 	}
+	url, verifier, err := manager.AnthropicAuthURL()
+	if err != nil {
+		return NewErrorCmd(err, "auth url")
+	}
+	m.authFlow = authFlowState{Provider: agent.ProviderAnthropic, Verifier: verifier}
+	m.setToast("Open URL then paste code#state: "+url, toastInfo)
+	return m.prefillQuickReplyInput("/auth anthropic oauth ")
+}
+
+func (m *Model) startOAuthFlow(provider agent.Provider, domain string) tea.Cmd {
+	manager, err := agent.NewAuthManager()
+	if err != nil {
+		return NewErrorCmd(err, "auth manager")
+	}
+	m.authFlow = authFlowState{Provider: provider}
 	switch provider {
-	case agent.ProviderAnthropic:
-		url, verifier, err := manager.AnthropicAuthURL()
-		if err != nil {
-			m.setToast("Auth error: "+err.Error(), toastError)
-			m.setState(StateDashboard)
-			return nil
-		}
-		m.authFlow.Verifier = verifier
-		note := "Open this URL in your browser, authorize, then paste the code#state:\n" + url
-		m.openAuthPrompt("Anthropic OAuth", note, "code#state", authPromptAnthropicCode)
-		return nil
 	case agent.ProviderGitHubCopilot:
-		m.openAuthPrompt("GitHub Copilot", "Enter enterprise domain or leave blank for github.com", "company.ghe.com", authPromptCopilotDomain)
-		return nil
+		m.setToast("Starting Copilot device flow...", toastInfo)
+		return authCopilotStartCmd(domain)
 	case agent.ProviderGoogleGeminiCLI, agent.ProviderGoogleAntigrav:
 		var url string
 		var verifier string
@@ -235,9 +448,7 @@ func (m *Model) startOAuthFlow(provider agent.Provider) tea.Cmd {
 			url, verifier, err = manager.AntigravityAuthURL()
 		}
 		if err != nil {
-			m.setToast("Auth error: "+err.Error(), toastError)
-			m.setState(StateDashboard)
-			return nil
+			return NewErrorCmd(err, "auth url")
 		}
 		m.authFlow.Verifier = verifier
 		var server *agent.CallbackServer
@@ -247,77 +458,49 @@ func (m *Model) startOAuthFlow(provider agent.Provider) tea.Cmd {
 			server, err = agent.StartAntigravityCallback()
 		}
 		if err != nil {
-			m.setToast("Auth error: "+err.Error(), toastError)
-			m.setState(StateDashboard)
-			return nil
+			return NewErrorCmd(err, "oauth callback")
 		}
 		m.authFlow.Callback = server
-		m.openAuthProgress("OAuth", "Open this URL and finish login:\n"+url+"\n\nWaiting for callback...", "esc cancel")
+		m.setToast("Open URL to finish login: "+url, toastInfo)
 		return authWaitCallbackCmd(provider, server)
 	default:
-		m.setToast("OAuth not supported for provider", toastWarning)
-		m.setState(StateDashboard)
-		return nil
+		return NewWarningCmd("OAuth not supported for provider")
 	}
 }
 
-func (m *Model) updateAuthPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		m.setState(StateDashboard)
-		return m, nil
-	case "enter":
-		return m, m.handleAuthPrompt()
+func splitAuthCode(raw string) (string, string, bool) {
+	parts := strings.SplitN(strings.TrimSpace(raw), "#", 2)
+	if len(parts) != 2 {
+		return "", "", false
 	}
-	var cmd tea.Cmd
-	m.authPromptInput, cmd = m.authPromptInput.Update(msg)
-	return m, cmd
+	code := strings.TrimSpace(parts[0])
+	state := strings.TrimSpace(parts[1])
+	if code == "" || state == "" {
+		return "", "", false
+	}
+	return code, state, true
 }
 
-func (m *Model) handleAuthPrompt() tea.Cmd {
-	value := strings.TrimSpace(m.authPromptInput.Value())
-	provider := m.authFlow.Provider
-	switch m.authFlow.Prompt {
-	case authPromptAPIKey:
-		if value == "" {
-			m.setToast("API key required", toastWarning)
-			return nil
-		}
-		m.openAuthProgress("Auth", "Saving API key...", "esc close")
-		return authSetAPIKeyCmd(provider, value)
-	case authPromptAnthropicCode:
-		parts := strings.SplitN(value, "#", 2)
-		if len(parts) != 2 {
-			m.setToast("Expected code#state", toastWarning)
-			return nil
-		}
-		code := strings.TrimSpace(parts[0])
-		state := strings.TrimSpace(parts[1])
-		if code == "" || state == "" {
-			m.setToast("code#state required", toastWarning)
-			return nil
-		}
-		m.openAuthProgress("Anthropic OAuth", "Exchanging code...", "esc close")
-		return authAnthropicExchangeCmd(code, state, m.authFlow.Verifier)
-	case authPromptCopilotDomain:
-		m.authFlow.CopilotDomain = value
-		m.openAuthProgress("GitHub Copilot", "Starting device flow...", "esc close")
-		return authCopilotStartCmd(value)
-	default:
-		return nil
+func authProviderDesc(info agent.ProviderInfo) string {
+	parts := []string{}
+	if info.SupportsAPIKey {
+		parts = append(parts, "api key")
 	}
+	if info.SupportsOAuth {
+		parts = append(parts, "oauth")
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, ", ")
 }
 
-func (m *Model) updateAuthProgress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if msg.String() == "esc" {
-		if m.authFlow.Callback != nil {
-			_ = m.authFlow.Callback.Close()
-			m.authFlow.Callback = nil
-		}
-		m.setState(StateDashboard)
-		return m, nil
+func (m *Model) providerHasAuth(provider agent.Provider) bool {
+	manager, err := agent.NewAuthManager()
+	if err != nil {
+		return false
 	}
-	return m, nil
+	return manager.HasAuth(provider)
 }
 
 type authDoneMsg struct {
@@ -448,37 +631,97 @@ func authGeminiExchangeCmd(provider agent.Provider, code, verifier string) tea.C
 func (m *Model) handleAuthDone(msg authDoneMsg) tea.Cmd {
 	if msg.Err != nil {
 		m.setToast("Auth failed: "+msg.Message, toastError)
-		m.setState(StateDashboard)
 		return nil
 	}
 	m.setToast(msg.Message, toastSuccess)
-	m.setState(StateDashboard)
 	return nil
 }
 
 func (m *Model) handleCopilotDevice(msg authCopilotDeviceMsg) tea.Cmd {
 	if msg.Err != nil {
 		m.setToast("Auth failed: "+msg.Err.Error(), toastError)
-		m.setState(StateDashboard)
 		return nil
 	}
-	m.authFlow.CopilotDevice = msg.Device
-	body := fmt.Sprintf("Open %s and enter code: %s\n\nWaiting for authorization...", msg.Device.VerificationURI, msg.Device.UserCode)
-	m.openAuthProgress("GitHub Copilot", body, "esc cancel")
+	m.authFlow = authFlowState{Provider: agent.ProviderGitHubCopilot}
+	body := fmt.Sprintf("Open %s and enter code %s", msg.Device.VerificationURI, msg.Device.UserCode)
+	m.setToast(body, toastInfo)
 	return authCopilotCompleteCmd(msg.Device, msg.Domain)
 }
 
 func (m *Model) handleAuthCallback(msg authCallbackMsg) tea.Cmd {
 	if msg.Err != nil {
 		m.setToast("Auth failed: "+msg.Err.Error(), toastError)
-		m.setState(StateDashboard)
 		return nil
 	}
 	if msg.State != m.authFlow.Verifier {
 		m.setToast("OAuth state mismatch", toastError)
-		m.setState(StateDashboard)
 		return nil
 	}
-	m.openAuthProgress("OAuth", "Exchanging code...", "esc close")
+	m.setToast("OAuth callback received; exchanging...", toastInfo)
 	return authGeminiExchangeCmd(msg.Provider, msg.Code, m.authFlow.Verifier)
+}
+
+func (m *Model) setAgentProvider(provider agent.Provider) tea.Cmd {
+	configPath, err := m.requireConfigPath()
+	if err != nil {
+		return NewErrorCmd(err, "agent config")
+	}
+	cfg, err := loadConfig(m.configPath)
+	if err != nil {
+		return NewErrorCmd(err, "agent config")
+	}
+	prevProvider := strings.ToLower(strings.TrimSpace(cfg.Agent.Provider))
+	newProvider := strings.ToLower(strings.TrimSpace(string(provider)))
+	cfg.Agent.Provider = newProvider
+	defaultModel := agent.ProviderDefaultModel(provider)
+	if cfg.Agent.Model == "" {
+		if defaultModel != "" {
+			cfg.Agent.Model = defaultModel
+		}
+	} else if prevProvider != newProvider && !agent.ProviderHasModel(provider, cfg.Agent.Model) {
+		if defaultModel != "" {
+			cfg.Agent.Model = defaultModel
+		}
+	}
+	if err := workspace.SaveConfig(configPath, cfg); err != nil {
+		return NewErrorCmd(err, "agent config")
+	}
+	m.config = cfg
+	label := agent.ProviderLabel(provider)
+	if label == "" {
+		label = string(provider)
+	}
+	m.setToast("Agent provider: "+label, toastSuccess)
+	return nil
+}
+
+func (m *Model) setAgentModel(model string) tea.Cmd {
+	configPath, err := m.requireConfigPath()
+	if err != nil {
+		return NewErrorCmd(err, "agent config")
+	}
+	cfg, err := loadConfig(m.configPath)
+	if err != nil {
+		return NewErrorCmd(err, "agent config")
+	}
+	cfg.Agent.Model = strings.TrimSpace(model)
+	if cfg.Agent.Model == "" {
+		return NewWarningCmd("Model required")
+	}
+	if err := workspace.SaveConfig(configPath, cfg); err != nil {
+		return NewErrorCmd(err, "agent config")
+	}
+	m.config = cfg
+	m.setToast("Agent model: "+cfg.Agent.Model, toastSuccess)
+	return nil
+}
+
+func stringSliceContains(values []string, target string) bool {
+	target = strings.TrimSpace(target)
+	for _, value := range values {
+		if strings.TrimSpace(value) == target {
+			return true
+		}
+	}
+	return false
 }

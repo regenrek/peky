@@ -354,6 +354,10 @@ func hasYesFlag(tokens []string) bool {
 func (m *Model) handlePekyResult(msg pekyResultMsg) tea.Cmd {
 	m.pekyBusy = false
 	if msg.Err != nil {
+		if errors.Is(msg.Err, agent.ErrAuthMissing) {
+			m.setToast("Peky needs authentication. Use /auth to connect a provider.", toastWarning)
+			return m.prefillQuickReplyInput("/auth")
+		}
 		body := strings.TrimSpace(msg.Err.Error())
 		if hint := strings.TrimSpace(msg.SetupHint); hint != "" {
 			body = strings.TrimSpace(body + "\n\nSetup:\n" + hint)

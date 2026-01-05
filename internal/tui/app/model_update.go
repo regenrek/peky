@@ -91,10 +91,6 @@ var keyHandlers = map[ViewState]keyHandler{
 	StateRenamePane:         func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateRename(msg) },
 	StateProjectRootSetup:   func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateProjectRootSetup(msg) },
 	StatePekyDialog:         func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updatePekyDialog(msg) },
-	StateAuthProviderPicker: func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateAuthProviderPicker(msg) },
-	StateAuthMethodPicker:   func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateAuthMethodPicker(msg) },
-	StateAuthPrompt:         func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateAuthPrompt(msg) },
-	StateAuthProgress:       func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateAuthProgress(msg) },
 }
 
 type updateHandler func(*Model, tea.Msg) (tea.Model, tea.Cmd)

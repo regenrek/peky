@@ -9,6 +9,7 @@ import (
 
 type quickReplySuggestion struct {
 	Text         string
+	Value        string
 	MatchLen     int
 	Desc         string
 	MatchIndexes []int
@@ -20,6 +21,9 @@ const (
 	quickReplyMenuNone quickReplyMenuKind = iota
 	quickReplyMenuSlash
 	quickReplyMenuAt
+	quickReplyMenuAuthProvider
+	quickReplyMenuAuthMethod
+	quickReplyMenuModel
 )
 
 type quickReplyMenu struct {

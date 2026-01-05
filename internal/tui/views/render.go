@@ -29,8 +29,4 @@ var viewRenderers = map[int]func(Model) string{
 	viewRenamePane:              func(m Model) string { return m.viewRename() },
 	viewProjectRootSetup:        func(m Model) string { return m.viewProjectRootSetup() },
 	viewPekyDialog:              func(m Model) string { return m.viewPekyDialog() },
-	viewAuthProviderPicker:      func(m Model) string { return appStyle.Render(m.AuthProviderPicker.View()) },
-	viewAuthMethodPicker:        func(m Model) string { return appStyle.Render(m.AuthMethodPicker.View()) },
-	viewAuthPrompt:              func(m Model) string { return m.viewAuthPrompt() },
-	viewAuthProgress:            func(m Model) string { return m.viewAuthProgress() },
 }
