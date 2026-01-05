@@ -545,7 +545,7 @@ func (m *Model) handlePaneViews(msg paneViewsMsg) tea.Cmd {
 
 func (m *Model) ensurePaneViewMaps() {
 	if m.paneViews == nil {
-		m.paneViews = make(map[paneViewKey]string)
+		m.paneViews = make(map[paneViewKey]paneViewEntry)
 	}
 	if m.paneMouseMotion == nil {
 		m.paneMouseMotion = make(map[string]bool)
@@ -563,19 +563,22 @@ func (m *Model) applyPaneView(view sessiond.PaneViewResponse) {
 	if view.PaneID != "" && view.Cols > 0 && view.Rows > 0 {
 		m.recordPaneSize(view.PaneID, view.Cols, view.Rows)
 	}
-	if !view.NotModified && view.View != "" {
-		m.paneViews[key] = view.View
+	if !view.NotModified && !view.Frame.Empty() {
+		m.paneViews[key] = paneViewEntry{
+			frame:    view.Frame,
+			rendered: make(map[bool]string, 2),
+		}
 	}
 	if view.PaneID != "" {
 		m.paneMouseMotion[view.PaneID] = view.AllowMotion
 	}
-	if perfDebugEnabled() && view.PaneID != "" && view.View != "" {
+	if perfDebugEnabled() && view.PaneID != "" && !view.Frame.Empty() {
 		if m.paneViewFirst == nil {
 			m.paneViewFirst = make(map[string]struct{})
 		}
 		if _, ok := m.paneViewFirst[view.PaneID]; !ok {
 			m.paneViewFirst[view.PaneID] = struct{}{}
-			logPerfEvery("tui.paneview.first."+view.PaneID, 0, "tui: pane view first pane=%s mode=%v cols=%d rows=%d", view.PaneID, view.Mode, view.Cols, view.Rows)
+			logPerfEvery("tui.paneview.first."+view.PaneID, 0, "tui: pane view first pane=%s cols=%d rows=%d", view.PaneID, view.Cols, view.Rows)
 		}
 	}
 	m.perfNotePaneViewResponse(view, time.Now())

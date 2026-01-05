@@ -32,7 +32,6 @@ func TestFetchPaneViewsCmdError(t *testing.T) {
 		PaneID: "missing",
 		Cols:   10,
 		Rows:   4,
-		Mode:   sessiond.PaneViewANSI,
 	}})
 	if cmd == nil {
 		t.Fatalf("expected pane views cmd")

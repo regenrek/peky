@@ -1,7 +1,6 @@
 package sessionrestore
 
 import (
-	"strings"
 	"testing"
 	"time"
 )
@@ -78,9 +77,8 @@ func TestConfigNormalizedDefaults(t *testing.T) {
 	}
 }
 
-func TestRenderPlainView(t *testing.T) {
-	view := RenderPlainView(4, 3, []string{"old"}, []string{"A", "B"})
-	lines := strings.Split(view, "\n")
+func TestRenderPlainLines(t *testing.T) {
+	lines := RenderPlainLines(4, 3, []string{"old"}, []string{"A", "B"})
 	if len(lines) != 3 {
 		t.Fatalf("lines = %d", len(lines))
 	}

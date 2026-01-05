@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/regenrek/peakypanes/internal/native"
+	"github.com/regenrek/peakypanes/internal/termframe"
 )
 
 const (
@@ -99,9 +100,10 @@ func (d *Daemon) logPaneViewRequest(paneID string, req PaneViewRequest) {
 		slog.Debug(
 			"sessiond: pane view first request",
 			slog.String("pane_id", paneID),
-			slog.Any("mode", req.Mode),
 			slog.Int("cols", req.Cols),
 			slog.Int("rows", req.Rows),
+			slog.Bool("direct", req.DirectRender),
+			slog.Any("priority", req.Priority),
 			slog.String("since_start", sinceStart),
 			slog.String("since_output", sinceOutput),
 		)
@@ -129,8 +131,7 @@ func (d *Daemon) logPaneViewFirstAfterOutput(paneID string, requestAt, computeSt
 	slog.Debug(
 		"sessiond: pane view first render after output",
 		slog.String("pane_id", paneID),
-		slog.Any("mode", resp.Mode),
-		slog.Int("view_bytes", len(resp.View)),
+		slog.Int("cell_count", len(resp.Frame.Cells)),
 		slog.Int("cols", resp.Cols),
 		slog.Int("rows", resp.Rows),
 		slog.String("since_start", timing.sinceStart),
@@ -202,7 +203,7 @@ func clampDuration(d time.Duration) time.Duration {
 	return d
 }
 
-func (d *Daemon) logPaneViewFirst(win paneViewWindow, paneID string, mode PaneViewMode, viewLen, cols, rows int) {
+func (d *Daemon) logPaneViewFirst(win paneViewWindow, paneID string, cols, rows int, frame termframe.Frame) {
 	if d == nil || !slog.Default().Enabled(context.Background(), slog.LevelDebug) {
 		return
 	}
@@ -232,22 +233,20 @@ func (d *Daemon) logPaneViewFirst(win paneViewWindow, paneID string, mode PaneVi
 		slog.Debug(
 			"sessiond: pane view first render",
 			slog.String("pane_id", paneID),
-			slog.Any("mode", mode),
-			slog.Int("view_bytes", viewLen),
+			slog.Int("cell_count", len(frame.Cells)),
 			slog.Int("cols", cols),
 			slog.Int("rows", rows),
 			slog.String("since_start", sinceStart),
 			slog.String("since_output", sinceOutput),
-			slog.Bool("empty", viewLen == 0),
+			slog.Bool("empty", frame.Empty()),
 		)
 	}
-	if viewLen > 0 && flags&perfPaneViewFirstNonEmpty == 0 {
+	if !frame.Empty() && flags&perfPaneViewFirstNonEmpty == 0 {
 		flags |= perfPaneViewFirstNonEmpty
 		slog.Debug(
 			"sessiond: pane view first non-empty",
 			slog.String("pane_id", paneID),
-			slog.Any("mode", mode),
-			slog.Int("view_bytes", viewLen),
+			slog.Int("cell_count", len(frame.Cells)),
 			slog.Int("cols", cols),
 			slog.Int("rows", rows),
 			slog.String("since_start", sinceStart),

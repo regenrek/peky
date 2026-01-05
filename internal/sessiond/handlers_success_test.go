@@ -8,10 +8,10 @@ import (
 	"time"
 
 	uv "github.com/charmbracelet/ultraviolet"
-	"github.com/muesli/termenv"
 
 	"github.com/regenrek/peakypanes/internal/native"
 	"github.com/regenrek/peakypanes/internal/terminal"
+	"github.com/regenrek/peakypanes/internal/termframe"
 )
 
 type fakeManager struct {
@@ -115,8 +115,7 @@ func (m *fakeManager) Close() {
 
 func TestHandlePaneViewSuccess(t *testing.T) {
 	win := &fakeTerminalWindow{
-		viewLipgloss: "lip",
-		viewANSI:     "ansi",
+		viewFrame: termframe.Frame{Cols: 1, Rows: 1, Cells: []termframe.Cell{{Content: "lip", Width: 1}}},
 		hasMouse:     true,
 		allowMotion:  true,
 	}
@@ -124,12 +123,9 @@ func TestHandlePaneViewSuccess(t *testing.T) {
 	d := &Daemon{manager: manager}
 
 	payload, err := encodePayload(PaneViewRequest{
-		PaneID:       "pane-1",
-		Cols:         0,
-		Rows:         0,
-		Mode:         PaneViewLipgloss,
-		ShowCursor:   true,
-		ColorProfile: termenv.ANSI256,
+		PaneID: "pane-1",
+		Cols:   0,
+		Rows:   0,
 	})
 	if err != nil {
 		t.Fatalf("encodePayload: %v", err)
@@ -142,11 +138,8 @@ func TestHandlePaneViewSuccess(t *testing.T) {
 	if err := decodePayload(data, &resp); err != nil {
 		t.Fatalf("decodePayload: %v", err)
 	}
-	if resp.View != "lip" || resp.PaneID != "pane-1" {
+	if resp.PaneID != "pane-1" || len(resp.Frame.Cells) == 0 || resp.Frame.Cells[0].Content != "lip" {
 		t.Fatalf("unexpected pane view response: %#v", resp)
-	}
-	if resp.ColorProfile != termenv.ANSI256 {
-		t.Fatalf("expected color profile echoed, got %v", resp.ColorProfile)
 	}
 	if win.resizeCols != 1 || win.resizeRows != 1 {
 		t.Fatalf("expected resize to 1x1, got %dx%d", win.resizeCols, win.resizeRows)

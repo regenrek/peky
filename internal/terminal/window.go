@@ -19,13 +19,14 @@ import (
 	xpty "github.com/charmbracelet/x/xpty"
 	"github.com/kballard/go-shellquote"
 	"github.com/regenrek/peakypanes/internal/limits"
+	"github.com/regenrek/peakypanes/internal/termframe"
 	"github.com/regenrek/peakypanes/internal/vt"
 )
 
 const (
-	ansiRenderDebounce    = 50 * time.Millisecond
-	ansiRenderMaxInterval = 250 * time.Millisecond
-	ansiDemandDefaultTTL  = 2 * time.Second
+	frameRenderDebounce    = 50 * time.Millisecond
+	frameRenderMaxInterval = 250 * time.Millisecond
+	frameDemandDefaultTTL  = 2 * time.Second
 )
 
 // vtEmulator is the subset of the VT emulator API Window depends on.
@@ -35,7 +36,6 @@ type vtEmulator interface {
 	io.Writer
 	Close() error
 	Resize(cols, rows int)
-	Render() string
 	CellAt(x, y int) *uv.Cell
 	CursorPosition() uv.Position
 	SendMouse(m uv.MouseEvent)
@@ -123,10 +123,10 @@ type Window struct {
 	writeMu sync.Mutex // serialize PTY writes from UI thread
 	writeCh chan writeRequest
 
-	// Cached ANSI render (cursorless) for fast non-focused panes.
+	// Cached frame render for fast pane previews.
 	cacheMu    sync.Mutex
 	cacheDirty bool
-	cacheANSI  string
+	cacheFrame termframe.Frame
 	cacheSeq   uint64
 
 	cacheCols      int
@@ -166,7 +166,7 @@ type Window struct {
 	lastWriteAt           atomic.Int64
 	firstUpdateAt         atomic.Int64
 
-	ansiDemandUntil atomic.Int64
+	frameDemandUntil atomic.Int64
 }
 
 // SetScrollbackMaxBytes updates the scrollback byte budget for the underlying VT.
@@ -311,14 +311,14 @@ func NewWindow(opts Options) (*Window, error) {
 	})
 
 	w.startIO(ctx)
-	w.startANSIRenderer(ctx)
+	w.startFrameRenderer(ctx)
 	w.wg.Add(1)
 	go w.waitExit(ctx)
 
 	return w, nil
 }
 
-func (w *Window) startANSIRenderer(ctx context.Context) {
+func (w *Window) startFrameRenderer(ctx context.Context) {
 	w.wg.Add(1)
 	go func() {
 		defer w.wg.Done()
@@ -351,15 +351,15 @@ func (w *Window) startANSIRenderer(ctx context.Context) {
 				return
 			case <-w.renderCh:
 				pending = true
-				if !lastRender.IsZero() && time.Since(lastRender) >= ansiRenderMaxInterval {
-					w.refreshANSICache()
+				if !lastRender.IsZero() && time.Since(lastRender) >= frameRenderMaxInterval {
+					w.refreshFrameCache()
 					lastRender = time.Now()
 					pending = false
 					stopTimer()
 					continue
 				}
 				if timer == nil {
-					timer = time.NewTimer(ansiRenderDebounce)
+					timer = time.NewTimer(frameRenderDebounce)
 				} else {
 					if !timer.Stop() {
 						select {
@@ -367,11 +367,11 @@ func (w *Window) startANSIRenderer(ctx context.Context) {
 						default:
 						}
 					}
-					timer.Reset(ansiRenderDebounce)
+					timer.Reset(frameRenderDebounce)
 				}
 			case <-timerCh:
 				if pending {
-					w.refreshANSICache()
+					w.refreshFrameCache()
 					lastRender = time.Now()
 					pending = false
 				}
@@ -381,8 +381,8 @@ func (w *Window) startANSIRenderer(ctx context.Context) {
 	}()
 }
 
-// RequestANSIRender schedules a background ANSI render for cached previews.
-func (w *Window) RequestANSIRender() {
+// RequestFrameRender schedules a background frame render for cached previews.
+func (w *Window) RequestFrameRender() {
 	if w == nil || w.closed.Load() {
 		return
 	}
@@ -401,9 +401,9 @@ func (w *Window) UpdateSeq() uint64 {
 	return w.updateSeq.Load()
 }
 
-// ANSICacheSeq returns the UpdateSeq value that produced the cached ANSI frame.
+// FrameCacheSeq returns the UpdateSeq value that produced the cached frame.
 // If the cache is dirty, it returns 0 so callers fall back to UpdateSeq.
-func (w *Window) ANSICacheSeq() uint64 {
+func (w *Window) FrameCacheSeq() uint64 {
 	if w == nil {
 		return 0
 	}
@@ -643,8 +643,8 @@ func (w *Window) markDirty() {
 	w.cacheMu.Lock()
 	w.cacheDirty = true
 	w.cacheMu.Unlock()
-	if w.ansiDemandActive() {
-		w.RequestANSIRender()
+	if w.frameDemandActive() {
+		w.RequestFrameRender()
 	}
 
 	// Coalesce signals.
@@ -654,31 +654,31 @@ func (w *Window) markDirty() {
 	}
 }
 
-// TouchANSIDemand keeps the ANSI cache renderer active for a short window.
-func (w *Window) TouchANSIDemand(ttl time.Duration) {
+// TouchFrameDemand keeps the frame cache renderer active for a short window.
+func (w *Window) TouchFrameDemand(ttl time.Duration) {
 	if w == nil || w.closed.Load() {
 		return
 	}
 	if ttl <= 0 {
-		ttl = ansiDemandDefaultTTL
+		ttl = frameDemandDefaultTTL
 	}
 	until := time.Now().Add(ttl).UnixNano()
 	for {
-		cur := w.ansiDemandUntil.Load()
+		cur := w.frameDemandUntil.Load()
 		if until <= cur {
 			return
 		}
-		if w.ansiDemandUntil.CompareAndSwap(cur, until) {
+		if w.frameDemandUntil.CompareAndSwap(cur, until) {
 			return
 		}
 	}
 }
 
-func (w *Window) ansiDemandActive() bool {
+func (w *Window) frameDemandActive() bool {
 	if w == nil {
 		return false
 	}
-	until := w.ansiDemandUntil.Load()
+	until := w.frameDemandUntil.Load()
 	return until > 0 && time.Now().UnixNano() <= until
 }
 

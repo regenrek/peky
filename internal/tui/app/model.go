@@ -7,12 +7,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
-
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/sessiond"
 	"github.com/regenrek/peakypanes/internal/tui/mouse"
@@ -161,8 +160,8 @@ type Model struct {
 
 	autoStart *AutoStartSpec
 
-	paneViewProfile   termenv.Profile
-	paneViews         map[paneViewKey]string
+	paneViewProfile   colorprofile.Profile
+	paneViews         map[paneViewKey]paneViewEntry
 	paneMouseMotion   map[string]bool
 	paneInputDisabled map[string]struct{}
 
@@ -213,7 +212,7 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 		configPath:         configPath,
 		expandedSessions:   make(map[string]bool),
 		selectionByProject: make(map[string]selectionState),
-		paneViews:          make(map[paneViewKey]string),
+		paneViews:          make(map[paneViewKey]paneViewEntry),
 		paneMouseMotion:    make(map[string]bool),
 		paneViewProfile:    detectPaneViewProfile(),
 		paneInputDisabled:  make(map[string]struct{}),

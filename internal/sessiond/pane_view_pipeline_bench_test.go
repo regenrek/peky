@@ -2,29 +2,24 @@ package sessiond
 
 import (
 	"context"
-	"strings"
 	"testing"
 
-	"github.com/muesli/termenv"
+	"github.com/regenrek/peakypanes/internal/termframe"
 )
 
 func BenchmarkPaneViewResponse(b *testing.B) {
-	view := strings.Repeat("x", 80*24)
+	view := termframe.Frame{Cols: 80, Rows: 24, Cells: make([]termframe.Cell, 80*24)}
 	win := &fakeTerminalWindow{
-		viewANSI:     view,
-		viewLipgloss: view,
-		updateSeq:    42,
+		viewFrame: view,
+		updateSeq: 42,
 	}
 	manager := &fakeManager{windowID: "pane-1", window: win}
 	d := &Daemon{manager: manager}
 
 	baseReq := PaneViewRequest{
-		PaneID:       "pane-1",
-		Cols:         80,
-		Rows:         24,
-		Mode:         PaneViewANSI,
-		ShowCursor:   false,
-		ColorProfile: termenv.TrueColor,
+		PaneID: "pane-1",
+		Cols:   80,
+		Rows:   24,
 	}
 
 	b.Run("NotModified", func(b *testing.B) {
@@ -37,7 +32,7 @@ func BenchmarkPaneViewResponse(b *testing.B) {
 		}
 	})
 
-	b.Run("ANSI", func(b *testing.B) {
+	b.Run("FrameCached", func(b *testing.B) {
 		req := baseReq
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -46,10 +41,9 @@ func BenchmarkPaneViewResponse(b *testing.B) {
 		}
 	})
 
-	b.Run("Lipgloss", func(b *testing.B) {
+	b.Run("FrameDirect", func(b *testing.B) {
 		req := baseReq
-		req.Mode = PaneViewLipgloss
-		req.ShowCursor = true
+		req.DirectRender = true
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {

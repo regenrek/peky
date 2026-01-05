@@ -28,10 +28,10 @@ func TrimLinesByBytes(lines []string, maxBytes int64) []string {
 	return lines[start:]
 }
 
-// RenderPlainView renders a fixed-size viewport from scrollback and screen lines.
-func RenderPlainView(cols, rows int, scrollback, screen []string) string {
+// RenderPlainLines renders a fixed-size viewport from scrollback and screen lines.
+func RenderPlainLines(cols, rows int, scrollback, screen []string) []string {
 	if cols <= 0 || rows <= 0 {
-		return ""
+		return nil
 	}
 	lines := make([]string, 0, len(scrollback)+len(screen))
 	lines = append(lines, scrollback...)
@@ -46,7 +46,7 @@ func RenderPlainView(cols, rows int, scrollback, screen []string) string {
 	for i := range lines {
 		lines[i] = fitWidth(lines[i], cols)
 	}
-	return strings.Join(lines, "\n")
+	return lines
 }
 
 func fitWidth(text string, width int) string {

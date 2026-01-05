@@ -288,7 +288,7 @@ func paneLivePreviewLines(m Model, pane DashboardPane, layout paneTileLayout, se
 		return nil
 	}
 	if m.PaneView != nil && strings.TrimSpace(pane.Pane.ID) != "" {
-		live := m.PaneView(pane.Pane.ID, layout.contentWidth, layout.availablePreview, selected && m.TerminalFocus, selected)
+		live := m.PaneView(pane.Pane.ID, layout.contentWidth, layout.availablePreview, selected && m.TerminalFocus)
 		if live != "" {
 			live = padLines(live, layout.contentWidth, layout.availablePreview)
 			return strings.Split(live, "\n")

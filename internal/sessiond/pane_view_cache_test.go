@@ -3,8 +3,6 @@ package sessiond
 import (
 	"testing"
 	"time"
-
-	"github.com/muesli/termenv"
 )
 
 func TestPaneViewCacheEvictsToCap(t *testing.T) {
@@ -13,14 +11,11 @@ func TestPaneViewCacheEvictsToCap(t *testing.T) {
 	}
 	for i := 0; i < paneViewCacheMaxEntries+5; i++ {
 		key := paneViewCacheKey{
-			PaneID:       "p-1",
-			Cols:         i + 1,
-			Rows:         1,
-			Mode:         PaneViewANSI,
-			ShowCursor:   false,
-			ColorProfile: termenv.TrueColor,
+			PaneID: "p-1",
+			Cols:   i + 1,
+			Rows:   1,
 		}
-		c.paneViewCachePut(key, PaneViewResponse{UpdateSeq: uint64(i + 1), View: "x"})
+		c.paneViewCachePut(key, PaneViewResponse{UpdateSeq: uint64(i + 1)})
 	}
 
 	c.paneViewCacheMu.Lock()
@@ -36,14 +31,11 @@ func TestPaneViewCacheTTLExpires(t *testing.T) {
 		paneViewCache: make(map[paneViewCacheKey]cachedPaneView),
 	}
 	key := paneViewCacheKey{
-		PaneID:       "p-1",
-		Cols:         80,
-		Rows:         24,
-		Mode:         PaneViewANSI,
-		ShowCursor:   false,
-		ColorProfile: termenv.TrueColor,
+		PaneID: "p-1",
+		Cols:   80,
+		Rows:   24,
 	}
-	c.paneViewCachePut(key, PaneViewResponse{UpdateSeq: 1, View: "x"})
+	c.paneViewCachePut(key, PaneViewResponse{UpdateSeq: 1})
 
 	c.paneViewCacheMu.Lock()
 	entry := c.paneViewCache[key]
@@ -61,14 +53,11 @@ func TestPaneViewCacheGetRefreshesAccessTime(t *testing.T) {
 		paneViewCache: make(map[paneViewCacheKey]cachedPaneView),
 	}
 	key := paneViewCacheKey{
-		PaneID:       "p-1",
-		Cols:         80,
-		Rows:         24,
-		Mode:         PaneViewANSI,
-		ShowCursor:   false,
-		ColorProfile: termenv.TrueColor,
+		PaneID: "p-1",
+		Cols:   80,
+		Rows:   24,
 	}
-	c.paneViewCachePut(key, PaneViewResponse{UpdateSeq: 1, View: "x"})
+	c.paneViewCachePut(key, PaneViewResponse{UpdateSeq: 1})
 
 	c.paneViewCacheMu.Lock()
 	entry := c.paneViewCache[key]

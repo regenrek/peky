@@ -4,21 +4,18 @@ import (
 	"context"
 
 	uv "github.com/charmbracelet/ultraviolet"
-	"github.com/muesli/termenv"
 
 	"github.com/regenrek/peakypanes/internal/native"
+	"github.com/regenrek/peakypanes/internal/termframe"
 	"github.com/regenrek/peakypanes/internal/terminal"
 )
 
 type paneViewWindow interface {
-	ANSICacheSeq() uint64
+	FrameCacheSeq() uint64
 	UpdateSeq() uint64
 	CopyModeActive() bool
-	ViewLipglossCtx(ctx context.Context, showCursor bool, profile termenv.Profile) (string, error)
-	ViewANSICtx(ctx context.Context) (string, error)
-	ViewANSIDirectCtx(ctx context.Context) (string, error)
-	ViewLipgloss(showCursor bool, profile termenv.Profile) string
-	ViewANSI() string
+	ViewFrameCtx(ctx context.Context) (termframe.Frame, error)
+	ViewFrameDirectCtx(ctx context.Context) (termframe.Frame, error)
 }
 
 type paneWindow interface {

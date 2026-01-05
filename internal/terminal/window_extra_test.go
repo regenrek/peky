@@ -8,8 +8,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/colorprofile"
 	uv "github.com/charmbracelet/ultraviolet"
-	"github.com/muesli/termenv"
+
+	"github.com/regenrek/peakypanes/internal/termrender"
 )
 
 func TestLooksLikeCPR(t *testing.T) {
@@ -221,31 +223,7 @@ func TestEnvHelpers(t *testing.T) {
 	}
 }
 
-func TestViewANSIAndRenderHelpers(t *testing.T) {
-	emu := &fakeEmu{renderValue: "hi"}
-	w := &Window{term: emu, cacheDirty: true}
-	if got := w.ViewANSI(); got != "hi" {
-		t.Fatalf("ViewANSI = %q", got)
-	}
-	if emu.renderCalls != 1 {
-		t.Fatalf("expected 1 render call, got %d", emu.renderCalls)
-	}
-	if got := w.ViewANSI(); got != "hi" {
-		t.Fatalf("ViewANSI cache = %q", got)
-	}
-	if emu.renderCalls != 1 {
-		t.Fatalf("expected cached render, got %d", emu.renderCalls)
-	}
-	w.markDirty()
-	_ = w.ViewANSI()
-	if emu.renderCalls != 1 {
-		t.Fatalf("expected cached render after markDirty, got %d", emu.renderCalls)
-	}
-	w.refreshANSICache()
-	if emu.renderCalls != 2 {
-		t.Fatalf("expected refresh render after markDirty")
-	}
-
+func TestViewFrameAndRenderHelpers(t *testing.T) {
 	cm := &CopyMode{
 		Active:       true,
 		Selecting:    true,
@@ -272,19 +250,9 @@ func TestViewANSIAndRenderHelpers(t *testing.T) {
 			Fg: color.RGBA{R: 1, G: 2, B: 3, A: 255},
 		},
 	}
-	term := &renderTerm{cell: cell, cursor: uv.Pos(0, 0)}
-	out := RenderEmulatorLipgloss(term, 1, 1, RenderOptions{ShowCursor: true, Profile: termenv.TrueColor})
+	frame := frameFromCells([]uv.Cell{cell}, 1, 1, viewRenderState{cursorX: 0, cursorY: 0, showCursor: true})
+	out := termrender.Render(frame, termrender.Options{ShowCursor: true, Profile: colorprofile.TrueColor})
 	if !strings.Contains(out, "A") {
 		t.Fatalf("expected rendered cell, got %q", out)
 	}
-}
-
-type renderTerm struct {
-	cell   uv.Cell
-	cursor uv.Position
-}
-
-func (r *renderTerm) CellAt(int, int) *uv.Cell { return &r.cell }
-func (r *renderTerm) CursorPosition() uv.Position {
-	return r.cursor
 }

@@ -363,7 +363,7 @@
       "required": ["pane_id", "mode", "rows", "cols", "content"],
       "properties": {
         "pane_id": {"$ref": "#/$defs/ID"},
-        "mode": {"type": "string", "enum": ["ansi", "lipgloss", "plain"]},
+        "mode": {"type": "string", "enum": ["ansi", "plain"]},
         "rows": {"type": "integer", "minimum": 1},
         "cols": {"type": "integer", "minimum": 1},
         "content": {"type": "string"},

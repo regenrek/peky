@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/regenrek/peakypanes/internal/native"
+	"github.com/regenrek/peakypanes/internal/termframe"
 )
 
 func newClientWithTestServer(t *testing.T) (*Client, func()) {
@@ -165,7 +166,7 @@ func serveClientTestConn(t *testing.T, conn net.Conn) {
 		case OpSplitPane:
 			payload = encodeMust(t, SplitPaneResponse{NewIndex: "2"})
 		case OpPaneView:
-			payload = encodeMust(t, PaneViewResponse{PaneID: "pane-1", Cols: 10, Rows: 2, Mode: PaneViewANSI, View: "ok"})
+			payload = encodeMust(t, PaneViewResponse{PaneID: "pane-1", Cols: 10, Rows: 2, Frame: termframe.Frame{Cols: 1, Rows: 1, Cells: []termframe.Cell{{Content: "ok", Width: 1}}}})
 		case OpTerminalAction:
 			payload = encodeMust(t, TerminalActionResponse{PaneID: "pane-1"})
 		case OpHandleKey:

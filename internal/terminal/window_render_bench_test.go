@@ -7,8 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/muesli/termenv"
-
 	"github.com/regenrek/peakypanes/internal/vt"
 )
 
@@ -25,34 +23,23 @@ func BenchmarkWindowRender(b *testing.B) {
 	for _, size := range sizes {
 		payload := benchPayload(size.cols, size.rows)
 
-		b.Run("ANSIRefresh/"+size.name, func(b *testing.B) {
+		b.Run("FrameRefresh/"+size.name, func(b *testing.B) {
 			w := newBenchWindow(size.cols, size.rows)
 			seedBenchWindow(w, payload)
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				w.refreshANSICache()
+				w.refreshFrameCache()
 			}
 		})
 
-		b.Run("Lipgloss/"+size.name, func(b *testing.B) {
+		b.Run("FrameDirect/"+size.name, func(b *testing.B) {
 			w := newBenchWindow(size.cols, size.rows)
 			seedBenchWindow(w, payload)
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				_, _ = w.ViewLipglossCtx(context.Background(), false, termenv.TrueColor)
-			}
-		})
-
-		b.Run("LipglossCursor/"+size.name, func(b *testing.B) {
-			w := newBenchWindow(size.cols, size.rows)
-			seedBenchWindow(w, payload)
-			w.cursorVisible.Store(true)
-			b.ReportAllocs()
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				_, _ = w.ViewLipglossCtx(context.Background(), true, termenv.TrueColor)
+				_, _ = w.ViewFrameDirectCtx(context.Background())
 			}
 		})
 	}

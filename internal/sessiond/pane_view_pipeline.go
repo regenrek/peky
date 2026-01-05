@@ -9,9 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/muesli/termenv"
-
 	"github.com/regenrek/peakypanes/internal/logging"
+	"github.com/regenrek/peakypanes/internal/termframe"
 )
 
 const (
@@ -24,14 +23,12 @@ const (
 	paneViewCacheMaxEntries = 100
 )
 
-func paneViewEffectiveSeq(win paneViewWindow, renderMode PaneViewMode) uint64 {
+func paneViewEffectiveSeq(win paneViewWindow) uint64 {
 	if win == nil {
 		return 0
 	}
-	if renderMode == PaneViewANSI {
-		if seq := win.ANSICacheSeq(); seq != 0 {
-			return seq
-		}
+	if seq := win.FrameCacheSeq(); seq != 0 {
+		return seq
 	}
 	return win.UpdateSeq()
 }
@@ -161,10 +158,6 @@ func paneViewJobPriority(req PaneViewRequest) int {
 	if req.Priority != PaneViewPriorityUnset {
 		return int(req.Priority)
 	}
-	// Back-compat: infer priority from mode.
-	if req.Mode == PaneViewLipgloss || req.ShowCursor {
-		return int(PaneViewPriorityFocused)
-	}
 	return int(PaneViewPriorityNormal)
 }
 
@@ -243,12 +236,9 @@ func (s *paneViewScheduler) close() {
 }
 
 type paneViewCacheKey struct {
-	PaneID       string
-	Cols         int
-	Rows         int
-	Mode         PaneViewMode
-	ShowCursor   bool
-	ColorProfile termenv.Profile
+	PaneID string
+	Cols   int
+	Rows   int
 }
 
 type cachedPaneView struct {
@@ -257,14 +247,11 @@ type cachedPaneView struct {
 	updateSeq  uint64
 }
 
-func paneViewCacheKeyFor(paneID string, cols, rows int, req PaneViewRequest) paneViewCacheKey {
+func paneViewCacheKeyFor(paneID string, cols, rows int) paneViewCacheKey {
 	return paneViewCacheKey{
-		PaneID:       paneID,
-		Cols:         cols,
-		Rows:         rows,
-		Mode:         req.Mode,
-		ShowCursor:   req.ShowCursor,
-		ColorProfile: req.ColorProfile,
+		PaneID: paneID,
+		Cols:   cols,
+		Rows:   rows,
 	}
 }
 
@@ -475,7 +462,7 @@ func (d *Daemon) paneViewResponse(ctx context.Context, client *clientConn, paneI
 		return PaneViewResponse{}, err
 	}
 
-	currentSeq, knownSeq := paneViewSeqs(win, info.renderMode, req)
+	currentSeq, knownSeq := paneViewSeqs(win, req)
 	if resp, ok := paneViewNotModified(win, paneID, info, currentSeq, knownSeq); ok {
 		return resp, nil
 	}
@@ -486,11 +473,11 @@ func (d *Daemon) paneViewResponse(ctx context.Context, client *clientConn, paneI
 		return resp, err
 	}
 
-	var view string
+	var frame termframe.Frame
 	perf := slog.Default().Enabled(context.Background(), slog.LevelDebug)
 	if perf {
 		start := time.Now()
-		view, err = paneViewString(ctx, win, info.renderReq)
+		frame, err = paneViewFrame(ctx, win, info.renderReq)
 		dur := time.Since(start)
 		if dur > paneViewSlowThreshold {
 			logging.LogEvery(
@@ -500,35 +487,31 @@ func (d *Daemon) paneViewResponse(ctx context.Context, client *clientConn, paneI
 				slog.LevelDebug,
 				"sessiond: pane view render slow",
 				slog.String("pane_id", paneID),
-				slog.Any("mode", info.renderMode),
 				slog.Duration("dur", dur),
 				slog.Int("cols", info.cols),
 				slog.Int("rows", info.rows),
 			)
 		}
 	} else {
-		view, err = paneViewString(ctx, win, info.renderReq)
+		frame, err = paneViewFrame(ctx, win, info.renderReq)
 	}
 	if err != nil {
 		return paneViewRenderError(err, client, info.key)
 	}
-	d.logPaneViewFirst(win, paneID, info.renderMode, len(view), info.cols, info.rows)
+	d.logPaneViewFirst(win, paneID, info.cols, info.rows, frame)
 
 	// Refresh seq after render. If output happened concurrently, the next request will pick it up.
-	currentSeq = paneViewEffectiveSeq(win, info.renderMode)
+	currentSeq = paneViewEffectiveSeq(win)
 
 	resp := PaneViewResponse{
-		PaneID:       paneID,
-		Cols:         info.cols,
-		Rows:         info.rows,
-		Mode:         info.renderMode,
-		ShowCursor:   info.renderReq.ShowCursor,
-		ColorProfile: info.renderReq.ColorProfile,
-		UpdateSeq:    currentSeq,
-		NotModified:  false,
-		View:         view,
-		HasMouse:     win.HasMouseMode(),
-		AllowMotion:  win.AllowsMouseMotion(),
+		PaneID:      paneID,
+		Cols:        info.cols,
+		Rows:        info.rows,
+		UpdateSeq:   currentSeq,
+		NotModified: false,
+		Frame:       frame,
+		HasMouse:    win.HasMouseMode(),
+		AllowMotion: win.AllowsMouseMotion(),
 	}
 	if client != nil {
 		client.paneViewCachePut(info.key, resp)
@@ -537,34 +520,27 @@ func (d *Daemon) paneViewResponse(ctx context.Context, client *clientConn, paneI
 }
 
 type paneViewRenderInfo struct {
-	cols       int
-	rows       int
-	renderMode PaneViewMode
-	renderReq  PaneViewRequest
-	key        paneViewCacheKey
+	cols      int
+	rows      int
+	renderReq PaneViewRequest
+	key       paneViewCacheKey
 }
 
 func buildPaneViewRenderInfo(win paneViewWindow, paneID string, req PaneViewRequest) paneViewRenderInfo {
 	cols, rows := normalizeDimensions(req.Cols, req.Rows)
-	renderMode := paneViewRenderMode(win, req)
 	renderReq := req
-	renderReq.Mode = renderMode
+	renderReq.Cols = cols
+	renderReq.Rows = rows
 	return paneViewRenderInfo{
-		cols:       cols,
-		rows:       rows,
-		renderMode: renderMode,
-		renderReq:  renderReq,
-		key:        paneViewCacheKeyFor(paneID, cols, rows, renderReq),
+		cols:      cols,
+		rows:      rows,
+		renderReq: renderReq,
+		key:       paneViewCacheKeyFor(paneID, cols, rows),
 	}
 }
 
-func paneViewSeqs(win paneViewWindow, renderMode PaneViewMode, req PaneViewRequest) (uint64, uint64) {
-	currentSeq := paneViewEffectiveSeq(win, renderMode)
-	knownSeq := req.KnownSeq
-	if renderMode != req.Mode {
-		knownSeq = 0
-	}
-	return currentSeq, knownSeq
+func paneViewSeqs(win paneViewWindow, req PaneViewRequest) (uint64, uint64) {
+	return paneViewEffectiveSeq(win), req.KnownSeq
 }
 
 func paneViewNotModified(
@@ -578,17 +554,14 @@ func paneViewNotModified(
 		return PaneViewResponse{}, false
 	}
 	return PaneViewResponse{
-		PaneID:       paneID,
-		Cols:         info.cols,
-		Rows:         info.rows,
-		Mode:         info.renderMode,
-		ShowCursor:   info.renderReq.ShowCursor,
-		ColorProfile: info.renderReq.ColorProfile,
-		UpdateSeq:    currentSeq,
-		NotModified:  true,
-		View:         "",
-		HasMouse:     win.HasMouseMode(),
-		AllowMotion:  win.AllowsMouseMotion(),
+		PaneID:      paneID,
+		Cols:        info.cols,
+		Rows:        info.rows,
+		UpdateSeq:   currentSeq,
+		NotModified: true,
+		Frame:       termframe.Frame{},
+		HasMouse:    win.HasMouseMode(),
+		AllowMotion: win.AllowsMouseMotion(),
 	}, true
 }
 
@@ -610,9 +583,6 @@ func paneViewCachedHit(
 	cached.PaneID = paneID
 	cached.Cols = info.cols
 	cached.Rows = info.rows
-	cached.Mode = info.renderMode
-	cached.ShowCursor = info.renderReq.ShowCursor
-	cached.ColorProfile = info.renderReq.ColorProfile
 	cached.UpdateSeq = currentSeq
 	cached.NotModified = false
 	cached.HasMouse = win.HasMouseMode()
@@ -679,19 +649,9 @@ func paneViewDeadlineSoon(ctx context.Context) bool {
 	return time.Until(deadline) <= paneViewDeadlineSlack
 }
 
-func paneViewRenderMode(win paneViewWindow, req PaneViewRequest) PaneViewMode {
-	if req.Mode == PaneViewLipgloss || req.ShowCursor {
-		return PaneViewLipgloss
-	}
-	return PaneViewANSI
-}
-
-func paneViewString(ctx context.Context, win paneViewWindow, req PaneViewRequest) (string, error) {
-	if req.Mode == PaneViewLipgloss {
-		return win.ViewLipglossCtx(ctx, req.ShowCursor, req.ColorProfile)
-	}
+func paneViewFrame(ctx context.Context, win paneViewWindow, req PaneViewRequest) (termframe.Frame, error) {
 	if req.DirectRender {
-		return win.ViewANSIDirectCtx(ctx)
+		return win.ViewFrameDirectCtx(ctx)
 	}
-	return win.ViewANSICtx(ctx)
+	return win.ViewFrameCtx(ctx)
 }
