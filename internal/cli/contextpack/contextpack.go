@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -175,7 +174,7 @@ func encodePack(pack output.ContextPack) ([]byte, bool) {
 }
 
 func gitContext(ctx root.CommandContext) (*output.GitContext, error) {
-	cwd, err := os.Getwd()
+	cwd, err := root.ResolveWorkDir(ctx)
 	if err != nil {
 		return nil, err
 	}

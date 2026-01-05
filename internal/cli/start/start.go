@@ -3,7 +3,6 @@ package start
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -24,7 +23,7 @@ func runStart(ctx root.CommandContext) error {
 	session := strings.TrimSpace(ctx.Cmd.String("session"))
 	path := strings.TrimSpace(ctx.Cmd.String("path"))
 	if path == "" {
-		cwd, err := os.Getwd()
+		cwd, err := root.ResolveWorkDir(ctx)
 		if err != nil {
 			return err
 		}

@@ -73,7 +73,7 @@ export PEAKYPANES_FRESH_CONFIG=1
 DAEMON_PID=$!
 
 cleanup() {
-  "$BIN" session kill --name "$SESSION_NAME" --yes >/dev/null 2>&1 || true
+  "$BIN" session close --name "$SESSION_NAME" --yes >/dev/null 2>&1 || true
   "$BIN" daemon stop --yes >/dev/null 2>&1 || true
   if kill -0 "$DAEMON_PID" >/dev/null 2>&1; then
     kill -TERM "$DAEMON_PID" >/dev/null 2>&1 || true

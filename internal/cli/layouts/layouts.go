@@ -2,7 +2,6 @@ package layouts
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -22,7 +21,7 @@ func Register(reg *root.Registry) {
 func runList(ctx root.CommandContext) error {
 	start := time.Now()
 	meta := output.NewMeta("layouts.list", ctx.Deps.Version)
-	layouts, err := loadLayoutsForList()
+	layouts, err := loadLayoutsForList(ctx)
 	if err != nil {
 		return err
 	}
@@ -33,12 +32,15 @@ func runList(ctx root.CommandContext) error {
 	return writeLayoutsText(ctx, layouts)
 }
 
-func loadLayoutsForList() ([]layout.LayoutInfo, error) {
+func loadLayoutsForList(ctx root.CommandContext) ([]layout.LayoutInfo, error) {
 	loader, err := layout.NewLoader()
 	if err != nil {
 		return nil, err
 	}
-	cwd, _ := os.Getwd()
+	cwd, err := root.ResolveWorkDir(ctx)
+	if err != nil {
+		return nil, err
+	}
 	loader.SetProjectDir(cwd)
 	if err := loader.LoadAll(); err != nil {
 		return nil, err

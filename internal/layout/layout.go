@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/regenrek/peakypanes/internal/limits"
 )
 
 // Grid represents a rectangular pane arrangement.
@@ -51,8 +53,8 @@ func (g Grid) Validate() error {
 		return fmt.Errorf("rows must be positive (got %d)", g.Rows)
 	case g.Columns <= 0:
 		return fmt.Errorf("columns must be positive (got %d)", g.Columns)
-	case g.Rows*g.Columns > 12:
-		return fmt.Errorf("layout %s creates %d panes; limit is 12 to keep panes readable", g, g.Rows*g.Columns)
+	case g.Rows*g.Columns > limits.MaxPanes:
+		return fmt.Errorf("layout %s creates %d panes; limit is %d to keep panes readable", g, g.Rows*g.Columns, limits.MaxPanes)
 	}
 	return nil
 }

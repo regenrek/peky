@@ -113,6 +113,7 @@ func testCommand() *cli.Command {
 			&cli.StringFlag{Name: "name"},
 			&cli.StringFlag{Name: "path"},
 			&cli.StringFlag{Name: "layout"},
+			&cli.IntFlag{Name: "panes"},
 			&cli.StringFlag{Name: "old"},
 			&cli.StringFlag{Name: "new"},
 			&cli.StringSliceFlag{Name: "env"},
@@ -238,12 +239,12 @@ func (f sessionFlow) mustSnapshotContains(name string, json bool, want string) {
 	}
 }
 
-func (f sessionFlow) mustKill(name string, json bool) {
+func (f sessionFlow) mustClose(name string, json bool) {
 	f.t.Helper()
 	cmd := testCommand()
 	_ = cmd.Set("name", name)
-	if err := runKill(f.ctx(cmd, io.Discard, json)); err != nil {
-		f.t.Fatalf("runKill(json=%v) error: %v", json, err)
+	if err := runClose(f.ctx(cmd, io.Discard, json)); err != nil {
+		f.t.Fatalf("runClose(json=%v) error: %v", json, err)
 	}
 }
 
@@ -275,6 +276,22 @@ func TestSessionCommandFlow(t *testing.T) {
 	flow.mustSnapshotContains(name, false, name)
 	flow.mustSnapshotContains(name, true, "\"snapshot\"")
 
-	flow.mustKill(name, false)
-	flow.mustKill(jsonName, true)
+	flow.mustClose(name, false)
+	flow.mustClose(jsonName, true)
+}
+
+func TestSessionStartWithPanes(t *testing.T) {
+	flow := newSessionFlow(t)
+	path := t.TempDir()
+	cmd := testCommand()
+	_ = cmd.Set("name", "sess-panes")
+	_ = cmd.Set("path", path)
+	_ = cmd.Set("panes", "3")
+	if err := runStart(flow.ctx(cmd, io.Discard, false)); err != nil {
+		t.Fatalf("runStart(panes) error: %v", err)
+	}
+	snap := waitForSessionSnapshot(t, flow.client, "sess-panes")
+	if len(snap.Panes) != 3 {
+		t.Fatalf("expected 3 panes, got %d", len(snap.Panes))
+	}
 }

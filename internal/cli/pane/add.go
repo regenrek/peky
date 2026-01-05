@@ -33,6 +33,13 @@ func runAdd(ctx root.CommandContext) error {
 	}
 	vertical := orientation == "vertical"
 	percent := ctx.Cmd.Int("percent")
+	count := ctx.Cmd.Int("count")
+	if count == 0 {
+		count = 1
+	}
+	if count < 1 {
+		return fmt.Errorf("count must be positive")
+	}
 
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
 	defer cancel()
@@ -41,13 +48,20 @@ func runAdd(ctx root.CommandContext) error {
 	if err != nil {
 		return err
 	}
-	newIndex, err := client.SplitPane(ctxTimeout, targetSession, targetIndex, vertical, percent)
-	if err != nil {
-		return err
+
+	newIndexes := make([]string, 0, count)
+	currentIndex := targetIndex
+	for i := 0; i < count; i++ {
+		newIndex, err := client.SplitPane(ctxTimeout, targetSession, currentIndex, vertical, percent)
+		if err != nil {
+			return err
+		}
+		newIndexes = append(newIndexes, newIndex)
+		currentIndex = newIndex
 	}
 	var focusedPaneID string
-	if ctx.Cmd.Bool("focus") {
-		focusedPaneID, err = focusPaneByIndex(ctxTimeout, client, targetSession, newIndex)
+	if ctx.Cmd.Bool("focus") && len(newIndexes) > 0 {
+		focusedPaneID, err = focusPaneByIndex(ctxTimeout, client, targetSession, newIndexes[len(newIndexes)-1])
 		if err != nil {
 			return err
 		}
@@ -57,8 +71,13 @@ func runAdd(ctx root.CommandContext) error {
 		details := map[string]any{
 			"session":     targetSession,
 			"split_from":  targetIndex,
-			"new_index":   newIndex,
 			"orientation": orientation,
+		}
+		if len(newIndexes) == 1 {
+			details["new_index"] = newIndexes[0]
+		} else {
+			details["new_indexes"] = newIndexes
+			details["count"] = len(newIndexes)
 		}
 		if focusedPaneID != "" {
 			details["focused_pane_id"] = focusedPaneID
@@ -69,7 +88,11 @@ func runAdd(ctx root.CommandContext) error {
 			Details: details,
 		})
 	}
-	return writef(ctx.Out, "Pane added %s\n", newIndex)
+	if len(newIndexes) == 1 {
+		return writef(ctx.Out, "Pane added %s\n", newIndexes[0])
+	}
+	lastIndex := newIndexes[len(newIndexes)-1]
+	return writef(ctx.Out, "Added %d panes (last index %s)\n", len(newIndexes), lastIndex)
 }
 
 func resolveAddTarget(ctx context.Context, client *sessiond.Client, sessionName, paneIndex, paneID string) (string, string, error) {

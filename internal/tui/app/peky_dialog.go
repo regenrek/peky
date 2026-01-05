@@ -8,12 +8,13 @@ import (
 
 const pekyDialogReservedLines = 2
 
-func (m *Model) openPekyDialog(title, body, footer string) {
+func (m *Model) openPekyDialog(title, body, footer string, isError bool) {
 	if m == nil {
 		return
 	}
 	m.pekyDialogTitle = strings.TrimSpace(title)
 	m.pekyDialogFooter = strings.TrimSpace(footer)
+	m.pekyDialogIsError = isError
 	m.pekyViewport.SetContent(body)
 	m.pekyViewport.GotoTop()
 	m.setPekyDialogSize()
@@ -34,6 +35,7 @@ func (m *Model) closePekyDialog() {
 	if previous == 0 {
 		previous = StateDashboard
 	}
+	m.pekyDialogIsError = false
 	m.state = previous
 }
 
@@ -43,6 +45,15 @@ func (m *Model) setPekyDialogSize() {
 	}
 	frameW, frameH := dialogStyle.GetFrameSize()
 	maxW := m.width - 8
+	if m.pekyDialogIsError {
+		maxW = int(float64(m.width) * 0.65)
+		if maxW < 40 {
+			maxW = 40
+		}
+		if maxW > m.width {
+			maxW = m.width
+		}
+	}
 	if maxW < 30 {
 		maxW = m.width
 	}

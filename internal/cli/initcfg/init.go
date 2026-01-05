@@ -30,7 +30,11 @@ func runInit(ctx root.CommandContext) error {
 	appName := identity.NormalizeCLIName(ctx.Deps.AppName)
 	var err error
 	if local {
-		err = initLocal(appName, layoutName, force)
+		cwd, resolveErr := root.ResolveWorkDir(ctx)
+		if resolveErr != nil {
+			return resolveErr
+		}
+		err = initLocal(appName, layoutName, force, cwd)
 	} else {
 		err = initGlobal(appName, layoutName, force)
 	}
@@ -47,12 +51,7 @@ func runInit(ctx root.CommandContext) error {
 	return nil
 }
 
-func initLocal(appName, layoutName string, force bool) error {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("cannot determine current directory: %w", err)
-	}
-
+func initLocal(appName, layoutName string, force bool, cwd string) error {
 	configPath := filepath.Join(cwd, ".peakypanes.yml")
 	if !force {
 		if _, err := os.Stat(configPath); err == nil {
@@ -172,7 +171,7 @@ ghostty:
 #   # allowed_commands:
 #   #   - pane.add
 #   #   - pane.split
-#   #   - session.kill
+#   #   - session.close
 #   # Otherwise, blocked_commands denies specific commands/prefixes.
 #   blocked_commands:
 #     - daemon

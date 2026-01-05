@@ -21,7 +21,7 @@ func (m Model) viewConfirmKill() string {
 		body.WriteString("\n")
 	}
 	body.WriteString(theme.DialogNote.Render("Kill the session: This won't delete your project"))
-	return m.renderConfirmDialog("⚠️  Kill Session?", body.String(), []dialogChoice{
+	return m.renderConfirmDialog("⚠️  Close Session?", body.String(), []dialogChoice{
 		{Key: "y", Label: "confirm"},
 		{Key: "n", Label: "cancel"},
 	})
@@ -59,7 +59,7 @@ func (m Model) viewConfirmCloseProject() string {
 	body.WriteString(theme.DialogNote.Render("Press k to kill running sessions instead."))
 	return m.renderConfirmDialog("⚠️  Close Project?", body.String(), []dialogChoice{
 		{Key: "y", Label: "close"},
-		{Key: "k", Label: "kill sessions"},
+		{Key: "k", Label: "close sessions"},
 		{Key: "n", Label: "cancel"},
 	})
 }
@@ -77,7 +77,7 @@ func (m Model) viewConfirmCloseAllProjects() string {
 	body.WriteString(theme.DialogNote.Render("Press k to kill running sessions instead."))
 	return m.renderConfirmDialog("⚠️  Close All Projects?", body.String(), []dialogChoice{
 		{Key: "y", Label: "close all"},
-		{Key: "k", Label: "kill sessions"},
+		{Key: "k", Label: "close sessions"},
 		{Key: "n", Label: "cancel"},
 	})
 }
@@ -187,6 +187,39 @@ func (m Model) viewProjectRootSetup() string {
 		note,
 		inputLine,
 		choices,
+	)
+	return m.renderDialog(dialogSpec{Content: content})
+}
+
+func (m Model) viewAuthDialog() string {
+	inputWidth := 50
+	if m.Width > 0 {
+		inputWidth = clamp(m.Width-30, 24, 80)
+	}
+	m.AuthDialog.Input.Width = inputWidth
+	title := strings.TrimSpace(m.AuthDialog.Title)
+	if title == "" {
+		title = "OAuth"
+	}
+	body := strings.TrimSpace(m.AuthDialog.Body)
+	if body == "" {
+		body = "Follow the instructions below to continue."
+	}
+	footer := strings.TrimSpace(m.AuthDialog.Footer)
+	if footer == "" {
+		footer = "enter confirm • esc cancel"
+	}
+	inputLine := theme.DialogLabel.Render("Paste code or token: ") + m.AuthDialog.Input.View()
+	choices := renderDialogChoices([]dialogChoice{
+		{Key: "enter", Label: "confirm"},
+		{Key: "esc", Label: "cancel"},
+	})
+	content := dialogContent(
+		dialogTitleStyle.Render(title),
+		body,
+		inputLine,
+		choices,
+		theme.DialogNote.Render(footer),
 	)
 	return m.renderDialog(dialogSpec{Content: content})
 }

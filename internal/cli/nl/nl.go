@@ -225,8 +225,8 @@ func planFromRules(specDoc *spec.Spec, prompt string) (output.NLPlannedCommand, 
 	if cmd, ok := matchSessionRename(specDoc, prompt); ok {
 		return cmd, "Matched rule: rename session", nil
 	}
-	if cmd, ok := matchSessionKill(specDoc, prompt); ok {
-		return cmd, "Matched rule: kill session", nil
+	if cmd, ok := matchSessionClose(specDoc, prompt); ok {
+		return cmd, "Matched rule: close session", nil
 	}
 	if cmd, ok := matchSessionStart(specDoc, prompt); ok {
 		return cmd, "Matched rule: start session", nil
@@ -260,9 +260,9 @@ func matchSessionRename(specDoc *spec.Spec, prompt string) (output.NLPlannedComm
 	return buildSimple(specDoc, "session.rename", []string{"session", "rename"}, nil, flags), true
 }
 
-func matchSessionKill(specDoc *spec.Spec, prompt string) (output.NLPlannedCommand, bool) {
+func matchSessionClose(specDoc *spec.Spec, prompt string) (output.NLPlannedCommand, bool) {
 	lower := strings.ToLower(prompt)
-	if !strings.Contains(lower, "kill session") {
+	if !strings.Contains(lower, "close session") && !strings.Contains(lower, "kill session") {
 		return output.NLPlannedCommand{}, false
 	}
 	parts := strings.Fields(prompt)
@@ -272,7 +272,7 @@ func matchSessionKill(specDoc *spec.Spec, prompt string) (output.NLPlannedComman
 	}
 	name := parts[idx+1]
 	flags := map[string]any{"name": name}
-	return buildSimple(specDoc, "session.kill", []string{"session", "kill"}, nil, flags), true
+	return buildSimple(specDoc, "session.close", []string{"session", "close"}, nil, flags), true
 }
 
 func matchSessionStart(specDoc *spec.Spec, prompt string) (output.NLPlannedCommand, bool) {

@@ -111,11 +111,12 @@ Use this for personal layouts and multi-project management:
 #   # allowed_commands:
 #   #   - pane.add
 #   #   - pane.split
-#   #   - session.kill
+#   #   - session.close
 #   # Otherwise, blocked_commands denies specific commands/prefixes.
 #   blocked_commands:
 #     - daemon
 #     - daemon.*
+#     - pane.send
 
 # Quick reply settings (for @file picker)
 # quick_reply:

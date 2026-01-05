@@ -8,10 +8,15 @@ import (
 	"time"
 )
 
-const defaultMaxSteps = 6
+const defaultMaxSteps = 10
 
 var baseSystemPrompt = strings.TrimSpace(`You are Peky, the PeakyPanes agent.
-Use the "peky" tool to run CLI commands (without the leading "peky").
+Use the "peky" tool to run CLI commands; pass commands without the leading "peky".
+Always run "--help" to discover commands and flags.
+Examples: "pane add --count 3", "pane close --pane-id p-8", "session start --name work --panes 3".
+Keep replies extremely short so they fit in a toast; omit extra detail.
+Prefer a single tool call; after a successful tool result, respond and stop.
+Use pane run for commands; do not use pane send.
 Never run daemon commands or modify the daemon.
 Use @file tokens as references only; do not assume file contents.
 Ask a clarifying question when a target (pane/session) is ambiguous.`)
@@ -75,6 +80,27 @@ func RunPrompt(
 	if strings.TrimSpace(contextHint) != "" {
 		systemPrompt = systemPrompt + "\n\n" + strings.TrimSpace(contextHint)
 	}
+	runID := fmt.Sprintf("peky-%d", time.Now().UnixNano())
+	trace, closeTrace, _ := newTraceLogger(norm.TracePath)
+	if closeTrace != nil {
+		defer func() { _ = closeTrace() }()
+	}
+	if trace != nil {
+		trace.log(traceEvent{
+			Time:     nowRFC3339(),
+			RunID:    runID,
+			Event:    "run_start",
+			Provider: string(norm.Provider),
+			Model:    norm.Model,
+			Prompt:   truncateField(prompt),
+			Context:  truncateField(contextHint),
+			Meta: map[string]any{
+				"max_steps": defaultMaxSteps,
+				"history":   len(history),
+			},
+		})
+	}
+
 	messages := append([]Message(nil), history...)
 	prompt = strings.TrimSpace(prompt)
 	messages = append(messages, NewUserMessage(prompt))
@@ -91,24 +117,75 @@ func RunPrompt(
 			ToolChoice:   "auto",
 		})
 		if err != nil {
+			if trace != nil {
+				trace.log(traceEvent{
+					Time:     nowRFC3339(),
+					RunID:    runID,
+					Event:    "llm_error",
+					Step:     step,
+					Provider: string(norm.Provider),
+					Model:    norm.Model,
+					Error:    err.Error(),
+				})
+			}
 			return Result{}, history, err
 		}
+		filteredCalls := filterToolCalls(norm.Provider, resp.ToolCalls)
 		last = Result{
 			Text:       strings.TrimSpace(resp.Text),
 			Usage:      resp.Usage,
-			ToolCalls:  resp.ToolCalls,
+			ToolCalls:  filteredCalls,
 			Provider:   norm.Provider,
 			Model:      norm.Model,
 			StopReason: resp.StopReason,
 		}
-		messages = append(messages, NewAssistantMessage(resp.Text, resp.ToolCalls))
-		if len(resp.ToolCalls) == 0 {
+		if trace != nil {
+			trace.log(traceEvent{
+				Time:       nowRFC3339(),
+				RunID:      runID,
+				Event:      "llm_response",
+				Step:       step,
+				Provider:   string(norm.Provider),
+				Model:      norm.Model,
+				Text:       truncateField(resp.Text),
+				StopReason: resp.StopReason,
+				Usage:      resp.Usage,
+				Meta: map[string]any{
+					"tool_calls": len(filteredCalls),
+				},
+			})
+		}
+		messages = append(messages, NewAssistantMessage(resp.Text, filteredCalls))
+		if len(filteredCalls) == 0 {
 			if last.Text == "" {
 				last.Text = "(no response)"
 			}
+			if trace != nil {
+				trace.log(traceEvent{
+					Time:     nowRFC3339(),
+					RunID:    runID,
+					Event:    "run_end",
+					Step:     step,
+					Provider: string(norm.Provider),
+					Model:    norm.Model,
+					Text:     truncateField(last.Text),
+					Usage:    resp.Usage,
+				})
+			}
 			return last, messages, nil
 		}
-		for _, call := range resp.ToolCalls {
+		for _, call := range filteredCalls {
+			if trace != nil {
+				trace.log(traceEvent{
+					Time:     nowRFC3339(),
+					RunID:    runID,
+					Event:    "tool_call",
+					Step:     step,
+					Provider: string(norm.Provider),
+					Model:    norm.Model,
+					ToolCall: &call,
+				})
+			}
 			result, err := execTool(ctx, call)
 			if err != nil {
 				result.IsError = true
@@ -116,10 +193,36 @@ func RunPrompt(
 					result.Content = err.Error()
 				}
 			}
+			if trace != nil {
+				captured := result
+				captured.Content = truncateField(captured.Content)
+				trace.log(traceEvent{
+					Time:       nowRFC3339(),
+					RunID:      runID,
+					Event:      "tool_result",
+					Step:       step,
+					Provider:   string(norm.Provider),
+					Model:      norm.Model,
+					ToolResult: &captured,
+				})
+			}
 			messages = append(messages, NewToolResultMessage(result))
 		}
 	}
-	return last, messages, fmt.Errorf("max steps reached (%d)", defaultMaxSteps)
+	err = fmt.Errorf("max steps reached (%d)", defaultMaxSteps)
+	if trace != nil {
+		trace.log(traceEvent{
+			Time:     nowRFC3339(),
+			RunID:    runID,
+			Event:    "run_end",
+			Step:     defaultMaxSteps,
+			Provider: string(norm.Provider),
+			Model:    norm.Model,
+			Error:    err.Error(),
+			Usage:    last.Usage,
+		})
+	}
+	return last, messages, err
 }
 
 func pekyToolSpec() ToolSpec {

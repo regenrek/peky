@@ -9,7 +9,7 @@ const (
 	defaultMaxItems      = 500
 )
 
-var defaultBlockedCommands = []string{"daemon", "daemon.*"}
+var defaultBlockedCommands = []string{"daemon", "daemon.*", "pane.send"}
 
 // ApplyDefaults fills in config defaults for agent and quick reply settings.
 func ApplyDefaults(cfg *Config) {

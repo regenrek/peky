@@ -118,9 +118,9 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 				},
 				{
 					ID:       "session_kill",
-					Label:    "Session: Kill session",
-					Desc:     "Kill the selected session",
-					Aliases:  []string{"kill-session", "session kill"},
+					Label:    "Session: Close session",
+					Desc:     "Close the selected session",
+					Aliases:  []string{"close-session", "session close"},
 					Shortcut: shortcutKillSession,
 					Run: func(m *Model, _ commandArgs) tea.Cmd {
 						m.openKillConfirm()

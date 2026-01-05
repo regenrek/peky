@@ -153,9 +153,10 @@ func (c *geminiCLIClient) Generate(ctx context.Context, req llmRequest) (llmResp
 			}
 			if part.FunctionCall != nil {
 				result.ToolCalls = append(result.ToolCalls, ToolCall{
-					ID:        part.FunctionCall.ID,
-					Name:      part.FunctionCall.Name,
-					Arguments: part.FunctionCall.Args,
+					ID:               part.FunctionCall.ID,
+					Name:             part.FunctionCall.Name,
+					Arguments:        part.FunctionCall.Args,
+					ThoughtSignature: part.ThoughtSignature,
 				})
 			}
 		}

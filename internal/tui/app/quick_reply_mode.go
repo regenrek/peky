@@ -37,7 +37,11 @@ func (m *Model) quickReplyModeLabel() string {
 	switch m.quickReplyMode {
 	case quickReplyModePeky:
 		if m.pekyBusy {
-			return "agent*"
+			spinner := strings.TrimSpace(m.pekySpinnerFrame())
+			if spinner == "" {
+				return "agent"
+			}
+			return spinner + " agent"
 		}
 		return "agent"
 	default:

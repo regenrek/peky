@@ -24,9 +24,10 @@ const (
 )
 
 type ToolCall struct {
-	ID        string
-	Name      string
-	Arguments map[string]any
+	ID               string
+	Name             string
+	Arguments        map[string]any
+	ThoughtSignature string
 }
 
 type ToolResult struct {

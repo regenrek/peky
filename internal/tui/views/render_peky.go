@@ -21,5 +21,10 @@ func (m Model) viewPekyDialog() string {
 		body,
 		theme.DialogNote.Render(footer),
 	}, "\n")
-	return m.renderDialog(dialogSpec{Content: content})
+	spec := dialogSpec{Content: content}
+	if m.PekyDialogIsError && m.PekyDialogViewport.Width > 0 {
+		frameW, _ := dialogStyle.GetFrameSize()
+		spec.Size.Width = m.PekyDialogViewport.Width + frameW
+	}
+	return m.renderDialog(spec)
 }

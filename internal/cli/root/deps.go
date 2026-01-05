@@ -13,6 +13,7 @@ import (
 type Dependencies struct {
 	Version string
 	AppName string
+	WorkDir string
 
 	Stdout io.Writer
 	Stderr io.Writer

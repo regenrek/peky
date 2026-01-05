@@ -3,10 +3,11 @@ package app
 import (
 	"context"
 	"errors"
-	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/regenrek/peakypanes/internal/agent"
@@ -14,10 +15,20 @@ import (
 )
 
 type authFlowState struct {
-	Provider agent.Provider
-	Verifier string
-	Callback *agent.CallbackServer
+	Provider       agent.Provider
+	Verifier       string
+	Callback       *agent.CallbackServer
+	IgnoreCallback bool
+	CopilotDomain  string
 }
+
+type authDialogKind int
+
+const (
+	authDialogOAuthCode authDialogKind = iota
+	authDialogAnthropicCode
+	authDialogCopilotDevice
+)
 
 type slashCommandInput struct {
 	Command       string
@@ -52,6 +63,122 @@ func parseSlashCommandInput(input string) (slashCommandInput, bool) {
 		Args:          args,
 		TrailingSpace: trailing,
 	}, true
+}
+
+func (m *Model) openAuthDialog(title, body, placeholder, footer string, kind authDialogKind) {
+	input := textinput.New()
+	input.Prompt = ""
+	input.Placeholder = placeholder
+	input.CharLimit = 512
+	input.Width = 50
+	input.Focus()
+	m.authDialogInput = input
+	m.authDialogTitle = strings.TrimSpace(title)
+	m.authDialogBody = strings.TrimSpace(body)
+	m.authDialogFooter = strings.TrimSpace(footer)
+	m.authDialogKind = kind
+	m.setState(StateAuthDialog)
+}
+
+func (m *Model) updateAuthDialog(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.closeAuthDialog()
+		return m, nil
+	case "enter":
+		return m, m.handleAuthDialogSubmit()
+	}
+	var cmd tea.Cmd
+	m.authDialogInput, cmd = m.authDialogInput.Update(msg)
+	return m, cmd
+}
+
+func (m *Model) handleAuthDialogSubmit() tea.Cmd {
+	value := strings.TrimSpace(m.authDialogInput.Value())
+	if value == "" {
+		m.setToast("Paste the token or wait for browser login", toastInfo)
+		return nil
+	}
+	code, state := parseOAuthPaste(value)
+	provider := m.authFlow.Provider
+	switch m.authDialogKind {
+	case authDialogAnthropicCode:
+		if code == "" || state == "" {
+			m.setToast("Paste code#state or the full redirect URL", toastWarning)
+			return nil
+		}
+		if m.authFlow.Verifier == "" {
+			m.setToast("Run /auth anthropic oauth first", toastWarning)
+			return nil
+		}
+		m.closeAuthDialog()
+		return authAnthropicExchangeCmd(code, state, m.authFlow.Verifier)
+	case authDialogOAuthCode:
+		if code == "" {
+			m.setToast("Paste the code or redirect URL", toastWarning)
+			return nil
+		}
+		if m.authFlow.Verifier == "" {
+			m.setToast("Run /auth <provider> oauth first", toastWarning)
+			return nil
+		}
+		m.closeAuthDialog()
+		return authGeminiExchangeCmd(provider, code, m.authFlow.Verifier)
+	case authDialogCopilotDevice:
+		if code == "" {
+			m.setToast("Paste the access token or wait for device login", toastInfo)
+			return nil
+		}
+		m.closeAuthDialog()
+		return authCopilotTokenCmd(code, m.authFlow.CopilotDomain)
+	default:
+		m.setToast("Unsupported auth dialog", toastWarning)
+		return nil
+	}
+}
+
+func (m *Model) closeAuthDialog() {
+	m.authFlow.IgnoreCallback = true
+	if m.authFlow.Callback != nil {
+		_ = m.authFlow.Callback.Close()
+		m.authFlow.Callback = nil
+	}
+	m.authDialogInput = textinput.Model{}
+	m.authDialogTitle = ""
+	m.authDialogBody = ""
+	m.authDialogFooter = ""
+	m.authDialogKind = authDialogOAuthCode
+	m.setState(StateDashboard)
+}
+
+func parseOAuthPaste(input string) (string, string) {
+	trimmed := strings.TrimSpace(input)
+	if trimmed == "" {
+		return "", ""
+	}
+	if strings.Contains(trimmed, "code=") {
+		if parsed, err := url.Parse(trimmed); err == nil {
+			query := parsed.Query()
+			code := strings.TrimSpace(query.Get("code"))
+			state := strings.TrimSpace(query.Get("state"))
+			if code != "" {
+				return code, state
+			}
+		}
+		if parsed, err := url.ParseQuery(strings.TrimPrefix(trimmed, "?")); err == nil {
+			code := strings.TrimSpace(parsed.Get("code"))
+			state := strings.TrimSpace(parsed.Get("state"))
+			if code != "" {
+				return code, state
+			}
+		}
+	}
+	if parts := strings.SplitN(trimmed, "#", 2); len(parts) == 2 {
+		code := strings.TrimSpace(parts[0])
+		state := strings.TrimSpace(parts[1])
+		return code, state
+	}
+	return trimmed, ""
 }
 
 func (m *Model) authMenuState() quickReplyMenu {
@@ -425,8 +552,10 @@ func (m *Model) startAnthropicOAuth() tea.Cmd {
 		return NewErrorCmd(err, "auth url")
 	}
 	m.authFlow = authFlowState{Provider: agent.ProviderAnthropic, Verifier: verifier}
-	m.setToast("Open URL then paste code#state: "+url, toastInfo)
-	return m.prefillQuickReplyInput("/auth anthropic oauth ")
+	openErr := openBrowserURL(url)
+	body := oauthDialogBody(url, "After login, paste code#state or the full redirect URL below.", openErr)
+	m.openAuthDialog("Anthropic OAuth", body, "code#state or redirect URL", "enter confirm • esc cancel", authDialogAnthropicCode)
+	return nil
 }
 
 func (m *Model) startOAuthFlow(provider agent.Provider, domain string) tea.Cmd {
@@ -434,10 +563,9 @@ func (m *Model) startOAuthFlow(provider agent.Provider, domain string) tea.Cmd {
 	if err != nil {
 		return NewErrorCmd(err, "auth manager")
 	}
-	m.authFlow = authFlowState{Provider: provider}
+	m.authFlow = authFlowState{Provider: provider, IgnoreCallback: false, CopilotDomain: strings.TrimSpace(domain)}
 	switch provider {
 	case agent.ProviderGitHubCopilot:
-		m.setToast("Starting Copilot device flow...", toastInfo)
 		return authCopilotStartCmd(domain)
 	case agent.ProviderGoogleGeminiCLI, agent.ProviderGoogleAntigrav:
 		var url string
@@ -461,7 +589,13 @@ func (m *Model) startOAuthFlow(provider agent.Provider, domain string) tea.Cmd {
 			return NewErrorCmd(err, "oauth callback")
 		}
 		m.authFlow.Callback = server
-		m.setToast("Open URL to finish login: "+url, toastInfo)
+		openErr := openBrowserURL(url)
+		body := oauthDialogBody(url, "If the redirect doesn't return here, paste the code or full redirect URL below.", openErr)
+		title := "OAuth Login"
+		if label := agent.ProviderLabel(provider); label != "" {
+			title = label + " OAuth"
+		}
+		m.openAuthDialog(title, body, "code or redirect URL", "enter confirm • esc cancel", authDialogOAuthCode)
 		return authWaitCallbackCmd(provider, server)
 	default:
 		return NewWarningCmd("OAuth not supported for provider")
@@ -595,6 +729,22 @@ func authCopilotCompleteCmd(device agent.CopilotDeviceInfo, domain string) tea.C
 	}
 }
 
+func authCopilotTokenCmd(token, domain string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		manager, err := agent.NewAuthManager()
+		if err == nil {
+			err = manager.CopilotToken(ctx, token, domain)
+		}
+		msg := "Copilot connected"
+		if err != nil {
+			msg = err.Error()
+		}
+		return authDoneMsg{Provider: agent.ProviderGitHubCopilot, Err: err, Message: msg}
+	}
+}
+
 func authWaitCallbackCmd(provider agent.Provider, server *agent.CallbackServer) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -633,6 +783,9 @@ func (m *Model) handleAuthDone(msg authDoneMsg) tea.Cmd {
 		m.setToast("Auth failed: "+msg.Message, toastError)
 		return nil
 	}
+	if m.state == StateAuthDialog {
+		m.closeAuthDialog()
+	}
 	m.setToast(msg.Message, toastSuccess)
 	return nil
 }
@@ -642,15 +795,22 @@ func (m *Model) handleCopilotDevice(msg authCopilotDeviceMsg) tea.Cmd {
 		m.setToast("Auth failed: "+msg.Err.Error(), toastError)
 		return nil
 	}
-	m.authFlow = authFlowState{Provider: agent.ProviderGitHubCopilot}
-	body := fmt.Sprintf("Open %s and enter code %s", msg.Device.VerificationURI, msg.Device.UserCode)
-	m.setToast(body, toastInfo)
+	m.authFlow = authFlowState{Provider: agent.ProviderGitHubCopilot, CopilotDomain: msg.Domain}
+	openErr := openBrowserURL(msg.Device.VerificationURI)
+	body := copilotDialogBody(msg.Device, openErr)
+	m.openAuthDialog("GitHub Copilot OAuth", body, "access token (optional)", "esc cancel • login will complete automatically", authDialogCopilotDevice)
 	return authCopilotCompleteCmd(msg.Device, msg.Domain)
 }
 
 func (m *Model) handleAuthCallback(msg authCallbackMsg) tea.Cmd {
+	if m.authFlow.IgnoreCallback {
+		return nil
+	}
 	if msg.Err != nil {
 		m.setToast("Auth failed: "+msg.Err.Error(), toastError)
+		return nil
+	}
+	if msg.Provider != m.authFlow.Provider {
 		return nil
 	}
 	if msg.State != m.authFlow.Verifier {
@@ -659,6 +819,39 @@ func (m *Model) handleAuthCallback(msg authCallbackMsg) tea.Cmd {
 	}
 	m.setToast("OAuth callback received; exchanging...", toastInfo)
 	return authGeminiExchangeCmd(msg.Provider, msg.Code, m.authFlow.Verifier)
+}
+
+func oauthDialogBody(authURL, prompt string, openErr error) string {
+	var body strings.Builder
+	body.WriteString("1) Open this URL in your browser:\n")
+	body.WriteString(strings.TrimSpace(authURL))
+	if openErr != nil {
+		body.WriteString("\n")
+		body.WriteString("Browser did not open automatically. Copy the URL above.")
+	}
+	body.WriteString("\n\n")
+	body.WriteString("2) Complete the login and approve access.")
+	if strings.TrimSpace(prompt) != "" {
+		body.WriteString("\n3) ")
+		body.WriteString(strings.TrimSpace(prompt))
+	}
+	return body.String()
+}
+
+func copilotDialogBody(device agent.CopilotDeviceInfo, openErr error) string {
+	var body strings.Builder
+	body.WriteString("1) Open this URL in your browser:\n")
+	body.WriteString(strings.TrimSpace(device.VerificationURI))
+	if openErr != nil {
+		body.WriteString("\n")
+		body.WriteString("Browser did not open automatically. Copy the URL above.")
+	}
+	body.WriteString("\n\n")
+	body.WriteString("2) Enter this code:\n")
+	body.WriteString(strings.TrimSpace(device.UserCode))
+	body.WriteString("\n\n")
+	body.WriteString("3) Return here and wait for confirmation, or paste an access token below.")
+	return body.String()
 }
 
 func (m *Model) setAgentProvider(provider agent.Provider) tea.Cmd {

@@ -285,16 +285,22 @@ commands:
           - name: layout
             type: string
             description: Layout name.
+          - name: panes
+            type: int
+            description: Number of panes to create (cannot be combined with layout).
           - name: env
             type: string_list
             repeatable: true
             description: Environment variables (KEY=VALUE).
+        constraints:
+          - type: excludes
+            fields: [layout, panes]
         json:
           supported: true
           schema_ref: "#/$defs/ActionResponse"
-      - name: kill
-        id: session.kill
-        summary: Kill a session
+      - name: close
+        id: session.close
+        summary: Close a session (stop all panes)
         side_effects: true
         confirm: true
         flags:
@@ -386,7 +392,7 @@ commands:
           schema_ref: "#/$defs/ActionResponse"
       - name: add
         id: pane.add
-        summary: Add a pane by splitting the active pane
+        summary: Add pane(s) by splitting the active pane
         side_effects: true
         confirm: true
         flags:
@@ -407,6 +413,10 @@ commands:
           - name: percent
             type: int
             description: Size percentage for the new pane.
+          - name: count
+            type: int
+            default: 1
+            description: Number of panes to add.
           - name: focus
             type: bool
             default: true
@@ -445,7 +455,7 @@ commands:
           schema_ref: "#/$defs/ActionResponse"
       - name: close
         id: pane.close
-        summary: Close a pane
+        summary: Close pane(s)
         side_effects: true
         confirm: true
         flags:
@@ -458,11 +468,20 @@ commands:
           - name: pane-id
             type: string
             description: Pane id (use @focused for current focus).
+          - name: scope
+            type: enum
+            enum: [all, session, project]
+            description: Close all panes in the scope (requires --all).
+          - name: all
+            type: bool
+            description: Confirm closing all panes in a scope.
         constraints:
           - type: exactly_one
-            fields: [pane-id, session]
+            fields: [pane-id, session, scope]
           - type: requires
             fields: [session, index]
+          - type: requires
+            fields: [scope, all]
         json:
           supported: true
           schema_ref: "#/$defs/ActionResponse"

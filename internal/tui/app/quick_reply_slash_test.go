@@ -123,7 +123,7 @@ func TestQuickReplySlashCompletionLongestPrefix(t *testing.T) {
 	if !m.applySlashCompletion() {
 		t.Fatalf("expected slash completion")
 	}
-	if got := m.quickReplyInput.Value(); got != "/kill" {
+	if got := m.quickReplyInput.Value(); got != "/kill " {
 		t.Fatalf("expected /kill prefix completion, got %q", got)
 	}
 }

@@ -30,16 +30,18 @@ func (m Model) viewDashboardContent() string {
 	header := m.viewHeader(contentWidth)
 	footer := m.viewFooter(contentWidth)
 	quickReply := m.viewQuickReply(contentWidth)
+	pekyPrompt := m.viewPekyPromptLine(contentWidth)
 	quickReplyHeight := lipgloss.Height(quickReply)
+	pekyPromptHeight := lipgloss.Height(pekyPrompt)
 
 	headerHeight := lipgloss.Height(header)
 	footerHeight := lipgloss.Height(footer)
 	headerGap := 1
-	extraLines := headerHeight + headerGap + footerHeight + quickReplyHeight
+	extraLines := headerHeight + headerGap + footerHeight + quickReplyHeight + pekyPromptHeight
 	bodyHeight := contentHeight - extraLines
 	if bodyHeight < 4 {
 		headerGap = 0
-		extraLines = headerHeight + headerGap + footerHeight + quickReplyHeight
+		extraLines = headerHeight + headerGap + footerHeight + quickReplyHeight + pekyPromptHeight
 		bodyHeight = contentHeight - extraLines
 	}
 
@@ -49,6 +51,9 @@ func (m Model) viewDashboardContent() string {
 		sections = append(sections, fitLine("", contentWidth))
 	}
 	sections = append(sections, body, quickReply)
+	if pekyPromptHeight > 0 {
+		sections = append(sections, pekyPrompt)
+	}
 	sections = append(sections, footer)
 	view := lipgloss.JoinVertical(lipgloss.Top, sections...)
 	return m.overlayQuickReplyMenu(view, contentWidth, contentHeight, headerHeight, headerGap, bodyHeight)
@@ -470,6 +475,32 @@ func (m Model) overlayQuickReplyMenu(base string, width, height, headerHeight, h
 		menuY = 0
 	}
 	return overlayAt(base, menu, width, height, menuX, menuY)
+}
+
+func (m Model) viewPekyPromptLine(width int) string {
+	text := strings.TrimSpace(m.PekyPromptLine)
+	if text == "" || width <= 0 {
+		return ""
+	}
+	barWidth := width
+	contentWidth := barWidth - 4
+	if contentWidth < 10 {
+		contentWidth = 10
+	}
+	base := lipgloss.NewStyle().
+		Foreground(theme.TextPrimary).
+		Background(theme.QuickReplyTag)
+	label := base.Foreground(theme.Accent).Bold(true).Render("peky ")
+	flat := strings.ReplaceAll(text, "\n", " ")
+	flat = strings.Join(strings.Fields(flat), " ")
+	line := label + base.Render(flat)
+	line = ansi.Truncate(line, contentWidth, "")
+	visible := lipgloss.Width(line)
+	if visible < contentWidth {
+		line += base.Render(strings.Repeat(" ", contentWidth-visible))
+	}
+	pad := base.Render(strings.Repeat(" ", 2))
+	return pad + line + pad
 }
 
 func renderQuickReplyMenu(suggestions []QuickReplySuggestion, selectedIdx, width, maxHeight int) string {

@@ -152,7 +152,7 @@
                         "init",
                         "clone",
                         "session.start",
-                        "session.kill",
+                        "session.close",
                         "session.rename",
                         "session.focus",
                         "pane.rename",

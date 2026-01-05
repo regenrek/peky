@@ -42,9 +42,12 @@ type Model struct {
 	SettingsMenu             list.Model
 	PerformanceMenu          list.Model
 	DebugMenu                list.Model
+	AuthDialog               AuthDialog
 	PekyDialogTitle          string
 	PekyDialogFooter         string
 	PekyDialogViewport       viewport.Model
+	PekyDialogIsError        bool
+	PekyPromptLine           string
 	ConfirmKill              ConfirmKill
 	ConfirmQuit              ConfirmQuit
 	ConfirmCloseProject      ConfirmCloseProject
@@ -172,4 +175,11 @@ type Rename struct {
 	Pane      string
 	PaneIndex string
 	Input     textinput.Model
+}
+
+type AuthDialog struct {
+	Title  string
+	Body   string
+	Input  textinput.Model
+	Footer string
 }

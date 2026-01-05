@@ -16,9 +16,10 @@ type googleClient struct {
 }
 
 type googlePart struct {
-	Text         string                  `json:"text,omitempty"`
-	FunctionCall *googleFunctionCall     `json:"functionCall,omitempty"`
-	FunctionResp *googleFunctionResponse `json:"functionResponse,omitempty"`
+	Text             string                  `json:"text,omitempty"`
+	ThoughtSignature string                  `json:"thoughtSignature,omitempty"`
+	FunctionCall     *googleFunctionCall     `json:"functionCall,omitempty"`
+	FunctionResp     *googleFunctionResponse `json:"functionResponse,omitempty"`
 }
 
 type googleFunctionCall struct {
@@ -145,9 +146,10 @@ func (c *googleClient) Generate(ctx context.Context, req llmRequest) (llmRespons
 		}
 		if part.FunctionCall != nil {
 			result.ToolCalls = append(result.ToolCalls, ToolCall{
-				ID:        part.FunctionCall.ID,
-				Name:      part.FunctionCall.Name,
-				Arguments: part.FunctionCall.Args,
+				ID:               part.FunctionCall.ID,
+				Name:             part.FunctionCall.Name,
+				Arguments:        part.FunctionCall.Args,
+				ThoughtSignature: part.ThoughtSignature,
 			})
 		}
 	}
@@ -158,6 +160,24 @@ func (c *googleClient) Generate(ctx context.Context, req llmRequest) (llmRespons
 }
 
 func googleContents(messages []Message) []googleContent {
+	allowedToolIDs := map[string]struct{}{}
+	allowToolNoID := false
+	for _, msg := range messages {
+		if msg.Role != RoleAssistant {
+			continue
+		}
+		for _, call := range msg.ToolCalls {
+			if strings.TrimSpace(call.ThoughtSignature) == "" {
+				continue
+			}
+			if strings.TrimSpace(call.ID) == "" {
+				allowToolNoID = true
+				continue
+			}
+			allowedToolIDs[call.ID] = struct{}{}
+		}
+	}
+
 	out := make([]googleContent, 0, len(messages))
 	for _, msg := range messages {
 		switch msg.Role {
@@ -169,13 +189,30 @@ func googleContents(messages []Message) []googleContent {
 				parts = append(parts, googlePart{Text: msg.Text})
 			}
 			for _, call := range msg.ToolCalls {
-				parts = append(parts, googlePart{FunctionCall: &googleFunctionCall{Name: call.Name, Args: call.Arguments, ID: call.ID}})
+				if strings.TrimSpace(call.ThoughtSignature) == "" {
+					continue
+				}
+				parts = append(parts, googlePart{
+					ThoughtSignature: call.ThoughtSignature,
+					FunctionCall: &googleFunctionCall{
+						Name: call.Name,
+						Args: call.Arguments,
+						ID:   call.ID,
+					},
+				})
 			}
 			if len(parts) > 0 {
 				out = append(out, googleContent{Role: "model", Parts: parts})
 			}
 		case RoleTool:
 			if msg.ToolResult == nil {
+				continue
+			}
+			if msg.ToolResult.ToolCallID != "" {
+				if _, ok := allowedToolIDs[msg.ToolResult.ToolCallID]; !ok {
+					continue
+				}
+			} else if !allowToolNoID {
 				continue
 			}
 			resp := googleFunctionResponse{

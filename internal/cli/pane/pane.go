@@ -188,6 +188,25 @@ func runClose(ctx root.CommandContext) error {
 	paneID := strings.TrimSpace(ctx.Cmd.String("pane-id"))
 	sessionName := ctx.Cmd.String("session")
 	paneIndex := intFlagString(ctx.Cmd, "index")
+	scope := strings.TrimSpace(ctx.Cmd.String("scope"))
+	if paneID != "" && (sessionName != "" || paneIndex != "") {
+		return fmt.Errorf("pane-id cannot be combined with session or index")
+	}
+	if scope != "" {
+		if paneID != "" || sessionName != "" || paneIndex != "" {
+			return fmt.Errorf("scope cannot be combined with pane-id or session/index")
+		}
+		if !ctx.Cmd.Bool("all") {
+			return fmt.Errorf("scope close requires --all")
+		}
+		return closePaneScope(ctx, client, scope, start, meta)
+	}
+	if paneID == "" && sessionName == "" {
+		return fmt.Errorf("pane-id or session is required")
+	}
+	if sessionName != "" && paneIndex == "" {
+		return fmt.Errorf("session requires index")
+	}
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
 	defer cancel()
 	if paneID != "" {
