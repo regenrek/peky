@@ -60,7 +60,7 @@ type Model struct {
 	PreviewCompact           bool
 	PreviewMode              string
 	DashboardPreviewLines    int
-	PaneView                 func(id string, width, height int, showCursor bool, useLipgloss bool) string
+	PaneView                 func(id string, width, height int, showCursor bool) string
 	DialogHelp               DialogHelp
 }
 

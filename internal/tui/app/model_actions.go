@@ -30,10 +30,8 @@ func (m *Model) attachOrStart() tea.Cmd {
 			m.setToast("No project path configured", toastWarning)
 			return nil
 		}
-		focus := m.settings.AttachBehavior != AttachBehaviorDetached
-		return m.startProjectNative(*session, focus)
+		return m.startProjectNative(*session, false)
 	}
-	m.setTerminalFocus(true)
 	return m.refreshPaneViewsCmd()
 }
 
@@ -81,8 +79,7 @@ func (m *Model) startNewSessionWithLayout(layoutName string) tea.Cmd {
 		return nil
 	}
 	newName := nextSessionName(base, existing)
-	focus := m.settings.AttachBehavior != AttachBehaviorDetached
-	return m.startSessionNative(newName, path, layoutName, focus)
+	return m.startSessionNative(newName, path, layoutName, false)
 }
 
 func (m *Model) shutdownCmd() tea.Cmd {
@@ -285,7 +282,7 @@ func (m *Model) openClosePaneConfirm() tea.Cmd {
 		m.setToast("No pane selected", toastWarning)
 		return nil
 	}
-	running := !pane.Dead
+	running := !pane.Dead && !pane.Disconnected
 	if !running {
 		m.setState(StateDashboard)
 		m.setToast("Closing pane...", toastInfo)
@@ -542,7 +539,7 @@ func runningPaneCount(projects []ProjectGroup) int {
 	for _, project := range projects {
 		for _, session := range project.Sessions {
 			for _, pane := range session.Panes {
-				if !pane.Dead {
+				if !pane.Dead && !pane.Disconnected {
 					count++
 				}
 			}

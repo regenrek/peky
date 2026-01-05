@@ -25,9 +25,6 @@ func (m *scopeSendManager) Version() uint64 { return 0 }
 func (m *scopeSendManager) StartSession(context.Context, native.SessionSpec) (*native.Session, error) {
 	return nil, nil
 }
-func (m *scopeSendManager) RestoreSession(context.Context, native.SessionRestoreSpec) (*native.Session, error) {
-	return nil, nil
-}
 func (m *scopeSendManager) KillSession(string) error                { return nil }
 func (m *scopeSendManager) RenameSession(string, string) error      { return nil }
 func (m *scopeSendManager) RenamePane(string, string, string) error { return nil }

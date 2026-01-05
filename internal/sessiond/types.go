@@ -3,9 +3,8 @@ package sessiond
 import (
 	"time"
 
-	"github.com/muesli/termenv"
-
 	"github.com/regenrek/peakypanes/internal/native"
+	"github.com/regenrek/peakypanes/internal/termframe"
 	"github.com/regenrek/peakypanes/internal/terminal"
 )
 
@@ -264,14 +263,6 @@ type ResizePaneRequest struct {
 	Rows   int
 }
 
-// PaneViewMode controls how the daemon renders a pane.
-type PaneViewMode int
-
-const (
-	PaneViewANSI PaneViewMode = iota
-	PaneViewLipgloss
-)
-
 type PaneViewPriority int
 
 const (
@@ -283,13 +274,10 @@ const (
 
 // PaneViewRequest asks for a rendered pane view.
 type PaneViewRequest struct {
-	PaneID       string
-	Cols         int
-	Rows         int
-	Mode         PaneViewMode
-	ShowCursor   bool
-	ColorProfile termenv.Profile
-	// DirectRender bypasses ANSI caching and renders synchronously.
+	PaneID string
+	Cols   int
+	Rows   int
+	// DirectRender bypasses frame caching and renders synchronously.
 	DirectRender bool
 	KnownSeq     uint64
 	Priority     PaneViewPriority
@@ -300,17 +288,14 @@ type PaneViewRequest struct {
 
 // PaneViewResponse returns a rendered pane view.
 type PaneViewResponse struct {
-	PaneID       string
-	Cols         int
-	Rows         int
-	Mode         PaneViewMode
-	ShowCursor   bool
-	ColorProfile termenv.Profile
-	UpdateSeq    uint64
-	NotModified  bool
-	View         string
-	HasMouse     bool
-	AllowMotion  bool
+	PaneID      string
+	Cols        int
+	Rows        int
+	UpdateSeq   uint64
+	NotModified bool
+	Frame       termframe.Frame
+	HasMouse    bool
+	AllowMotion bool
 }
 
 // PaneOutputRequest asks for output lines since a sequence.

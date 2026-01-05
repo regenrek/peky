@@ -7,25 +7,21 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/muesli/termenv"
-
 	"github.com/regenrek/peakypanes/internal/limits"
 	"github.com/regenrek/peakypanes/internal/native"
+	"github.com/regenrek/peakypanes/internal/termframe"
 )
 
 type stubPaneView struct {
-	lipglossCalled bool
-	ansiCalled     bool
-	ansiDirect     bool
-	showCursor     bool
-	profile        termenv.Profile
+	frameCalled bool
+	frameDirect bool
 }
 
 func (s *stubPaneView) UpdateSeq() uint64 {
 	return 0
 }
 
-func (s *stubPaneView) ANSICacheSeq() uint64 {
+func (s *stubPaneView) FrameCacheSeq() uint64 {
 	return 0
 }
 
@@ -33,33 +29,14 @@ func (s *stubPaneView) CopyModeActive() bool {
 	return false
 }
 
-func (s *stubPaneView) ViewLipglossCtx(ctx context.Context, showCursor bool, profile termenv.Profile) (string, error) {
-	s.lipglossCalled = true
-	s.showCursor = showCursor
-	s.profile = profile
-	return "lipgloss", nil
+func (s *stubPaneView) ViewFrameCtx(ctx context.Context) (termframe.Frame, error) {
+	s.frameCalled = true
+	return termframe.Frame{Cols: 1, Rows: 1, Cells: []termframe.Cell{{Content: "A", Width: 1}}}, nil
 }
 
-func (s *stubPaneView) ViewANSICtx(ctx context.Context) (string, error) {
-	s.ansiCalled = true
-	return "ansi", nil
-}
-
-func (s *stubPaneView) ViewANSIDirectCtx(ctx context.Context) (string, error) {
-	s.ansiDirect = true
-	return "ansi", nil
-}
-
-func (s *stubPaneView) ViewLipgloss(showCursor bool, profile termenv.Profile) string {
-	s.lipglossCalled = true
-	s.showCursor = showCursor
-	s.profile = profile
-	return "lipgloss"
-}
-
-func (s *stubPaneView) ViewANSI() string {
-	s.ansiCalled = true
-	return "ansi"
+func (s *stubPaneView) ViewFrameDirectCtx(ctx context.Context) (termframe.Frame, error) {
+	s.frameDirect = true
+	return termframe.Frame{Cols: 1, Rows: 1, Cells: []termframe.Cell{{Content: "B", Width: 1}}}, nil
 }
 
 func TestRequirePaneID(t *testing.T) {
@@ -90,32 +67,26 @@ func TestNormalizeDimensions(t *testing.T) {
 	}
 }
 
-func TestPaneViewString(t *testing.T) {
+func TestPaneViewFrame(t *testing.T) {
 	win := &stubPaneView{}
-	out, err := paneViewString(context.Background(), win, PaneViewRequest{Mode: PaneViewLipgloss, ShowCursor: true, ColorProfile: termenv.ANSI256})
+	frame, err := paneViewFrame(context.Background(), win, PaneViewRequest{})
 	if err != nil {
-		t.Fatalf("paneViewString: %v", err)
+		t.Fatalf("paneViewFrame: %v", err)
 	}
-	if out != "lipgloss" || !win.lipglossCalled || !win.showCursor || win.profile != termenv.ANSI256 {
-		t.Fatalf("expected lipgloss render")
+	if frame.Cols != 1 || frame.Rows != 1 || len(frame.Cells) != 1 || frame.Cells[0].Content != "A" {
+		t.Fatalf("unexpected frame from cached render")
+	}
+	if !win.frameCalled || win.frameDirect {
+		t.Fatalf("expected cached frame render")
 	}
 
 	win = &stubPaneView{}
-	out, err = paneViewString(context.Background(), win, PaneViewRequest{Mode: PaneViewANSI})
+	frame, err = paneViewFrame(context.Background(), win, PaneViewRequest{DirectRender: true})
 	if err != nil {
-		t.Fatalf("paneViewString: %v", err)
+		t.Fatalf("paneViewFrame: %v", err)
 	}
-	if out != "ansi" || !win.ansiCalled {
-		t.Fatalf("expected ansi render")
-	}
-
-	win = &stubPaneView{}
-	out, err = paneViewString(context.Background(), win, PaneViewRequest{Mode: PaneViewANSI, DirectRender: true})
-	if err != nil {
-		t.Fatalf("paneViewString: %v", err)
-	}
-	if out != "ansi" || !win.ansiDirect {
-		t.Fatalf("expected direct ansi render")
+	if frame.Cells[0].Content != "B" || !win.frameDirect {
+		t.Fatalf("expected direct frame render")
 	}
 }
 

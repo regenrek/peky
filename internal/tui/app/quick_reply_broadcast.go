@@ -77,7 +77,7 @@ func (m *Model) sendQuickReplyToTarget(target quickReplyTarget, message string) 
 	if m.isPaneInputDisabled(paneID) {
 		return quickReplyTargetResult{Status: quickReplyTargetSkipped, PaneID: paneID}
 	}
-	if pane := m.paneByID(paneID); pane == nil || pane.Dead {
+	if pane := m.paneByID(paneID); pane == nil || pane.Dead || pane.Disconnected {
 		return quickReplyTargetResult{Status: quickReplyTargetClosed, PaneID: paneID}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), terminalActionTimeout)

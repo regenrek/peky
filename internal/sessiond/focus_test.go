@@ -23,9 +23,6 @@ func (m *focusManager) Version() uint64 { return 0 }
 func (m *focusManager) StartSession(context.Context, native.SessionSpec) (*native.Session, error) {
 	return nil, nil
 }
-func (m *focusManager) RestoreSession(context.Context, native.SessionRestoreSpec) (*native.Session, error) {
-	return nil, nil
-}
 func (m *focusManager) KillSession(string) error                { return nil }
 func (m *focusManager) RenameSession(string, string) error      { return nil }
 func (m *focusManager) RenamePane(string, string, string) error { return nil }

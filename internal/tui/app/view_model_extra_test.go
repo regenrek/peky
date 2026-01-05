@@ -3,8 +3,6 @@ package app
 import (
 	"testing"
 
-	"github.com/muesli/termenv"
-
 	"github.com/regenrek/peakypanes/internal/sessiond"
 )
 
@@ -20,18 +18,15 @@ func TestPaneViewProvider(t *testing.T) {
 		t.Fatalf("expected pane view provider with client")
 	}
 	key := paneViewKey{
-		PaneID:       "p1",
-		Cols:         10,
-		Rows:         5,
-		Mode:         sessiond.PaneViewANSI,
-		ShowCursor:   false,
-		ColorProfile: termenv.TrueColor,
+		PaneID: "p1",
+		Cols:   10,
+		Rows:   5,
 	}
-	m.paneViews[key] = "view"
-	if got := provider("p1", 10, 5, false, false); got != "view" {
+	m.paneViews[key] = paneViewEntry{rendered: map[bool]string{false: "view"}}
+	if got := provider("p1", 10, 5, false); got != "view" {
 		t.Fatalf("expected pane view lookup, got %q", got)
 	}
-	if got := provider("", 10, 5, false, false); got != "" {
+	if got := provider("", 10, 5, false); got != "" {
 		t.Fatalf("expected empty result for missing id")
 	}
 }

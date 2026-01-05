@@ -13,6 +13,7 @@ import (
 
 	uv "github.com/charmbracelet/ultraviolet"
 
+	"github.com/regenrek/peakypanes/internal/sessionrestore"
 	"github.com/regenrek/peakypanes/internal/terminal"
 )
 
@@ -36,6 +37,7 @@ type Pane struct {
 	RestoreError  string
 	lastActive    atomic.Int64
 	Tags          []string
+	RestoreMode   sessionrestore.Mode
 	window        *terminal.Window
 	output        *outputLog
 }
@@ -267,6 +269,7 @@ func (m *Manager) SplitPane(ctx context.Context, sessionName, paneIndex string, 
 		m.mu.RUnlock()
 		return "", fmt.Errorf("native: pane %q not found in %q", paneIndex, sessionName)
 	}
+	targetRestore := target.RestoreMode
 	newIndex := nextPaneIndex(session.Panes)
 	startDir := strings.TrimSpace(session.Path)
 	env := append([]string(nil), session.Env...)
@@ -281,6 +284,7 @@ func (m *Manager) SplitPane(ctx context.Context, sessionName, paneIndex string, 
 	if err != nil {
 		return "", err
 	}
+	pane.RestoreMode = targetRestore
 
 	m.mu.Lock()
 	session, ok = m.sessions[sessionName]

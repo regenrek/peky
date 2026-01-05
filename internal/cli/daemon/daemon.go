@@ -5,14 +5,19 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/regenrek/peakypanes/internal/appdirs"
 	"github.com/regenrek/peakypanes/internal/cli/output"
 	"github.com/regenrek/peakypanes/internal/cli/root"
+	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/runenv"
 	"github.com/regenrek/peakypanes/internal/sessiond"
+	"github.com/regenrek/peakypanes/internal/sessionrestore"
+	"github.com/regenrek/peakypanes/internal/userpath"
 )
 
 // Register registers daemon handlers.
@@ -34,13 +39,15 @@ func runDaemon(ctx root.CommandContext) error {
 		return err
 	}
 	fresh := runenv.FreshConfigEnabled()
+	restoreCfg, err := resolveSessionRestoreConfig(fresh)
+	if err != nil {
+		return err
+	}
 	daemon, err := sessiond.NewDaemon(sessiond.DaemonConfig{
-		Version:                 ctx.Deps.Version,
-		StateDebounce:           sessiond.DefaultStateDebounce,
-		HandleSignals:           true,
-		SkipRestore:             fresh,
-		DisableStatePersistence: fresh,
-		PprofAddr:               pprofAddr,
+		Version:        ctx.Deps.Version,
+		HandleSignals:  true,
+		SessionRestore: restoreCfg,
+		PprofAddr:      pprofAddr,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create daemon: %w", err)
@@ -55,6 +62,64 @@ func runDaemon(ctx root.CommandContext) error {
 		return fmt.Errorf("daemon failed: %w", err)
 	}
 	return nil
+}
+
+func resolveSessionRestoreConfig(fresh bool) (sessionrestore.Config, error) {
+	if fresh {
+		return sessionrestore.Config{Enabled: false}, nil
+	}
+	cfg := sessionrestore.Config{Enabled: true}
+	configPath, err := layout.DefaultConfigPath()
+	if err != nil {
+		return cfg, nil
+	}
+	if configPath != "" {
+		if loaded, err := layout.LoadConfig(configPath); err == nil && loaded != nil {
+			applySessionRestoreConfig(&cfg, loaded.SessionRestore)
+		} else if err != nil && !os.IsNotExist(err) {
+			return sessionrestore.Config{}, fmt.Errorf("load config: %w", err)
+		}
+	}
+	if !cfg.Enabled {
+		return cfg, nil
+	}
+	base := strings.TrimSpace(cfg.BaseDir)
+	if base == "" {
+		dataDir, err := appdirs.DataDir()
+		if err != nil {
+			return sessionrestore.Config{}, err
+		}
+		base = filepath.Join(dataDir, "sessions")
+	}
+	cfg.BaseDir = filepath.Clean(userpath.ExpandUser(base))
+	return cfg.Normalized(), nil
+}
+
+func applySessionRestoreConfig(out *sessionrestore.Config, cfg layout.SessionRestoreConfig) {
+	if out == nil {
+		return
+	}
+	if cfg.Enabled != nil {
+		out.Enabled = *cfg.Enabled
+	}
+	if strings.TrimSpace(cfg.BaseDir) != "" {
+		out.BaseDir = cfg.BaseDir
+	}
+	if cfg.MaxScrollbackLines > 0 {
+		out.MaxScrollbackLines = cfg.MaxScrollbackLines
+	}
+	if cfg.MaxScrollbackBytes > 0 {
+		out.MaxScrollbackBytes = int64(cfg.MaxScrollbackBytes)
+	}
+	if cfg.SnapshotIntervalMS > 0 {
+		out.SnapshotInterval = time.Duration(cfg.SnapshotIntervalMS) * time.Millisecond
+	}
+	if cfg.MaxDiskMB > 0 {
+		out.MaxDiskBytes = int64(cfg.MaxDiskMB) * 1024 * 1024
+	}
+	if cfg.TTLInactiveSeconds > 0 {
+		out.TTLInactive = time.Duration(cfg.TTLInactiveSeconds) * time.Second
+	}
 }
 
 func resolvePprofAddr(ctx root.CommandContext) (string, error) {

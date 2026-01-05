@@ -4,15 +4,18 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/muesli/termenv"
+	"github.com/charmbracelet/colorprofile"
 
 	"github.com/regenrek/peakypanes/internal/logging"
 	"github.com/regenrek/peakypanes/internal/sessiond"
+	"github.com/regenrek/peakypanes/internal/termframe"
+	"github.com/regenrek/peakypanes/internal/termrender"
 	"github.com/regenrek/peakypanes/internal/tui/mouse"
 )
 
@@ -23,12 +26,14 @@ const (
 )
 
 type paneViewKey struct {
-	PaneID       string
-	Cols         int
-	Rows         int
-	Mode         sessiond.PaneViewMode
-	ShowCursor   bool
-	ColorProfile termenv.Profile
+	PaneID string
+	Cols   int
+	Rows   int
+}
+
+type paneViewEntry struct {
+	frame    termframe.Frame
+	rendered map[bool]string
 }
 
 type paneSize struct {
@@ -38,12 +43,9 @@ type paneSize struct {
 
 func paneViewKeyFrom(view sessiond.PaneViewResponse) paneViewKey {
 	return paneViewKey{
-		PaneID:       view.PaneID,
-		Cols:         view.Cols,
-		Rows:         view.Rows,
-		Mode:         view.Mode,
-		ShowCursor:   view.ShowCursor,
-		ColorProfile: view.ColorProfile,
+		PaneID: view.PaneID,
+		Cols:   view.Cols,
+		Rows:   view.Rows,
 	}
 }
 
@@ -192,12 +194,9 @@ func (m *Model) paneViewRequests() []sessiond.PaneViewRequest {
 			continue
 		}
 		key := paneViewKey{
-			PaneID:       req.PaneID,
-			Cols:         req.Cols,
-			Rows:         req.Rows,
-			Mode:         req.Mode,
-			ShowCursor:   req.ShowCursor,
-			ColorProfile: req.ColorProfile,
+			PaneID: req.PaneID,
+			Cols:   req.Cols,
+			Rows:   req.Rows,
 		}
 		if _, ok := seen[key]; ok {
 			continue
@@ -263,6 +262,9 @@ func (m *Model) allowFallbackRequest(paneID string, now time.Time) bool {
 
 func (m *Model) schedulePaneViewPump(reason string, delay time.Duration) tea.Cmd {
 	if m == nil {
+		return nil
+	}
+	if m.daemonDisconnected {
 		return nil
 	}
 	if m.paneViewPumpScheduled {
@@ -509,12 +511,9 @@ func (m *Model) buildPendingRequestsNoSnapshot(b *paneViewPendingBuild) {
 		}
 		if fallback := m.buildFallbackRequest(paneID, b.seen, b.now); fallback != nil {
 			key := paneViewKey{
-				PaneID:       fallback.PaneID,
-				Cols:         fallback.Cols,
-				Rows:         fallback.Rows,
-				Mode:         fallback.Mode,
-				ShowCursor:   fallback.ShowCursor,
-				ColorProfile: fallback.ColorProfile,
+				PaneID: fallback.PaneID,
+				Cols:   fallback.Cols,
+				Rows:   fallback.Rows,
 			}
 			b.addRequest(*fallback, key)
 		}
@@ -526,12 +525,9 @@ func (m *Model) buildPendingRequestsNoSnapshot(b *paneViewPendingBuild) {
 func (m *Model) queueFallbackAndNote(paneID string, b *paneViewPendingBuild, reason string) {
 	if fallback := m.buildFallbackRequest(paneID, b.seen, b.now); fallback != nil {
 		key := paneViewKey{
-			PaneID:       fallback.PaneID,
-			Cols:         fallback.Cols,
-			Rows:         fallback.Rows,
-			Mode:         fallback.Mode,
-			ShowCursor:   fallback.ShowCursor,
-			ColorProfile: fallback.ColorProfile,
+			PaneID: fallback.PaneID,
+			Cols:   fallback.Cols,
+			Rows:   fallback.Rows,
 		}
 		b.addRequest(*fallback, key)
 	}
@@ -560,12 +556,9 @@ func (m *Model) tryAddPaneViewRequestWithHit(paneID string, hit mouse.PaneHit, b
 		return false
 	}
 	key := paneViewKey{
-		PaneID:       req.PaneID,
-		Cols:         req.Cols,
-		Rows:         req.Rows,
-		Mode:         req.Mode,
-		ShowCursor:   req.ShowCursor,
-		ColorProfile: req.ColorProfile,
+		PaneID: req.PaneID,
+		Cols:   req.Cols,
+		Rows:   req.Rows,
 	}
 	if _, seen := b.seen[key]; seen {
 		return true
@@ -650,24 +643,18 @@ func (m *Model) buildFallbackRequest(paneID string, seen map[paneViewKey]struct{
 	}
 	cols, rows := m.paneSizeForFallback(paneID)
 	req := sessiond.PaneViewRequest{
-		PaneID:       paneID,
-		Cols:         cols,
-		Rows:         rows,
-		Mode:         sessiond.PaneViewANSI,
-		ShowCursor:   false,
-		ColorProfile: m.paneViewProfile,
-		Priority:     sessiond.PaneViewPriorityBackground,
+		PaneID:   paneID,
+		Cols:     cols,
+		Rows:     rows,
+		Priority: sessiond.PaneViewPriorityBackground,
 	}
 	if m.previewRenderMode() == PreviewRenderDirect {
 		req.DirectRender = true
 	}
 	key := paneViewKey{
-		PaneID:       req.PaneID,
-		Cols:         req.Cols,
-		Rows:         req.Rows,
-		Mode:         req.Mode,
-		ShowCursor:   req.ShowCursor,
-		ColorProfile: req.ColorProfile,
+		PaneID: req.PaneID,
+		Cols:   req.Cols,
+		Rows:   req.Rows,
 	}
 	if _, ok := seen[key]; ok {
 		return nil
@@ -741,6 +728,9 @@ func (m *Model) hasPaneViewFirst(paneID string) bool {
 
 func (m *Model) startPaneViewFetch(reqs []sessiond.PaneViewRequest) tea.Cmd {
 	if m == nil || m.client == nil || len(reqs) == 0 {
+		return nil
+	}
+	if m.daemonDisconnected {
 		return nil
 	}
 	now := time.Now()
@@ -833,8 +823,8 @@ func (m *Model) paneViewRequestForHit(hit mouse.PaneHit) *sessiond.PaneViewReque
 		m.logPaneViewSkip(hit.PaneID, "invalid_size", fmt.Sprintf("cols=%d rows=%d %s", cols, rows, m.paneViewSkipContext()))
 		return nil
 	}
-	mode, showCursor, priority := m.paneViewRenderSettings(hit.PaneID)
-	req := m.newPaneViewRequest(hit.PaneID, cols, rows, mode, showCursor, priority)
+	_, priority := m.paneViewRenderSettings(hit.PaneID)
+	req := m.newPaneViewRequest(hit.PaneID, cols, rows, priority)
 	m.applyKnownPaneViewSeq(req)
 	return req
 }
@@ -860,8 +850,7 @@ func (m *Model) paneViewContent(hit mouse.PaneHit) (mouse.Rect, bool) {
 	return content, true
 }
 
-func (m *Model) paneViewRenderSettings(paneID string) (sessiond.PaneViewMode, bool, sessiond.PaneViewPriority) {
-	mode := sessiond.PaneViewANSI
+func (m *Model) paneViewRenderSettings(paneID string) (bool, sessiond.PaneViewPriority) {
 	showCursor := false
 	priority := sessiond.PaneViewPriorityBackground
 
@@ -869,14 +858,16 @@ func (m *Model) paneViewRenderSettings(paneID string) (sessiond.PaneViewMode, bo
 	if isSelected {
 		priority = sessiond.PaneViewPriorityNormal
 	}
+	if pane := m.paneByID(paneID); pane != nil && pane.Disconnected {
+		return false, priority
+	}
 	if isSelected && m.supportsTerminalFocus() {
-		mode = sessiond.PaneViewLipgloss
 		showCursor = m.terminalFocus
 		if showCursor {
 			priority = sessiond.PaneViewPriorityFocused
 		}
 	}
-	return mode, showCursor, priority
+	return showCursor, priority
 }
 
 func (m *Model) selectedPaneID() string {
@@ -890,20 +881,15 @@ func (m *Model) newPaneViewRequest(
 	paneID string,
 	cols int,
 	rows int,
-	mode sessiond.PaneViewMode,
-	showCursor bool,
 	priority sessiond.PaneViewPriority,
 ) *sessiond.PaneViewRequest {
 	req := &sessiond.PaneViewRequest{
-		PaneID:       paneID,
-		Cols:         cols,
-		Rows:         rows,
-		Mode:         mode,
-		ShowCursor:   showCursor,
-		ColorProfile: m.paneViewProfile,
-		Priority:     priority,
+		PaneID:   paneID,
+		Cols:     cols,
+		Rows:     rows,
+		Priority: priority,
 	}
-	if mode == sessiond.PaneViewANSI && m.previewRenderMode() == PreviewRenderDirect {
+	if m.previewRenderMode() == PreviewRenderDirect {
 		req.DirectRender = true
 	}
 	return req
@@ -914,12 +900,9 @@ func (m *Model) applyKnownPaneViewSeq(req *sessiond.PaneViewRequest) {
 		return
 	}
 	key := paneViewKey{
-		PaneID:       req.PaneID,
-		Cols:         req.Cols,
-		Rows:         req.Rows,
-		Mode:         req.Mode,
-		ShowCursor:   req.ShowCursor,
-		ColorProfile: req.ColorProfile,
+		PaneID: req.PaneID,
+		Cols:   req.Cols,
+		Rows:   req.Rows,
 	}
 	req.KnownSeq = m.paneViewSeq[key]
 }
@@ -1104,7 +1087,7 @@ func (m *Model) dashboardColumnsDebug() string {
 }
 
 func paneViewMinIntervalFor(req sessiond.PaneViewRequest, perf PaneViewPerformance) time.Duration {
-	if req.Priority == sessiond.PaneViewPriorityFocused || req.Mode == sessiond.PaneViewLipgloss || req.ShowCursor {
+	if req.Priority == sessiond.PaneViewPriorityFocused {
 		return perf.MinIntervalFocused
 	}
 	if req.Priority == sessiond.PaneViewPriorityNormal || req.Priority == sessiond.PaneViewPriorityUnset {
@@ -1114,7 +1097,7 @@ func paneViewMinIntervalFor(req sessiond.PaneViewRequest, perf PaneViewPerforman
 }
 
 func paneViewTimeoutFor(req sessiond.PaneViewRequest, perf PaneViewPerformance) time.Duration {
-	if req.Priority == sessiond.PaneViewPriorityFocused || req.Mode == sessiond.PaneViewLipgloss || req.ShowCursor {
+	if req.Priority == sessiond.PaneViewPriorityFocused {
 		return perf.TimeoutFocused
 	}
 	if req.Priority == sessiond.PaneViewPriorityNormal || req.Priority == sessiond.PaneViewPriorityUnset {
@@ -1227,7 +1210,7 @@ func paneViewWorker(client *sessiond.Client, jobs <-chan sessiond.PaneViewReques
 		if perfDebugEnabled() {
 			dur := time.Since(start)
 			if dur > perfSlowPaneViewReq {
-				logPerfEvery("tui.paneviews.req", perfLogInterval, "tui: pane view req slow pane=%s dur=%s cols=%d rows=%d mode=%v priority=%v err=%v", req.PaneID, dur, req.Cols, req.Rows, req.Mode, req.Priority, err)
+				logPerfEvery("tui.paneviews.req", perfLogInterval, "tui: pane view req slow pane=%s dur=%s cols=%d rows=%d priority=%v err=%v", req.PaneID, dur, req.Cols, req.Rows, req.Priority, err)
 			}
 		}
 		if err != nil {
@@ -1253,24 +1236,37 @@ func collectPaneViewResults(results <-chan paneViewResult) ([]sessiond.PaneViewR
 	return views, firstErr
 }
 
-func (m Model) paneView(paneID string, cols, rows int, mode sessiond.PaneViewMode, showCursor bool, profile termenv.Profile) string {
-	if paneID == "" || cols <= 0 || rows <= 0 {
+func (m *Model) paneView(paneID string, cols, rows int, showCursor bool) string {
+	if m == nil || paneID == "" || cols <= 0 || rows <= 0 {
 		return ""
 	}
 	key := paneViewKey{
-		PaneID:       paneID,
-		Cols:         cols,
-		Rows:         rows,
-		Mode:         mode,
-		ShowCursor:   showCursor,
-		ColorProfile: profile,
+		PaneID: paneID,
+		Cols:   cols,
+		Rows:   rows,
 	}
 	if m.paneViews == nil {
 		return ""
 	}
-	return m.paneViews[key]
+	entry, ok := m.paneViews[key]
+	if !ok {
+		return ""
+	}
+	if entry.rendered == nil {
+		entry.rendered = make(map[bool]string, 2)
+	}
+	if cached, ok := entry.rendered[showCursor]; ok {
+		return cached
+	}
+	rendered := termrender.Render(entry.frame, termrender.Options{
+		Profile:    m.paneViewProfile,
+		ShowCursor: showCursor,
+	})
+	entry.rendered[showCursor] = rendered
+	m.paneViews[key] = entry
+	return rendered
 }
 
-func detectPaneViewProfile() termenv.Profile {
-	return termenv.EnvColorProfile()
+func detectPaneViewProfile() colorprofile.Profile {
+	return colorprofile.Detect(os.Stdout, os.Environ())
 }

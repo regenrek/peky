@@ -20,7 +20,7 @@ scripts/perf-bench
 ```
 
 Current benchmark areas:
-- `internal/terminal`: window render paths (ANSI cache + lipgloss view).
+- `internal/terminal`: frame cache and snapshot rendering path.
 - `internal/sessiond`: pane view response construction.
 - `internal/vt`: scrollback push/reflow behaviors.
 

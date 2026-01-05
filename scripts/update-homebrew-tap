@@ -89,7 +89,7 @@ mkdir -p "$(dirname "$formula_path")"
 
 cat >"$formula_path" <<EOF
 class Peakypanes < Formula
-  desc "Terminal dashboard with YAML-based layouts and native live previews."
+  desc "Terminal dashboard with YAML-based layouts and native live previews"
   homepage "https://github.com/regenrek/peakypanes"
   url "$tarball_url"
   sha256 "$sha256"
@@ -107,6 +107,11 @@ class Peakypanes < Formula
   end
 end
 EOF
+
+desc_line=$(grep -E '^  desc ' "$formula_path" || true)
+if [[ $desc_line =~ \"\.$ ]]; then
+  die "formula desc ends with a period"
+fi
 
 if git -C "$tmp/tap" diff --quiet; then
   echo "update-homebrew-tap: no changes needed (${tag})"

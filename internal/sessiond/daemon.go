@@ -14,8 +14,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/regenrek/peakypanes/internal/appdirs"
 	"github.com/regenrek/peakypanes/internal/native"
-	"github.com/regenrek/peakypanes/internal/sessiond/state"
+	"github.com/regenrek/peakypanes/internal/sessionrestore"
 	"github.com/regenrek/peakypanes/internal/tool"
 )
 
@@ -25,20 +26,14 @@ const (
 	defaultOpTimeout    = 5 * time.Second
 )
 
-// DefaultStateDebounce controls the default persistence debounce interval.
-const DefaultStateDebounce = 250 * time.Millisecond
-
 // DaemonConfig configures a session daemon instance.
 type DaemonConfig struct {
-	Version                 string
-	SocketPath              string
-	PidPath                 string
-	StatePath               string
-	StateDebounce           time.Duration
-	HandleSignals           bool
-	SkipRestore             bool
-	DisableStatePersistence bool
-	PprofAddr               string
+	Version        string
+	SocketPath     string
+	PidPath        string
+	SessionRestore sessionrestore.Config
+	HandleSignals  bool
+	PprofAddr      string
 }
 
 type pprofServer interface {
@@ -53,13 +48,11 @@ type Daemon struct {
 	listenerMu    sync.RWMutex
 	socketPath    string
 	pidPath       string
-	statePath     string
 	pprofAddr     string
 	pprofServer   pprofServer
 	pprofListener net.Listener
-	stateWriter   *state.Writer
 	version       string
-	skipRestore   bool
+	restore       *restoreService
 	profileStop   func()
 	startMu       sync.Mutex
 	started       chan struct{}
@@ -115,21 +108,6 @@ func NewDaemon(cfg DaemonConfig) (*Daemon, error) {
 		}
 		pidPath = path
 	}
-	statePath := cfg.StatePath
-	if statePath == "" {
-		statePath = filepath.Join(filepath.Dir(socketPath), "state.json")
-	}
-	debounce := cfg.StateDebounce
-	if debounce < 0 {
-		debounce = DefaultStateDebounce
-	}
-	var stateWriter *state.Writer
-	if !cfg.DisableStatePersistence {
-		stateWriter = state.NewWriter(statePath, state.WriterOptions{
-			Debounce: debounce,
-			FileMode: 0o600,
-		})
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	registry, err := loadToolRegistry()
 	if err != nil {
@@ -145,16 +123,32 @@ func NewDaemon(cfg DaemonConfig) (*Daemon, error) {
 		cancel()
 		return nil, err
 	}
+	var restore *restoreService
+	restoreCfg := cfg.SessionRestore.Normalized()
+	if restoreCfg.Enabled {
+		if strings.TrimSpace(restoreCfg.BaseDir) == "" {
+			dataDir, err := appdirs.DataDir()
+			if err != nil {
+				cancel()
+				return nil, err
+			}
+			restoreCfg.BaseDir = filepath.Join(dataDir, "sessions")
+		}
+		store, err := sessionrestore.NewStore(restoreCfg)
+		if err != nil {
+			cancel()
+			return nil, err
+		}
+		restore = newRestoreService(store, restoreCfg)
+	}
 	d := &Daemon{
 		manager:      wrapManager(nativeMgr),
 		toolRegistry: registry,
 		socketPath:   socketPath,
 		pidPath:      pidPath,
-		statePath:    statePath,
 		pprofAddr:    strings.TrimSpace(cfg.PprofAddr),
-		stateWriter:  stateWriter,
 		version:      cfg.Version,
-		skipRestore:  cfg.SkipRestore,
+		restore:      restore,
 		ctx:          ctx,
 		cancel:       cancel,
 		clients:      make(map[uint64]*clientConn),
@@ -209,9 +203,9 @@ func (d *Daemon) Start() error {
 		_ = os.Remove(d.pidPath)
 		return err
 	}
-	if !d.skipRestore {
-		if err := d.restorePersistedState(); err != nil {
-			slog.Warn("sessiond: restore state failed", slog.Any("err", err))
+	if d.restore != nil {
+		if err := d.restore.Load(d.ctx); err != nil {
+			slog.Warn("sessiond: restore load failed", slog.Any("err", err))
 		}
 	}
 	d.startProfiler()
@@ -219,6 +213,10 @@ func (d *Daemon) Start() error {
 	d.wg.Add(2)
 	go d.acceptLoop()
 	go d.eventLoop()
+	if d.restore != nil {
+		d.wg.Add(1)
+		go d.restoreLoop()
+	}
 
 	slog.Info("sessiond: daemon listening", slog.String("socket", d.socketPath))
 	return nil
@@ -266,11 +264,10 @@ func (d *Daemon) shutdown() error {
 	d.clients = make(map[uint64]*clientConn)
 	d.clientsMu.Unlock()
 
-	d.queuePersistState()
-	if d.stateWriter != nil {
+	if d.restore != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
-		if err := d.stateWriter.Close(ctx); err != nil {
-			slog.Warn("sessiond: flush state failed", slog.Any("err", err))
+		if err := d.restore.Flush(ctx, d.manager); err != nil {
+			slog.Warn("sessiond: flush restore failed", slog.Any("err", err))
 		}
 		cancel()
 	}
@@ -333,17 +330,6 @@ func (d *Daemon) clearListener() net.Listener {
 	d.listener = nil
 	d.listenerMu.Unlock()
 	return listener
-}
-
-func (d *Daemon) queuePersistState() {
-	if d == nil || d.stateWriter == nil || d.manager == nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
-	defer cancel()
-	sessions := d.manager.Snapshot(ctx, 0)
-	st := state.FromSnapshots(d.version, sessions)
-	d.stateWriter.Persist(st)
 }
 
 func (d *Daemon) writePidFile() error {

@@ -5,6 +5,20 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.0.21 - 2026-01-05
+
+### Added
+- Structured frame rendering pipeline for pane views (termframe + termrender).
+- Offline pane previews and cleanup helpers for dead panes.
+- Frame-based regression tests covering pane views and restore paths.
+
+### Changed
+- Pane previews now render locally from frames in TUI/CLI for a single canonical path.
+- Session restore storage and merge paths are consolidated for offline panes.
+
+### Fixed
+- Homebrew formula description guard to prevent invalid trailing punctuation.
+
 ## 0.0.20 - 2026-01-04
 
 ### Added

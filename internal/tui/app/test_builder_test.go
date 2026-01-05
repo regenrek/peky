@@ -5,7 +5,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/muesli/termenv"
+	"github.com/charmbracelet/colorprofile"
 )
 
 func newTestModelLite() *Model {
@@ -16,9 +16,9 @@ func newTestModelLite() *Model {
 		selection:              selectionState{ProjectID: projectKey("/alpha", "Alpha"), Session: "alpha-1", Pane: "1"},
 		expandedSessions:       map[string]bool{"alpha-1": true, "alpha-2": false, "beta-1": true},
 		selectionByProject:     make(map[string]selectionState),
-		paneViews:              make(map[paneViewKey]string),
+		paneViews:              make(map[paneViewKey]paneViewEntry),
 		paneMouseMotion:        make(map[string]bool),
-		paneViewProfile:        termenv.TrueColor,
+		paneViewProfile:        colorprofile.TrueColor,
 		paneInputDisabled:      make(map[string]struct{}),
 		paneViewSeq:            make(map[paneViewKey]uint64),
 		paneViewLastReq:        make(map[paneViewKey]time.Time),

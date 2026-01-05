@@ -134,10 +134,9 @@ func (m *Model) perfNotePaneViewRequest(req sessiond.PaneViewRequest, now time.T
 				slog.Uint64("last_seq", trace.pendingLastSeq),
 				slog.Int("cols", req.Cols),
 				slog.Int("rows", req.Rows),
-				slog.Any("mode", req.Mode),
 			)
 		} else if delay >= perfSlowPaneEventToReq {
-			logPerfEvery("tui.paneviews.req."+req.PaneID, perfLogInterval, "tui: pane view req slow pane=%s delay_event_to_req=%s pending_count=%d last_seq=%d cols=%d rows=%d mode=%v", req.PaneID, delay, trace.pendingCount, trace.pendingLastSeq, req.Cols, req.Rows, req.Mode)
+			logPerfEvery("tui.paneviews.req."+req.PaneID, perfLogInterval, "tui: pane view req slow pane=%s delay_event_to_req=%s pending_count=%d last_seq=%d cols=%d rows=%d", req.PaneID, delay, trace.pendingCount, trace.pendingLastSeq, req.Cols, req.Rows)
 		}
 		trace.lastReqPendingAt = trace.pendingAt
 		trace.lastReqPendingCount = trace.pendingCount

@@ -44,4 +44,6 @@ const (
 	paneStatusRunning
 	paneStatusDone
 	paneStatusError
+	paneStatusDead
+	paneStatusDisconnected
 )

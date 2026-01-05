@@ -387,6 +387,9 @@ func (m *Model) quickReplyPlan() (quickReplyPlan, tea.Cmd, bool) {
 	if pane.Dead {
 		return quickReplyPlan{}, func() tea.Msg { return newPaneClosedMsg(paneID, nil) }, false
 	}
+	if pane.Disconnected {
+		return quickReplyPlan{}, NewWarningCmd("Pane is offline (snapshot only)"), false
+	}
 	label := strings.TrimSpace(pane.Title)
 	if label == "" {
 		label = fmt.Sprintf("pane %s", pane.Index)
@@ -404,6 +407,9 @@ func (m *Model) sendQuickReplyToPane(plan quickReplyPlan) tea.Msg {
 	pane := m.paneByID(plan.paneID)
 	if pane == nil || pane.Dead {
 		return newPaneClosedMsg(plan.paneID, nil)
+	}
+	if pane != nil && pane.Disconnected {
+		return WarningMsg{Message: "Pane is offline (snapshot only)"}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), terminalActionTimeout)
 	defer cancel()

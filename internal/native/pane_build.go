@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 	"github.com/kballard/go-shellquote"
 
 	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/sessionrestore"
 	"github.com/regenrek/peakypanes/internal/terminal"
 )
 
@@ -146,6 +148,9 @@ func (m *Manager) buildGridPanes(ctx context.Context, path string, layoutCfg *la
 				m.closePanes(panes)
 				return nil, err
 			}
+			if idx < len(paneDefs) {
+				pane.RestoreMode = resolvePaneRestoreMode(paneDefs[idx])
+			}
 			pane.Index = strconv.Itoa(idx)
 			pane.Left = left
 			pane.Top = top
@@ -171,6 +176,7 @@ func (m *Manager) buildSplitPanes(ctx context.Context, path string, defs []layou
 			m.closePanes(panes)
 			return nil, err
 		}
+		pane.RestoreMode = resolvePaneRestoreMode(paneDef)
 		pane.Index = strconv.Itoa(i)
 		if i == 0 {
 			pane.Active = true
@@ -308,6 +314,15 @@ func renderPreviewLines(win *terminal.Window, max int) ([]string, bool) {
 		return nil, ready
 	}
 	return lines, ready
+}
+
+func resolvePaneRestoreMode(def layout.PaneDef) sessionrestore.Mode {
+	mode, err := sessionrestore.ParseMode(def.SessionRestore)
+	if err == nil {
+		return mode
+	}
+	slog.Warn("native: invalid pane session_restore mode", slog.Any("err", err))
+	return sessionrestore.ModeDefault
 }
 
 func splitCommand(command string) (string, []string, error) {

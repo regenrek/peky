@@ -1,12 +1,6 @@
 package app
 
-import (
-	"testing"
-
-	"github.com/muesli/termenv"
-
-	"github.com/regenrek/peakypanes/internal/sessiond"
-)
+import "testing"
 
 func TestDashboardPaneHits(t *testing.T) {
 	m := newTestModelLite()
@@ -80,15 +74,12 @@ func TestPaneViewRequestsAndLookup(t *testing.T) {
 	}
 
 	key := paneViewKey{
-		PaneID:       "p1",
-		Cols:         req.Cols,
-		Rows:         req.Rows,
-		Mode:         sessiond.PaneViewANSI,
-		ShowCursor:   false,
-		ColorProfile: termenv.TrueColor,
+		PaneID: "p1",
+		Cols:   req.Cols,
+		Rows:   req.Rows,
 	}
-	m.paneViews[key] = "view"
-	if got := m.paneView("p1", req.Cols, req.Rows, sessiond.PaneViewANSI, false, termenv.TrueColor); got != "view" {
+	m.paneViews[key] = paneViewEntry{rendered: map[bool]string{false: "view"}}
+	if got := m.paneView("p1", req.Cols, req.Rows, false); got != "view" {
 		t.Fatalf("expected pane view lookup, got %q", got)
 	}
 }

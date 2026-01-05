@@ -29,7 +29,7 @@ func (m *Model) reconcilePaneInputDisabled() {
 			session := &project.Sessions[sessIdx]
 			for paneIdx := range session.Panes {
 				pane := &session.Panes[paneIdx]
-				if pane.Dead {
+				if pane.Dead || pane.Disconnected {
 					deadPanes[pane.ID] = struct{}{}
 				}
 			}

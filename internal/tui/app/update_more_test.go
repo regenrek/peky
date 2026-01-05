@@ -5,10 +5,10 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/muesli/termenv"
 
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/sessiond"
+	"github.com/regenrek/peakypanes/internal/termframe"
 )
 
 func TestUpdateHandlers(t *testing.T) {
@@ -50,16 +50,15 @@ func TestUpdateHandlers(t *testing.T) {
 	}
 
 	view := sessiond.PaneViewResponse{
-		PaneID:       "p1",
-		Cols:         1,
-		Rows:         1,
-		View:         "view",
-		AllowMotion:  true,
-		ColorProfile: termenv.TrueColor,
+		PaneID:      "p1",
+		Cols:        1,
+		Rows:        1,
+		Frame:       termframe.Frame{Cols: 1, Rows: 1, Cells: []termframe.Cell{{Content: "view", Width: 1}}},
+		AllowMotion: true,
 	}
 	_ = m.handlePaneViews(paneViewsMsg{Views: []sessiond.PaneViewResponse{view}})
 	key := paneViewKeyFrom(view)
-	if m.paneViews[key] != "view" {
+	if len(m.paneViews[key].frame.Cells) == 0 || m.paneViews[key].frame.Cells[0].Content != "view" {
 		t.Fatalf("expected pane view stored")
 	}
 

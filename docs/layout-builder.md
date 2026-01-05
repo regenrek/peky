@@ -44,6 +44,9 @@ layout:
     - title: shell
       cmd: ""
       split: vertical
+
+# Optional per-pane persistence override:
+# session_restore: true | false | private
 ```
 
 ---
