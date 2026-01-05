@@ -17,6 +17,11 @@ type geminiCLIClient struct {
 	cfg providerConfig
 }
 
+type geminiCLICreds struct {
+	Token     string
+	ProjectID string
+}
+
 type geminiCLIRequest struct {
 	Project string `json:"project"`
 	Model   string `json:"model"`
@@ -54,20 +59,16 @@ func newGeminiCLIClient(cfg providerConfig) *geminiCLIClient {
 }
 
 func (c *geminiCLIClient) Generate(ctx context.Context, req llmRequest) (llmResponse, error) {
-	if strings.TrimSpace(c.cfg.APIKey) == "" {
-		return llmResponse{}, errors.New("missing API key")
+	creds, err := parseGeminiCLICreds(c.cfg.APIKey)
+	if err != nil {
+		return llmResponse{}, err
 	}
-	var payloadCred struct {
-		Token     string `json:"token"`
-		ProjectID string `json:"projectId"`
+	request := geminiCLIRequest{
+		Project:   creds.ProjectID,
+		Model:     c.cfg.Model,
+		UserAgent: "peakypanes",
+		RequestID: fmt.Sprintf("peky-%d", time.Now().UnixNano()),
 	}
-	if err := json.Unmarshal([]byte(c.cfg.APIKey), &payloadCred); err != nil {
-		return llmResponse{}, errors.New("invalid oauth credentials")
-	}
-	if payloadCred.Token == "" || payloadCred.ProjectID == "" {
-		return llmResponse{}, errors.New("missing oauth token or projectId")
-	}
-	request := geminiCLIRequest{Project: payloadCred.ProjectID, Model: c.cfg.Model}
 	request.Request.Contents = googleContents(req.Messages)
 	if strings.TrimSpace(req.SystemPrompt) != "" {
 		request.Request.SystemInstruction = &googleContent{Parts: []googlePart{{Text: req.SystemPrompt}}}
@@ -76,99 +77,71 @@ func (c *geminiCLIClient) Generate(ctx context.Context, req llmRequest) (llmResp
 		request.Request.Tools = []googleTools{{FunctionDeclarations: googleToolDecls(req.Tools)}}
 		request.Request.ToolConfig = map[string]any{"functionCallingConfig": map[string]any{"mode": "AUTO"}}
 	}
-	request.UserAgent = "peakypanes"
-	request.RequestID = fmt.Sprintf("peky-%d", time.Now().UnixNano())
 	body, err := json.Marshal(request)
 	if err != nil {
 		return llmResponse{}, fmt.Errorf("gemini cli request encode: %w", err)
 	}
 	endpoint := strings.TrimRight(c.cfg.BaseURL, "/") + "/v1internal:streamGenerateContent?alt=sse"
+	resp, err := geminiCLIStreamRequest(ctx, endpoint, creds.Token, body)
+	if err != nil {
+		return llmResponse{}, err
+	}
+	return geminiCLIParseStream(resp)
+}
+
+func parseGeminiCLICreds(apiKey string) (geminiCLICreds, error) {
+	if strings.TrimSpace(apiKey) == "" {
+		return geminiCLICreds{}, errors.New("missing API key")
+	}
+	var payloadCred struct {
+		Token     string `json:"token"`
+		ProjectID string `json:"projectId"`
+	}
+	if err := json.Unmarshal([]byte(apiKey), &payloadCred); err != nil {
+		return geminiCLICreds{}, errors.New("invalid oauth credentials")
+	}
+	if payloadCred.Token == "" || payloadCred.ProjectID == "" {
+		return geminiCLICreds{}, errors.New("missing oauth token or projectId")
+	}
+	return geminiCLICreds{Token: payloadCred.Token, ProjectID: payloadCred.ProjectID}, nil
+}
+
+func geminiCLIStreamRequest(ctx context.Context, endpoint, token string, body []byte) (*http.Response, error) {
 	reqHTTP, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
-		return llmResponse{}, fmt.Errorf("gemini cli request: %w", err)
+		return nil, fmt.Errorf("gemini cli request: %w", err)
 	}
+	for k, v := range geminiCLIHeaders(endpoint, token) {
+		reqHTTP.Header.Set(k, v)
+	}
+	return http.DefaultClient.Do(reqHTTP)
+}
+
+func geminiCLIHeaders(endpoint, token string) map[string]string {
 	headers := map[string]string{
-		"Authorization": "Bearer " + payloadCred.Token,
-		"Content-Type":  "application/json",
-		"Accept":        "text/event-stream",
+		"Authorization":   "Bearer " + token,
+		"Content-Type":    "application/json",
+		"Accept":          "text/event-stream",
+		"Client-Metadata": `{"ideType":"IDE_UNSPECIFIED","platform":"PLATFORM_UNSPECIFIED","pluginType":"GEMINI"}`,
 	}
 	if strings.Contains(endpoint, "sandbox.googleapis.com") {
 		headers["User-Agent"] = "antigravity/1.11.5 darwin/arm64"
 		headers["X-Goog-Api-Client"] = "google-cloud-sdk vscode_cloudshelleditor/0.1"
-		headers["Client-Metadata"] = `{"ideType":"IDE_UNSPECIFIED","platform":"PLATFORM_UNSPECIFIED","pluginType":"GEMINI"}`
 	} else {
 		headers["User-Agent"] = "google-cloud-sdk vscode_cloudshelleditor/0.1"
 		headers["X-Goog-Api-Client"] = "gl-node/22.17.0"
-		headers["Client-Metadata"] = `{"ideType":"IDE_UNSPECIFIED","platform":"PLATFORM_UNSPECIFIED","pluginType":"GEMINI"}`
 	}
-	for k, v := range headers {
-		reqHTTP.Header.Set(k, v)
-	}
-	resp, err := http.DefaultClient.Do(reqHTTP)
-	if err != nil {
-		return llmResponse{}, err
-	}
+	return headers
+}
+
+func geminiCLIParseStream(resp *http.Response) (llmResponse, error) {
 	if resp.Body == nil {
 		return llmResponse{}, errors.New("gemini cli empty response")
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, readErr := io.ReadAll(resp.Body)
-		closeErr := resp.Body.Close()
-		if readErr != nil {
-			err := fmt.Errorf("gemini cli response read: %w", readErr)
-			if closeErr != nil {
-				return llmResponse{}, errors.Join(err, fmt.Errorf("gemini cli response close: %w", closeErr))
-			}
-			return llmResponse{}, err
-		}
-		err := fmt.Errorf("gemini cli error: %s", string(data))
-		if closeErr != nil {
-			return llmResponse{}, errors.Join(err, fmt.Errorf("gemini cli response close: %w", closeErr))
-		}
-		return llmResponse{}, err
+		return llmResponse{}, geminiCLIReadError(resp)
 	}
-	result := llmResponse{}
-	scanner := bufio.NewScanner(resp.Body)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if !strings.HasPrefix(line, "data:") {
-			continue
-		}
-		payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
-		if payload == "" {
-			continue
-		}
-		var chunk geminiCLIChunk
-		if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
-			continue
-		}
-		if chunk.Response == nil || len(chunk.Response.Candidates) == 0 {
-			continue
-		}
-		candidate := chunk.Response.Candidates[0]
-		result.StopReason = candidate.FinishReason
-		for _, part := range candidate.Content.Parts {
-			if part.Text != "" {
-				result.Text += part.Text
-			}
-			if part.FunctionCall != nil {
-				result.ToolCalls = append(result.ToolCalls, ToolCall{
-					ID:               part.FunctionCall.ID,
-					Name:             part.FunctionCall.Name,
-					Arguments:        part.FunctionCall.Args,
-					ThoughtSignature: part.ThoughtSignature,
-				})
-			}
-		}
-		if chunk.Response.UsageMetadata.TotalTokens > 0 {
-			result.Usage = Usage{
-				InputTokens:  chunk.Response.UsageMetadata.PromptTokens - chunk.Response.UsageMetadata.CachedTokens,
-				OutputTokens: chunk.Response.UsageMetadata.CandidatesTokens + chunk.Response.UsageMetadata.ThoughtsTokens,
-				TotalTokens:  chunk.Response.UsageMetadata.TotalTokens,
-			}
-		}
-	}
-	scanErr := scanner.Err()
+	result, scanErr := geminiCLIReadStream(resp.Body)
 	closeErr := resp.Body.Close()
 	if scanErr != nil {
 		if closeErr != nil {
@@ -183,4 +156,78 @@ func (c *geminiCLIClient) Generate(ctx context.Context, req llmRequest) (llmResp
 		result.Text = "(no response)"
 	}
 	return result, nil
+}
+
+func geminiCLIReadStream(body io.Reader) (llmResponse, error) {
+	result := llmResponse{}
+	scanner := bufio.NewScanner(body)
+	for scanner.Scan() {
+		payload := geminiCLIExtractPayload(scanner.Text())
+		if payload == "" {
+			continue
+		}
+		var chunk geminiCLIChunk
+		if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
+			continue
+		}
+		if chunk.Response == nil || len(chunk.Response.Candidates) == 0 {
+			continue
+		}
+		updateGeminiCLIResult(&result, chunk)
+	}
+	return result, scanner.Err()
+}
+
+func geminiCLIExtractPayload(line string) string {
+	line = strings.TrimSpace(line)
+	if !strings.HasPrefix(line, "data:") {
+		return ""
+	}
+	payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+	if payload == "" {
+		return ""
+	}
+	return payload
+}
+
+func updateGeminiCLIResult(result *llmResponse, chunk geminiCLIChunk) {
+	candidate := chunk.Response.Candidates[0]
+	result.StopReason = candidate.FinishReason
+	for _, part := range candidate.Content.Parts {
+		if part.Text != "" {
+			result.Text += part.Text
+		}
+		if part.FunctionCall != nil {
+			result.ToolCalls = append(result.ToolCalls, ToolCall{
+				ID:               part.FunctionCall.ID,
+				Name:             part.FunctionCall.Name,
+				Arguments:        part.FunctionCall.Args,
+				ThoughtSignature: part.ThoughtSignature,
+			})
+		}
+	}
+	if chunk.Response.UsageMetadata.TotalTokens > 0 {
+		result.Usage = Usage{
+			InputTokens:  chunk.Response.UsageMetadata.PromptTokens - chunk.Response.UsageMetadata.CachedTokens,
+			OutputTokens: chunk.Response.UsageMetadata.CandidatesTokens + chunk.Response.UsageMetadata.ThoughtsTokens,
+			TotalTokens:  chunk.Response.UsageMetadata.TotalTokens,
+		}
+	}
+}
+
+func geminiCLIReadError(resp *http.Response) error {
+	data, readErr := io.ReadAll(resp.Body)
+	closeErr := resp.Body.Close()
+	if readErr != nil {
+		err := fmt.Errorf("gemini cli response read: %w", readErr)
+		if closeErr != nil {
+			return errors.Join(err, fmt.Errorf("gemini cli response close: %w", closeErr))
+		}
+		return err
+	}
+	err := fmt.Errorf("gemini cli error: %s", string(data))
+	if closeErr != nil {
+		return errors.Join(err, fmt.Errorf("gemini cli response close: %w", closeErr))
+	}
+	return err
 }

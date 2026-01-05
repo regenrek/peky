@@ -10,52 +10,23 @@ import (
 )
 
 func resolveOAuthAPIKey(provider string, cred oauthCredentials, now time.Time) (string, *oauthCredentials, error) {
-	provider = string(Provider(strings.ToLower(strings.TrimSpace(provider))))
-	if provider == "" {
-		return "", nil, errors.New("provider is required")
+	providerID, err := normalizeOAuthProvider(provider)
+	if err != nil {
+		return "", nil, err
 	}
 	if cred.AccessToken == "" && cred.RefreshToken == "" {
 		return "", nil, errors.New("oauth credentials missing")
 	}
 	if !cred.expired(now.UnixMilli()) {
-		key, err := oauthAPIKeyForProvider(provider, cred)
+		key, err := oauthAPIKeyForProvider(providerID, cred)
 		return key, nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	var updated oauthCredentials
-	var err error
-	switch Provider(provider) {
-	case ProviderAnthropic:
-		updated, err = anthropicRefresh(ctx, cred.RefreshToken)
-	case ProviderGitHubCopilot:
-		updated, err = copilotRefreshToken(ctx, cred.RefreshToken, cred.EnterpriseURL)
-	case ProviderGoogleGeminiCLI:
-		if cred.ProjectID == "" {
-			return "", nil, errors.New("google gemini cli projectId missing")
-		}
-		updated, err = geminiCLIRefresh(ctx, cred.RefreshToken, cred.ProjectID)
-	case ProviderGoogleAntigrav:
-		if cred.ProjectID == "" {
-			return "", nil, errors.New("antigravity projectId missing")
-		}
-		updated, err = antigravityRefresh(ctx, cred.RefreshToken, cred.ProjectID)
-	default:
-		return "", nil, fmt.Errorf("unsupported oauth provider %q", provider)
-	}
+	updated, err := refreshOAuthCredentials(providerID, cred)
 	if err != nil {
 		return "", nil, err
 	}
-	if updated.ProjectID == "" {
-		updated.ProjectID = cred.ProjectID
-	}
-	if updated.EnterpriseURL == "" {
-		updated.EnterpriseURL = cred.EnterpriseURL
-	}
-	if updated.Email == "" {
-		updated.Email = cred.Email
-	}
-	apiKey, err := oauthAPIKeyForProvider(provider, updated)
+	updated = mergeOAuthCredentials(updated, cred)
+	apiKey, err := oauthAPIKeyForProvider(providerID, updated)
 	if err != nil {
 		return "", nil, err
 	}
@@ -83,4 +54,48 @@ func oauthAPIKeyForProvider(provider string, cred oauthCredentials) (string, err
 		}
 		return cred.AccessToken, nil
 	}
+}
+
+func normalizeOAuthProvider(provider string) (string, error) {
+	normalized := string(Provider(strings.ToLower(strings.TrimSpace(provider))))
+	if normalized == "" {
+		return "", errors.New("provider is required")
+	}
+	return normalized, nil
+}
+
+func refreshOAuthCredentials(provider string, cred oauthCredentials) (oauthCredentials, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	switch Provider(provider) {
+	case ProviderAnthropic:
+		return anthropicRefresh(ctx, cred.RefreshToken)
+	case ProviderGitHubCopilot:
+		return copilotRefreshToken(ctx, cred.RefreshToken, cred.EnterpriseURL)
+	case ProviderGoogleGeminiCLI:
+		if cred.ProjectID == "" {
+			return oauthCredentials{}, errors.New("google gemini cli projectId missing")
+		}
+		return geminiCLIRefresh(ctx, cred.RefreshToken, cred.ProjectID)
+	case ProviderGoogleAntigrav:
+		if cred.ProjectID == "" {
+			return oauthCredentials{}, errors.New("antigravity projectId missing")
+		}
+		return antigravityRefresh(ctx, cred.RefreshToken, cred.ProjectID)
+	default:
+		return oauthCredentials{}, fmt.Errorf("unsupported oauth provider %q", provider)
+	}
+}
+
+func mergeOAuthCredentials(updated, prev oauthCredentials) oauthCredentials {
+	if updated.ProjectID == "" {
+		updated.ProjectID = prev.ProjectID
+	}
+	if updated.EnterpriseURL == "" {
+		updated.EnterpriseURL = prev.EnterpriseURL
+	}
+	if updated.Email == "" {
+		updated.Email = prev.Email
+	}
+	return updated
 }

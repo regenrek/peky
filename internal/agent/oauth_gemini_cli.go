@@ -140,6 +140,30 @@ func geminiCLIRefresh(ctx context.Context, refreshToken, projectID string) (oaut
 }
 
 func geminiCLIDiscoverProject(ctx context.Context, accessToken string) (string, error) {
+	loaded, err := geminiCLILoadCodeAssist(ctx, accessToken)
+	if err != nil {
+		return "", err
+	}
+	if id := extractProjectID(loaded.CloudAIProject); id != "" {
+		return id, nil
+	}
+	tierID := geminiCLITierID(loaded.AllowedTiers)
+	return geminiCLIProvisionProject(ctx, accessToken, tierID)
+}
+
+func extractProjectID(raw any) string {
+	switch v := raw.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case map[string]any:
+		if id, ok := v["id"].(string); ok {
+			return strings.TrimSpace(id)
+		}
+	}
+	return ""
+}
+
+func geminiCLILoadCodeAssist(ctx context.Context, accessToken string) (geminiCLILoadResponse, error) {
 	payload := map[string]any{
 		"metadata": map[string]string{
 			"ideType":    "IDE_UNSPECIFIED",
@@ -147,40 +171,41 @@ func geminiCLIDiscoverProject(ctx context.Context, accessToken string) (string, 
 			"pluginType": "GEMINI",
 		},
 	}
-	resp, err := oauthPostJSON(ctx, geminiCLICodeAssist+"/v1internal:loadCodeAssist", payload, map[string]string{
-		"Authorization":     "Bearer " + accessToken,
-		"Content-Type":      "application/json",
-		"User-Agent":        "google-api-nodejs-client/9.15.1",
-		"X-Goog-Api-Client": "gl-node/22.17.0",
-	})
+	resp, err := oauthPostJSON(ctx, geminiCLICodeAssist+"/v1internal:loadCodeAssist", payload, geminiCLIOAuthHeaders(accessToken))
 	if err != nil {
-		return "", err
+		return geminiCLILoadResponse{}, err
 	}
 	body, err := readResponseBody(resp)
 	if err != nil {
-		return "", err
+		return geminiCLILoadResponse{}, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("code assist load failed: %s", body)
+		return geminiCLILoadResponse{}, fmt.Errorf("code assist load failed: %s", body)
 	}
 	var parsed geminiCLILoadResponse
 	if err := json.Unmarshal([]byte(body), &parsed); err != nil {
-		return "", fmt.Errorf("code assist parse: %w", err)
+		return geminiCLILoadResponse{}, fmt.Errorf("code assist parse: %w", err)
 	}
-	if id := extractProjectID(parsed.CloudAIProject); id != "" {
-		return id, nil
-	}
-	// onboard
+	return parsed, nil
+}
+
+func geminiCLITierID(tiers []struct {
+	ID        string `json:"id"`
+	IsDefault bool   `json:"isDefault"`
+}) string {
 	tierID := "FREE"
-	for _, tier := range parsed.AllowedTiers {
+	for _, tier := range tiers {
 		if tier.IsDefault {
-			tierID = tier.ID
-			break
+			return tier.ID
 		}
 		if tierID == "FREE" && tier.ID != "" {
 			tierID = tier.ID
 		}
 	}
+	return tierID
+}
+
+func geminiCLIProvisionProject(ctx context.Context, accessToken, tierID string) (string, error) {
 	for attempt := 0; attempt < 10; attempt++ {
 		resp, err := oauthPostJSON(ctx, geminiCLICodeAssist+"/v1internal:onboardUser", map[string]any{
 			"tierId": tierID,
@@ -189,12 +214,7 @@ func geminiCLIDiscoverProject(ctx context.Context, accessToken string) (string, 
 				"platform":   "PLATFORM_UNSPECIFIED",
 				"pluginType": "GEMINI",
 			},
-		}, map[string]string{
-			"Authorization":     "Bearer " + accessToken,
-			"Content-Type":      "application/json",
-			"User-Agent":        "google-api-nodejs-client/9.15.1",
-			"X-Goog-Api-Client": "gl-node/22.17.0",
-		})
+		}, geminiCLIOAuthHeaders(accessToken))
 		if err != nil {
 			return "", err
 		}
@@ -203,6 +223,9 @@ func geminiCLIDiscoverProject(ctx context.Context, accessToken string) (string, 
 			return "", err
 		}
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			if attempt < 9 {
+				time.Sleep(3 * time.Second)
+			}
 			continue
 		}
 		var onboard geminiCLIOnboardResponse
@@ -218,16 +241,13 @@ func geminiCLIDiscoverProject(ctx context.Context, accessToken string) (string, 
 	return "", errors.New("code assist project provisioning failed")
 }
 
-func extractProjectID(raw any) string {
-	switch v := raw.(type) {
-	case string:
-		return strings.TrimSpace(v)
-	case map[string]any:
-		if id, ok := v["id"].(string); ok {
-			return strings.TrimSpace(id)
-		}
+func geminiCLIOAuthHeaders(accessToken string) map[string]string {
+	return map[string]string{
+		"Authorization":     "Bearer " + accessToken,
+		"Content-Type":      "application/json",
+		"User-Agent":        "google-api-nodejs-client/9.15.1",
+		"X-Goog-Api-Client": "gl-node/22.17.0",
 	}
-	return ""
 }
 
 func googleUserEmail(ctx context.Context, accessToken string) (string, error) {

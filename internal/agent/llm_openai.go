@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 )
@@ -72,53 +71,53 @@ func (c *openaiClient) Generate(ctx context.Context, req llmRequest) (llmRespons
 	if strings.TrimSpace(c.cfg.APIKey) == "" {
 		return llmResponse{}, errors.New("missing API key")
 	}
-	messages, err := openaiMessages(req)
+	payload, err := openaiPayload(req, c.cfg.Model)
 	if err != nil {
 		return llmResponse{}, err
 	}
+	data, err := openaiDoRequest(ctx, c.cfg, payload)
+	if err != nil {
+		return llmResponse{}, err
+	}
+	return openaiParseResponse(data)
+}
+
+func openaiPayload(req llmRequest, model string) (openaiRequest, error) {
+	messages, err := openaiMessages(req)
+	if err != nil {
+		return openaiRequest{}, err
+	}
 	payload := openaiRequest{
-		Model:    c.cfg.Model,
+		Model:    model,
 		Messages: messages,
 	}
 	if len(req.Tools) > 0 {
 		payload.Tools = openaiTools(req.Tools)
 		payload.ToolChoice = "auto"
 	}
+	return payload, nil
+}
+
+func openaiDoRequest(ctx context.Context, cfg providerConfig, payload openaiRequest) ([]byte, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return llmResponse{}, fmt.Errorf("openai request encode: %w", err)
+		return nil, fmt.Errorf("openai request encode: %w", err)
 	}
-	url := strings.TrimRight(c.cfg.BaseURL, "/") + "/chat/completions"
+	url := strings.TrimRight(cfg.BaseURL, "/") + "/chat/completions"
 	reqHTTP, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		return llmResponse{}, fmt.Errorf("openai request: %w", err)
+		return nil, fmt.Errorf("openai request: %w", err)
 	}
 	reqHTTP.Header.Set("Content-Type", "application/json")
-	reqHTTP.Header.Set("Authorization", "Bearer "+c.cfg.APIKey)
-	client := http.DefaultClient
-	resp, err := client.Do(reqHTTP)
+	reqHTTP.Header.Set("Authorization", "Bearer "+cfg.APIKey)
+	resp, err := http.DefaultClient.Do(reqHTTP)
 	if err != nil {
-		return llmResponse{}, err
+		return nil, err
 	}
-	data, readErr := io.ReadAll(resp.Body)
-	closeErr := resp.Body.Close()
-	if readErr != nil {
-		err := fmt.Errorf("openai response read: %w", readErr)
-		if closeErr != nil {
-			return llmResponse{}, errors.Join(err, fmt.Errorf("openai response close: %w", closeErr))
-		}
-		return llmResponse{}, err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		err := fmt.Errorf("openai error: %s", string(data))
-		if closeErr != nil {
-			return llmResponse{}, errors.Join(err, fmt.Errorf("openai response close: %w", closeErr))
-		}
-		return llmResponse{}, err
-	}
-	if closeErr != nil {
-		return llmResponse{}, fmt.Errorf("openai response close: %w", closeErr)
-	}
+	return readHTTPResponse(resp, "openai")
+}
+
+func openaiParseResponse(data []byte) (llmResponse, error) {
 	var parsed openaiResponse
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		return llmResponse{}, fmt.Errorf("openai response parse: %w", err)
@@ -136,24 +135,30 @@ func (c *openaiClient) Generate(ctx context.Context, req llmRequest) (llmRespons
 			TotalTokens:  parsed.Usage.TotalTokens,
 		},
 	}
-	if len(msg.ToolCalls) > 0 {
-		result.ToolCalls = make([]ToolCall, 0, len(msg.ToolCalls))
-		for _, call := range msg.ToolCalls {
-			args := map[string]any{}
-			if call.Function.Arguments != "" {
-				_ = json.Unmarshal([]byte(call.Function.Arguments), &args)
-			}
-			result.ToolCalls = append(result.ToolCalls, ToolCall{
-				ID:        call.ID,
-				Name:      call.Function.Name,
-				Arguments: args,
-			})
-		}
-	}
+	result.ToolCalls = openaiToolCalls(msg.ToolCalls)
 	if result.Text == "" && len(result.ToolCalls) == 0 {
 		result.Text = "(no response)"
 	}
 	return result, nil
+}
+
+func openaiToolCalls(calls []openaiToolCall) []ToolCall {
+	if len(calls) == 0 {
+		return nil
+	}
+	out := make([]ToolCall, 0, len(calls))
+	for _, call := range calls {
+		args := map[string]any{}
+		if call.Function.Arguments != "" {
+			_ = json.Unmarshal([]byte(call.Function.Arguments), &args)
+		}
+		out = append(out, ToolCall{
+			ID:        call.ID,
+			Name:      call.Function.Name,
+			Arguments: args,
+		})
+	}
+	return out
 }
 
 func openaiMessages(req llmRequest) ([]openaiMessage, error) {

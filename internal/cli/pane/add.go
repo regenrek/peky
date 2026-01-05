@@ -3,6 +3,7 @@ package pane
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -21,46 +22,25 @@ func runAdd(ctx root.CommandContext) error {
 	}
 	defer cleanup()
 
-	sessionName := strings.TrimSpace(ctx.Cmd.String("session"))
-	paneIndex := intFlagString(ctx.Cmd, "index")
-	paneID := strings.TrimSpace(ctx.Cmd.String("pane-id"))
-	orientation := strings.ToLower(strings.TrimSpace(ctx.Cmd.String("orientation")))
-	if orientation == "" {
-		orientation = "vertical"
-	}
-	if orientation != "vertical" && orientation != "horizontal" {
-		return fmt.Errorf("invalid orientation %q (allowed: vertical, horizontal)", orientation)
-	}
-	vertical := orientation == "vertical"
-	percent := ctx.Cmd.Int("percent")
-	count := ctx.Cmd.Int("count")
-	if count == 0 {
-		count = 1
-	}
-	if count < 1 {
-		return fmt.Errorf("count must be positive")
+	opts, err := parseAddOptions(ctx)
+	if err != nil {
+		return err
 	}
 
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
 	defer cancel()
 
-	targetSession, targetIndex, err := resolveAddTarget(ctxTimeout, client, sessionName, paneIndex, paneID)
+	targetSession, targetIndex, err := resolveAddTarget(ctxTimeout, client, opts.sessionName, opts.paneIndex, opts.paneID)
 	if err != nil {
 		return err
 	}
 
-	newIndexes := make([]string, 0, count)
-	currentIndex := targetIndex
-	for i := 0; i < count; i++ {
-		newIndex, err := client.SplitPane(ctxTimeout, targetSession, currentIndex, vertical, percent)
-		if err != nil {
-			return err
-		}
-		newIndexes = append(newIndexes, newIndex)
-		currentIndex = newIndex
+	newIndexes, err := splitPaneCount(ctxTimeout, client, targetSession, targetIndex, opts)
+	if err != nil {
+		return err
 	}
 	var focusedPaneID string
-	if ctx.Cmd.Bool("focus") && len(newIndexes) > 0 {
+	if opts.focus && len(newIndexes) > 0 {
 		focusedPaneID, err = focusPaneByIndex(ctxTimeout, client, targetSession, newIndexes[len(newIndexes)-1])
 		if err != nil {
 			return err
@@ -68,31 +48,92 @@ func runAdd(ctx root.CommandContext) error {
 	}
 	if ctx.JSON {
 		meta = output.WithDuration(meta, start)
-		details := map[string]any{
-			"session":     targetSession,
-			"split_from":  targetIndex,
-			"orientation": orientation,
-		}
-		if len(newIndexes) == 1 {
-			details["new_index"] = newIndexes[0]
-		} else {
-			details["new_indexes"] = newIndexes
-			details["count"] = len(newIndexes)
-		}
-		if focusedPaneID != "" {
-			details["focused_pane_id"] = focusedPaneID
-		}
+		details := paneAddDetails(targetSession, targetIndex, opts.orientation, newIndexes, focusedPaneID)
 		return output.WriteSuccess(ctx.Out, meta, output.ActionResult{
 			Action:  "pane.add",
 			Status:  "ok",
 			Details: details,
 		})
 	}
+	return writePaneAddOutput(ctx.Out, newIndexes)
+}
+
+type addOptions struct {
+	sessionName string
+	paneIndex   string
+	paneID      string
+	orientation string
+	vertical    bool
+	percent     int
+	count       int
+	focus       bool
+}
+
+func parseAddOptions(ctx root.CommandContext) (addOptions, error) {
+	orientation := strings.ToLower(strings.TrimSpace(ctx.Cmd.String("orientation")))
+	if orientation == "" {
+		orientation = "vertical"
+	}
+	if orientation != "vertical" && orientation != "horizontal" {
+		return addOptions{}, fmt.Errorf("invalid orientation %q (allowed: vertical, horizontal)", orientation)
+	}
+	count := ctx.Cmd.Int("count")
+	if count == 0 {
+		count = 1
+	}
+	if count < 1 {
+		return addOptions{}, fmt.Errorf("count must be positive")
+	}
+	return addOptions{
+		sessionName: strings.TrimSpace(ctx.Cmd.String("session")),
+		paneIndex:   intFlagString(ctx.Cmd, "index"),
+		paneID:      strings.TrimSpace(ctx.Cmd.String("pane-id")),
+		orientation: orientation,
+		vertical:    orientation == "vertical",
+		percent:     ctx.Cmd.Int("percent"),
+		count:       count,
+		focus:       ctx.Cmd.Bool("focus"),
+	}, nil
+}
+
+func splitPaneCount(ctx context.Context, client *sessiond.Client, sessionName, paneIndex string, opts addOptions) ([]string, error) {
+	newIndexes := make([]string, 0, opts.count)
+	currentIndex := paneIndex
+	for i := 0; i < opts.count; i++ {
+		newIndex, err := client.SplitPane(ctx, sessionName, currentIndex, opts.vertical, opts.percent)
+		if err != nil {
+			return nil, err
+		}
+		newIndexes = append(newIndexes, newIndex)
+		currentIndex = newIndex
+	}
+	return newIndexes, nil
+}
+
+func paneAddDetails(sessionName, paneIndex, orientation string, newIndexes []string, focusedPaneID string) map[string]any {
+	details := map[string]any{
+		"session":     sessionName,
+		"split_from":  paneIndex,
+		"orientation": orientation,
+	}
 	if len(newIndexes) == 1 {
-		return writef(ctx.Out, "Pane added %s\n", newIndexes[0])
+		details["new_index"] = newIndexes[0]
+	} else {
+		details["new_indexes"] = newIndexes
+		details["count"] = len(newIndexes)
+	}
+	if focusedPaneID != "" {
+		details["focused_pane_id"] = focusedPaneID
+	}
+	return details
+}
+
+func writePaneAddOutput(out io.Writer, newIndexes []string) error {
+	if len(newIndexes) == 1 {
+		return writef(out, "Pane added %s\n", newIndexes[0])
 	}
 	lastIndex := newIndexes[len(newIndexes)-1]
-	return writef(ctx.Out, "Added %d panes (last index %s)\n", len(newIndexes), lastIndex)
+	return writef(out, "Added %d panes (last index %s)\n", len(newIndexes), lastIndex)
 }
 
 func resolveAddTarget(ctx context.Context, client *sessiond.Client, sessionName, paneIndex, paneID string) (string, string, error) {

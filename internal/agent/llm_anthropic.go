@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 )
@@ -63,12 +62,24 @@ func (c *anthropicClient) Generate(ctx context.Context, req llmRequest) (llmResp
 	if strings.TrimSpace(c.cfg.APIKey) == "" {
 		return llmResponse{}, errors.New("missing API key")
 	}
-	messages, err := anthropicMessages(req)
+	payload, err := anthropicPayload(req, c.cfg.Model)
 	if err != nil {
 		return llmResponse{}, err
 	}
+	data, err := anthropicDoRequest(ctx, c.cfg, payload)
+	if err != nil {
+		return llmResponse{}, err
+	}
+	return anthropicParseResponse(data)
+}
+
+func anthropicPayload(req llmRequest, model string) (anthropicRequest, error) {
+	messages, err := anthropicMessages(req)
+	if err != nil {
+		return anthropicRequest{}, err
+	}
 	payload := anthropicRequest{
-		Model:     c.cfg.Model,
+		Model:     model,
 		MaxTokens: 2048,
 		System:    strings.TrimSpace(req.SystemPrompt),
 		Messages:  messages,
@@ -76,41 +87,30 @@ func (c *anthropicClient) Generate(ctx context.Context, req llmRequest) (llmResp
 	if len(req.Tools) > 0 {
 		payload.Tools = anthropicTools(req.Tools)
 	}
+	return payload, nil
+}
+
+func anthropicDoRequest(ctx context.Context, cfg providerConfig, payload anthropicRequest) ([]byte, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return llmResponse{}, fmt.Errorf("anthropic request encode: %w", err)
+		return nil, fmt.Errorf("anthropic request encode: %w", err)
 	}
-	url := strings.TrimRight(c.cfg.BaseURL, "/") + "/v1/messages"
+	url := strings.TrimRight(cfg.BaseURL, "/") + "/v1/messages"
 	reqHTTP, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		return llmResponse{}, fmt.Errorf("anthropic request: %w", err)
+		return nil, fmt.Errorf("anthropic request: %w", err)
 	}
 	reqHTTP.Header.Set("Content-Type", "application/json")
-	reqHTTP.Header.Set("x-api-key", c.cfg.APIKey)
+	reqHTTP.Header.Set("x-api-key", cfg.APIKey)
 	reqHTTP.Header.Set("anthropic-version", anthropicVersion)
 	resp, err := http.DefaultClient.Do(reqHTTP)
 	if err != nil {
-		return llmResponse{}, err
+		return nil, err
 	}
-	data, readErr := io.ReadAll(resp.Body)
-	closeErr := resp.Body.Close()
-	if readErr != nil {
-		err := fmt.Errorf("anthropic response read: %w", readErr)
-		if closeErr != nil {
-			return llmResponse{}, errors.Join(err, fmt.Errorf("anthropic response close: %w", closeErr))
-		}
-		return llmResponse{}, err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		err := fmt.Errorf("anthropic error: %s", string(data))
-		if closeErr != nil {
-			return llmResponse{}, errors.Join(err, fmt.Errorf("anthropic response close: %w", closeErr))
-		}
-		return llmResponse{}, err
-	}
-	if closeErr != nil {
-		return llmResponse{}, fmt.Errorf("anthropic response close: %w", closeErr)
-	}
+	return readHTTPResponse(resp, "anthropic")
+}
+
+func anthropicParseResponse(data []byte) (llmResponse, error) {
 	var parsed anthropicResponse
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		return llmResponse{}, fmt.Errorf("anthropic response parse: %w", err)

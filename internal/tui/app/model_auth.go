@@ -425,87 +425,44 @@ func (m *Model) handleAuthSlashCommand(input string) quickReplyCommandOutcome {
 			Handled: true,
 		}
 	}
+	if len(cmd.Args) == 1 {
+		return m.handleAuthProviderOnly(info)
+	}
+	return m.handleAuthProviderMethod(info, cmd)
+}
+
+func (m *Model) handleAuthProviderOnly(info agent.ProviderInfo) quickReplyCommandOutcome {
 	providerToken := string(info.ID)
 	setProvider := m.setAgentProvider(info.ID)
-	if len(cmd.Args) == 1 {
-		if info.SupportsAPIKey && !info.SupportsOAuth {
-			return quickReplyCommandOutcome{
-				Cmd:     tea.Batch(setProvider, m.prefillQuickReplyInput("/auth "+providerToken+" api-key ")),
-				Handled: true,
-			}
-		}
-		if info.SupportsOAuth && !info.SupportsAPIKey {
-			return quickReplyCommandOutcome{
-				Cmd:        tea.Batch(setProvider, m.startOAuthFlow(info.ID, "")),
-				Handled:    true,
-				ClearInput: true,
-			}
-		}
+	if info.SupportsAPIKey && !info.SupportsOAuth {
 		return quickReplyCommandOutcome{
-			Cmd:     tea.Batch(setProvider, m.prefillQuickReplyInput("/auth "+providerToken+" ")),
+			Cmd:     tea.Batch(setProvider, m.prefillQuickReplyInput("/auth "+providerToken+" api-key ")),
 			Handled: true,
 		}
 	}
+	if info.SupportsOAuth && !info.SupportsAPIKey {
+		return quickReplyCommandOutcome{
+			Cmd:        tea.Batch(setProvider, m.startOAuthFlow(info.ID, "")),
+			Handled:    true,
+			ClearInput: true,
+		}
+	}
+	return quickReplyCommandOutcome{
+		Cmd:     tea.Batch(setProvider, m.prefillQuickReplyInput("/auth "+providerToken+" ")),
+		Handled: true,
+	}
+}
+
+func (m *Model) handleAuthProviderMethod(info agent.ProviderInfo, cmd slashCommandInput) quickReplyCommandOutcome {
 	method := strings.ToLower(cmd.Args[1])
 	switch method {
 	case "api-key", "apikey", "key":
-		if len(cmd.Args) < 3 {
-			return quickReplyCommandOutcome{
-				Cmd:     tea.Batch(setProvider, m.prefillQuickReplyInput("/auth "+providerToken+" api-key ")),
-				Handled: true,
-			}
-		}
-		key := strings.TrimSpace(strings.Join(cmd.Args[2:], " "))
-		if key == "" {
-			return quickReplyCommandOutcome{
-				Cmd:     NewWarningCmd("API key required"),
-				Handled: true,
-			}
-		}
-		return quickReplyCommandOutcome{
-			Cmd:        tea.Batch(setProvider, authSetAPIKeyCmd(info.ID, key)),
-			Handled:    true,
-			ClearInput: true,
-		}
+		return m.handleAuthAPIKey(info, cmd.Args)
 	case "oauth":
-		if info.ID == agent.ProviderAnthropic {
-			if len(cmd.Args) < 3 {
-				return quickReplyCommandOutcome{
-					Cmd:     tea.Batch(setProvider, m.startAnthropicOAuth()),
-					Handled: true,
-				}
-			}
-			code, state, ok := splitAuthCode(cmd.Args[2])
-			if !ok {
-				return quickReplyCommandOutcome{
-					Cmd:     NewWarningCmd("Expected code#state"),
-					Handled: true,
-				}
-			}
-			if strings.TrimSpace(m.authFlow.Verifier) == "" {
-				return quickReplyCommandOutcome{
-					Cmd:     NewWarningCmd("Run /auth anthropic oauth first"),
-					Handled: true,
-				}
-			}
-			return quickReplyCommandOutcome{
-				Cmd:        tea.Batch(setProvider, authAnthropicExchangeCmd(code, state, m.authFlow.Verifier)),
-				Handled:    true,
-				ClearInput: true,
-			}
-		}
-		domain := ""
-		if len(cmd.Args) >= 3 {
-			domain = strings.TrimSpace(cmd.Args[2])
-		}
-		return quickReplyCommandOutcome{
-			Cmd:        tea.Batch(setProvider, m.startOAuthFlow(info.ID, domain)),
-			Handled:    true,
-			ClearInput: true,
-		}
+		return m.handleAuthOAuth(info, cmd.Args)
 	case "logout", "remove", "signout":
 		return quickReplyCommandOutcome{
-			Cmd:        tea.Batch(setProvider, authRemoveCmd(info.ID)),
+			Cmd:        tea.Batch(m.setAgentProvider(info.ID), authRemoveCmd(info.ID)),
 			Handled:    true,
 			ClearInput: true,
 		}
@@ -514,6 +471,72 @@ func (m *Model) handleAuthSlashCommand(input string) quickReplyCommandOutcome {
 			Cmd:     NewWarningCmd("Unknown auth method"),
 			Handled: true,
 		}
+	}
+}
+
+func (m *Model) handleAuthAPIKey(info agent.ProviderInfo, args []string) quickReplyCommandOutcome {
+	providerToken := string(info.ID)
+	setProvider := m.setAgentProvider(info.ID)
+	if len(args) < 3 {
+		return quickReplyCommandOutcome{
+			Cmd:     tea.Batch(setProvider, m.prefillQuickReplyInput("/auth "+providerToken+" api-key ")),
+			Handled: true,
+		}
+	}
+	key := strings.TrimSpace(strings.Join(args[2:], " "))
+	if key == "" {
+		return quickReplyCommandOutcome{
+			Cmd:     NewWarningCmd("API key required"),
+			Handled: true,
+		}
+	}
+	return quickReplyCommandOutcome{
+		Cmd:        tea.Batch(setProvider, authSetAPIKeyCmd(info.ID, key)),
+		Handled:    true,
+		ClearInput: true,
+	}
+}
+
+func (m *Model) handleAuthOAuth(info agent.ProviderInfo, args []string) quickReplyCommandOutcome {
+	setProvider := m.setAgentProvider(info.ID)
+	if info.ID == agent.ProviderAnthropic {
+		return m.handleAnthropicOAuth(setProvider, args)
+	}
+	domain := ""
+	if len(args) >= 3 {
+		domain = strings.TrimSpace(args[2])
+	}
+	return quickReplyCommandOutcome{
+		Cmd:        tea.Batch(setProvider, m.startOAuthFlow(info.ID, domain)),
+		Handled:    true,
+		ClearInput: true,
+	}
+}
+
+func (m *Model) handleAnthropicOAuth(setProvider tea.Cmd, args []string) quickReplyCommandOutcome {
+	if len(args) < 3 {
+		return quickReplyCommandOutcome{
+			Cmd:     tea.Batch(setProvider, m.startAnthropicOAuth()),
+			Handled: true,
+		}
+	}
+	code, state, ok := splitAuthCode(args[2])
+	if !ok {
+		return quickReplyCommandOutcome{
+			Cmd:     NewWarningCmd("Expected code#state"),
+			Handled: true,
+		}
+	}
+	if strings.TrimSpace(m.authFlow.Verifier) == "" {
+		return quickReplyCommandOutcome{
+			Cmd:     NewWarningCmd("Run /auth anthropic oauth first"),
+			Handled: true,
+		}
+	}
+	return quickReplyCommandOutcome{
+		Cmd:        tea.Batch(setProvider, authAnthropicExchangeCmd(code, state, m.authFlow.Verifier)),
+		Handled:    true,
+		ClearInput: true,
 	}
 }
 
