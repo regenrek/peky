@@ -123,6 +123,7 @@ type SessionItem struct {
 	ActivePane string
 	Panes      []PaneItem
 	Config     *layout.ProjectConfig
+	createdAt  time.Time
 }
 
 // DashboardPane represents a pane with project metadata for the dashboard.
@@ -292,6 +293,12 @@ type paneViewPumpMsg struct {
 }
 
 type daemonRestartMsg struct {
+	Client         *sessiond.Client
+	PaneViewClient *sessiond.Client
+	Err            error
+}
+
+type daemonReconnectMsg struct {
 	Client         *sessiond.Client
 	PaneViewClient *sessiond.Client
 	Err            error

@@ -25,6 +25,9 @@ func (m *Model) updateDashboardMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, cursorCmd
 	}
 	m.updateTerminalMouseDrag(msg)
+	if cmd, handled := m.handleOfflineScrollWheel(msg); handled {
+		return m, tea.Batch(cursorCmd, cmd)
+	}
 	cmd := m.mouse.UpdateDashboard(msg, mouse.DashboardCallbacks{
 		HitHeader:             m.hitTestHeader,
 		HitPane:               m.hitTestPane,

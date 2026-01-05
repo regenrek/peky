@@ -9,6 +9,9 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if cmd, handled := m.handleDashboardFilter(msg); handled {
 		return m, cmd
 	}
+	if cmd, handled := m.handleOfflineScrollInput(msg); handled {
+		return m, cmd
+	}
 	if cmd, handled := m.handleTerminalFocusInput(msg); handled {
 		return m, cmd
 	}

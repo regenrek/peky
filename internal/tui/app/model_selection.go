@@ -127,11 +127,16 @@ func (m *Model) spatialDashboardSelection(columns []DashboardProjectColumn, targ
 }
 
 func (m *Model) applySelection(sel selectionState) {
+	prevPaneID := m.selectedPaneID()
 	prev := m.selection
 	m.selection = sel
 	m.rememberSelection(sel)
 	if m.terminalFocus && !m.supportsTerminalFocus() {
 		m.setTerminalFocus(false)
+	}
+	nextPaneID := m.selectedPaneID()
+	if prevPaneID != nextPaneID {
+		m.clearOfflineScroll()
 	}
 	m.queueFocusSync(prev, sel)
 }
@@ -271,6 +276,36 @@ func (m *Model) selectSessionOrPane(delta int) {
 	}
 
 	current := findSessionPaneIndex(items, m.selection)
+	if delta < 0 && m.selection.Pane != "" {
+		if headerIdx, ok := sessionHeaderIndex(items, m.selection.Session); ok {
+			if firstPaneIdx, ok := sessionFirstPaneIndex(items, m.selection.Session); ok && firstPaneIdx == current {
+				if prevHeader := previousSessionHeaderIndex(items, headerIdx); prevHeader >= 0 {
+					next := items[prevHeader]
+					sel := m.selection
+					sel.Session = next.session
+					sel.Pane = next.pane
+					m.applySelection(sel)
+					m.selectionVersion++
+					return
+				}
+			}
+		}
+	}
+	if delta > 0 && m.selection.Pane != "" {
+		if headerIdx, ok := sessionHeaderIndex(items, m.selection.Session); ok {
+			if lastPaneIdx, ok := sessionLastPaneIndex(items, m.selection.Session); ok && lastPaneIdx == current {
+				if nextHeader := nextSessionHeaderIndex(items, headerIdx); nextHeader >= 0 {
+					next := items[nextHeader]
+					sel := m.selection
+					sel.Session = next.session
+					sel.Pane = next.pane
+					m.applySelection(sel)
+					m.selectionVersion++
+					return
+				}
+			}
+		}
+	}
 	next := items[wrapIndex(current+delta, len(items))]
 	sel := m.selection
 	sel.Session = next.session
@@ -315,6 +350,67 @@ func findSessionPaneIndex(items []sessionPaneEntry, selection selectionState) in
 func matchSessionPane(items []sessionPaneEntry, session, pane string) int {
 	for i, item := range items {
 		if item.session == session && item.pane == pane {
+			return i
+		}
+	}
+	return -1
+}
+
+func sessionHeaderIndex(items []sessionPaneEntry, session string) (int, bool) {
+	if strings.TrimSpace(session) == "" {
+		return -1, false
+	}
+	for i, item := range items {
+		if item.session == session && item.pane == "" {
+			return i, true
+		}
+	}
+	return -1, false
+}
+
+func sessionFirstPaneIndex(items []sessionPaneEntry, session string) (int, bool) {
+	if strings.TrimSpace(session) == "" {
+		return -1, false
+	}
+	for i, item := range items {
+		if item.session == session && item.pane != "" {
+			return i, true
+		}
+	}
+	return -1, false
+}
+
+func sessionLastPaneIndex(items []sessionPaneEntry, session string) (int, bool) {
+	if strings.TrimSpace(session) == "" {
+		return -1, false
+	}
+	last := -1
+	for i, item := range items {
+		if item.session == session && item.pane != "" {
+			last = i
+		}
+	}
+	if last < 0 {
+		return -1, false
+	}
+	return last, true
+}
+
+func previousSessionHeaderIndex(items []sessionPaneEntry, from int) int {
+	if from <= 0 {
+		return -1
+	}
+	for i := from - 1; i >= 0; i-- {
+		if items[i].pane == "" {
+			return i
+		}
+	}
+	return -1
+}
+
+func nextSessionHeaderIndex(items []sessionPaneEntry, from int) int {
+	for i := from + 1; i < len(items); i++ {
+		if items[i].pane == "" {
 			return i
 		}
 	}

@@ -30,10 +30,8 @@ func (m *Model) attachOrStart() tea.Cmd {
 			m.setToast("No project path configured", toastWarning)
 			return nil
 		}
-		focus := m.settings.AttachBehavior != AttachBehaviorDetached
-		return m.startProjectNative(*session, focus)
+		return m.startProjectNative(*session, false)
 	}
-	m.setTerminalFocus(true)
 	return m.refreshPaneViewsCmd()
 }
 
@@ -81,8 +79,7 @@ func (m *Model) startNewSessionWithLayout(layoutName string) tea.Cmd {
 		return nil
 	}
 	newName := nextSessionName(base, existing)
-	focus := m.settings.AttachBehavior != AttachBehaviorDetached
-	return m.startSessionNative(newName, path, layoutName, focus)
+	return m.startSessionNative(newName, path, layoutName, false)
 }
 
 func (m *Model) shutdownCmd() tea.Cmd {

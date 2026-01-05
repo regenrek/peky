@@ -90,7 +90,7 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 				{
 					ID:      "pane_cleanup",
 					Label:   "Pane: Cleanup dead panes",
-					Desc:    "Restart dead/offline panes in the selected session",
+					Desc:    "Restart dead/offline panes in the selected session (or all offline sessions if none are live)",
 					Aliases: []string{"cleanup", "pane cleanup", "panes cleanup", "cleanup panes"},
 					Run: func(m *Model, _ commandArgs) tea.Cmd {
 						return m.cleanupDeadPanes()

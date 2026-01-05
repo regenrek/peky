@@ -123,6 +123,9 @@ var updateHandlers = map[reflect.Type]updateHandler{
 	reflect.TypeOf(daemonRestartMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleDaemonRestart(msg.(daemonRestartMsg))
 	},
+	reflect.TypeOf(daemonReconnectMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleDaemonReconnect(msg.(daemonReconnectMsg))
+	},
 	reflect.TypeOf(daemonStopMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleDaemonStop(msg.(daemonStopMsg))
 	},
@@ -217,6 +220,13 @@ func (m *Model) applyWindowSize(msg tea.WindowSizeMsg) {
 }
 
 func (m *Model) handleRefreshTick(msg refreshTickMsg) tea.Cmd {
+	if m.daemonDisconnected {
+		cmds := []tea.Cmd{tickCmd(m.settings.RefreshInterval)}
+		if cmd := m.scheduleDaemonReconnect(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		return tea.Batch(cmds...)
+	}
 	if m.refreshInFlight == 0 {
 		logging.LogEvery(
 			context.Background(),
@@ -307,6 +317,9 @@ func (m *Model) finishQueuedRefresh() tea.Cmd {
 }
 
 func (m *Model) handleSnapshotError(msg dashboardSnapshotMsg) tea.Cmd {
+	if cmd := m.handleDaemonDisconnect(msg.Result.Err); cmd != nil {
+		return cmd
+	}
 	m.setToast("Refresh failed: "+msg.Result.Err.Error(), toastError)
 	return m.appendQueuedRefresh(m.refreshPaneViewsCmd())
 }
@@ -316,6 +329,7 @@ func (m *Model) applySnapshotState(msg dashboardSnapshotMsg) {
 	if msg.Result.Warning != "" {
 		m.setToast("Dashboard config: "+msg.Result.Warning, toastWarning)
 	}
+	prevData := m.data
 	m.data = msg.Result.Data
 	m.reconcilePaneInputDisabled()
 	m.settings = msg.Result.Settings
@@ -323,6 +337,8 @@ func (m *Model) applySnapshotState(msg dashboardSnapshotMsg) {
 	if msg.Result.Keymap != nil {
 		m.keys = msg.Result.Keymap
 	}
+	m.mergePanePreviews(prevData)
+	m.pruneOfflineScroll()
 	if msg.Result.Version == m.selectionVersion {
 		m.applySelection(msg.Result.Resolved)
 	} else {
@@ -489,6 +505,7 @@ func toastLevelFromSessiond(level sessiond.ToastLevel) toastLevel {
 
 func (m *Model) handlePaneViews(msg paneViewsMsg) tea.Cmd {
 	var cmd tea.Cmd
+	var disconnectCmd tea.Cmd
 	logging.LogEvery(
 		context.Background(),
 		"tui.paneviews.recv",
@@ -500,7 +517,10 @@ func (m *Model) handlePaneViews(msg paneViewsMsg) tea.Cmd {
 		slog.Int("in_flight", m.paneViewInFlight),
 		slog.Int("pending", len(m.paneViewQueuedIDs)),
 	)
-	if msg.Err != nil && len(msg.Views) == 0 && !errors.Is(msg.Err, context.DeadlineExceeded) && !errors.Is(msg.Err, context.Canceled) {
+	if msg.Err != nil {
+		disconnectCmd = m.handleDaemonDisconnect(msg.Err)
+	}
+	if disconnectCmd == nil && msg.Err != nil && len(msg.Views) == 0 && !errors.Is(msg.Err, context.DeadlineExceeded) && !errors.Is(msg.Err, context.Canceled) {
 		m.setToast("Pane view failed: "+msg.Err.Error(), toastWarning)
 	}
 	m.ensurePaneViewMaps()
@@ -513,6 +533,12 @@ func (m *Model) handlePaneViews(msg paneViewsMsg) tea.Cmd {
 	}
 	if len(m.paneViewQueuedIDs) > 0 {
 		cmd = m.schedulePaneViewPump("pane_view_done", 0)
+	}
+	if disconnectCmd != nil {
+		if cmd == nil {
+			return disconnectCmd
+		}
+		return tea.Batch(cmd, disconnectCmd)
 	}
 	return cmd
 }
@@ -575,6 +601,5 @@ func (m *Model) handleSessionStarted(msg sessionStartedMsg) tea.Cmd {
 	} else {
 		m.setToast("Session started", toastSuccess)
 	}
-	m.setTerminalFocus(msg.Focus)
 	return m.requestRefreshCmd()
 }

@@ -23,6 +23,7 @@ func buildDashboardData(input dashboardSnapshotInput) dashboardSnapshotResult {
 
 	groups := index.groups
 	sortProjectGroups(groups, input.Config)
+	sortProjectSessions(groups)
 	selection := input.Selection
 	if selectionEmpty(selection) {
 		focusedSession := strings.TrimSpace(input.FocusedSession)
@@ -157,6 +158,7 @@ func (idx *dashboardGroupIndex) mergeSession(group *ProjectGroup, session native
 			PaneCount:  paneCount,
 			ActivePane: activePane,
 			Panes:      panes,
+			createdAt:  session.CreatedAt,
 		})
 		return
 	}
@@ -166,6 +168,9 @@ func (idx *dashboardGroupIndex) mergeSession(group *ProjectGroup, session native
 	item.PaneCount = paneCount
 	item.ActivePane = activePane
 	item.Panes = panes
+	if !session.CreatedAt.IsZero() {
+		item.createdAt = session.CreatedAt
+	}
 }
 
 func resolveSelectionForTab(tab DashboardTab, groups []ProjectGroup, desired selectionState) selectionState {
@@ -209,6 +214,41 @@ func sortProjectGroups(groups []ProjectGroup, cfg *layout.Config) {
 		}
 		return left.key < right.key
 	})
+}
+
+func sortProjectSessions(groups []ProjectGroup) {
+	for i := range groups {
+		sessions := groups[i].Sessions
+		if len(sessions) < 2 {
+			continue
+		}
+		sort.SliceStable(sessions, func(a, b int) bool {
+			left := sessions[a]
+			right := sessions[b]
+			leftTime := left.createdAt
+			rightTime := right.createdAt
+			if !leftTime.IsZero() || !rightTime.IsZero() {
+				if leftTime.IsZero() != rightTime.IsZero() {
+					return !leftTime.IsZero()
+				}
+				if !leftTime.Equal(rightTime) {
+					return leftTime.After(rightTime)
+				}
+			}
+			leftName := strings.ToLower(strings.TrimSpace(left.Name))
+			rightName := strings.ToLower(strings.TrimSpace(right.Name))
+			if leftName != rightName {
+				return leftName < rightName
+			}
+			leftPath := strings.ToLower(strings.TrimSpace(left.Path))
+			rightPath := strings.ToLower(strings.TrimSpace(right.Path))
+			if leftPath != rightPath {
+				return leftPath < rightPath
+			}
+			return left.LayoutName < right.LayoutName
+		})
+		groups[i].Sessions = sessions
+	}
 }
 
 type projectGroupSortMeta struct {

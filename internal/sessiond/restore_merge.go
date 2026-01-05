@@ -9,7 +9,7 @@ import (
 	"github.com/regenrek/peakypanes/internal/sessionrestore"
 )
 
-func (d *Daemon) mergeOfflineSessions(live []native.SessionSnapshot, previewLines int) []native.SessionSnapshot {
+func (d *Daemon) mergeOfflineSessions(live []native.SessionSnapshot) []native.SessionSnapshot {
 	if d == nil || d.restore == nil {
 		return live
 	}
@@ -54,10 +54,9 @@ func (d *Daemon) mergeOfflineSessions(live []native.SessionSnapshot, previewLine
 			grouped[snap.SessionName] = group
 		}
 		mode, _ := sessionrestore.ParseMode(snap.RestoreMode)
-		preview := append([]string(nil), snap.Terminal.ScreenLines...)
-		if previewLines > 0 && len(preview) > previewLines {
-			preview = preview[len(preview)-previewLines:]
-		}
+		preview := make([]string, 0, len(snap.Terminal.ScrollbackLines)+len(snap.Terminal.ScreenLines))
+		preview = append(preview, snap.Terminal.ScrollbackLines...)
+		preview = append(preview, snap.Terminal.ScreenLines...)
 		group.Panes = append(group.Panes, native.PaneSnapshot{
 			ID:            snap.PaneID,
 			Index:         snap.PaneIndex,

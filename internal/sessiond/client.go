@@ -269,7 +269,7 @@ func (c *Client) call(ctx context.Context, op Op, req any, out any) (Envelope, e
 		return Envelope{}, errors.New("sessiond: client is nil")
 	}
 	if c.closed.Load() {
-		return Envelope{}, errors.New("sessiond: client closed")
+		return Envelope{}, ErrClientClosed
 	}
 	if ctx == nil {
 		ctx = context.Background()
@@ -283,7 +283,7 @@ func (c *Client) call(ctx context.Context, op Op, req any, out any) (Envelope, e
 	c.pendingMu.Lock()
 	if c.pending == nil {
 		c.pendingMu.Unlock()
-		return Envelope{}, errors.New("sessiond: client closed")
+		return Envelope{}, ErrClientClosed
 	}
 	c.pending[id] = respCh
 	c.pendingMu.Unlock()
@@ -301,7 +301,7 @@ func (c *Client) call(ctx context.Context, op Op, req any, out any) (Envelope, e
 		return Envelope{}, ctx.Err()
 	case env, ok := <-respCh:
 		if !ok {
-			return Envelope{}, errors.New("sessiond: response channel closed")
+			return Envelope{}, ErrResponseChannelClosed
 		}
 		if env.Error != "" {
 			return env, errors.New(env.Error)
@@ -317,13 +317,13 @@ func (c *Client) call(ctx context.Context, op Op, req any, out any) (Envelope, e
 
 func (c *Client) send(ctx context.Context, env Envelope) error {
 	if c.conn == nil {
-		return errors.New("sessiond: connection unavailable")
+		return ErrConnectionUnavailable
 	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	if c.closed.Load() {
-		return errors.New("sessiond: client closed")
+		return ErrClientClosed
 	}
 	c.sendMu.Lock()
 	defer c.sendMu.Unlock()

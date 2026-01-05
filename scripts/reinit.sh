@@ -12,10 +12,14 @@ peky_bin="${gobin}/peky"
 peak_bin="${gobin}/peakypanes"
 
 kill_all=false
+skip_daemon_restart=false
 for arg in "$@"; do
   case "$arg" in
     --all)
       kill_all=true
+      ;;
+    --no-daemon-restart|--skip-daemon-restart)
+      skip_daemon_restart=true
       ;;
   esac
 done
@@ -81,6 +85,11 @@ fi
 if [[ ! -x "$peak_bin" ]]; then
   echo "reinit: peakypanes binary not found at $peak_bin" >&2
   exit 1
+fi
+
+if [[ "$skip_daemon_restart" == true ]]; then
+  echo "reinit: skipping daemon restart"
+  exit 0
 fi
 
 echo "reinit: restarting daemon"

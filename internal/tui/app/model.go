@@ -58,12 +58,17 @@ type dashboardKeyMap struct {
 
 // Model implements tea.Model for peakypanes TUI.
 type Model struct {
-	client         *sessiond.Client
-	paneViewClient *sessiond.Client
-	state          ViewState
-	tab            DashboardTab
-	width          int
-	height         int
+	client             *sessiond.Client
+	paneViewClient     *sessiond.Client
+	daemonVersion      string
+	daemonDisconnected bool
+	reconnectInFlight  bool
+	reconnectBackoff   time.Duration
+	reconnectToastAt   time.Time
+	state              ViewState
+	tab                DashboardTab
+	width              int
+	height             int
 
 	configPath string
 
@@ -149,6 +154,11 @@ type Model struct {
 	// terminalMouseDrag tracks an in-progress drag selection in terminal focus.
 	terminalMouseDrag bool
 
+	offlineScroll        map[string]int
+	offlineScrollViewport map[string]int
+	offlineScrollActive  bool
+	offlineScrollPane    string
+
 	autoStart *AutoStartSpec
 
 	paneViewProfile   termenv.Profile
@@ -186,6 +196,7 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 	if client == nil {
 		return nil, errors.New("session client is required")
 	}
+	version := client.Version()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	paneViewClient, err := client.Clone(ctx)
@@ -196,6 +207,7 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 	m := &Model{
 		client:             client,
 		paneViewClient:     paneViewClient,
+		daemonVersion:      version,
 		state:              StateDashboard,
 		tab:                TabDashboard,
 		configPath:         configPath,

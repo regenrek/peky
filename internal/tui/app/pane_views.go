@@ -265,6 +265,9 @@ func (m *Model) schedulePaneViewPump(reason string, delay time.Duration) tea.Cmd
 	if m == nil {
 		return nil
 	}
+	if m.daemonDisconnected {
+		return nil
+	}
 	if m.paneViewPumpScheduled {
 		return nil
 	}
@@ -741,6 +744,9 @@ func (m *Model) hasPaneViewFirst(paneID string) bool {
 
 func (m *Model) startPaneViewFetch(reqs []sessiond.PaneViewRequest) tea.Cmd {
 	if m == nil || m.client == nil || len(reqs) == 0 {
+		return nil
+	}
+	if m.daemonDisconnected {
 		return nil
 	}
 	now := time.Now()
@@ -1271,7 +1277,25 @@ func (m Model) paneView(paneID string, cols, rows int, mode sessiond.PaneViewMod
 	if m.paneViews == nil {
 		return ""
 	}
-	return m.paneViews[key]
+	if view, ok := m.paneViews[key]; ok {
+		return view
+	}
+	// Fallback to any cached view with matching pane/size when mode or cursor differs.
+	for cachedKey, cachedView := range m.paneViews {
+		if cachedKey.PaneID != paneID {
+			continue
+		}
+		if cachedKey.Cols != cols || cachedKey.Rows != rows {
+			continue
+		}
+		if cachedKey.ColorProfile != profile {
+			continue
+		}
+		if cachedView != "" {
+			return cachedView
+		}
+	}
+	return ""
 }
 
 func detectPaneViewProfile() termenv.Profile {

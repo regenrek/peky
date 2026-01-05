@@ -55,7 +55,7 @@ func (d *Daemon) handleSnapshot(payload []byte) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
 	defer cancel()
 	sessions := manager.Snapshot(ctx, req.PreviewLines)
-	sessions = d.mergeOfflineSessions(sessions, req.PreviewLines)
+	sessions = d.mergeOfflineSessions(sessions)
 	d.debugSnapshot(req.PreviewLines, sessions)
 	focusedSession, focusedPane := d.focusState()
 	resp := SnapshotResponse{

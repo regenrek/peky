@@ -14,8 +14,8 @@ import (
 const paneCleanupTimeout = 4 * time.Second
 
 type paneCleanupMsg struct {
-	Session   string
-	Restarted bool
+	Sessions  []string
+	Restarted int
 	Closed    int
 	Added     int
 	Failed    int
@@ -23,14 +23,24 @@ type paneCleanupMsg struct {
 	Noop      string
 }
 
+type restartSessionTarget struct {
+	name   string
+	path   string
+	layout string
+}
+
 func (m *Model) cleanupDeadPanes() tea.Cmd {
+	if m.client == nil {
+		m.setToast("Pane cleanup failed: session client unavailable", toastError)
+		return nil
+	}
+	targets, hasLive := collectOfflineSessions(m.data.Projects)
+	if !hasLive && len(targets) > 0 {
+		return m.restartOfflineSessionsCmd(targets)
+	}
 	session := m.selectedSession()
 	if session == nil {
 		m.setToast("No session selected", toastWarning)
-		return nil
-	}
-	if m.client == nil {
-		m.setToast("Pane cleanup failed: session client unavailable", toastError)
 		return nil
 	}
 	dead, live := splitDeadPanes(session.Panes)
@@ -52,9 +62,13 @@ func (m *Model) cleanupDeadPanes() tea.Cmd {
 			defer cancel()
 			resp, err := m.client.StartSession(ctx, req)
 			if err != nil {
-				return paneCleanupMsg{Session: session.Name, Err: err.Error()}
+				return paneCleanupMsg{Err: err.Error()}
 			}
-			return paneCleanupMsg{Session: resp.Name, Restarted: true}
+			name := strings.TrimSpace(resp.Name)
+			if name == "" {
+				name = session.Name
+			}
+			return paneCleanupMsg{Sessions: []string{name}, Restarted: 1}
 		}
 	}
 	anchor := selectCleanupAnchor(live)
@@ -66,7 +80,7 @@ func (m *Model) cleanupDeadPanes() tea.Cmd {
 	sessionName := session.Name
 	anchorIndex := anchor.Index
 	return func() tea.Msg {
-		result := paneCleanupMsg{Session: sessionName}
+		result := paneCleanupMsg{}
 		for _, pane := range dead {
 			ctx, cancel := context.WithTimeout(context.Background(), paneCleanupTimeout)
 			err := m.client.ClosePaneByID(ctx, pane.ID)
@@ -92,6 +106,68 @@ func (m *Model) cleanupDeadPanes() tea.Cmd {
 		}
 		if result.Failed > 0 {
 			result.Err = fmt.Sprintf("%d operations failed", result.Failed)
+		}
+		return result
+	}
+}
+
+func collectOfflineSessions(projects []ProjectGroup) ([]restartSessionTarget, bool) {
+	var targets []restartSessionTarget
+	hasLive := false
+	for _, project := range projects {
+		for _, session := range project.Sessions {
+			dead, live := splitDeadPanes(session.Panes)
+			if len(live) > 0 {
+				hasLive = true
+			}
+			if len(dead) > 0 && len(live) == 0 {
+				targets = append(targets, restartSessionTarget{
+					name:   session.Name,
+					path:   session.Path,
+					layout: session.LayoutName,
+				})
+			}
+		}
+	}
+	return targets, hasLive
+}
+
+func (m *Model) restartOfflineSessionsCmd(targets []restartSessionTarget) tea.Cmd {
+	if len(targets) == 0 {
+		return nil
+	}
+	return func() tea.Msg {
+		result := paneCleanupMsg{}
+		for _, target := range targets {
+			path := strings.TrimSpace(target.path)
+			if path == "" {
+				result.Failed++
+				continue
+			}
+			req := sessiond.StartSessionRequest{
+				Name:       target.name,
+				Path:       path,
+				LayoutName: target.layout,
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), paneCleanupTimeout)
+			resp, err := m.client.StartSession(ctx, req)
+			cancel()
+			if err != nil {
+				result.Failed++
+				continue
+			}
+			name := strings.TrimSpace(resp.Name)
+			if name == "" {
+				name = target.name
+			}
+			result.Sessions = append(result.Sessions, name)
+		}
+		result.Restarted = len(result.Sessions)
+		if result.Restarted == 0 && result.Failed > 0 {
+			result.Err = fmt.Sprintf("%d session restart(s) failed", result.Failed)
+		}
+		if result.Restarted == 0 && result.Failed == 0 {
+			result.Noop = "No dead/offline panes"
 		}
 		return result
 	}
@@ -129,12 +205,18 @@ func (m *Model) handlePaneCleanup(msg paneCleanupMsg) tea.Cmd {
 		m.setToast("Pane cleanup failed: "+msg.Err, toastError)
 		return m.requestRefreshCmd()
 	}
-	if msg.Restarted {
-		name := strings.TrimSpace(msg.Session)
-		if name == "" {
-			m.setToast("Restarted session", toastSuccess)
+	if msg.Restarted > 0 {
+		label := "Restarted session"
+		if msg.Restarted > 1 {
+			label = fmt.Sprintf("Restarted %d sessions", msg.Restarted)
+		} else if len(msg.Sessions) == 1 && strings.TrimSpace(msg.Sessions[0]) != "" {
+			label = "Restarted session " + strings.TrimSpace(msg.Sessions[0])
+		}
+		if msg.Failed > 0 {
+			label = fmt.Sprintf("%s (%d failed)", label, msg.Failed)
+			m.setToast(label, toastWarning)
 		} else {
-			m.setToast("Restarted session "+name, toastSuccess)
+			m.setToast(label, toastSuccess)
 		}
 		return m.requestRefreshCmd()
 	}

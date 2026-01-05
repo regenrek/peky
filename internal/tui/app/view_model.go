@@ -124,6 +124,9 @@ func (m *Model) paneViewProvider() func(id string, width, height int, showCursor
 		if m.previewRenderMode() == PreviewRenderOff && m.state == StateDashboard {
 			return ""
 		}
+		if pane := m.paneByID(id); pane != nil && pane.Disconnected {
+			return m.offlinePaneView(pane, width, height)
+		}
 		mode := sessiond.PaneViewANSI
 		if useLipgloss || showCursor {
 			mode = sessiond.PaneViewLipgloss
