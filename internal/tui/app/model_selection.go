@@ -276,47 +276,71 @@ func (m *Model) selectSessionOrPane(delta int) {
 	}
 
 	current := findSessionPaneIndex(items, m.selection)
-	if delta < 0 && m.selection.Pane != "" {
-		if headerIdx, ok := sessionHeaderIndex(items, m.selection.Session); ok {
-			if firstPaneIdx, ok := sessionFirstPaneIndex(items, m.selection.Session); ok && firstPaneIdx == current {
-				if prevHeader := previousSessionHeaderIndex(items, headerIdx); prevHeader >= 0 {
-					next := items[prevHeader]
-					sel := m.selection
-					sel.Session = next.session
-					sel.Pane = next.pane
-					m.applySelection(sel)
-					m.selectionVersion++
-					return
-				}
-			}
-		}
-	}
-	if delta > 0 && m.selection.Pane != "" {
-		if headerIdx, ok := sessionHeaderIndex(items, m.selection.Session); ok {
-			if lastPaneIdx, ok := sessionLastPaneIndex(items, m.selection.Session); ok && lastPaneIdx == current {
-				if nextHeader := nextSessionHeaderIndex(items, headerIdx); nextHeader >= 0 {
-					next := items[nextHeader]
-					sel := m.selection
-					sel.Session = next.session
-					sel.Pane = next.pane
-					m.applySelection(sel)
-					m.selectionVersion++
-					return
-				}
-			}
-		}
+	if sel, ok := selectAcrossSessionBoundary(items, m.selection, current, delta); ok {
+		m.applySelection(sel)
+		m.selectionVersion++
+		return
 	}
 	next := items[wrapIndex(current+delta, len(items))]
-	sel := m.selection
-	sel.Session = next.session
-	sel.Pane = next.pane
-	m.applySelection(sel)
+	m.applySelection(selectionWithEntry(m.selection, next))
 	m.selectionVersion++
 }
 
 type sessionPaneEntry struct {
 	session string
 	pane    string
+}
+
+func selectAcrossSessionBoundary(items []sessionPaneEntry, sel selectionState, current, delta int) (selectionState, bool) {
+	if sel.Pane == "" {
+		return selectionState{}, false
+	}
+	switch {
+	case delta < 0:
+		return previousSessionSelection(items, sel, current)
+	case delta > 0:
+		return nextSessionSelection(items, sel, current)
+	default:
+		return selectionState{}, false
+	}
+}
+
+func previousSessionSelection(items []sessionPaneEntry, sel selectionState, current int) (selectionState, bool) {
+	headerIdx, ok := sessionHeaderIndex(items, sel.Session)
+	if !ok {
+		return selectionState{}, false
+	}
+	firstPaneIdx, ok := sessionFirstPaneIndex(items, sel.Session)
+	if !ok || firstPaneIdx != current {
+		return selectionState{}, false
+	}
+	prevHeader := previousSessionHeaderIndex(items, headerIdx)
+	if prevHeader < 0 {
+		return selectionState{}, false
+	}
+	return selectionWithEntry(sel, items[prevHeader]), true
+}
+
+func nextSessionSelection(items []sessionPaneEntry, sel selectionState, current int) (selectionState, bool) {
+	headerIdx, ok := sessionHeaderIndex(items, sel.Session)
+	if !ok {
+		return selectionState{}, false
+	}
+	lastPaneIdx, ok := sessionLastPaneIndex(items, sel.Session)
+	if !ok || lastPaneIdx != current {
+		return selectionState{}, false
+	}
+	nextHeader := nextSessionHeaderIndex(items, headerIdx)
+	if nextHeader < 0 {
+		return selectionState{}, false
+	}
+	return selectionWithEntry(sel, items[nextHeader]), true
+}
+
+func selectionWithEntry(sel selectionState, entry sessionPaneEntry) selectionState {
+	sel.Session = entry.session
+	sel.Pane = entry.pane
+	return sel
 }
 
 func buildSessionPaneEntries(sessions []SessionItem, expanded func(string) bool) []sessionPaneEntry {

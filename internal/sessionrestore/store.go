@@ -234,50 +234,10 @@ func (s *Store) enforceDiskCap(ctx context.Context, live map[string]struct{}) er
 	if err != nil {
 		return fmt.Errorf("sessionrestore: read pane dir: %w", err)
 	}
-	var files []paneFile
-	total := int64(0)
-	s.mu.RLock()
-	for _, entry := range entries {
-		if err := ctx.Err(); err != nil {
-			s.mu.RUnlock()
-			return err
-		}
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), snapshotExt) {
-			continue
-		}
-		id := strings.TrimSuffix(entry.Name(), snapshotExt)
-		info, err := entry.Info()
-		if err != nil {
-			continue
-		}
-		snap, ok := s.panes[id]
-		last := time.Time{}
-		capturedAt := time.Time{}
-		if ok {
-			last = snap.PaneLastAct
-			if snap.CapturedAt.After(last) {
-				last = snap.CapturedAt
-			}
-			capturedAt = snap.CapturedAt
-		}
-		if last.IsZero() {
-			last = info.ModTime()
-		}
-		if capturedAt.IsZero() {
-			capturedAt = info.ModTime()
-		}
-		total += info.Size()
-		_, livePane := live[id]
-		files = append(files, paneFile{
-			id:         id,
-			path:       filepath.Join(s.paneDir, entry.Name()),
-			size:       info.Size(),
-			lastActive: last,
-			capturedAt: capturedAt,
-			live:       livePane,
-		})
+	files, total, err := s.collectPaneFiles(ctx, entries, live)
+	if err != nil {
+		return err
 	}
-	s.mu.RUnlock()
 	if total <= s.cfg.MaxDiskBytes {
 		return nil
 	}
@@ -290,9 +250,68 @@ func (s *Store) enforceDiskCap(ctx context.Context, live map[string]struct{}) er
 		}
 		return files[i].capturedAt.Before(files[j].capturedAt)
 	})
+	return s.evictPaneFiles(ctx, files, total)
+}
+
+func (s *Store) collectPaneFiles(ctx context.Context, entries []os.DirEntry, live map[string]struct{}) ([]paneFile, int64, error) {
+	var files []paneFile
+	total := int64(0)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return nil, 0, err
+		}
+		file, size, ok := s.paneFileFromEntry(entry, live)
+		if !ok {
+			continue
+		}
+		total += size
+		files = append(files, file)
+	}
+	return files, total, nil
+}
+
+func (s *Store) paneFileFromEntry(entry os.DirEntry, live map[string]struct{}) (paneFile, int64, bool) {
+	if entry.IsDir() || !strings.HasSuffix(entry.Name(), snapshotExt) {
+		return paneFile{}, 0, false
+	}
+	id := strings.TrimSuffix(entry.Name(), snapshotExt)
+	info, err := entry.Info()
+	if err != nil {
+		return paneFile{}, 0, false
+	}
+	snap, ok := s.panes[id]
+	last := time.Time{}
+	capturedAt := time.Time{}
+	if ok {
+		last = snap.PaneLastAct
+		if snap.CapturedAt.After(last) {
+			last = snap.CapturedAt
+		}
+		capturedAt = snap.CapturedAt
+	}
+	if last.IsZero() {
+		last = info.ModTime()
+	}
+	if capturedAt.IsZero() {
+		capturedAt = info.ModTime()
+	}
+	_, livePane := live[id]
+	return paneFile{
+		id:         id,
+		path:       filepath.Join(s.paneDir, entry.Name()),
+		size:       info.Size(),
+		lastActive: last,
+		capturedAt: capturedAt,
+		live:       livePane,
+	}, info.Size(), true
+}
+
+func (s *Store) evictPaneFiles(ctx context.Context, files []paneFile, total int64) error {
 	for _, file := range files {
 		if total <= s.cfg.MaxDiskBytes {
-			break
+			return nil
 		}
 		if err := ctx.Err(); err != nil {
 			return err

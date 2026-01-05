@@ -130,34 +130,10 @@ func (m *Model) forwardMouseEvent(hit mouse.PaneHit, msg tea.MouseMsg) tea.Cmd {
 	if !m.supportsTerminalFocus() {
 		return nil
 	}
-	if strings.TrimSpace(hit.PaneID) == "" {
-		return nil
-	}
-	if pane := m.paneByID(hit.PaneID); pane == nil || pane.Dead || pane.Disconnected {
-		return nil
-	}
-	if !hit.Content.Contains(msg.X, msg.Y) {
-		return nil
-	}
-	relX := msg.X - hit.Content.X
-	relY := msg.Y - hit.Content.Y
-	if relX < 0 || relY < 0 {
-		return nil
-	}
-
-	payload, ok := mousePayloadFromTea(msg, relX, relY)
+	paneID, payload, ok := m.mouseForwardPayload(hit, msg)
 	if !ok {
 		return nil
 	}
-	if m.terminalFocus {
-		payload.Route = sessiond.MouseRouteAuto
-	} else {
-		payload.Route = sessiond.MouseRouteHostSelection
-	}
-	if payload.Action == sessiond.MouseActionMotion && !m.paneMouseMotion[hit.PaneID] && !m.terminalMouseDrag {
-		return nil
-	}
-	paneID := hit.PaneID
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), terminalActionTimeout)
 		defer cancel()
@@ -166,6 +142,59 @@ func (m *Model) forwardMouseEvent(hit mouse.PaneHit, msg tea.MouseMsg) tea.Cmd {
 		}
 		return nil
 	}
+}
+
+func (m *Model) mouseForwardPayload(hit mouse.PaneHit, msg tea.MouseMsg) (string, sessiond.MousePayload, bool) {
+	paneID, relX, relY, ok := m.mouseForwardTarget(hit, msg)
+	if !ok {
+		return "", sessiond.MousePayload{}, false
+	}
+	payload, ok := mousePayloadFromTea(msg, relX, relY)
+	if !ok {
+		return "", sessiond.MousePayload{}, false
+	}
+	payload.Route = m.mouseRouteForForward()
+	if !m.allowMousePayload(paneID, payload) {
+		return "", sessiond.MousePayload{}, false
+	}
+	return paneID, payload, true
+}
+
+func (m *Model) mouseForwardTarget(hit mouse.PaneHit, msg tea.MouseMsg) (string, int, int, bool) {
+	paneID := strings.TrimSpace(hit.PaneID)
+	if paneID == "" {
+		return "", 0, 0, false
+	}
+	pane := m.paneByID(paneID)
+	if pane == nil || pane.Dead || pane.Disconnected {
+		return "", 0, 0, false
+	}
+	if !hit.Content.Contains(msg.X, msg.Y) {
+		return "", 0, 0, false
+	}
+	relX := msg.X - hit.Content.X
+	relY := msg.Y - hit.Content.Y
+	if relX < 0 || relY < 0 {
+		return "", 0, 0, false
+	}
+	return paneID, relX, relY, true
+}
+
+func (m *Model) mouseRouteForForward() sessiond.MouseRoute {
+	if m.terminalFocus {
+		return sessiond.MouseRouteAuto
+	}
+	return sessiond.MouseRouteHostSelection
+}
+
+func (m *Model) allowMousePayload(paneID string, payload sessiond.MousePayload) bool {
+	if payload.Action != sessiond.MouseActionMotion {
+		return true
+	}
+	if m.paneMouseMotion[paneID] {
+		return true
+	}
+	return m.terminalMouseDrag
 }
 
 func (m *Model) updateTerminalMouseDrag(msg tea.MouseMsg) {
