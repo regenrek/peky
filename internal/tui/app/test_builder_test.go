@@ -47,6 +47,7 @@ func newTestModelLite() *Model {
 	m.setupSettingsMenu()
 	m.setupPerformanceMenu()
 	m.setupDebugMenu()
+	m.setupAuthPickers()
 	m.keys = testKeyMap()
 	return m
 }

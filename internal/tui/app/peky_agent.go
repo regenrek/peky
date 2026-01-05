@@ -5,18 +5,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
-	"charm.land/fantasy"
-	"charm.land/fantasy/providers/anthropic"
-	"charm.land/fantasy/providers/google"
-	"charm.land/fantasy/providers/openai"
-	"charm.land/fantasy/providers/openrouter"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kballard/go-shellquote"
 
+	"github.com/regenrek/peakypanes/internal/agent"
 	"github.com/regenrek/peakypanes/internal/cli/contextpack"
 	"github.com/regenrek/peakypanes/internal/cli/daemon"
 	"github.com/regenrek/peakypanes/internal/cli/events"
@@ -38,19 +33,13 @@ import (
 const (
 	pekyPromptTimeout  = 2 * time.Minute
 	pekyCommandTimeout = 20 * time.Second
-	pekyMaxSteps       = 6
 )
-
-const pekySystemPrompt = `You are Peky, the PeakyPanes agent.
-Use the "peky" tool to run CLI commands (without the leading "peky").
-Never run daemon commands or modify the daemon.
-Use @file tokens as references only; do not assume file contents.
-Ask a clarifying question when a target (pane/session) is ambiguous.`
 
 type pekyResultMsg struct {
 	Prompt    string
 	Text      string
-	Usage     fantasy.Usage
+	Usage     agent.Usage
+	History   []agent.Message
 	Err       error
 	SetupHint string
 }
@@ -68,7 +57,7 @@ func (m *Model) sendPekyPrompt(text string) tea.Cmd {
 		return NewWarningCmd("Peky is busy")
 	}
 	cfg := m.pekyConfig().Agent
-	history := append([]fantasy.Message(nil), m.pekyMessages...)
+	history := append([]agent.Message(nil), m.pekyMessages...)
 	contextHint := m.pekyContext()
 	cliVersion := ""
 	if m.client != nil {
@@ -84,119 +73,81 @@ func (m *Model) sendPekyPrompt(text string) tea.Cmd {
 	}
 }
 
-func runPekyPrompt(prompt string, cfg layout.AgentConfig, history []fantasy.Message, contextHint, cliVersion string) tea.Msg {
+func runPekyPrompt(prompt string, cfg layout.AgentConfig, history []agent.Message, contextHint, cliVersion string) tea.Msg {
 	ctx, cancel := context.WithTimeout(context.Background(), pekyPromptTimeout)
 	defer cancel()
 
-	agent, hint, err := newPekyAgent(ctx, cfg, cliVersion)
-	if err != nil {
-		return pekyResultMsg{Prompt: prompt, Err: err, SetupHint: hint}
-	}
-
-	messages := append([]fantasy.Message(nil), history...)
-	if strings.TrimSpace(contextHint) != "" {
-		messages = append([]fantasy.Message{fantasy.NewSystemMessage(contextHint)}, messages...)
-	}
-
-	result, err := agent.Generate(ctx, fantasy.AgentCall{
-		Prompt:   prompt,
-		Messages: messages,
-	})
+	skillsDir, err := agent.DefaultSkillsDir()
 	if err != nil {
 		return pekyResultMsg{Prompt: prompt, Err: err}
 	}
-	text := strings.TrimSpace(result.Response.Content.Text())
+
+	result, updated, err := agent.RunPrompt(
+		ctx,
+		agent.Config{
+			Provider:        agent.Provider(cfg.Provider),
+			Model:           cfg.Model,
+			AllowedCommands: cfg.AllowedCommands,
+			BlockedCommands: cfg.BlockedCommands,
+		},
+		history,
+		prompt,
+		contextHint,
+		skillsDir,
+		func(ctx context.Context, call agent.ToolCall) (agent.ToolResult, error) {
+			command, ok := call.Arguments["command"].(string)
+			if !ok || strings.TrimSpace(command) == "" {
+				return agent.ToolResult{
+					ToolCallID: call.ID,
+					ToolName:   call.Name,
+					Content:    "missing command",
+					IsError:    true,
+				}, errors.New("missing command")
+			}
+			output, err := runPekyCommand(ctx, newPekyPolicy(cfg), pekyToolInput{Command: command}, cliVersion)
+			return agent.ToolResult{
+				ToolCallID: call.ID,
+				ToolName:   call.Name,
+				Content:    output,
+				IsError:    err != nil,
+			}, err
+		},
+	)
+	if err != nil {
+		return pekyResultMsg{Prompt: prompt, Err: err, SetupHint: pekySetupHint(agent.Provider(cfg.Provider))}
+	}
+	text := strings.TrimSpace(result.Text)
 	if text == "" {
 		text = "(no response)"
 	}
 	return pekyResultMsg{
-		Prompt: prompt,
-		Text:   text,
-		Usage:  result.TotalUsage,
+		Prompt:  prompt,
+		Text:    text,
+		Usage:   result.Usage,
+		History: updated,
 	}
 }
 
-func newPekyAgent(ctx context.Context, cfg layout.AgentConfig, cliVersion string) (fantasy.Agent, string, error) {
-	provider, hint, err := newPekyProvider(cfg)
-	if err != nil {
-		return nil, hint, err
-	}
-	modelID := strings.TrimSpace(cfg.Model)
-	if modelID == "" {
-		return nil, hint, errors.New("model is required")
-	}
-	model, err := provider.LanguageModel(ctx, modelID)
-	if err != nil {
-		return nil, hint, err
-	}
-	tool := newPekyTool(newPekyPolicy(cfg), cliVersion)
-	agent := fantasy.NewAgent(
-		model,
-		fantasy.WithSystemPrompt(pekySystemPrompt),
-		fantasy.WithTools(tool),
-		fantasy.WithStopConditions(fantasy.StepCountIs(pekyMaxSteps)),
-	)
-	return agent, hint, nil
-}
-
-func newPekyProvider(cfg layout.AgentConfig) (fantasy.Provider, string, error) {
-	provider := strings.ToLower(strings.TrimSpace(cfg.Provider))
+func pekySetupHint(provider agent.Provider) string {
+	provider = agent.Provider(strings.ToLower(strings.TrimSpace(string(provider))))
 	switch provider {
-	case "", "google":
-		apiKey := envFirst("GEMINI_API_KEY", "GOOGLE_API_KEY")
-		if apiKey == "" {
-			return nil, googleSetupHint(), errors.New("missing Gemini API key")
-		}
-		p, err := google.New(google.WithGeminiAPIKey(apiKey))
-		return p, googleSetupHint(), err
-	case "anthropic":
-		apiKey := strings.TrimSpace(os.Getenv("ANTHROPIC_API_KEY"))
-		if apiKey == "" {
-			return nil, "Set ANTHROPIC_API_KEY in your environment.", errors.New("missing Anthropic API key")
-		}
-		p, err := anthropic.New(anthropic.WithAPIKey(apiKey))
-		return p, "Set ANTHROPIC_API_KEY in your environment.", err
-	case "openai":
-		apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
-		if apiKey == "" {
-			return nil, "Set OPENAI_API_KEY in your environment.", errors.New("missing OpenAI API key")
-		}
-		p, err := openai.New(openai.WithAPIKey(apiKey))
-		return p, "Set OPENAI_API_KEY in your environment.", err
-	case "openrouter":
-		apiKey := strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY"))
-		if apiKey == "" {
-			return nil, "Set OPENROUTER_API_KEY in your environment.", errors.New("missing OpenRouter API key")
-		}
-		p, err := openrouter.New(openrouter.WithAPIKey(apiKey))
-		return p, "Set OPENROUTER_API_KEY in your environment.", err
+	case agent.ProviderGoogle:
+		return "Use /auth to login (Gemini) or set GEMINI_API_KEY / GOOGLE_API_KEY."
+	case agent.ProviderAnthropic:
+		return "Use /auth to login (Anthropic) or set ANTHROPIC_API_KEY."
+	case agent.ProviderOpenAI:
+		return "Use /auth to login (OpenAI) or set OPENAI_API_KEY."
+	case agent.ProviderOpenRouter:
+		return "Use /auth to login (OpenRouter) or set OPENROUTER_API_KEY."
+	case agent.ProviderGitHubCopilot:
+		return "Use /auth to login with GitHub Copilot."
+	case agent.ProviderGoogleGeminiCLI:
+		return "Use /auth to login with Gemini CLI."
+	case agent.ProviderGoogleAntigrav:
+		return "Use /auth to login with Antigravity."
 	default:
-		return nil, "", fmt.Errorf("unsupported provider %q", provider)
+		return "Use /auth to login or set provider API keys in your environment."
 	}
-}
-
-func googleSetupHint() string {
-	return "Set GEMINI_API_KEY (or GOOGLE_API_KEY) in your environment."
-}
-
-func envFirst(keys ...string) string {
-	for _, key := range keys {
-		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
-			return value
-		}
-	}
-	return ""
-}
-
-func newPekyTool(policy pekyPolicy, cliVersion string) fantasy.AgentTool {
-	description := "Run a PeakyPanes CLI command. Provide the command without the leading 'peky'."
-	return fantasy.NewAgentTool("peky", description, func(ctx context.Context, input pekyToolInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
-		output, err := runPekyCommand(ctx, policy, input, cliVersion)
-		if err != nil {
-			return fantasy.NewTextErrorResponse(output), nil
-		}
-		return fantasy.NewTextResponse(output), nil
-	})
 }
 
 func runPekyCommand(ctx context.Context, policy pekyPolicy, input pekyToolInput, cliVersion string) (string, error) {
@@ -410,22 +361,11 @@ func (m *Model) handlePekyResult(msg pekyResultMsg) tea.Cmd {
 		m.openPekyDialog("Peky setup", body, "esc close")
 		return nil
 	}
-	m.pekyMessages = append(
-		m.pekyMessages,
-		fantasy.NewUserMessage(msg.Prompt),
-		newAssistantMessage(msg.Text),
-	)
+	m.pekyMessages = append([]agent.Message(nil), msg.History...)
 	footer := "esc close • ↑/↓ scroll"
 	if msg.Usage.TotalTokens > 0 {
 		footer = fmt.Sprintf("%s • tokens %d", footer, msg.Usage.TotalTokens)
 	}
 	m.openPekyDialog("Peky", msg.Text, footer)
 	return nil
-}
-
-func newAssistantMessage(text string) fantasy.Message {
-	return fantasy.Message{
-		Role:    fantasy.MessageRoleAssistant,
-		Content: []fantasy.MessagePart{fantasy.TextPart{Text: text}},
-	}
 }

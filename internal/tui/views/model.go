@@ -42,6 +42,10 @@ type Model struct {
 	SettingsMenu             list.Model
 	PerformanceMenu          list.Model
 	DebugMenu                list.Model
+	AuthProviderPicker       list.Model
+	AuthMethodPicker         list.Model
+	AuthPrompt               AuthPrompt
+	AuthProgress             AuthProgress
 	PekyDialogTitle          string
 	PekyDialogFooter         string
 	PekyDialogViewport       viewport.Model
@@ -172,4 +176,16 @@ type Rename struct {
 	Pane      string
 	PaneIndex string
 	Input     textinput.Model
+}
+
+type AuthPrompt struct {
+	Title string
+	Note  string
+	Input textinput.Model
+}
+
+type AuthProgress struct {
+	Title  string
+	Body   string
+	Footer string
 }

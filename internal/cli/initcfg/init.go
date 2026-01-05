@@ -164,6 +164,27 @@ ghostty:
 #     codex: true
 #     claude: true
 
+# Peky agent settings (used by /peky and Shift+Tab)
+# agent:
+#   provider: google
+#   model: gemini-3-flash
+#   # If allowed_commands is set, only these commands may run.
+#   # allowed_commands:
+#   #   - pane.add
+#   #   - pane.split
+#   #   - session.kill
+#   # Otherwise, blocked_commands denies specific commands/prefixes.
+#   blocked_commands:
+#     - daemon
+#     - daemon.*
+
+# Quick reply settings (for @file picker)
+# quick_reply:
+#   files:
+#     show_hidden: false
+#     max_depth: 4
+#     max_items: 500
+
 # Load additional layouts from this directory
 layout_dirs:
   - ~/.config/peakypanes/layouts

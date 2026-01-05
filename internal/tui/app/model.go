@@ -4,17 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"time"
-
-	"charm.land/fantasy"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
+	"os"
+	"time"
 
+	"github.com/regenrek/peakypanes/internal/agent"
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/sessiond"
 	"github.com/regenrek/peakypanes/internal/tui/mouse"
@@ -107,15 +106,25 @@ type Model struct {
 	cursorShapeFlushScheduled bool
 	cursorShapeNow            func() time.Time
 
-	projectPicker  list.Model
-	layoutPicker   list.Model
-	paneSwapPicker list.Model
-	commandPalette list.Model
-	settingsMenu   list.Model
-	perfMenu       list.Model
-	debugMenu      list.Model
-	gitProjects    []picker.ProjectItem
-	dialogHelpOpen bool
+	projectPicker      list.Model
+	layoutPicker       list.Model
+	paneSwapPicker     list.Model
+	commandPalette     list.Model
+	settingsMenu       list.Model
+	perfMenu           list.Model
+	debugMenu          list.Model
+	authPickersReady   bool
+	authProviderPicker list.Model
+	authMethodPicker   list.Model
+	authPromptInput    textinput.Model
+	authPromptTitle    string
+	authPromptNote     string
+	authProgressTitle  string
+	authProgressBody   string
+	authProgressFooter string
+	authFlow           authFlowState
+	gitProjects        []picker.ProjectItem
+	dialogHelpOpen     bool
 
 	confirmSession     string
 	confirmProject     string
@@ -182,7 +191,7 @@ type Model struct {
 	lastUrgentRefreshAt time.Time
 
 	pekyBusy            bool
-	pekyMessages        []fantasy.Message
+	pekyMessages        []agent.Message
 	pekyDialogTitle     string
 	pekyDialogFooter    string
 	pekyDialogPrevState ViewState
@@ -259,6 +268,7 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 	m.setupSettingsMenu()
 	m.setupPerformanceMenu()
 	m.setupDebugMenu()
+	m.setupAuthPickers()
 
 	configExists := true
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {

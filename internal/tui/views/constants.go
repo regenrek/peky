@@ -22,6 +22,10 @@ const (
 	viewPerformanceMenu
 	viewDebugMenu
 	viewPekyDialog
+	viewAuthProviderPicker
+	viewAuthMethodPicker
+	viewAuthPrompt
+	viewAuthProgress
 )
 
 // Tab ordering must match app.DashboardTab.

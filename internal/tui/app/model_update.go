@@ -79,18 +79,22 @@ var keyHandlers = map[ViewState]keyHandler{
 	StateConfirmCloseAllProjects: func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.updateConfirmCloseAllProjects(msg)
 	},
-	StateConfirmClosePane: func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateConfirmClosePane(msg) },
-	StateConfirmRestart:   func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateConfirmRestart(msg) },
-	StateConfirmQuit:      func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateConfirmQuit(msg) },
-	StateHelp:             func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateHelp(msg) },
-	StateCommandPalette:   func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateCommandPalette(msg) },
-	StateSettingsMenu:     func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateSettingsMenu(msg) },
-	StatePerformanceMenu:  func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updatePerformanceMenu(msg) },
-	StateDebugMenu:        func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateDebugMenu(msg) },
-	StateRenameSession:    func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateRename(msg) },
-	StateRenamePane:       func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateRename(msg) },
-	StateProjectRootSetup: func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateProjectRootSetup(msg) },
-	StatePekyDialog:       func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updatePekyDialog(msg) },
+	StateConfirmClosePane:   func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateConfirmClosePane(msg) },
+	StateConfirmRestart:     func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateConfirmRestart(msg) },
+	StateConfirmQuit:        func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateConfirmQuit(msg) },
+	StateHelp:               func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateHelp(msg) },
+	StateCommandPalette:     func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateCommandPalette(msg) },
+	StateSettingsMenu:       func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateSettingsMenu(msg) },
+	StatePerformanceMenu:    func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updatePerformanceMenu(msg) },
+	StateDebugMenu:          func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateDebugMenu(msg) },
+	StateRenameSession:      func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateRename(msg) },
+	StateRenamePane:         func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateRename(msg) },
+	StateProjectRootSetup:   func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateProjectRootSetup(msg) },
+	StatePekyDialog:         func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updatePekyDialog(msg) },
+	StateAuthProviderPicker: func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateAuthProviderPicker(msg) },
+	StateAuthMethodPicker:   func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateAuthMethodPicker(msg) },
+	StateAuthPrompt:         func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateAuthPrompt(msg) },
+	StateAuthProgress:       func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateAuthProgress(msg) },
 }
 
 type updateHandler func(*Model, tea.Msg) (tea.Model, tea.Cmd)
@@ -135,6 +139,15 @@ var updateHandlers = map[reflect.Type]updateHandler{
 	},
 	reflect.TypeOf(pekyResultMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handlePekyResult(msg.(pekyResultMsg))
+	},
+	reflect.TypeOf(authDoneMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleAuthDone(msg.(authDoneMsg))
+	},
+	reflect.TypeOf(authCopilotDeviceMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleCopilotDevice(msg.(authCopilotDeviceMsg))
+	},
+	reflect.TypeOf(authCallbackMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleAuthCallback(msg.(authCallbackMsg))
 	},
 	reflect.TypeOf(sessionStartedMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleSessionStarted(msg.(sessionStartedMsg))

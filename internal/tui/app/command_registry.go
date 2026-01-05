@@ -210,6 +210,20 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 			},
 		},
 		{
+			Name: "agent",
+			Commands: []commandSpec{
+				{
+					ID:      "agent_auth",
+					Label:   "Agent: Auth",
+					Desc:    "Connect an AI provider for Peky",
+					Aliases: []string{"auth", "login", "agent auth"},
+					Run: func(m *Model, _ commandArgs) tea.Cmd {
+						return m.openAuthProviderPicker()
+					},
+				},
+			},
+		},
+		{
 			Name: "broadcast",
 			Commands: []commandSpec{
 				{
