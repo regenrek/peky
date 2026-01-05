@@ -35,6 +35,11 @@ func (m *Model) appendFocusResult(model tea.Model, cmd tea.Cmd) (tea.Model, tea.
 }
 
 func (m *Model) handleUpdateMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		if keyMsg.String() == "esc" && m.pekyBusy {
+			m.cancelPekyRun()
+		}
+	}
 	if handler, ok := updateHandlers[reflect.TypeOf(msg)]; ok {
 		model, cmd := handler(m, msg)
 		return model, cmd, true
@@ -79,18 +84,19 @@ var keyHandlers = map[ViewState]keyHandler{
 	StateConfirmCloseAllProjects: func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.updateConfirmCloseAllProjects(msg)
 	},
-	StateConfirmClosePane:   func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateConfirmClosePane(msg) },
-	StateConfirmRestart:     func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateConfirmRestart(msg) },
-	StateConfirmQuit:        func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateConfirmQuit(msg) },
-	StateHelp:               func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateHelp(msg) },
-	StateCommandPalette:     func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateCommandPalette(msg) },
-	StateSettingsMenu:       func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateSettingsMenu(msg) },
-	StatePerformanceMenu:    func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updatePerformanceMenu(msg) },
-	StateDebugMenu:          func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateDebugMenu(msg) },
-	StateRenameSession:      func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateRename(msg) },
-	StateRenamePane:         func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateRename(msg) },
-	StateProjectRootSetup:   func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateProjectRootSetup(msg) },
-	StatePekyDialog:         func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updatePekyDialog(msg) },
+	StateConfirmClosePane: func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateConfirmClosePane(msg) },
+	StateConfirmRestart:   func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateConfirmRestart(msg) },
+	StateConfirmQuit:      func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateConfirmQuit(msg) },
+	StateHelp:             func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateHelp(msg) },
+	StateCommandPalette:   func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateCommandPalette(msg) },
+	StateSettingsMenu:     func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateSettingsMenu(msg) },
+	StatePerformanceMenu:  func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updatePerformanceMenu(msg) },
+	StateDebugMenu:        func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateDebugMenu(msg) },
+	StateRenameSession:    func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateRename(msg) },
+	StateRenamePane:       func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateRename(msg) },
+	StateProjectRootSetup: func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateProjectRootSetup(msg) },
+	StatePekyDialog:       func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updatePekyDialog(msg) },
+	StateAuthDialog:       func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateAuthDialog(msg) },
 }
 
 type updateHandler func(*Model, tea.Msg) (tea.Model, tea.Cmd)
@@ -105,6 +111,12 @@ var updateHandlers = map[reflect.Type]updateHandler{
 	},
 	reflect.TypeOf(refreshTickMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleRefreshTick(msg.(refreshTickMsg))
+	},
+	reflect.TypeOf(pekySpinnerTickMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handlePekySpinnerTick()
+	},
+	reflect.TypeOf(pekyPromptClearMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handlePekyPromptClear(msg.(pekyPromptClearMsg))
 	},
 	reflect.TypeOf(selectionRefreshMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleSelectionRefresh(msg.(selectionRefreshMsg))

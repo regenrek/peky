@@ -33,6 +33,7 @@ import (
 const (
 	pekyPromptTimeout  = 2 * time.Minute
 	pekyCommandTimeout = 20 * time.Second
+	pekyPromptLineTTL  = 4 * time.Second
 )
 
 type pekyResultMsg struct {
@@ -42,6 +43,7 @@ type pekyResultMsg struct {
 	History   []agent.Message
 	Err       error
 	SetupHint string
+	RunID     int64
 }
 
 type pekyToolInput struct {
@@ -56,6 +58,10 @@ func (m *Model) sendPekyPrompt(text string) tea.Cmd {
 	if m.pekyBusy {
 		return NewWarningCmd("Peky is busy")
 	}
+	workDir, err := m.pekyWorkDir()
+	if err != nil {
+		return NewWarningCmd(err.Error())
+	}
 	cfg := m.pekyConfig().Agent
 	history := append([]agent.Message(nil), m.pekyMessages...)
 	contextHint := m.pekyContext()
@@ -64,22 +70,30 @@ func (m *Model) sendPekyPrompt(text string) tea.Cmd {
 		cliVersion = m.client.Version()
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), pekyPromptTimeout)
+	m.pekyCancel = cancel
+	m.pekyRunID++
+	runID := m.pekyRunID
+
 	m.quickReplyInput.SetValue("")
 	m.resetQuickReplyMenu()
 	m.pekyBusy = true
+	m.pekySpinnerIndex = 0
+	m.pekyPromptLine = ""
+	m.pekyPromptLineID++
 
-	return func() tea.Msg {
-		return runPekyPrompt(text, cfg, history, contextHint, cliVersion)
-	}
+	return tea.Batch(
+		m.pekySpinnerTickCmd(),
+		func() tea.Msg {
+			return runPekyPrompt(ctx, runID, text, cfg, history, contextHint, workDir, cliVersion)
+		},
+	)
 }
 
-func runPekyPrompt(prompt string, cfg layout.AgentConfig, history []agent.Message, contextHint, cliVersion string) tea.Msg {
-	ctx, cancel := context.WithTimeout(context.Background(), pekyPromptTimeout)
-	defer cancel()
-
+func runPekyPrompt(ctx context.Context, runID int64, prompt string, cfg layout.AgentConfig, history []agent.Message, contextHint, workDir, cliVersion string) tea.Msg {
 	skillsDir, err := agent.DefaultSkillsDir()
 	if err != nil {
-		return pekyResultMsg{Prompt: prompt, Err: err}
+		return pekyResultMsg{Prompt: prompt, Err: err, RunID: runID}
 	}
 
 	result, updated, err := agent.RunPrompt(
@@ -89,6 +103,7 @@ func runPekyPrompt(prompt string, cfg layout.AgentConfig, history []agent.Messag
 			Model:           cfg.Model,
 			AllowedCommands: cfg.AllowedCommands,
 			BlockedCommands: cfg.BlockedCommands,
+			TracePath:       pekyTracePath(),
 		},
 		history,
 		prompt,
@@ -104,7 +119,7 @@ func runPekyPrompt(prompt string, cfg layout.AgentConfig, history []agent.Messag
 					IsError:    true,
 				}, errors.New("missing command")
 			}
-			output, err := runPekyCommand(ctx, newPekyPolicy(cfg), pekyToolInput{Command: command}, cliVersion)
+			output, err := runPekyCommand(ctx, newPekyPolicy(cfg), pekyToolInput{Command: command}, workDir, cliVersion)
 			return agent.ToolResult{
 				ToolCallID: call.ID,
 				ToolName:   call.Name,
@@ -114,7 +129,7 @@ func runPekyPrompt(prompt string, cfg layout.AgentConfig, history []agent.Messag
 		},
 	)
 	if err != nil {
-		return pekyResultMsg{Prompt: prompt, Err: err, SetupHint: pekySetupHint(agent.Provider(cfg.Provider))}
+		return pekyResultMsg{Prompt: prompt, Err: err, SetupHint: pekySetupHint(agent.Provider(cfg.Provider)), RunID: runID}
 	}
 	text := strings.TrimSpace(result.Text)
 	if text == "" {
@@ -125,6 +140,7 @@ func runPekyPrompt(prompt string, cfg layout.AgentConfig, history []agent.Messag
 		Text:    text,
 		Usage:   result.Usage,
 		History: updated,
+		RunID:   runID,
 	}
 }
 
@@ -150,7 +166,7 @@ func pekySetupHint(provider agent.Provider) string {
 	}
 }
 
-func runPekyCommand(ctx context.Context, policy pekyPolicy, input pekyToolInput, cliVersion string) (string, error) {
+func runPekyCommand(ctx context.Context, policy pekyPolicy, input pekyToolInput, workDir, cliVersion string) (string, error) {
 	command := strings.TrimSpace(input.Command)
 	if command == "" {
 		return "command is required", errors.New("command is required")
@@ -179,7 +195,7 @@ func runPekyCommand(ctx context.Context, policy pekyPolicy, input pekyToolInput,
 	}
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	deps := cliDeps(&stdout, &stderr, cliVersion)
+	deps := cliDeps(&stdout, &stderr, workDir, cliVersion)
 	runner, err := newPekyRunner(specDoc, deps)
 	if err != nil {
 		return fmt.Sprintf("runner init failed: %v", err), err
@@ -216,18 +232,46 @@ func formatPekyOutput(stdout, stderr string, err error) string {
 	return strings.Join(parts, "\n\n")
 }
 
-func cliDeps(stdout, stderr *bytes.Buffer, version string) root.Dependencies {
+func cliDeps(stdout, stderr *bytes.Buffer, workDir, version string) root.Dependencies {
 	if strings.TrimSpace(version) == "" {
 		version = identity.AppSlug
 	}
 	return root.Dependencies{
 		Version: version,
 		AppName: identity.CLIName,
+		WorkDir: strings.TrimSpace(workDir),
 		Stdout:  stdout,
 		Stderr:  stderr,
 		Stdin:   strings.NewReader(""),
 		Connect: sessiond.ConnectDefault,
 	}
+}
+
+func (m *Model) pekyWorkDir() (string, error) {
+	if m == nil {
+		return "", errors.New("no selection available")
+	}
+	if pane := m.selectedPane(); pane != nil {
+		cwd := strings.TrimSpace(pane.Cwd)
+		if cwd != "" && !strings.EqualFold(cwd, "unknown") {
+			return cwd, nil
+		}
+	}
+	if session := m.selectedSession(); session != nil {
+		path := strings.TrimSpace(session.Path)
+		if path != "" {
+			return path, nil
+		}
+	}
+	return "", errors.New("select a pane or session with a valid path")
+}
+
+func pekyTracePath() string {
+	path, err := agent.DefaultTracePath()
+	if err != nil {
+		return ""
+	}
+	return path
 }
 
 func loadPekySpec() (*spec.Spec, error) {
@@ -268,7 +312,7 @@ func filterPekyCommands(commands []spec.Command) []spec.Command {
 
 func isPekySkippedCommand(id string) bool {
 	switch id {
-	case "dashboard", "start", "clone", "nl":
+	case "dashboard", "start", "clone", "nl", "pane.send":
 		return true
 	default:
 		return false
@@ -352,24 +396,77 @@ func hasYesFlag(tokens []string) bool {
 }
 
 func (m *Model) handlePekyResult(msg pekyResultMsg) tea.Cmd {
+	if msg.RunID != m.pekyRunID {
+		return nil
+	}
 	m.pekyBusy = false
+	m.pekySpinnerIndex = 0
+	if m.pekyCancel != nil {
+		m.pekyCancel()
+		m.pekyCancel = nil
+	}
 	if msg.Err != nil {
 		if errors.Is(msg.Err, agent.ErrAuthMissing) {
 			m.setToast("Peky needs authentication. Use /auth to connect a provider.", toastWarning)
 			return m.prefillQuickReplyInput("/auth")
 		}
+		if errors.Is(msg.Err, context.Canceled) {
+			m.setToast("Peky canceled", toastInfo)
+			return nil
+		}
 		body := strings.TrimSpace(msg.Err.Error())
 		if hint := strings.TrimSpace(msg.SetupHint); hint != "" {
 			body = strings.TrimSpace(body + "\n\nSetup:\n" + hint)
 		}
-		m.openPekyDialog("Peky setup", body, "esc close")
+		m.openPekyDialog("Peky error", body, "esc close • ↑/↓ scroll", true)
 		return nil
 	}
 	m.pekyMessages = append([]agent.Message(nil), msg.History...)
-	footer := "esc close • ↑/↓ scroll"
-	if msg.Usage.TotalTokens > 0 {
-		footer = fmt.Sprintf("%s • tokens %d", footer, msg.Usage.TotalTokens)
+	m.closePekyDialog()
+	m.pekyPromptLine = pekySuccessToast(msg.Text)
+	m.pekyPromptLineID++
+	return m.pekyPromptClearCmd(m.pekyPromptLineID)
+}
+
+func (m *Model) cancelPekyRun() {
+	if !m.pekyBusy && m.pekyCancel == nil {
+		return
 	}
-	m.openPekyDialog("Peky", msg.Text, footer)
+	if m.pekyCancel != nil {
+		m.pekyCancel()
+		m.pekyCancel = nil
+	}
+	m.pekyBusy = false
+	m.pekySpinnerIndex = 0
+	m.pekyPromptLine = ""
+	m.pekyPromptLineID++
+	m.pekyRunID++
+	m.setToast("Peky canceled", toastInfo)
+}
+
+func pekySuccessToast(text string) string {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return "Done"
+	}
+	trimmed = strings.ReplaceAll(trimmed, "\n", " ")
+	trimmed = strings.Join(strings.Fields(trimmed), " ")
+	const limit = 120
+	if len(trimmed) > limit {
+		return trimmed[:limit-1] + "…"
+	}
+	return trimmed
+}
+
+func (m *Model) pekyPromptClearCmd(id int64) tea.Cmd {
+	return tea.Tick(pekyPromptLineTTL, func(time.Time) tea.Msg {
+		return pekyPromptClearMsg{ID: id}
+	})
+}
+
+func (m *Model) handlePekyPromptClear(msg pekyPromptClearMsg) tea.Cmd {
+	if msg.ID == m.pekyPromptLineID {
+		m.pekyPromptLine = ""
+	}
 	return nil
 }

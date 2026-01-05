@@ -106,16 +106,21 @@ type Model struct {
 	cursorShapeFlushScheduled bool
 	cursorShapeNow            func() time.Time
 
-	projectPicker  list.Model
-	layoutPicker   list.Model
-	paneSwapPicker list.Model
-	commandPalette list.Model
-	settingsMenu   list.Model
-	perfMenu       list.Model
-	debugMenu      list.Model
-	authFlow       authFlowState
-	gitProjects    []picker.ProjectItem
-	dialogHelpOpen bool
+	projectPicker    list.Model
+	layoutPicker     list.Model
+	paneSwapPicker   list.Model
+	commandPalette   list.Model
+	settingsMenu     list.Model
+	perfMenu         list.Model
+	debugMenu        list.Model
+	authFlow         authFlowState
+	authDialogInput  textinput.Model
+	authDialogTitle  string
+	authDialogBody   string
+	authDialogFooter string
+	authDialogKind   authDialogKind
+	gitProjects      []picker.ProjectItem
+	dialogHelpOpen   bool
 
 	confirmSession     string
 	confirmProject     string
@@ -182,11 +187,17 @@ type Model struct {
 	lastUrgentRefreshAt time.Time
 
 	pekyBusy            bool
+	pekySpinnerIndex    int
 	pekyMessages        []agent.Message
 	pekyDialogTitle     string
 	pekyDialogFooter    string
 	pekyDialogPrevState ViewState
+	pekyDialogIsError   bool
 	pekyViewport        viewport.Model
+	pekyPromptLine      string
+	pekyRunID           int64
+	pekyCancel          context.CancelFunc
+	pekyPromptLineID    int64
 }
 
 // NewModel creates a new peakypanes TUI model.
