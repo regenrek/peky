@@ -16,7 +16,6 @@ import (
 	"github.com/muesli/termenv"
 
 	"github.com/regenrek/peakypanes/internal/layout"
-	"github.com/regenrek/peakypanes/internal/pekyconfig"
 	"github.com/regenrek/peakypanes/internal/sessiond"
 	"github.com/regenrek/peakypanes/internal/tui/mouse"
 	"github.com/regenrek/peakypanes/internal/tui/picker"
@@ -182,10 +181,6 @@ type Model struct {
 
 	lastUrgentRefreshAt time.Time
 
-	pekyConfigLoader *pekyconfig.Loader
-	pekyConfig       pekyconfig.Config
-	pekyConfigErr    error
-
 	pekyBusy            bool
 	pekyMessages        []fantasy.Message
 	pekyDialogTitle     string
@@ -256,19 +251,6 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 	m.quickReplyHistoryIndex = -1
 	m.quickReplyMenuIndex = -1
 	m.quickReplyMode = quickReplyModePane
-
-	if pekyPath, err := pekyconfig.DefaultPath(); err == nil {
-		m.pekyConfigLoader = pekyconfig.NewLoader(pekyPath)
-		if cfg, loadErr := m.pekyConfigLoader.Load(); loadErr == nil {
-			m.pekyConfig = cfg
-		} else {
-			m.pekyConfig = pekyconfig.Defaults()
-			m.pekyConfigErr = loadErr
-		}
-	} else {
-		m.pekyConfig = pekyconfig.Defaults()
-		m.pekyConfigErr = err
-	}
 
 	m.setupProjectPicker()
 	m.setupLayoutPicker()

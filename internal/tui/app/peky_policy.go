@@ -3,7 +3,7 @@ package app
 import (
 	"strings"
 
-	"github.com/regenrek/peakypanes/internal/pekyconfig"
+	"github.com/regenrek/peakypanes/internal/layout"
 )
 
 type pekyPolicy struct {
@@ -11,7 +11,7 @@ type pekyPolicy struct {
 	blocked []string
 }
 
-func newPekyPolicy(cfg pekyconfig.AgentConfig) pekyPolicy {
+func newPekyPolicy(cfg layout.AgentConfig) pekyPolicy {
 	return pekyPolicy{
 		allowed: cfg.AllowedCommands,
 		blocked: cfg.BlockedCommands,

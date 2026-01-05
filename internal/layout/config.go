@@ -204,6 +204,26 @@ type DashboardConfig struct {
 	Performance        PerformanceConfig      `yaml:"performance,omitempty"`
 }
 
+// AgentConfig configures the Peky agent.
+type AgentConfig struct {
+	Provider        string   `yaml:"provider,omitempty"`
+	Model           string   `yaml:"model,omitempty"`
+	BlockedCommands []string `yaml:"blocked_commands,omitempty"`
+	AllowedCommands []string `yaml:"allowed_commands,omitempty"`
+}
+
+// QuickReplyFilesConfig configures @ file listing.
+type QuickReplyFilesConfig struct {
+	ShowHidden *bool `yaml:"show_hidden,omitempty"`
+	MaxDepth   int   `yaml:"max_depth,omitempty"`
+	MaxItems   int   `yaml:"max_items,omitempty"`
+}
+
+// QuickReplyConfig configures quick reply behavior.
+type QuickReplyConfig struct {
+	Files QuickReplyFilesConfig `yaml:"files,omitempty"`
+}
+
 // ZellijSection holds zellij-specific config.
 type ZellijSection struct {
 	Config       string `yaml:"config,omitempty"`
@@ -227,6 +247,8 @@ type Config struct {
 	ToolDetection ToolDetectionConfig      `yaml:"tool_detection,omitempty"`
 	Logging       logging.Config           `yaml:"logging,omitempty"`
 	Dashboard     DashboardConfig          `yaml:"dashboard,omitempty"`
+	Agent         AgentConfig              `yaml:"agent,omitempty"`
+	QuickReply    QuickReplyConfig         `yaml:"quick_reply,omitempty"`
 }
 
 // ProjectDashboardConfig configures dashboard overrides in .peakypanes.yml.
@@ -253,6 +275,7 @@ func LoadConfig(path string) (*Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse config %q: %w", path, err)
 	}
+	ApplyDefaults(&cfg)
 	return &cfg, nil
 }
 

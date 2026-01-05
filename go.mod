@@ -20,7 +20,6 @@ require (
 	github.com/google/gops v0.3.28
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/muesli/termenv v0.16.0
-	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/sahilm/fuzzy v0.1.1
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
@@ -216,6 +215,7 @@ require (
 	github.com/openai/openai-go/v2 v2.7.1 // indirect
 	github.com/orlangure/gocovsh v0.5.1 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
+	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/polyfloyd/go-errorlint v1.8.0 // indirect
 	github.com/prometheus/client_golang v1.12.1 // indirect

@@ -236,7 +236,7 @@ func (m *Model) atFileEntries(relDir string) ([]atEntry, error) {
 	if pane == nil {
 		return nil, errors.New("no pane selected")
 	}
-	cfg := quickReplyFilesConfig(m.loadPekyConfig())
+	cfg := quickReplyFilesConfig(m.pekyConfig().QuickReply)
 	cwd := strings.TrimSpace(pane.Cwd)
 	if cwd == "" {
 		return nil, errors.New("pane cwd unavailable")

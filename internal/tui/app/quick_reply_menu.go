@@ -1,11 +1,10 @@
 package app
 
 import (
-	"log/slog"
 	"strings"
 
 	"github.com/regenrek/peakypanes/internal/filelist"
-	"github.com/regenrek/peakypanes/internal/pekyconfig"
+	"github.com/regenrek/peakypanes/internal/layout"
 )
 
 type quickReplyMode int
@@ -115,25 +114,19 @@ func (m *Model) resetQuickReplyMenu() {
 	m.quickReplyMenuPrefix = ""
 }
 
-func (m *Model) loadPekyConfig() pekyconfig.Config {
-	if m == nil || m.pekyConfigLoader == nil {
-		return pekyconfig.Defaults()
+func (m *Model) pekyConfig() layout.Config {
+	if m == nil || m.config == nil {
+		cfg := layout.Config{}
+		layout.ApplyDefaults(&cfg)
+		return cfg
 	}
-	cfg, err := m.pekyConfigLoader.Load()
-	if err != nil {
-		if m.pekyConfigErr == nil || m.pekyConfigErr.Error() != err.Error() {
-			slog.Warn("peky config reload failed", "err", err)
-		}
-		m.pekyConfigErr = err
-		return pekyconfig.Defaults()
-	}
-	m.pekyConfigErr = nil
-	m.pekyConfig = cfg
+	cfg := *m.config
+	layout.ApplyDefaults(&cfg)
 	return cfg
 }
 
-func quickReplyFilesConfig(cfg pekyconfig.Config) filelist.Config {
-	files := cfg.QuickReply.Files
+func quickReplyFilesConfig(cfg layout.QuickReplyConfig) filelist.Config {
+	files := cfg.Files
 	includeHidden := false
 	if files.ShowHidden != nil {
 		includeHidden = *files.ShowHidden

@@ -31,7 +31,7 @@ import (
 	"github.com/regenrek/peakypanes/internal/cli/version"
 	"github.com/regenrek/peakypanes/internal/cli/workspace"
 	"github.com/regenrek/peakypanes/internal/identity"
-	"github.com/regenrek/peakypanes/internal/pekyconfig"
+	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/sessiond"
 )
 
@@ -67,7 +67,7 @@ func (m *Model) sendPekyPrompt(text string) tea.Cmd {
 	if m.pekyBusy {
 		return NewWarningCmd("Peky is busy")
 	}
-	cfg := m.loadPekyConfig()
+	cfg := m.pekyConfig().Agent
 	history := append([]fantasy.Message(nil), m.pekyMessages...)
 	contextHint := m.pekyContext()
 	cliVersion := ""
@@ -84,11 +84,11 @@ func (m *Model) sendPekyPrompt(text string) tea.Cmd {
 	}
 }
 
-func runPekyPrompt(prompt string, cfg pekyconfig.Config, history []fantasy.Message, contextHint, cliVersion string) tea.Msg {
+func runPekyPrompt(prompt string, cfg layout.AgentConfig, history []fantasy.Message, contextHint, cliVersion string) tea.Msg {
 	ctx, cancel := context.WithTimeout(context.Background(), pekyPromptTimeout)
 	defer cancel()
 
-	agent, hint, err := newPekyAgent(ctx, cfg.Agent, cliVersion)
+	agent, hint, err := newPekyAgent(ctx, cfg, cliVersion)
 	if err != nil {
 		return pekyResultMsg{Prompt: prompt, Err: err, SetupHint: hint}
 	}
@@ -116,7 +116,7 @@ func runPekyPrompt(prompt string, cfg pekyconfig.Config, history []fantasy.Messa
 	}
 }
 
-func newPekyAgent(ctx context.Context, cfg pekyconfig.AgentConfig, cliVersion string) (fantasy.Agent, string, error) {
+func newPekyAgent(ctx context.Context, cfg layout.AgentConfig, cliVersion string) (fantasy.Agent, string, error) {
 	provider, hint, err := newPekyProvider(cfg)
 	if err != nil {
 		return nil, hint, err
@@ -139,7 +139,7 @@ func newPekyAgent(ctx context.Context, cfg pekyconfig.AgentConfig, cliVersion st
 	return agent, hint, nil
 }
 
-func newPekyProvider(cfg pekyconfig.AgentConfig) (fantasy.Provider, string, error) {
+func newPekyProvider(cfg layout.AgentConfig) (fantasy.Provider, string, error) {
 	provider := strings.ToLower(strings.TrimSpace(cfg.Provider))
 	switch provider {
 	case "", "google":
