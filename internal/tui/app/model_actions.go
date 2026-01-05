@@ -282,7 +282,7 @@ func (m *Model) openClosePaneConfirm() tea.Cmd {
 		m.setToast("No pane selected", toastWarning)
 		return nil
 	}
-	running := !(pane.Dead || pane.Disconnected)
+	running := !pane.Dead && !pane.Disconnected
 	if !running {
 		m.setState(StateDashboard)
 		m.setToast("Closing pane...", toastInfo)
