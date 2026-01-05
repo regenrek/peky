@@ -231,16 +231,16 @@ type GhosttySection struct {
 
 // Config is the root configuration structure for Peaky Panes.
 type Config struct {
-	Zellij        ZellijSection            `yaml:"zellij,omitempty"`
-	Ghostty       GhosttySection           `yaml:"ghostty,omitempty"`
-	LayoutDirs    []string                 `yaml:"layout_dirs,omitempty"`
-	Layouts       map[string]*LayoutConfig `yaml:"layouts,omitempty"`
-	Projects      []ProjectConfig          `yaml:"projects,omitempty"`
-	Tools         ToolsConfig              `yaml:"tools,omitempty"`
-	ToolDetection ToolDetectionConfig      `yaml:"tool_detection,omitempty"`
-	Logging       logging.Config           `yaml:"logging,omitempty"`
-	Dashboard     DashboardConfig          `yaml:"dashboard,omitempty"`
-	SessionRestore SessionRestoreConfig    `yaml:"session_restore,omitempty"`
+	Zellij         ZellijSection            `yaml:"zellij,omitempty"`
+	Ghostty        GhosttySection           `yaml:"ghostty,omitempty"`
+	LayoutDirs     []string                 `yaml:"layout_dirs,omitempty"`
+	Layouts        map[string]*LayoutConfig `yaml:"layouts,omitempty"`
+	Projects       []ProjectConfig          `yaml:"projects,omitempty"`
+	Tools          ToolsConfig              `yaml:"tools,omitempty"`
+	ToolDetection  ToolDetectionConfig      `yaml:"tool_detection,omitempty"`
+	Logging        logging.Config           `yaml:"logging,omitempty"`
+	Dashboard      DashboardConfig          `yaml:"dashboard,omitempty"`
+	SessionRestore SessionRestoreConfig     `yaml:"session_restore,omitempty"`
 }
 
 // ProjectDashboardConfig configures dashboard overrides in .peakypanes.yml.

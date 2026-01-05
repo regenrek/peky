@@ -10,8 +10,8 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 
 	"github.com/regenrek/peakypanes/internal/native"
-	"github.com/regenrek/peakypanes/internal/terminal"
 	"github.com/regenrek/peakypanes/internal/termframe"
+	"github.com/regenrek/peakypanes/internal/terminal"
 )
 
 type fakeManager struct {
@@ -115,9 +115,9 @@ func (m *fakeManager) Close() {
 
 func TestHandlePaneViewSuccess(t *testing.T) {
 	win := &fakeTerminalWindow{
-		viewFrame: termframe.Frame{Cols: 1, Rows: 1, Cells: []termframe.Cell{{Content: "lip", Width: 1}}},
-		hasMouse:     true,
-		allowMotion:  true,
+		viewFrame:   termframe.Frame{Cols: 1, Rows: 1, Cells: []termframe.Cell{{Content: "lip", Width: 1}}},
+		hasMouse:    true,
+		allowMotion: true,
 	}
 	manager := &fakeManager{windowID: "pane-1", window: win}
 	d := &Daemon{manager: manager}

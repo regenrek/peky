@@ -273,9 +273,9 @@ const (
 
 // PaneViewRequest asks for a rendered pane view.
 type PaneViewRequest struct {
-	PaneID       string
-	Cols         int
-	Rows         int
+	PaneID string
+	Cols   int
+	Rows   int
 	// DirectRender bypasses frame caching and renders synchronously.
 	DirectRender bool
 	KnownSeq     uint64
@@ -287,14 +287,14 @@ type PaneViewRequest struct {
 
 // PaneViewResponse returns a rendered pane view.
 type PaneViewResponse struct {
-	PaneID       string
-	Cols         int
-	Rows         int
-	UpdateSeq    uint64
-	NotModified  bool
-	Frame        termframe.Frame
-	HasMouse     bool
-	AllowMotion  bool
+	PaneID      string
+	Cols        int
+	Rows        int
+	UpdateSeq   uint64
+	NotModified bool
+	Frame       termframe.Frame
+	HasMouse    bool
+	AllowMotion bool
 }
 
 // PaneOutputRequest asks for output lines since a sequence.

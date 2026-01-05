@@ -7,10 +7,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/sessiond"
@@ -153,10 +153,10 @@ type Model struct {
 	// terminalMouseDrag tracks an in-progress drag selection in terminal focus.
 	terminalMouseDrag bool
 
-	offlineScroll        map[string]int
+	offlineScroll         map[string]int
 	offlineScrollViewport map[string]int
-	offlineScrollActive  bool
-	offlineScrollPane    string
+	offlineScrollActive   bool
+	offlineScrollPane     string
 
 	autoStart *AutoStartSpec
 

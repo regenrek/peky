@@ -258,8 +258,8 @@ func frameFromCells(cells []uv.Cell, cols, rows int, state viewRenderState) term
 		return termframe.Frame{}
 	}
 	frame := termframe.Frame{
-		Cols: cols,
-		Rows: rows,
+		Cols:  cols,
+		Rows:  rows,
 		Cells: make([]termframe.Cell, len(cells)),
 		Cursor: termframe.Cursor{
 			X:       state.cursorX,

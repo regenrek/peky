@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/regenrek/peakypanes/internal/terminal"
 	"github.com/regenrek/peakypanes/internal/termframe"
+	"github.com/regenrek/peakypanes/internal/terminal"
 )
 
 type fakeTerminalWindow struct {

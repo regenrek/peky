@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/charmbracelet/x/ansi"
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/regenrek/peakypanes/internal/termframe"
 )
@@ -66,14 +66,14 @@ func TestViewFrameSelectionHighlight(t *testing.T) {
 		updates: make(chan struct{}, 1),
 	}
 	w.CopyMode = &CopyMode{
-		Active:        true,
-		Selecting:     true,
-		CursorX:       1,
-		CursorAbsY:    0,
-		SelStartX:     1,
-		SelStartAbsY:  0,
-		SelEndX:       2,
-		SelEndAbsY:    0,
+		Active:       true,
+		Selecting:    true,
+		CursorX:      1,
+		CursorAbsY:   0,
+		SelStartX:    1,
+		SelStartAbsY: 0,
+		SelEndX:      2,
+		SelEndAbsY:   0,
 	}
 
 	frame, err := w.ViewFrameCtx(context.Background())

@@ -28,12 +28,12 @@ const (
 
 // DaemonConfig configures a session daemon instance.
 type DaemonConfig struct {
-	Version         string
-	SocketPath      string
-	PidPath         string
-	SessionRestore  sessionrestore.Config
-	HandleSignals   bool
-	PprofAddr       string
+	Version        string
+	SocketPath     string
+	PidPath        string
+	SessionRestore sessionrestore.Config
+	HandleSignals  bool
+	PprofAddr      string
 }
 
 type pprofServer interface {
