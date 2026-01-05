@@ -144,18 +144,18 @@ func (m *Model) forwardMouseEvent(hit mouse.PaneHit, msg tea.MouseMsg) tea.Cmd {
 	}
 }
 
-func (m *Model) mouseForwardPayload(hit mouse.PaneHit, msg tea.MouseMsg) (string, sessiond.MousePayload, bool) {
+func (m *Model) mouseForwardPayload(hit mouse.PaneHit, msg tea.MouseMsg) (string, sessiond.MouseEventPayload, bool) {
 	paneID, relX, relY, ok := m.mouseForwardTarget(hit, msg)
 	if !ok {
-		return "", sessiond.MousePayload{}, false
+		return "", sessiond.MouseEventPayload{}, false
 	}
 	payload, ok := mousePayloadFromTea(msg, relX, relY)
 	if !ok {
-		return "", sessiond.MousePayload{}, false
+		return "", sessiond.MouseEventPayload{}, false
 	}
 	payload.Route = m.mouseRouteForForward()
 	if !m.allowMousePayload(paneID, payload) {
-		return "", sessiond.MousePayload{}, false
+		return "", sessiond.MouseEventPayload{}, false
 	}
 	return paneID, payload, true
 }
@@ -187,7 +187,7 @@ func (m *Model) mouseRouteForForward() sessiond.MouseRoute {
 	return sessiond.MouseRouteHostSelection
 }
 
-func (m *Model) allowMousePayload(paneID string, payload sessiond.MousePayload) bool {
+func (m *Model) allowMousePayload(paneID string, payload sessiond.MouseEventPayload) bool {
 	if payload.Action != sessiond.MouseActionMotion {
 		return true
 	}
