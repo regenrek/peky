@@ -109,14 +109,14 @@ func sendEnvelope(client *clientConn, env Envelope, timeout time.Duration) error
 	}
 	select {
 	case <-client.done:
-		return errors.New("sessiond: client closed")
+		return ErrClientClosed
 	default:
 	}
 	select {
 	case client.respCh <- outboundEnvelope{env: env, timeout: timeout}:
 		return nil
 	case <-client.done:
-		return errors.New("sessiond: client closed")
+		return ErrClientClosed
 	case <-time.After(timeout):
 		return errors.New("sessiond: client send timeout")
 	}

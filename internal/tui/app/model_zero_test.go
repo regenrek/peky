@@ -70,8 +70,8 @@ func TestAttachOrStart(t *testing.T) {
 	if cmd := m.attachOrStart(); cmd != nil {
 		t.Fatalf("attachOrStart() for running session should not return cmd")
 	}
-	if !m.terminalFocus {
-		t.Fatalf("attachOrStart() should enable terminal focus")
+	if m.terminalFocus {
+		t.Fatalf("attachOrStart() should not enable terminal focus")
 	}
 }
 

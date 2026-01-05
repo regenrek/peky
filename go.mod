@@ -8,6 +8,7 @@ require (
 	github.com/atotto/clipboard v0.1.4
 	github.com/charmbracelet/bubbles v0.21.1-0.20250623103423-23b8fd6302d7
 	github.com/charmbracelet/bubbletea v1.3.6
+	github.com/charmbracelet/colorprofile v0.4.1
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/charmbracelet/ultraviolet v0.0.0-20251217160852-6b0c0e26fad9
 	github.com/charmbracelet/x/ansi v0.11.3
@@ -18,7 +19,7 @@ require (
 	github.com/fsnotify/fsnotify v1.5.4
 	github.com/google/gops v0.3.28
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
-	github.com/muesli/termenv v0.16.0
+	github.com/mattn/go-runewidth v0.0.19
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/urfave/cli/v3 v3.6.1
 	golang.org/x/sys v0.39.0
@@ -68,7 +69,6 @@ require (
 	github.com/ccojocar/zxcvbn-go v1.0.4 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/charithe/durationcheck v0.0.11 // indirect
-	github.com/charmbracelet/colorprofile v0.4.1 // indirect
 	github.com/charmbracelet/x/conpty v0.1.1 // indirect
 	github.com/charmbracelet/x/errors v0.0.0-20240508181413-e8d8b6e2de86 // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect
@@ -159,7 +159,6 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
-	github.com/mattn/go-runewidth v0.0.19 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/mfridman/tparse v0.18.0 // indirect
 	github.com/mgechev/revive v1.13.0 // indirect
@@ -169,6 +168,7 @@ require (
 	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/muesli/reflow v0.3.0 // indirect
+	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/nakabonne/nestif v0.3.1 // indirect
 	github.com/nishanths/exhaustive v0.12.0 // indirect
 	github.com/nishanths/predeclared v0.2.2 // indirect

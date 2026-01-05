@@ -11,7 +11,7 @@ import (
 	"github.com/regenrek/peakypanes/internal/terminal"
 )
 
-func TestSnapshotUsesDirtyANSICache(t *testing.T) {
+func TestSnapshotUsesPlainPreview(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
@@ -32,14 +32,12 @@ func TestSnapshotUsesDirtyANSICache(t *testing.T) {
 		_ = win.Close()
 	})
 
-	var cached string
 	for {
 		if ctx.Err() != nil {
-			t.Fatalf("timeout waiting for dirty cache")
+			t.Fatalf("timeout waiting for preview")
 		}
-		view, ready := win.ViewANSICached()
-		if view != "" && !ready {
-			cached = view
+		lines, _ := win.PreviewPlainLines(3)
+		if len(lines) != 0 {
 			break
 		}
 		time.Sleep(20 * time.Millisecond)
@@ -57,6 +55,6 @@ func TestSnapshotUsesDirtyANSICache(t *testing.T) {
 	}
 	preview := strings.Join(snaps[0].Panes[0].Preview, "\n")
 	if strings.TrimSpace(preview) == "" {
-		t.Fatalf("expected preview from dirty cache, got empty; cached=%q", cached)
+		t.Fatalf("expected preview from plain lines, got empty")
 	}
 }

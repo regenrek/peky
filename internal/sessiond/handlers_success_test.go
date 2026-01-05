@@ -8,9 +8,9 @@ import (
 	"time"
 
 	uv "github.com/charmbracelet/ultraviolet"
-	"github.com/muesli/termenv"
 
 	"github.com/regenrek/peakypanes/internal/native"
+	"github.com/regenrek/peakypanes/internal/termframe"
 	"github.com/regenrek/peakypanes/internal/terminal"
 )
 
@@ -45,9 +45,6 @@ func (m *fakeManager) Snapshot(ctx context.Context, previewLines int) []native.S
 func (m *fakeManager) Version() uint64 { return m.version }
 func (m *fakeManager) StartSession(context.Context, native.SessionSpec) (*native.Session, error) {
 	return &native.Session{Name: "demo"}, nil
-}
-func (m *fakeManager) RestoreSession(context.Context, native.SessionRestoreSpec) (*native.Session, error) {
-	return &native.Session{Name: "restored"}, nil
 }
 func (m *fakeManager) KillSession(name string) error {
 	m.lastKilled = name
@@ -118,21 +115,17 @@ func (m *fakeManager) Close() {
 
 func TestHandlePaneViewSuccess(t *testing.T) {
 	win := &fakeTerminalWindow{
-		viewLipgloss: "lip",
-		viewANSI:     "ansi",
-		hasMouse:     true,
-		allowMotion:  true,
+		viewFrame:   termframe.Frame{Cols: 1, Rows: 1, Cells: []termframe.Cell{{Content: "lip", Width: 1}}},
+		hasMouse:    true,
+		allowMotion: true,
 	}
 	manager := &fakeManager{windowID: "pane-1", window: win}
 	d := &Daemon{manager: manager}
 
 	payload, err := encodePayload(PaneViewRequest{
-		PaneID:       "pane-1",
-		Cols:         0,
-		Rows:         0,
-		Mode:         PaneViewLipgloss,
-		ShowCursor:   true,
-		ColorProfile: termenv.ANSI256,
+		PaneID: "pane-1",
+		Cols:   0,
+		Rows:   0,
 	})
 	if err != nil {
 		t.Fatalf("encodePayload: %v", err)
@@ -145,11 +138,8 @@ func TestHandlePaneViewSuccess(t *testing.T) {
 	if err := decodePayload(data, &resp); err != nil {
 		t.Fatalf("decodePayload: %v", err)
 	}
-	if resp.View != "lip" || resp.PaneID != "pane-1" {
+	if resp.PaneID != "pane-1" || len(resp.Frame.Cells) == 0 || resp.Frame.Cells[0].Content != "lip" {
 		t.Fatalf("unexpected pane view response: %#v", resp)
-	}
-	if resp.ColorProfile != termenv.ANSI256 {
-		t.Fatalf("expected color profile echoed, got %v", resp.ColorProfile)
 	}
 	if win.resizeCols != 1 || win.resizeRows != 1 {
 		t.Fatalf("expected resize to 1x1, got %dx%d", win.resizeCols, win.resizeRows)

@@ -193,6 +193,9 @@ func (m *Model) requestRefreshCmdReason(reason string, force bool) tea.Cmd {
 	if m == nil {
 		return nil
 	}
+	if m.daemonDisconnected {
+		return m.scheduleDaemonReconnect()
+	}
 	if m.refreshInFlight > 0 {
 		m.refreshQueued = true
 		if perfDebugEnabled() && reason != "" {

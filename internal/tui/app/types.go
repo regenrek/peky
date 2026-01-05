@@ -59,6 +59,8 @@ const (
 	PaneStatusRunning
 	PaneStatusDone
 	PaneStatusError
+	PaneStatusDead
+	PaneStatusDisconnected
 )
 
 const (
@@ -121,6 +123,7 @@ type SessionItem struct {
 	ActivePane string
 	Panes      []PaneItem
 	Config     *layout.ProjectConfig
+	createdAt  time.Time
 }
 
 // DashboardPane represents a pane with project metadata for the dashboard.
@@ -158,6 +161,8 @@ type PaneItem struct {
 	DeadStatus    int
 	RestoreFailed bool
 	RestoreError  string
+	Disconnected  bool
+	SnapshotAt    time.Time
 	LastActive    time.Time
 	Preview       []string
 	Status        PaneStatus
@@ -288,6 +293,12 @@ type paneViewPumpMsg struct {
 }
 
 type daemonRestartMsg struct {
+	Client         *sessiond.Client
+	PaneViewClient *sessiond.Client
+	Err            error
+}
+
+type daemonReconnectMsg struct {
 	Client         *sessiond.Client
 	PaneViewClient *sessiond.Client
 	Err            error

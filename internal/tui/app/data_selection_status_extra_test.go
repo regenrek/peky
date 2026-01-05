@@ -82,12 +82,12 @@ func TestPaneStatusClassification(t *testing.T) {
 	}
 
 	pane := PaneItem{Dead: true, DeadStatus: 2}
-	if status := classifyPane(pane, nil, DashboardConfig{}, time.Now()); status != PaneStatusError {
-		t.Fatalf("expected dead pane error")
+	if status := classifyPane(pane, nil, DashboardConfig{}, time.Now()); status != PaneStatusDead {
+		t.Fatalf("expected dead pane status")
 	}
 	pane = PaneItem{Dead: true, DeadStatus: 0}
-	if status := classifyPane(pane, nil, DashboardConfig{}, time.Now()); status != PaneStatusDone {
-		t.Fatalf("expected dead pane done")
+	if status := classifyPane(pane, nil, DashboardConfig{}, time.Now()); status != PaneStatusDead {
+		t.Fatalf("expected dead pane status")
 	}
 
 	now := time.Now()

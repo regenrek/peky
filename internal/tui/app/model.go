@@ -10,9 +10,8 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
-
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/sessiond"
 	"github.com/regenrek/peakypanes/internal/tui/mouse"
@@ -58,12 +57,17 @@ type dashboardKeyMap struct {
 
 // Model implements tea.Model for peakypanes TUI.
 type Model struct {
-	client         *sessiond.Client
-	paneViewClient *sessiond.Client
-	state          ViewState
-	tab            DashboardTab
-	width          int
-	height         int
+	client             *sessiond.Client
+	paneViewClient     *sessiond.Client
+	daemonVersion      string
+	daemonDisconnected bool
+	reconnectInFlight  bool
+	reconnectBackoff   time.Duration
+	reconnectToastAt   time.Time
+	state              ViewState
+	tab                DashboardTab
+	width              int
+	height             int
 
 	configPath string
 
@@ -149,10 +153,15 @@ type Model struct {
 	// terminalMouseDrag tracks an in-progress drag selection in terminal focus.
 	terminalMouseDrag bool
 
+	offlineScroll         map[string]int
+	offlineScrollViewport map[string]int
+	offlineScrollActive   bool
+	offlineScrollPane     string
+
 	autoStart *AutoStartSpec
 
-	paneViewProfile   termenv.Profile
-	paneViews         map[paneViewKey]string
+	paneViewProfile   colorprofile.Profile
+	paneViews         map[paneViewKey]paneViewEntry
 	paneMouseMotion   map[string]bool
 	paneInputDisabled map[string]struct{}
 
@@ -186,6 +195,7 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 	if client == nil {
 		return nil, errors.New("session client is required")
 	}
+	version := client.Version()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	paneViewClient, err := client.Clone(ctx)
@@ -196,12 +206,13 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 	m := &Model{
 		client:             client,
 		paneViewClient:     paneViewClient,
+		daemonVersion:      version,
 		state:              StateDashboard,
 		tab:                TabDashboard,
 		configPath:         configPath,
 		expandedSessions:   make(map[string]bool),
 		selectionByProject: make(map[string]selectionState),
-		paneViews:          make(map[paneViewKey]string),
+		paneViews:          make(map[paneViewKey]paneViewEntry),
 		paneMouseMotion:    make(map[string]bool),
 		paneViewProfile:    detectPaneViewProfile(),
 		paneInputDisabled:  make(map[string]struct{}),

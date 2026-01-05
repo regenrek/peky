@@ -3,7 +3,6 @@ package app
 import (
 	"strings"
 
-	"github.com/regenrek/peakypanes/internal/sessiond"
 	"github.com/regenrek/peakypanes/internal/tui/views"
 	"github.com/regenrek/peakypanes/internal/userpath"
 )
@@ -113,22 +112,21 @@ func toViewSlashSuggestions(entries []slashSuggestion) []views.SlashSuggestion {
 	return out
 }
 
-func (m *Model) paneViewProvider() func(id string, width, height int, showCursor bool, useLipgloss bool) string {
+func (m *Model) paneViewProvider() func(id string, width, height int, showCursor bool) string {
 	if m == nil || m.client == nil {
 		return nil
 	}
-	return func(id string, width, height int, showCursor bool, useLipgloss bool) string {
+	return func(id string, width, height int, showCursor bool) string {
 		if strings.TrimSpace(id) == "" || width <= 0 || height <= 0 {
 			return ""
 		}
 		if m.previewRenderMode() == PreviewRenderOff && m.state == StateDashboard {
 			return ""
 		}
-		mode := sessiond.PaneViewANSI
-		if useLipgloss || showCursor {
-			mode = sessiond.PaneViewLipgloss
+		if pane := m.paneByID(id); pane != nil && pane.Disconnected {
+			return m.offlinePaneView(pane, width, height)
 		}
-		return m.paneView(id, width, height, mode, showCursor, m.paneViewProfile)
+		return m.paneView(id, width, height, showCursor)
 	}
 }
 

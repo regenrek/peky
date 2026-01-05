@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/regenrek/peakypanes/internal/cli/output"
@@ -20,6 +21,7 @@ import (
 	"github.com/regenrek/peakypanes/internal/limits"
 	"github.com/regenrek/peakypanes/internal/native"
 	"github.com/regenrek/peakypanes/internal/sessiond"
+	"github.com/regenrek/peakypanes/internal/termrender"
 )
 
 // Register registers pane handlers.
@@ -462,16 +464,12 @@ func runView(ctx root.CommandContext) error {
 	if mode == "" {
 		mode = "ansi"
 	}
-	var viewMode sessiond.PaneViewMode
 	switch mode {
-	case "lipgloss":
-		viewMode = sessiond.PaneViewLipgloss
 	case "plain", "ansi":
-		viewMode = sessiond.PaneViewANSI
 	default:
 		return fmt.Errorf("unknown mode %q", mode)
 	}
-	req := sessiond.PaneViewRequest{PaneID: paneID, Rows: rows, Cols: cols, Mode: viewMode}
+	req := sessiond.PaneViewRequest{PaneID: paneID, Rows: rows, Cols: cols}
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
 	defer cancel()
 	resolved, err := resolvePaneID(ctxTimeout, client, paneID)
@@ -483,7 +481,10 @@ func runView(ctx root.CommandContext) error {
 	if err != nil {
 		return err
 	}
-	content := resp.View
+	content := termrender.Render(resp.Frame, termrender.Options{
+		Profile:    colorprofile.Detect(ctx.Out, os.Environ()),
+		ShowCursor: false,
+	})
 	if mode == "plain" {
 		content = ansi.Strip(content)
 	}

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/regenrek/peakypanes/internal/native"
+	"github.com/regenrek/peakypanes/internal/termframe"
 )
 
 type clientCase struct {
@@ -374,18 +375,18 @@ func TestClientPaneView(t *testing.T) {
 			if err := decodePayload(env.Payload, &req); err != nil {
 				return err
 			}
-			if req.PaneID != "pane" || req.Cols != 100 || req.Mode != PaneViewANSI {
+			if req.PaneID != "pane" || req.Cols != 100 {
 				return fmt.Errorf("unexpected pane view request")
 			}
 			return nil
 		},
-		respond: PaneViewResponse{PaneID: "pane", View: "ok", Cols: 100, Rows: 40},
+		respond: PaneViewResponse{PaneID: "pane", Cols: 100, Rows: 40, Frame: termframe.Frame{Cols: 1, Rows: 1, Cells: []termframe.Cell{{Content: "ok", Width: 1}}}},
 		call: func(c *Client) error {
 			resp, err := c.GetPaneView(context.Background(), PaneViewRequest{PaneID: "pane", Cols: 100, Rows: 40})
 			if err != nil {
 				return err
 			}
-			if resp.View != "ok" || resp.PaneID != "pane" {
+			if resp.PaneID != "pane" || len(resp.Frame.Cells) != 1 || resp.Frame.Cells[0].Content != "ok" {
 				return fmt.Errorf("unexpected pane view response")
 			}
 			return nil

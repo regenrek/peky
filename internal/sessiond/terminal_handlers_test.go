@@ -4,7 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/muesli/termenv"
+	"github.com/regenrek/peakypanes/internal/termframe"
+	"github.com/regenrek/peakypanes/internal/terminal"
 )
 
 type fakeTerminalWindow struct {
@@ -15,8 +16,7 @@ type fakeTerminalWindow struct {
 	scrollback     bool
 	scrollOffset   int
 	yankText       string
-	viewANSI       string
-	viewLipgloss   string
+	viewFrame      termframe.Frame
 	hasMouse       bool
 	allowMotion    bool
 	updateSeq      uint64
@@ -35,7 +35,7 @@ func (f *fakeTerminalWindow) record(name string) {
 }
 
 func (f *fakeTerminalWindow) UpdateSeq() uint64 { return f.updateSeq }
-func (f *fakeTerminalWindow) ANSICacheSeq() uint64 {
+func (f *fakeTerminalWindow) FrameCacheSeq() uint64 {
 	return f.updateSeq
 }
 
@@ -85,31 +85,23 @@ func (f *fakeTerminalWindow) ScrollToBottom()            { f.record("scrollBotto
 func (f *fakeTerminalWindow) ScrollToTop()               { f.record("scrollTop") }
 func (f *fakeTerminalWindow) ScrollUp(lines int)         { f.record("scrollUp") }
 func (f *fakeTerminalWindow) ScrollbackModeActive() bool { return f.scrollback }
-func (f *fakeTerminalWindow) ViewLipglossCtx(ctx context.Context, showCursor bool, profile termenv.Profile) (string, error) {
-	f.record("viewLipgloss")
-	return f.viewLipgloss, nil
+func (f *fakeTerminalWindow) ViewFrameCtx(ctx context.Context) (termframe.Frame, error) {
+	f.record("viewFrame")
+	return f.viewFrame, nil
 }
-func (f *fakeTerminalWindow) ViewANSICtx(ctx context.Context) (string, error) {
-	f.record("viewANSI")
-	return f.viewANSI, nil
-}
-func (f *fakeTerminalWindow) ViewANSIDirectCtx(ctx context.Context) (string, error) {
-	f.record("viewANSI")
-	return f.viewANSI, nil
-}
-func (f *fakeTerminalWindow) ViewLipgloss(showCursor bool, profile termenv.Profile) string {
-	f.record("viewLipgloss")
-	return f.viewLipgloss
-}
-func (f *fakeTerminalWindow) ViewANSI() string {
-	f.record("viewANSI")
-	return f.viewANSI
+func (f *fakeTerminalWindow) ViewFrameDirectCtx(ctx context.Context) (termframe.Frame, error) {
+	f.record("viewFrameDirect")
+	return f.viewFrame, nil
 }
 func (f *fakeTerminalWindow) HasMouseMode() bool {
 	return f.hasMouse
 }
 func (f *fakeTerminalWindow) AllowsMouseMotion() bool {
 	return f.allowMotion
+}
+func (f *fakeTerminalWindow) SnapshotPlain(opts terminal.PlainSnapshotOptions) (terminal.PlainSnapshot, error) {
+	_ = opts
+	return terminal.PlainSnapshot{}, nil
 }
 
 func TestHandleAltScreenKeyResetsModes(t *testing.T) {

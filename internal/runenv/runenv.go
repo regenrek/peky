@@ -9,6 +9,7 @@ import (
 
 const (
 	RuntimeDirEnv          = "PEAKYPANES_RUNTIME_DIR"
+	DataDirEnv             = "PEAKYPANES_DATA_DIR"
 	ConfigDirEnv           = "PEAKYPANES_CONFIG_DIR"
 	FreshConfigEnv         = "PEAKYPANES_FRESH_CONFIG"
 	StartSessionTimeoutEnv = "PEAKYPANES_START_TIMEOUT"
@@ -37,6 +38,10 @@ func ConfigDir() string {
 
 func RuntimeDir() string {
 	return strings.TrimSpace(os.Getenv(RuntimeDirEnv))
+}
+
+func DataDir() string {
+	return strings.TrimSpace(os.Getenv(DataDirEnv))
 }
 
 func StartSessionTimeout() time.Duration {

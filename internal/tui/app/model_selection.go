@@ -127,11 +127,16 @@ func (m *Model) spatialDashboardSelection(columns []DashboardProjectColumn, targ
 }
 
 func (m *Model) applySelection(sel selectionState) {
+	prevPaneID := m.selectedPaneID()
 	prev := m.selection
 	m.selection = sel
 	m.rememberSelection(sel)
 	if m.terminalFocus && !m.supportsTerminalFocus() {
 		m.setTerminalFocus(false)
+	}
+	nextPaneID := m.selectedPaneID()
+	if prevPaneID != nextPaneID {
+		m.clearOfflineScroll()
 	}
 	m.queueFocusSync(prev, sel)
 }
@@ -271,17 +276,71 @@ func (m *Model) selectSessionOrPane(delta int) {
 	}
 
 	current := findSessionPaneIndex(items, m.selection)
+	if sel, ok := selectAcrossSessionBoundary(items, m.selection, current, delta); ok {
+		m.applySelection(sel)
+		m.selectionVersion++
+		return
+	}
 	next := items[wrapIndex(current+delta, len(items))]
-	sel := m.selection
-	sel.Session = next.session
-	sel.Pane = next.pane
-	m.applySelection(sel)
+	m.applySelection(selectionWithEntry(m.selection, next))
 	m.selectionVersion++
 }
 
 type sessionPaneEntry struct {
 	session string
 	pane    string
+}
+
+func selectAcrossSessionBoundary(items []sessionPaneEntry, sel selectionState, current, delta int) (selectionState, bool) {
+	if sel.Pane == "" {
+		return selectionState{}, false
+	}
+	switch {
+	case delta < 0:
+		return previousSessionSelection(items, sel, current)
+	case delta > 0:
+		return nextSessionSelection(items, sel, current)
+	default:
+		return selectionState{}, false
+	}
+}
+
+func previousSessionSelection(items []sessionPaneEntry, sel selectionState, current int) (selectionState, bool) {
+	headerIdx, ok := sessionHeaderIndex(items, sel.Session)
+	if !ok {
+		return selectionState{}, false
+	}
+	firstPaneIdx, ok := sessionFirstPaneIndex(items, sel.Session)
+	if !ok || firstPaneIdx != current {
+		return selectionState{}, false
+	}
+	prevHeader := previousSessionHeaderIndex(items, headerIdx)
+	if prevHeader < 0 {
+		return selectionState{}, false
+	}
+	return selectionWithEntry(sel, items[prevHeader]), true
+}
+
+func nextSessionSelection(items []sessionPaneEntry, sel selectionState, current int) (selectionState, bool) {
+	headerIdx, ok := sessionHeaderIndex(items, sel.Session)
+	if !ok {
+		return selectionState{}, false
+	}
+	lastPaneIdx, ok := sessionLastPaneIndex(items, sel.Session)
+	if !ok || lastPaneIdx != current {
+		return selectionState{}, false
+	}
+	nextHeader := nextSessionHeaderIndex(items, headerIdx)
+	if nextHeader < 0 {
+		return selectionState{}, false
+	}
+	return selectionWithEntry(sel, items[nextHeader]), true
+}
+
+func selectionWithEntry(sel selectionState, entry sessionPaneEntry) selectionState {
+	sel.Session = entry.session
+	sel.Pane = entry.pane
+	return sel
 }
 
 func buildSessionPaneEntries(sessions []SessionItem, expanded func(string) bool) []sessionPaneEntry {
@@ -315,6 +374,67 @@ func findSessionPaneIndex(items []sessionPaneEntry, selection selectionState) in
 func matchSessionPane(items []sessionPaneEntry, session, pane string) int {
 	for i, item := range items {
 		if item.session == session && item.pane == pane {
+			return i
+		}
+	}
+	return -1
+}
+
+func sessionHeaderIndex(items []sessionPaneEntry, session string) (int, bool) {
+	if strings.TrimSpace(session) == "" {
+		return -1, false
+	}
+	for i, item := range items {
+		if item.session == session && item.pane == "" {
+			return i, true
+		}
+	}
+	return -1, false
+}
+
+func sessionFirstPaneIndex(items []sessionPaneEntry, session string) (int, bool) {
+	if strings.TrimSpace(session) == "" {
+		return -1, false
+	}
+	for i, item := range items {
+		if item.session == session && item.pane != "" {
+			return i, true
+		}
+	}
+	return -1, false
+}
+
+func sessionLastPaneIndex(items []sessionPaneEntry, session string) (int, bool) {
+	if strings.TrimSpace(session) == "" {
+		return -1, false
+	}
+	last := -1
+	for i, item := range items {
+		if item.session == session && item.pane != "" {
+			last = i
+		}
+	}
+	if last < 0 {
+		return -1, false
+	}
+	return last, true
+}
+
+func previousSessionHeaderIndex(items []sessionPaneEntry, from int) int {
+	if from <= 0 {
+		return -1
+	}
+	for i := from - 1; i >= 0; i-- {
+		if items[i].pane == "" {
+			return i
+		}
+	}
+	return -1
+}
+
+func nextSessionHeaderIndex(items []sessionPaneEntry, from int) int {
+	for i := from + 1; i < len(items); i++ {
+		if items[i].pane == "" {
 			return i
 		}
 	}

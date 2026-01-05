@@ -9,7 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/muesli/termenv"
+	"github.com/charmbracelet/colorprofile"
+
+	"github.com/regenrek/peakypanes/internal/termrender"
 )
 
 func TestWindowScrollbackCopySmoke(t *testing.T) {
@@ -32,7 +34,7 @@ func TestWindowScrollbackCopySmoke(t *testing.T) {
 
 	waitFor(t, 2*time.Second, "scrollback shows line00", func() bool {
 		w.ScrollToTop()
-		view := w.ViewLipgloss(false, termenv.TrueColor)
+		view := renderFrameView(w)
 		lines := trimLinesSmoke(view)
 		return containsLineSmoke(lines, "line00")
 	})
@@ -119,6 +121,14 @@ func trimLinesSmoke(s string) []string {
 		out = append(out, strings.TrimRight(ln, " "))
 	}
 	return out
+}
+
+func renderFrameView(w *Window) string {
+	frame, _ := w.ViewFrameCtx(context.Background())
+	return termrender.Render(frame, termrender.Options{
+		Profile:    colorprofile.TrueColor,
+		ShowCursor: false,
+	})
 }
 
 func containsLineSmoke(lines []string, target string) bool {

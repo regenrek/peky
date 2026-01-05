@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/sessionrestore"
 	"github.com/regenrek/peakypanes/internal/terminal"
 )
 
@@ -319,6 +320,7 @@ func (m *Manager) snapshotSessions() ([]SessionSnapshot, []panePreviewRef, []str
 				LastActive:    pane.LastActiveAt(),
 				RestoreFailed: pane.RestoreFailed,
 				RestoreError:  pane.RestoreError,
+				RestoreMode:   pane.RestoreMode,
 				Cwd:           cwd,
 				Tags:          append([]string(nil), pane.Tags...),
 				BytesIn:       bytesIn,
@@ -499,6 +501,9 @@ type PaneSnapshot struct {
 	Preview       []string
 	RestoreFailed bool
 	RestoreError  string
+	RestoreMode   sessionrestore.Mode
+	Disconnected  bool
+	SnapshotAt    time.Time
 	Tags          []string
 	BytesIn       uint64
 	BytesOut      uint64

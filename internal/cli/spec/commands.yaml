@@ -612,8 +612,8 @@ commands:
             description: Columns to render.
           - name: mode
             type: enum
-            enum: [ansi, lipgloss, plain]
-            description: Rendering mode.
+            enum: [ansi, plain]
+            description: Output mode.
         json:
           supported: true
           schema_ref: "#/$defs/PaneViewResponse"

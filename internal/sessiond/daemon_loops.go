@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/regenrek/peakypanes/internal/native"
+	"github.com/regenrek/peakypanes/internal/sessionrestore"
 )
 
 func (d *Daemon) acceptLoop() {
@@ -72,6 +73,35 @@ func (d *Daemon) eventLoop() {
 			d.broadcast(Event{Type: EventPaneMetaChanged, PaneID: event.PaneID})
 		default:
 			d.broadcast(Event{Type: EventPaneUpdated, PaneID: event.PaneID, PaneUpdateSeq: event.Seq})
+		}
+		if d.restore != nil && strings.TrimSpace(event.PaneID) != "" {
+			d.restore.MarkDirty(event.PaneID)
+		}
+	}
+}
+
+func (d *Daemon) restoreLoop() {
+	defer d.wg.Done()
+	if d.restore == nil || d.manager == nil {
+		return
+	}
+	interval := d.restore.cfg.SnapshotInterval
+	if interval <= 0 {
+		interval = sessionrestore.DefaultSnapshotInterval
+	}
+	timer := time.NewTimer(0)
+	defer timer.Stop()
+	for {
+		select {
+		case <-d.ctx.Done():
+			return
+		case <-timer.C:
+			ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
+			if err := d.restore.Flush(ctx, d.manager); err != nil {
+				slog.Warn("sessiond: restore flush failed", slog.Any("err", err))
+			}
+			cancel()
+			timer.Reset(interval)
 		}
 	}
 }

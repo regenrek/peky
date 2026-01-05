@@ -93,7 +93,7 @@ List and metadata:
 
 ```bash
 peky pane list [--session NAME]
-peky pane view --pane-id PANE --rows 24 --cols 80 --mode ansi|lipgloss|plain
+peky pane view --pane-id PANE --rows 24 --cols 80 --mode ansi|plain
 peky pane tail --pane-id PANE [--follow] [--lines 200] [--grep REGEX] [--since RFC3339|DURATION] [--until RFC3339|DURATION]
 peky pane snapshot --pane-id PANE [--rows 200]
 peky pane history --pane-id PANE [--limit 50] [--since RFC3339]
