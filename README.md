@@ -19,6 +19,15 @@
 
 Run all your projects and AI agents in one dashboard instead of juggling terminal windows or tabs. Define layouts in YAML, share them with your team via git, and get consistent environments everywhere. Sessions are owned by a **native daemon** so they keep running after the UI exits.
 
+## Why?
+
+Running multiple agents on different projects at the same time takes real organization and 
+a different approach to how we do agentic coding.
+
+I built Peky to solve my own problems with juggling too many windows and wasting time on setup
+and rebuilding the same environment every time. It lets you build your own reusable 
+window layouts and better-organized projects.
+
 ## Features
 
 - 🧠 **AI agent orchestration** - Run Codex/Claude/agents side by side with quick replies, slash commands, and broadcast
@@ -67,10 +76,12 @@ go install github.com/regenrek/peakypanes/cmd/peky@latest
 
 ### Usage
 
-**Start a session (auto-detect layout):**
+**Start peakypanes:**
 ```bash
 peky start
 ```
+
+## Custom Configuraton
 
 **Create project-local config (recommended for teams):**
 ```bash
@@ -145,6 +156,11 @@ See `RELEASE-DOCS.md` for the full release checklist (tests, tag, GoReleaser, np
 
 MIT
 
+## Credits
+
+[@pi-mono](https://github.com/badlogic/pi-mono) - Peky Agent is inspired by PI / [Mario Zechner's](https://x.com/badlogicgames) work. 
+(Direct pi integration would've been ideal, but 60 MB of Node for agent + sidecar isn't worth it)
+[@charm](https://github.com/charmbracelet) - peaky is using bubbletea and lipgloss
 
 ## Links
 
