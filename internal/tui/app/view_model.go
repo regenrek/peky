@@ -30,7 +30,7 @@ func (m *Model) viewModel() views.Model {
 		Height:                   m.height,
 		ActiveView:               int(m.state),
 		Tab:                      int(m.tab),
-		HeaderLine:               headerLine(m.headerParts()),
+		HeaderLine:               singleLine(headerLine(m.headerParts())),
 		EmptyStateMessage:        m.emptyStateMessage(),
 		SplashInfo:               m.splashInfo(),
 		Projects:                 toViewProjects(m.data.Projects),
@@ -69,7 +69,7 @@ func (m *Model) viewModel() views.Model {
 		PekyDialogFooter:   m.pekyDialogFooter,
 		PekyDialogViewport: m.pekyViewport,
 		PekyDialogIsError:  m.pekyDialogIsError,
-		PekyPromptLine:     m.pekyPromptLine,
+		PekyPromptLine:     singleLine(m.pekyPromptLine),
 		ConfirmKill: views.ConfirmKill{
 			Session: m.confirmSession,
 			Project: m.confirmProject,

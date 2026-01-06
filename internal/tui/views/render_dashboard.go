@@ -10,6 +10,7 @@ import (
 	"github.com/regenrek/peakypanes/internal/tui/icons"
 	"github.com/regenrek/peakypanes/internal/tui/logo"
 	"github.com/regenrek/peakypanes/internal/tui/theme"
+	"github.com/regenrek/peakypanes/internal/tui/viewlayout"
 )
 
 func (m Model) viewDashboard() string {
@@ -23,40 +24,32 @@ func (m Model) viewDashboardContent() string {
 	h, v := appStyle.GetFrameSize()
 	contentWidth := m.Width - h
 	contentHeight := m.Height - v
-	if contentWidth <= 10 || contentHeight <= 6 {
+	hasPekyPrompt := strings.TrimSpace(m.PekyPromptLine) != ""
+	layout, ok := viewlayout.Dashboard(contentWidth, contentHeight, hasPekyPrompt)
+	if !ok {
 		return "Terminal too small"
 	}
 
 	header := m.viewHeader(contentWidth)
 	footer := m.viewFooter(contentWidth)
 	quickReply := m.viewQuickReply(contentWidth)
-	pekyPrompt := m.viewPekyPromptLine(contentWidth)
-	quickReplyHeight := lipgloss.Height(quickReply)
-	pekyPromptHeight := lipgloss.Height(pekyPrompt)
-
-	headerHeight := lipgloss.Height(header)
-	footerHeight := lipgloss.Height(footer)
-	headerGap := 1
-	extraLines := headerHeight + headerGap + footerHeight + quickReplyHeight + pekyPromptHeight
-	bodyHeight := contentHeight - extraLines
-	if bodyHeight < 4 {
-		headerGap = 0
-		extraLines = headerHeight + headerGap + footerHeight + quickReplyHeight + pekyPromptHeight
-		bodyHeight = contentHeight - extraLines
+	pekyPrompt := ""
+	if hasPekyPrompt {
+		pekyPrompt = m.viewPekyPromptLine(contentWidth)
 	}
 
-	body := m.viewBody(contentWidth, bodyHeight)
+	body := m.viewBody(contentWidth, layout.BodyHeight)
 	sections := []string{header}
-	if headerGap > 0 {
+	if layout.HeaderGap > 0 {
 		sections = append(sections, fitLine("", contentWidth))
 	}
 	sections = append(sections, body, quickReply)
-	if pekyPromptHeight > 0 {
+	if hasPekyPrompt {
 		sections = append(sections, pekyPrompt)
 	}
 	sections = append(sections, footer)
 	view := lipgloss.JoinVertical(lipgloss.Top, sections...)
-	return m.overlayQuickReplyMenu(view, contentWidth, contentHeight, headerHeight, headerGap, bodyHeight)
+	return m.overlayQuickReplyMenu(view, contentWidth, contentHeight, layout.HeaderHeight, layout.HeaderGap, layout.BodyHeight)
 }
 
 func (m Model) viewHeader(width int) string {

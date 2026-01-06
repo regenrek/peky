@@ -295,14 +295,16 @@ func dashboardPaneContentRect(outer mouse.Rect, previewLines int) mouse.Rect {
 	if inner.Empty() {
 		return mouse.Rect{}
 	}
-	available := previewLines
-	if inner.H-2 < available {
-		available = inner.H - 2
-	}
+	available := panelayout.DashboardTilePreviewLines(inner.H, previewLines)
 	if available <= 0 {
 		return mouse.Rect{}
 	}
-	return mouse.Rect{X: inner.X, Y: inner.Y + 2, W: inner.W, H: available}
+	return mouse.Rect{
+		X: inner.X,
+		Y: inner.Y + panelayout.DashboardTileHeaderLines,
+		W: inner.W,
+		H: available,
+	}
 }
 
 func projectTileContentRect(outer mouse.Rect, pane PaneItem, borders tileBorders) mouse.Rect {

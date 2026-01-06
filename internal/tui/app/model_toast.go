@@ -24,7 +24,7 @@ type toastMessage struct {
 }
 
 func (m *Model) setToast(text string, level toastLevel) {
-	m.toast = toastMessage{Text: text, Level: level, Until: time.Now().Add(3 * time.Second)}
+	m.toast = toastMessage{Text: singleLine(text), Level: level, Until: time.Now().Add(3 * time.Second)}
 }
 
 func (m *Model) toastText() string {
