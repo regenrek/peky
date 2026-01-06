@@ -187,13 +187,17 @@ func runClose(ctx root.CommandContext) error {
 		return err
 	}
 	defer cleanup()
-	paneID := strings.TrimSpace(ctx.Cmd.String("pane-id"))
-	sessionName := ctx.Cmd.String("session")
-	paneIndex := intFlagString(ctx.Cmd, "index")
+	opts, err := parsePaneCloseOptions(ctx)
+	if err != nil {
+		return err
+	}
+	if opts.scope != "" {
+		return closePaneScope(ctx, client, opts.scope, start, meta)
+	}
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
 	defer cancel()
-	if paneID != "" {
-		resolved, err := resolvePaneID(ctxTimeout, client, paneID)
+	if opts.paneID != "" {
+		resolved, err := resolvePaneID(ctxTimeout, client, opts.paneID)
 		if err != nil {
 			return err
 		}
@@ -201,16 +205,16 @@ func runClose(ctx root.CommandContext) error {
 			return err
 		}
 	} else {
-		if err := client.ClosePane(ctxTimeout, sessionName, paneIndex); err != nil {
+		if err := client.ClosePane(ctxTimeout, opts.sessionName, opts.paneIndex); err != nil {
 			return err
 		}
 	}
 	if ctx.JSON {
 		meta = output.WithDuration(meta, start)
-		target := paneID
+		target := opts.paneID
 		if target == "" {
-			target = fmt.Sprintf("%s:%s", sessionName, paneIndex)
-		} else if resolved, err := resolvePaneID(ctxTimeout, client, paneID); err == nil {
+			target = fmt.Sprintf("%s:%s", opts.sessionName, opts.paneIndex)
+		} else if resolved, err := resolvePaneID(ctxTimeout, client, opts.paneID); err == nil {
 			target = resolved
 		}
 		return output.WriteSuccess(ctx.Out, meta, output.ActionResult{
@@ -219,13 +223,50 @@ func runClose(ctx root.CommandContext) error {
 			Targets: []output.TargetRef{{Type: "pane", ID: target}},
 		})
 	}
-	if paneID != "" {
-		if resolved, err := resolvePaneID(ctxTimeout, client, paneID); err == nil {
-			paneID = resolved
+	if opts.paneID != "" {
+		if resolved, err := resolvePaneID(ctxTimeout, client, opts.paneID); err == nil {
+			opts.paneID = resolved
 		}
-		return writef(ctx.Out, "Closed pane %s\n", paneID)
+		return writef(ctx.Out, "Closed pane %s\n", opts.paneID)
 	}
-	return writef(ctx.Out, "Closed pane %s:%s\n", sessionName, paneIndex)
+	return writef(ctx.Out, "Closed pane %s:%s\n", opts.sessionName, opts.paneIndex)
+}
+
+type paneCloseOptions struct {
+	paneID      string
+	sessionName string
+	paneIndex   string
+	scope       string
+}
+
+func parsePaneCloseOptions(ctx root.CommandContext) (paneCloseOptions, error) {
+	paneID := strings.TrimSpace(ctx.Cmd.String("pane-id"))
+	sessionName := ctx.Cmd.String("session")
+	paneIndex := intFlagString(ctx.Cmd, "index")
+	scope := strings.TrimSpace(ctx.Cmd.String("scope"))
+	if paneID != "" && (sessionName != "" || paneIndex != "") {
+		return paneCloseOptions{}, fmt.Errorf("pane-id cannot be combined with session or index")
+	}
+	if scope != "" {
+		if paneID != "" || sessionName != "" || paneIndex != "" {
+			return paneCloseOptions{}, fmt.Errorf("scope cannot be combined with pane-id or session/index")
+		}
+		if !ctx.Cmd.Bool("all") {
+			return paneCloseOptions{}, fmt.Errorf("scope close requires --all")
+		}
+		return paneCloseOptions{scope: scope}, nil
+	}
+	if paneID == "" && sessionName == "" {
+		return paneCloseOptions{}, fmt.Errorf("pane-id or session is required")
+	}
+	if sessionName != "" && paneIndex == "" {
+		return paneCloseOptions{}, fmt.Errorf("session requires index")
+	}
+	return paneCloseOptions{
+		paneID:      paneID,
+		sessionName: sessionName,
+		paneIndex:   paneIndex,
+	}, nil
 }
 
 func runSwap(ctx root.CommandContext) error {

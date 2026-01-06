@@ -1,6 +1,11 @@
 package app
 
-import "github.com/regenrek/peakypanes/internal/tui/mouse"
+import (
+	"strings"
+
+	"github.com/regenrek/peakypanes/internal/tui/mouse"
+	"github.com/regenrek/peakypanes/internal/tui/viewlayout"
+)
 
 type dashboardLayout struct {
 	contentWidth  int
@@ -26,27 +31,11 @@ func (m *Model) dashboardLayoutInternal(logCtx string) (dashboardLayout, bool) {
 	h, v := appStyle.GetFrameSize()
 	contentWidth := m.width - h
 	contentHeight := m.height - v
-	if contentWidth <= 10 || contentHeight <= 6 {
+	hasPekyPrompt := strings.TrimSpace(m.pekyPromptLine) != ""
+	layout, ok := viewlayout.Dashboard(contentWidth, contentHeight, hasPekyPrompt)
+	if !ok {
 		if log {
-			m.logPaneViewSkipGlobal("content_too_small", logCtx)
-		}
-		return dashboardLayout{}, false
-	}
-
-	headerHeight := 1
-	footerHeight := 1
-	quickReplyHeight := 3
-	headerGap := 1
-	extraLines := headerHeight + headerGap + footerHeight + quickReplyHeight
-	bodyHeight := contentHeight - extraLines
-	if bodyHeight < 4 {
-		headerGap = 0
-		extraLines = headerHeight + headerGap + footerHeight + quickReplyHeight
-		bodyHeight = contentHeight - extraLines
-	}
-	if bodyHeight <= 0 {
-		if log {
-			m.logPaneViewSkipGlobal("body_height_invalid", logCtx)
+			m.logPaneViewSkipGlobal("dashboard_too_small", logCtx)
 		}
 		return dashboardLayout{}, false
 	}
@@ -57,11 +46,11 @@ func (m *Model) dashboardLayoutInternal(logCtx string) (dashboardLayout, bool) {
 		contentHeight:    contentHeight,
 		padTop:           padTop,
 		padLeft:          padLeft,
-		headerHeight:     headerHeight,
-		headerGap:        headerGap,
-		bodyHeight:       bodyHeight,
-		quickReplyHeight: quickReplyHeight,
-		footerHeight:     footerHeight,
+		headerHeight:     layout.HeaderHeight,
+		headerGap:        layout.HeaderGap,
+		bodyHeight:       layout.BodyHeight,
+		quickReplyHeight: layout.QuickReplyHeight,
+		footerHeight:     layout.FooterHeight,
 	}, true
 }
 

@@ -71,12 +71,14 @@ peky daemon --pprof        # Enable pprof server (requires profiler build)
 peky daemon --pprof-addr 127.0.0.1:6060
 
 peky session list
-peky session start --name NAME --path PATH --layout LAYOUT --env KEY=VAL
-peky session kill --name NAME
+peky session start --name NAME --path PATH --layout LAYOUT --panes N --env KEY=VAL
+peky session close --name NAME
 peky session rename --old OLD --new NEW
 peky session focus --name NAME
 peky session snapshot
 ```
+
+`--panes` creates a grid with exactly N panes and cannot be combined with `--layout`.
 
 ## Workspace
 
@@ -107,10 +109,13 @@ Lifecycle and layout:
 ```bash
 peky pane rename --pane-id PANE --name NAME
 peky pane rename --session NAME --index INDEX --name NAME
-peky pane add [--session NAME] [--index INDEX] [--pane-id PANE] [--orientation vertical|horizontal] [--percent 50] [--focus=false]
+peky pane add [--session NAME] [--index INDEX] [--pane-id PANE] [--orientation vertical|horizontal] [--percent 50] [--count N] [--focus=false]
 peky pane split --session NAME --index INDEX --orientation vertical|horizontal [--percent 50] [--focus=false]
 peky pane close --pane-id PANE
 peky pane close --session NAME --index INDEX
+peky pane close --scope session --all
+peky pane close --scope project --all
+peky pane close --scope all --all
 peky pane swap --session NAME --a INDEX --b INDEX
 peky pane resize --pane-id PANE --cols N --rows N
 peky pane focus --pane-id PANE

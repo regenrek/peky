@@ -161,6 +161,7 @@ func testCommand() *cli.Command {
 			&cli.BoolFlag{Name: "confirm"},
 			&cli.BoolFlag{Name: "require-ack"},
 			&cli.BoolFlag{Name: "focus", Value: true},
+			&cli.BoolFlag{Name: "all"},
 			&cli.BoolFlag{Name: "follow"},
 			&cli.BoolFlag{Name: "scrollback-toggle"},
 			&cli.BoolFlag{Name: "copy-toggle"},
@@ -709,5 +710,61 @@ func TestPaneAddFocusesNewPane(t *testing.T) {
 	}
 	if focusSnap.FocusedPaneID != newPaneID {
 		t.Fatalf("expected focus %q, got %q", newPaneID, focusSnap.FocusedPaneID)
+	}
+}
+
+func TestPaneAddCountAddsMultiple(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	td := newTestDaemon(t)
+	client := dialTestClient(t, td)
+	path := t.TempDir()
+	sessionName := "sess-add-count"
+	writeTestLayout(t, path, sessionName)
+	snap := startTestSession(t, client, sessionName, path)
+	if len(snap.Panes) == 0 {
+		t.Fatalf("session snapshot missing panes")
+	}
+	before := make(map[string]struct{}, len(snap.Panes))
+	for _, pane := range snap.Panes {
+		before[pane.ID] = struct{}{}
+	}
+
+	addCmd := testCommand()
+	_ = addCmd.Set("session", sessionName)
+	_ = addCmd.Set("index", snap.Panes[0].Index)
+	_ = addCmd.Set("count", "3")
+	addCtx := root.CommandContext{
+		Context: context.Background(),
+		Cmd:     addCmd,
+		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
+		Out:     io.Discard,
+		ErrOut:  io.Discard,
+		Stdin:   strings.NewReader(""),
+	}
+	if err := runAdd(addCtx); err != nil {
+		t.Fatalf("runAdd(count) error: %v", err)
+	}
+
+	updated := waitForSessionSnapshot(t, client, sessionName)
+	newIDs := make(map[string]struct{})
+	for _, pane := range updated.Panes {
+		if _, ok := before[pane.ID]; !ok {
+			newIDs[pane.ID] = struct{}{}
+		}
+	}
+	if len(newIDs) != 3 {
+		t.Fatalf("expected 3 new panes, got %d", len(newIDs))
+	}
+	focusCtx, focusCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer focusCancel()
+	focusSnap, err := client.SnapshotState(focusCtx, 0)
+	if err != nil {
+		t.Fatalf("SnapshotState() error: %v", err)
+	}
+	if focusSnap.FocusedPaneID == "" {
+		t.Fatalf("expected focused pane after add")
+	}
+	if _, ok := newIDs[focusSnap.FocusedPaneID]; !ok {
+		t.Fatalf("expected focus on a newly added pane, got %q", focusSnap.FocusedPaneID)
 	}
 }

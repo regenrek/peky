@@ -5,6 +5,17 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Added
+- Shared dashboard layout sizing helpers with SSOT geometry for render + hit-testing.
+- Regression test to ensure pane view render/request sizes stay aligned across dashboard + project tabs.
+
+### Changed
+- Dashboard tile preview sizing now uses shared panelayout metrics to prevent size drift.
+- Header/toast/peky prompt lines are sanitized to single-line for layout stability.
+
+### Fixed
+- Dev reinit script now kills daemon/UI processes reliably on macOS bash 3.2.
+
 ## 0.0.21 - 2026-01-05
 
 ### Added

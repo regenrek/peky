@@ -551,7 +551,7 @@ func (d *Daemon) startSession(req StartSessionRequest) (StartSessionResponse, er
 	if d.manager == nil {
 		return StartSessionResponse{}, errors.New("sessiond: manager unavailable")
 	}
-	path, nameOverride, env, err := validateStartSessionRequest(req)
+	path, nameOverride, env, paneCount, err := validateStartSessionRequest(req)
 	if err != nil {
 		return StartSessionResponse{}, err
 	}
@@ -563,31 +563,53 @@ func (d *Daemon) startSession(req StartSessionRequest) (StartSessionResponse, er
 	if err != nil {
 		return StartSessionResponse{}, err
 	}
-	selectedLayout, err := selectStartSessionLayout(loader, strings.TrimSpace(req.LayoutName))
-	if err != nil {
-		return StartSessionResponse{}, err
+	layoutName := strings.TrimSpace(req.LayoutName)
+	var selectedLayout *layout.LayoutConfig
+	if paneCount > 0 {
+		layoutCfg, generatedName, err := layoutForPaneCount(paneCount)
+		if err != nil {
+			return StartSessionResponse{}, err
+		}
+		layoutName = generatedName
+		selectedLayout = layoutCfg
+	} else {
+		selectedLayout, err = selectStartSessionLayout(loader, layoutName)
+		if err != nil {
+			return StartSessionResponse{}, err
+		}
+		if selectedLayout == nil {
+			return StartSessionResponse{}, errors.New("sessiond: no layout found")
+		}
+		layoutName = selectedLayout.Name
 	}
 	expanded := expandStartSessionLayout(selectedLayout, loader, path)
-	if err := d.startSessionWithLayout(sessionName, path, selectedLayout.Name, expanded, env); err != nil {
+	if err := d.startSessionWithLayout(sessionName, path, layoutName, expanded, env); err != nil {
 		return StartSessionResponse{}, err
 	}
-	return StartSessionResponse{Name: sessionName, Path: path, LayoutName: selectedLayout.Name}, nil
+	return StartSessionResponse{Name: sessionName, Path: path, LayoutName: layoutName}, nil
 }
 
-func validateStartSessionRequest(req StartSessionRequest) (string, string, []string, error) {
+func validateStartSessionRequest(req StartSessionRequest) (string, string, []string, int, error) {
 	path, err := sessionpolicy.ValidatePath(req.Path)
 	if err != nil {
-		return "", "", nil, err
+		return "", "", nil, 0, err
 	}
 	nameOverride, err := sessionpolicy.ValidateOptionalSessionName(req.Name)
 	if err != nil {
-		return "", "", nil, err
+		return "", "", nil, 0, err
 	}
 	env, err := sessionpolicy.ValidateEnvList(req.Env)
 	if err != nil {
-		return "", "", nil, err
+		return "", "", nil, 0, err
 	}
-	return path, nameOverride, env, nil
+	paneCount, err := sessionpolicy.ValidatePaneCount(req.PaneCount)
+	if err != nil {
+		return "", "", nil, 0, err
+	}
+	if paneCount > 0 && strings.TrimSpace(req.LayoutName) != "" {
+		return "", "", nil, 0, errors.New("layout cannot be combined with panes")
+	}
+	return path, nameOverride, env, paneCount, nil
 }
 
 func loadStartSessionLayouts(path string) (*layout.Loader, error) {
@@ -642,6 +664,41 @@ func expandStartSessionLayout(selectedLayout *layout.LayoutConfig, loader *layou
 		projectVars = loader.GetProjectConfig().Vars
 	}
 	return layout.ExpandLayoutVars(selectedLayout, projectVars, path, projectName)
+}
+
+func layoutForPaneCount(count int) (*layout.LayoutConfig, string, error) {
+	grid, err := gridForPaneCount(count)
+	if err != nil {
+		return nil, "", err
+	}
+	name := fmt.Sprintf("grid-%s", grid.String())
+	return &layout.LayoutConfig{
+		Name: name,
+		Grid: grid.String(),
+	}, name, nil
+}
+
+func gridForPaneCount(count int) (layout.Grid, error) {
+	if count <= 0 {
+		return layout.Grid{}, errors.New("pane count must be positive")
+	}
+	best := layout.Grid{Rows: 1, Columns: count}
+	bestDiff := best.Columns - best.Rows
+	for rows := 1; rows*rows <= count; rows++ {
+		if count%rows != 0 {
+			continue
+		}
+		cols := count / rows
+		diff := cols - rows
+		if diff < bestDiff {
+			best = layout.Grid{Rows: rows, Columns: cols}
+			bestDiff = diff
+		}
+	}
+	if err := best.Validate(); err != nil {
+		return layout.Grid{}, err
+	}
+	return best, nil
 }
 
 func (d *Daemon) startSessionWithLayout(name, path, layoutName string, layoutConfig *layout.LayoutConfig, env []string) error {

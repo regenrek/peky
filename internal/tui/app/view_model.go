@@ -24,12 +24,13 @@ func (m *Model) viewModel() views.Model {
 		previewSession = session
 	}
 
+	menu := m.quickReplyMenuState()
 	vm := views.Model{
 		Width:                    m.width,
 		Height:                   m.height,
 		ActiveView:               int(m.state),
 		Tab:                      int(m.tab),
-		HeaderLine:               headerLine(m.headerParts()),
+		HeaderLine:               singleLine(headerLine(m.headerParts())),
 		EmptyStateMessage:        m.emptyStateMessage(),
 		SplashInfo:               m.splashInfo(),
 		Projects:                 toViewProjects(m.data.Projects),
@@ -46,8 +47,9 @@ func (m *Model) viewModel() views.Model {
 		FilterActive:             m.filterActive,
 		FilterInput:              m.filterInput,
 		QuickReplyInput:          m.quickReplyInput,
-		SlashSuggestions:         toViewSlashSuggestions(m.slashSuggestions()),
-		SlashSelected:            m.quickReplySlashIndex,
+		QuickReplyMode:           m.quickReplyModeLabel(),
+		QuickReplySuggestions:    toViewQuickReplySuggestions(menu.suggestions),
+		QuickReplySelected:       m.quickReplyMenuIndex,
 		TerminalFocus:            m.terminalFocus,
 		SupportsTerminalFocus:    m.supportsTerminalFocus(),
 		ProjectPicker:            m.projectPicker,
@@ -57,6 +59,17 @@ func (m *Model) viewModel() views.Model {
 		SettingsMenu:             m.settingsMenu,
 		PerformanceMenu:          m.perfMenu,
 		DebugMenu:                m.debugMenu,
+		AuthDialog: views.AuthDialog{
+			Title:  m.authDialogTitle,
+			Body:   m.authDialogBody,
+			Input:  m.authDialogInput,
+			Footer: m.authDialogFooter,
+		},
+		PekyDialogTitle:    m.pekyDialogTitle,
+		PekyDialogFooter:   m.pekyDialogFooter,
+		PekyDialogViewport: m.pekyViewport,
+		PekyDialogIsError:  m.pekyDialogIsError,
+		PekyPromptLine:     singleLine(m.pekyPromptLine),
 		ConfirmKill: views.ConfirmKill{
 			Session: m.confirmSession,
 			Project: m.confirmProject,
@@ -97,16 +110,17 @@ func (m *Model) viewModel() views.Model {
 	return vm
 }
 
-func toViewSlashSuggestions(entries []slashSuggestion) []views.SlashSuggestion {
+func toViewQuickReplySuggestions(entries []quickReplySuggestion) []views.QuickReplySuggestion {
 	if len(entries) == 0 {
 		return nil
 	}
-	out := make([]views.SlashSuggestion, len(entries))
+	out := make([]views.QuickReplySuggestion, len(entries))
 	for i, entry := range entries {
-		out[i] = views.SlashSuggestion{
-			Text:     entry.Text,
-			MatchLen: entry.MatchLen,
-			Desc:     entry.Desc,
+		out[i] = views.QuickReplySuggestion{
+			Text:         entry.Text,
+			MatchLen:     entry.MatchLen,
+			MatchIndexes: entry.MatchIndexes,
+			Desc:         entry.Desc,
 		}
 	}
 	return out

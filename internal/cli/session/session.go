@@ -3,7 +3,6 @@ package session
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -18,7 +17,7 @@ import (
 func Register(reg *root.Registry) {
 	reg.Register("session.list", runList)
 	reg.Register("session.start", runStart)
-	reg.Register("session.kill", runKill)
+	reg.Register("session.close", runClose)
 	reg.Register("session.rename", runRename)
 	reg.Register("session.focus", runFocus)
 	reg.Register("session.snapshot", runSnapshot)
@@ -64,7 +63,7 @@ func runStart(ctx root.CommandContext) error {
 	defer cleanup()
 	path := strings.TrimSpace(ctx.Cmd.String("path"))
 	if path == "" {
-		cwd, err := os.Getwd()
+		cwd, err := root.ResolveWorkDir(ctx)
 		if err != nil {
 			return err
 		}
@@ -74,10 +73,15 @@ func runStart(ctx root.CommandContext) error {
 	if err != nil {
 		return err
 	}
+	paneCount, err := sessionpolicy.ValidatePaneCount(ctx.Cmd.Int("panes"))
+	if err != nil {
+		return err
+	}
 	req := sessiond.StartSessionRequest{
 		Name:       strings.TrimSpace(ctx.Cmd.String("name")),
 		Path:       path,
 		LayoutName: strings.TrimSpace(ctx.Cmd.String("layout")),
+		PaneCount:  paneCount,
 		Env:        env,
 	}
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
@@ -105,9 +109,9 @@ func runStart(ctx root.CommandContext) error {
 	return nil
 }
 
-func runKill(ctx root.CommandContext) error {
+func runClose(ctx root.CommandContext) error {
 	start := time.Now()
-	meta := output.NewMeta("session.kill", ctx.Deps.Version)
+	meta := output.NewMeta("session.close", ctx.Deps.Version)
 	client, cleanup, err := connect(ctx)
 	if err != nil {
 		return err
@@ -122,12 +126,12 @@ func runKill(ctx root.CommandContext) error {
 	if ctx.JSON {
 		meta = output.WithDuration(meta, start)
 		return output.WriteSuccess(ctx.Out, meta, output.ActionResult{
-			Action:  "session.kill",
+			Action:  "session.close",
 			Status:  "ok",
 			Targets: []output.TargetRef{{Type: "session", ID: name}},
 		})
 	}
-	if _, err := fmt.Fprintf(ctx.Out, "Killed session %s\n", name); err != nil {
+	if _, err := fmt.Fprintf(ctx.Out, "Closed session %s\n", name); err != nil {
 		return err
 	}
 	return nil

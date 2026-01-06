@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/regenrek/peakypanes/internal/limits"
 	"github.com/regenrek/peakypanes/internal/userpath"
 )
 
@@ -82,6 +83,19 @@ func ValidateEnvList(entries []string) ([]string, error) {
 		out = append(out, trimmed)
 	}
 	return out, nil
+}
+
+func ValidatePaneCount(count int) (int, error) {
+	if count == 0 {
+		return 0, nil
+	}
+	if count < 0 {
+		return 0, errors.New("pane count must be positive")
+	}
+	if count > limits.MaxPanes {
+		return 0, fmt.Errorf("pane count %d exceeds max %d", count, limits.MaxPanes)
+	}
+	return count, nil
 }
 
 func validateEnvKey(key string) error {

@@ -47,6 +47,12 @@ func (m *Model) handleQuickReplyCommand(input string) quickReplyCommandOutcome {
 	if !strings.HasPrefix(trimmed, "/") {
 		return quickReplyCommandOutcome{}
 	}
+	if outcome := m.handleAuthSlashCommand(trimmed); outcome.Handled {
+		return outcome
+	}
+	if outcome := m.handleModelSlashCommand(trimmed); outcome.Handled {
+		return outcome
+	}
 	cmd, matched, clear, record := m.runSlashCommand(trimmed)
 	return quickReplyCommandOutcome{
 		Cmd:          cmd,
@@ -54,6 +60,20 @@ func (m *Model) handleQuickReplyCommand(input string) quickReplyCommandOutcome {
 		ClearInput:   clear,
 		RecordPrompt: record && matched,
 	}
+}
+
+func (m *Model) handleAgentSlashCommand(input string) quickReplyCommandOutcome {
+	trimmed := strings.TrimSpace(input)
+	if trimmed == "" || !strings.HasPrefix(trimmed, "/") {
+		return quickReplyCommandOutcome{}
+	}
+	if outcome := m.handleAuthSlashCommand(trimmed); outcome.Handled {
+		return outcome
+	}
+	if outcome := m.handleModelSlashCommand(trimmed); outcome.Handled {
+		return outcome
+	}
+	return quickReplyCommandOutcome{}
 }
 
 func (m *Model) runSlashCommand(input string) (tea.Cmd, bool, bool, bool) {

@@ -10,6 +10,7 @@ import (
 	"github.com/regenrek/peakypanes/internal/tui/icons"
 	"github.com/regenrek/peakypanes/internal/tui/logo"
 	"github.com/regenrek/peakypanes/internal/tui/theme"
+	"github.com/regenrek/peakypanes/internal/tui/viewlayout"
 )
 
 func (m Model) viewDashboard() string {
@@ -23,35 +24,32 @@ func (m Model) viewDashboardContent() string {
 	h, v := appStyle.GetFrameSize()
 	contentWidth := m.Width - h
 	contentHeight := m.Height - v
-	if contentWidth <= 10 || contentHeight <= 6 {
+	hasPekyPrompt := strings.TrimSpace(m.PekyPromptLine) != ""
+	layout, ok := viewlayout.Dashboard(contentWidth, contentHeight, hasPekyPrompt)
+	if !ok {
 		return "Terminal too small"
 	}
 
 	header := m.viewHeader(contentWidth)
 	footer := m.viewFooter(contentWidth)
 	quickReply := m.viewQuickReply(contentWidth)
-	quickReplyHeight := lipgloss.Height(quickReply)
-
-	headerHeight := lipgloss.Height(header)
-	footerHeight := lipgloss.Height(footer)
-	headerGap := 1
-	extraLines := headerHeight + headerGap + footerHeight + quickReplyHeight
-	bodyHeight := contentHeight - extraLines
-	if bodyHeight < 4 {
-		headerGap = 0
-		extraLines = headerHeight + headerGap + footerHeight + quickReplyHeight
-		bodyHeight = contentHeight - extraLines
+	pekyPrompt := ""
+	if hasPekyPrompt {
+		pekyPrompt = m.viewPekyPromptLine(contentWidth)
 	}
 
-	body := m.viewBody(contentWidth, bodyHeight)
+	body := m.viewBody(contentWidth, layout.BodyHeight)
 	sections := []string{header}
-	if headerGap > 0 {
+	if layout.HeaderGap > 0 {
 		sections = append(sections, fitLine("", contentWidth))
 	}
 	sections = append(sections, body, quickReply)
+	if hasPekyPrompt {
+		sections = append(sections, pekyPrompt)
+	}
 	sections = append(sections, footer)
 	view := lipgloss.JoinVertical(lipgloss.Top, sections...)
-	return m.overlaySlashMenu(view, contentWidth, contentHeight, headerHeight, headerGap, bodyHeight)
+	return m.overlayQuickReplyMenu(view, contentWidth, contentHeight, layout.HeaderHeight, layout.HeaderGap, layout.BodyHeight)
 }
 
 func (m Model) viewHeader(width int) string {
@@ -413,8 +411,14 @@ func (m Model) viewQuickReply(width int) string {
 	base := lipgloss.NewStyle().
 		Foreground(theme.TextPrimary).
 		Background(theme.QuickReplyBg)
-	accent := base.Foreground(theme.QuickReplyAcc).Render("▌ ")
-	inputWidth := contentWidth - lipgloss.Width(accent)
+	accent := base.Foreground(theme.Accent).Render("▌ ")
+	label := ""
+	labelWidth := 0
+	if mode := strings.TrimSpace(m.QuickReplyMode); mode != "" {
+		label = base.Foreground(theme.Accent).Bold(true).Render(mode) + base.Render(" ")
+		labelWidth = lipgloss.Width(label)
+	}
+	inputWidth := contentWidth - lipgloss.Width(accent) - labelWidth
 	if inputWidth < 10 {
 		inputWidth = 10
 	}
@@ -423,7 +427,7 @@ func (m Model) viewQuickReply(width int) string {
 	}
 	m.QuickReplyInput.Width = inputWidth
 
-	line := accent + m.QuickReplyInput.View()
+	line := accent + label + m.QuickReplyInput.View()
 	line = ansi.Truncate(line, contentWidth, "")
 	visible := lipgloss.Width(line)
 	if visible < contentWidth {
@@ -440,8 +444,8 @@ func (m Model) viewQuickReply(width int) string {
 	return strings.Join(lines, "\n")
 }
 
-func (m Model) overlaySlashMenu(base string, width, height, headerHeight, headerGap, bodyHeight int) string {
-	if len(m.SlashSuggestions) == 0 || width <= 0 || height <= 0 {
+func (m Model) overlayQuickReplyMenu(base string, width, height, headerHeight, headerGap, bodyHeight int) string {
+	if len(m.QuickReplySuggestions) == 0 || width <= 0 || height <= 0 {
 		return base
 	}
 	menuX := 2
@@ -451,7 +455,7 @@ func (m Model) overlaySlashMenu(base string, width, height, headerHeight, header
 		menuX = 0
 	}
 	availableHeight := headerHeight + headerGap + bodyHeight
-	menu := renderSlashMenu(m.SlashSuggestions, m.SlashSelected, menuWidth, availableHeight)
+	menu := renderQuickReplyMenu(m.QuickReplySuggestions, m.QuickReplySelected, menuWidth, availableHeight)
 	if strings.TrimSpace(menu) == "" {
 		return base
 	}
@@ -466,22 +470,48 @@ func (m Model) overlaySlashMenu(base string, width, height, headerHeight, header
 	return overlayAt(base, menu, width, height, menuX, menuY)
 }
 
-func renderSlashMenu(suggestions []SlashSuggestion, selectedIdx, width, maxHeight int) string {
+func (m Model) viewPekyPromptLine(width int) string {
+	text := strings.TrimSpace(m.PekyPromptLine)
+	if text == "" || width <= 0 {
+		return ""
+	}
+	barWidth := width
+	contentWidth := barWidth - 4
+	if contentWidth < 10 {
+		contentWidth = 10
+	}
+	base := lipgloss.NewStyle().
+		Foreground(theme.TextPrimary).
+		Background(theme.QuickReplyTag)
+	label := base.Foreground(theme.Accent).Bold(true).Render("peky ")
+	flat := strings.ReplaceAll(text, "\n", " ")
+	flat = strings.Join(strings.Fields(flat), " ")
+	line := label + base.Render(flat)
+	line = ansi.Truncate(line, contentWidth, "")
+	visible := lipgloss.Width(line)
+	if visible < contentWidth {
+		line += base.Render(strings.Repeat(" ", contentWidth-visible))
+	}
+	pad := base.Render(strings.Repeat(" ", 2))
+	return pad + line + pad
+}
+
+func renderQuickReplyMenu(suggestions []QuickReplySuggestion, selectedIdx, width, maxHeight int) string {
 	if len(suggestions) == 0 || width <= 0 || maxHeight <= 0 {
 		return ""
 	}
-	visible, selectedVisible := slashMenuVisible(suggestions, selectedIdx, maxHeight)
+	visible, selectedVisible := quickReplyMenuVisible(suggestions, selectedIdx, maxHeight)
 	if len(visible) == 0 {
 		return ""
 	}
-	commandWidth := slashMenuCommandWidth(visible)
+	commandWidth := quickReplyMenuCommandWidth(visible)
 	if commandWidth == 0 {
 		return ""
 	}
-	return renderSlashMenuLines(visible, selectedVisible, width, slashMenuStyles(), commandWidth)
+	return renderQuickReplyMenuLines(visible, selectedVisible, width, quickReplyMenuStyles(), commandWidth)
 }
 
-type slashMenuStyleSet struct {
+type quickReplyMenuStyleSet struct {
 	base              lipgloss.Style
 	normal            lipgloss.Style
 	highlight         lipgloss.Style
@@ -492,21 +522,21 @@ type slashMenuStyleSet struct {
 	selectedDesc      lipgloss.Style
 }
 
-type slashMenuLineStyle struct {
+type quickReplyMenuLineStyle struct {
 	base      lipgloss.Style
 	normal    lipgloss.Style
 	highlight lipgloss.Style
 	desc      lipgloss.Style
 }
 
-func slashMenuStyles() slashMenuStyleSet {
+func quickReplyMenuStyles() quickReplyMenuStyleSet {
 	base := lipgloss.NewStyle().
 		Background(theme.Highlight).
 		Foreground(theme.TextPrimary)
 	selectedBase := lipgloss.NewStyle().
 		Background(theme.Accent).
 		Foreground(theme.TextPrimary)
-	return slashMenuStyleSet{
+	return quickReplyMenuStyleSet{
 		base:              base,
 		normal:            base.Foreground(theme.TextSecondary),
 		highlight:         base.Foreground(theme.TextPrimary),
@@ -518,16 +548,16 @@ func slashMenuStyles() slashMenuStyleSet {
 	}
 }
 
-func (s slashMenuStyleSet) lineStyle(selected bool) slashMenuLineStyle {
+func (s quickReplyMenuStyleSet) lineStyle(selected bool) quickReplyMenuLineStyle {
 	if selected {
-		return slashMenuLineStyle{
+		return quickReplyMenuLineStyle{
 			base:      s.selectedBase,
 			normal:    s.selectedNormal,
 			highlight: s.selectedHighlight,
 			desc:      s.selectedDesc,
 		}
 	}
-	return slashMenuLineStyle{
+	return quickReplyMenuLineStyle{
 		base:      s.base,
 		normal:    s.normal,
 		highlight: s.highlight,
@@ -535,7 +565,7 @@ func (s slashMenuStyleSet) lineStyle(selected bool) slashMenuLineStyle {
 	}
 }
 
-func slashMenuVisible(suggestions []SlashSuggestion, selectedIdx, maxHeight int) ([]SlashSuggestion, int) {
+func quickReplyMenuVisible(suggestions []QuickReplySuggestion, selectedIdx, maxHeight int) ([]QuickReplySuggestion, int) {
 	if maxHeight <= 2 {
 		return nil, -1
 	}
@@ -566,7 +596,7 @@ func slashMenuVisible(suggestions []SlashSuggestion, selectedIdx, maxHeight int)
 	return suggestions[start:end], selectedIdx - start
 }
 
-func slashMenuCommandWidth(visible []SlashSuggestion) int {
+func quickReplyMenuCommandWidth(visible []QuickReplySuggestion) int {
 	commandWidth := 0
 	for i := 0; i < len(visible); i++ {
 		length := lipgloss.Width(visible[i].Text)
@@ -577,38 +607,38 @@ func slashMenuCommandWidth(visible []SlashSuggestion) int {
 	return commandWidth
 }
 
-func renderSlashMenuLines(
-	visible []SlashSuggestion,
+func renderQuickReplyMenuLines(
+	visible []QuickReplySuggestion,
 	selectedIdx int,
 	width int,
-	styles slashMenuStyleSet,
+	styles quickReplyMenuStyleSet,
 	commandWidth int,
 ) string {
-	contentWidth := slashMenuContentWidth(width)
+	contentWidth := quickReplyMenuContentWidth(width)
 	lines := make([]string, 0, len(visible)+2)
 	lines = append(lines, styles.base.Render(strings.Repeat(" ", width)))
 	for i := 0; i < len(visible); i++ {
-		line := renderSlashMenuLine(visible[i], styles.lineStyle(i == selectedIdx), commandWidth, width, contentWidth)
+		line := renderQuickReplyMenuLine(visible[i], styles.lineStyle(i == selectedIdx), commandWidth, width, contentWidth)
 		lines = append(lines, line)
 	}
 	lines = append(lines, styles.base.Render(strings.Repeat(" ", width)))
 	return strings.Join(lines, "\n")
 }
 
-func renderSlashMenuLine(
-	suggestion SlashSuggestion,
-	styles slashMenuLineStyle,
+func renderQuickReplyMenuLine(
+	suggestion QuickReplySuggestion,
+	styles quickReplyMenuLineStyle,
 	commandWidth int,
 	width int,
 	contentWidth int,
 ) string {
-	rendered := renderSlashSuggestion(suggestion, styles.normal, styles.highlight)
-	rendered = padSlashCommand(rendered, suggestion.Text, commandWidth, styles.base)
-	rendered = appendSlashDesc(rendered, suggestion.Desc, styles.base, styles.desc)
-	return fitSlashMenuLine(rendered, styles.base, width, contentWidth)
+	rendered := renderQuickReplySuggestion(suggestion, styles.normal, styles.highlight)
+	rendered = padQuickReplyCommand(rendered, suggestion.Text, commandWidth, styles.base)
+	rendered = appendQuickReplyDesc(rendered, suggestion.Desc, styles.base, styles.desc)
+	return fitQuickReplyMenuLine(rendered, styles.base, width, contentWidth)
 }
 
-func slashMenuContentWidth(width int) int {
+func quickReplyMenuContentWidth(width int) int {
 	contentWidth := width - 2
 	if contentWidth < 1 {
 		contentWidth = width
@@ -616,7 +646,7 @@ func slashMenuContentWidth(width int) int {
 	return contentWidth
 }
 
-func padSlashCommand(rendered, command string, commandWidth int, style lipgloss.Style) string {
+func padQuickReplyCommand(rendered, command string, commandWidth int, style lipgloss.Style) string {
 	cmdPad := commandWidth - lipgloss.Width(command)
 	if cmdPad <= 0 {
 		return rendered
@@ -624,7 +654,7 @@ func padSlashCommand(rendered, command string, commandWidth int, style lipgloss.
 	return rendered + style.Render(strings.Repeat(" ", cmdPad))
 }
 
-func appendSlashDesc(rendered, desc string, baseStyle, descStyle lipgloss.Style) string {
+func appendQuickReplyDesc(rendered, desc string, baseStyle, descStyle lipgloss.Style) string {
 	desc = strings.TrimSpace(desc)
 	if desc == "" {
 		return rendered
@@ -632,7 +662,7 @@ func appendSlashDesc(rendered, desc string, baseStyle, descStyle lipgloss.Style)
 	return rendered + baseStyle.Render("  ") + descStyle.Render(desc)
 }
 
-func fitSlashMenuLine(rendered string, baseStyle lipgloss.Style, width, contentWidth int) string {
+func fitQuickReplyMenuLine(rendered string, baseStyle lipgloss.Style, width, contentWidth int) string {
 	rendered = ansi.Truncate(rendered, contentWidth, "")
 	visible := lipgloss.Width(rendered)
 	if visible < contentWidth {
@@ -644,10 +674,25 @@ func fitSlashMenuLine(rendered string, baseStyle lipgloss.Style, width, contentW
 	return rendered
 }
 
-func renderSlashSuggestion(suggestion SlashSuggestion, normal, highlight lipgloss.Style) string {
+func renderQuickReplySuggestion(suggestion QuickReplySuggestion, normal, highlight lipgloss.Style) string {
 	text := suggestion.Text
 	if text == "" {
 		return ""
+	}
+	if len(suggestion.MatchIndexes) > 0 {
+		matches := make(map[int]struct{}, len(suggestion.MatchIndexes))
+		for _, idx := range suggestion.MatchIndexes {
+			matches[idx] = struct{}{}
+		}
+		var builder strings.Builder
+		for i, r := range text {
+			if _, ok := matches[i]; ok {
+				builder.WriteString(highlight.Render(string(r)))
+				continue
+			}
+			builder.WriteString(normal.Render(string(r)))
+		}
+		return builder.String()
 	}
 	matchLen := suggestion.MatchLen
 	if matchLen < 0 {

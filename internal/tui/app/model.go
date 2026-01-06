@@ -4,14 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"time"
-
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/lipgloss"
+	"os"
+	"time"
+
+	"github.com/regenrek/peakypanes/internal/agent"
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/sessiond"
 	"github.com/regenrek/peakypanes/internal/tui/mouse"
@@ -93,8 +95,11 @@ type Model struct {
 	quickReplyHistory      []string
 	quickReplyHistoryIndex int
 	quickReplyHistoryDraft string
-	quickReplySlashIndex   int
-	quickReplySlashPrefix  string
+	quickReplyMenuIndex    int
+	quickReplyMenuPrefix   string
+	quickReplyMenuKind     quickReplyMenuKind
+	quickReplyMode         quickReplyMode
+	quickReplyFileCache    quickReplyFileCache
 
 	mouse mouse.Handler
 
@@ -106,15 +111,21 @@ type Model struct {
 	cursorShapeFlushScheduled bool
 	cursorShapeNow            func() time.Time
 
-	projectPicker  list.Model
-	layoutPicker   list.Model
-	paneSwapPicker list.Model
-	commandPalette list.Model
-	settingsMenu   list.Model
-	perfMenu       list.Model
-	debugMenu      list.Model
-	gitProjects    []picker.ProjectItem
-	dialogHelpOpen bool
+	projectPicker    list.Model
+	layoutPicker     list.Model
+	paneSwapPicker   list.Model
+	commandPalette   list.Model
+	settingsMenu     list.Model
+	perfMenu         list.Model
+	debugMenu        list.Model
+	authFlow         authFlowState
+	authDialogInput  textinput.Model
+	authDialogTitle  string
+	authDialogBody   string
+	authDialogFooter string
+	authDialogKind   authDialogKind
+	gitProjects      []picker.ProjectItem
+	dialogHelpOpen   bool
 
 	confirmSession     string
 	confirmProject     string
@@ -184,6 +195,19 @@ type Model struct {
 	panePerfLastPrune time.Time
 
 	lastUrgentRefreshAt time.Time
+
+	pekyBusy            bool
+	pekySpinnerIndex    int
+	pekyMessages        []agent.Message
+	pekyDialogTitle     string
+	pekyDialogFooter    string
+	pekyDialogPrevState ViewState
+	pekyDialogIsError   bool
+	pekyViewport        viewport.Model
+	pekyPromptLine      string
+	pekyRunID           int64
+	pekyCancel          context.CancelFunc
+	pekyPromptLineID    int64
 }
 
 // NewModel creates a new peakypanes TUI model.
@@ -225,6 +249,7 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 		paneLastSize:           make(map[string]paneSize),
 		paneLastFallback:       make(map[string]time.Time),
 		cursorShapeNow:         time.Now,
+		pekyViewport:           viewport.New(0, 0),
 	}
 
 	m.filterInput = textinput.New()
@@ -247,7 +272,8 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 	m.quickReplyInput.Cursor.Style = qrStyle.Reverse(true)
 	m.quickReplyInput.Focus()
 	m.quickReplyHistoryIndex = -1
-	m.quickReplySlashIndex = -1
+	m.quickReplyMenuIndex = -1
+	m.quickReplyMode = quickReplyModePane
 
 	m.setupProjectPicker()
 	m.setupLayoutPicker()

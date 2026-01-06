@@ -31,31 +31,11 @@ func (d *Daemon) resolveScopeTargetsWithSnapshot(scope string, sessions []native
 	if d == nil {
 		return nil, errors.New("sessiond: daemon unavailable")
 	}
-	scope = strings.TrimSpace(scope)
-	if scope == "" {
-		return nil, errors.New("sessiond: scope is required")
-	}
 	if len(sessions) == 0 {
 		return nil, errors.New("sessiond: no sessions available")
 	}
-	switch strings.ToLower(scope) {
-	case "all":
-		return collectPaneIDs(sessions), nil
-	case "session":
-		name := d.resolveFocusedSession(sessions)
-		if name == "" {
-			return nil, errors.New("sessiond: focused session unavailable")
-		}
-		return collectSessionPaneIDs(sessions, name), nil
-	case "project":
-		path := d.resolveFocusedProjectPath(sessions)
-		if path == "" {
-			return nil, errors.New("sessiond: focused project unavailable")
-		}
-		return collectProjectPaneIDs(sessions, path), nil
-	default:
-		return nil, fmt.Errorf("sessiond: unknown scope %q", scope)
-	}
+	focusedSession, focusedPane := d.focusState()
+	return ResolveScopeTargets(scope, sessions, focusedSession, focusedPane)
 }
 
 func collectPaneIDs(sessions []native.SessionSnapshot) []string {
@@ -121,15 +101,45 @@ func collectProjectPaneIDs(sessions []native.SessionSnapshot, path string) []str
 	return out
 }
 
-func (d *Daemon) resolveFocusedSession(sessions []native.SessionSnapshot) string {
-	session, pane := d.focusState()
-	if session != "" {
-		return session
+// ResolveScopeTargets resolves pane ids for a scope using explicit focus hints.
+func ResolveScopeTargets(scope string, sessions []native.SessionSnapshot, focusedSession, focusedPane string) ([]string, error) {
+	scope = strings.TrimSpace(scope)
+	if scope == "" {
+		return nil, errors.New("sessiond: scope is required")
 	}
-	if pane != "" {
+	if len(sessions) == 0 {
+		return nil, errors.New("sessiond: no sessions available")
+	}
+	switch strings.ToLower(scope) {
+	case "all":
+		return collectPaneIDs(sessions), nil
+	case "session":
+		name := resolveFocusedSessionFromHints(sessions, focusedSession, focusedPane)
+		if name == "" {
+			return nil, errors.New("sessiond: focused session unavailable")
+		}
+		return collectSessionPaneIDs(sessions, name), nil
+	case "project":
+		path := resolveFocusedProjectPathFromHints(sessions, focusedSession, focusedPane)
+		if path == "" {
+			return nil, errors.New("sessiond: focused project unavailable")
+		}
+		return collectProjectPaneIDs(sessions, path), nil
+	default:
+		return nil, fmt.Errorf("sessiond: unknown scope %q", scope)
+	}
+}
+
+func resolveFocusedSessionFromHints(sessions []native.SessionSnapshot, focusedSession, focusedPane string) string {
+	focusedSession = strings.TrimSpace(focusedSession)
+	if focusedSession != "" {
+		return focusedSession
+	}
+	focusedPane = strings.TrimSpace(focusedPane)
+	if focusedPane != "" {
 		for _, snap := range sessions {
 			for _, paneSnap := range snap.Panes {
-				if paneSnap.ID == pane {
+				if paneSnap.ID == focusedPane {
 					return snap.Name
 				}
 			}
@@ -141,8 +151,8 @@ func (d *Daemon) resolveFocusedSession(sessions []native.SessionSnapshot) string
 	return ""
 }
 
-func (d *Daemon) resolveFocusedProjectPath(sessions []native.SessionSnapshot) string {
-	sessionName := d.resolveFocusedSession(sessions)
+func resolveFocusedProjectPathFromHints(sessions []native.SessionSnapshot, focusedSession, focusedPane string) string {
+	sessionName := resolveFocusedSessionFromHints(sessions, focusedSession, focusedPane)
 	if sessionName != "" {
 		for _, snap := range sessions {
 			if snap.Name == sessionName {

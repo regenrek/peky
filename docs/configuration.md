@@ -103,6 +103,28 @@ Use this for personal layouts and multi-project management:
 #     #   force_after_ms: 150
 #     #   fallback_min_interval_ms: 100
 
+# Peky agent settings (used by /peky and Shift+Tab)
+# agent:
+#   provider: google
+#   model: gemini-3-flash
+#   # If allowed_commands is set, only these commands may run.
+#   # allowed_commands:
+#   #   - pane.add
+#   #   - pane.split
+#   #   - session.close
+#   # Otherwise, blocked_commands denies specific commands/prefixes.
+#   blocked_commands:
+#     - daemon
+#     - daemon.*
+#     - pane.send
+
+# Quick reply settings (for @file picker)
+# quick_reply:
+#   files:
+#     show_hidden: false
+#     max_depth: 4
+#     max_items: 500
+
 # Custom layouts
 layouts:
   my-custom:

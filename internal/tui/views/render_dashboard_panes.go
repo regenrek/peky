@@ -8,6 +8,7 @@ import (
 
 	"github.com/regenrek/peakypanes/internal/tui/dashlayout"
 	"github.com/regenrek/peakypanes/internal/tui/icons"
+	"github.com/regenrek/peakypanes/internal/tui/panelayout"
 	"github.com/regenrek/peakypanes/internal/tui/theme"
 )
 
@@ -212,14 +213,14 @@ func buildPaneTileLayout(width, height, previewLines int, selected bool, focused
 		BorderForeground(borderColor).
 		Padding(0, 1)
 
-	frameW, frameH := style.GetFrameSize()
-	borderW := style.GetHorizontalBorderSize()
-	borderH := style.GetVerticalBorderSize()
-	contentWidth := width - frameW
+	borders := panelayout.TileBorders{Top: true, Left: true, Right: true, Bottom: true}
+	metrics := panelayout.TileMetricsFor(width, height, borders)
+	borderW, borderH := panelayout.BorderSizes(borders)
+	contentWidth := metrics.ContentWidth
 	if contentWidth < 1 {
 		contentWidth = 1
 	}
-	contentHeight := height - frameH
+	contentHeight := metrics.InnerHeight
 	if contentHeight < 1 {
 		contentHeight = 1
 	}
@@ -232,13 +233,7 @@ func buildPaneTileLayout(width, height, previewLines int, selected bool, focused
 		blockHeight = 1
 	}
 	style = style.Width(blockWidth).Height(blockHeight)
-	availablePreview := previewLines
-	if contentHeight-2 < availablePreview {
-		availablePreview = contentHeight - 2
-	}
-	if availablePreview < 0 {
-		availablePreview = 0
-	}
+	availablePreview := panelayout.DashboardTilePreviewLines(contentHeight, previewLines)
 	return paneTileLayout{
 		style:            style,
 		contentWidth:     contentWidth,

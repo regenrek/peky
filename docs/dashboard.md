@@ -34,7 +34,7 @@ Project
 Session
 - enter attach/start session (when reply is empty)
 - ctrl+n new session (pick layout)
-- ctrl+x kill session
+- ctrl+x close session
 - rename session via command palette (ctrl+p)
 
 Window

@@ -108,6 +108,7 @@ type StartSessionRequest struct {
 	Name       string
 	Path       string
 	LayoutName string
+	PaneCount  int
 	Env        []string
 }
 

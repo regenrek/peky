@@ -127,9 +127,9 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 				},
 				{
 					ID:       "session_kill",
-					Label:    "Session: Kill session",
-					Desc:     "Kill the selected session",
-					Aliases:  []string{"kill-session", "session kill"},
+					Label:    "Session: Close session",
+					Desc:     "Close the selected session",
+					Aliases:  []string{"close-session", "session close"},
 					Shortcut: shortcutKillSession,
 					Run: func(m *Model, _ commandArgs) tea.Cmd {
 						m.openKillConfirm()
@@ -214,6 +214,29 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 					Run: func(m *Model, _ commandArgs) tea.Cmd {
 						m.openCloseAllProjectsConfirm()
 						return nil
+					},
+				},
+			},
+		},
+		{
+			Name: "agent",
+			Commands: []commandSpec{
+				{
+					ID:      "agent_auth",
+					Label:   "Agent: Auth",
+					Desc:    "Connect an AI provider for Peky",
+					Aliases: []string{"auth", "login", "agent auth"},
+					Run: func(m *Model, _ commandArgs) tea.Cmd {
+						return m.prefillQuickReplyInput("/auth ")
+					},
+				},
+				{
+					ID:      "agent_model",
+					Label:   "Agent: Model",
+					Desc:    "Select the model used by Peky",
+					Aliases: []string{"model", "agent model"},
+					Run: func(m *Model, _ commandArgs) tea.Cmd {
+						return m.prefillQuickReplyInput("/model ")
 					},
 				},
 			},

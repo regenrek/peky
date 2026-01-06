@@ -349,7 +349,7 @@ func (m *Model) openQuickReply() tea.Cmd {
 	m.quickReplyInput.SetValue("")
 	m.quickReplyInput.Focus()
 	m.resetQuickReplyHistory()
-	m.resetSlashMenu()
+	m.resetQuickReplyMenu()
 	return m.refreshPaneViewsCmd()
 }
 
@@ -375,7 +375,7 @@ func (m *Model) quickReplyPlan() (quickReplyPlan, tea.Cmd, bool) {
 		return quickReplyPlan{}, NewInfoCmd("Nothing to send"), false
 	}
 	m.quickReplyInput.SetValue("")
-	m.resetSlashMenu()
+	m.resetQuickReplyMenu()
 	pane := m.selectedPane()
 	if pane == nil || strings.TrimSpace(pane.ID) == "" {
 		return quickReplyPlan{}, NewWarningCmd("No pane selected"), false

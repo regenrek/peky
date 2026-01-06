@@ -144,6 +144,7 @@ func runHandler(ctx context.Context, cliCmd *cli.Command, cmdSpec spec.Command, 
 		Out:     deps.Stdout,
 		ErrOut:  deps.Stderr,
 		Stdin:   deps.Stdin,
+		WorkDir: deps.WorkDir,
 	}
 	if err := validateArgs(cmdSpec, cliCmd); err != nil {
 		return err

@@ -20,4 +20,5 @@ type CommandContext struct {
 	Out     io.Writer
 	ErrOut  io.Writer
 	Stdin   io.Reader
+	WorkDir string
 }

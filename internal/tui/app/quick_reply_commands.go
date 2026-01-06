@@ -72,6 +72,6 @@ func (m *Model) prefillQuickReplyInput(value string) tea.Cmd {
 	cmd := m.prepareQuickReplyInput()
 	m.quickReplyInput.SetValue(value)
 	m.quickReplyInput.CursorEnd()
-	m.updateSlashSelection()
+	m.updateQuickReplyMenuSelection()
 	return cmd
 }

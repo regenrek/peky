@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/regenrek/peakypanes/internal/limits"
 )
 
 func TestValidateSessionName(t *testing.T) {
@@ -101,5 +103,20 @@ func TestValidateEnvList(t *testing.T) {
 	}
 	if _, err := ValidateEnvList([]string{"1BAD=VALUE"}); err == nil {
 		t.Fatalf("expected error for invalid key")
+	}
+}
+
+func TestValidatePaneCount(t *testing.T) {
+	if count, err := ValidatePaneCount(0); err != nil || count != 0 {
+		t.Fatalf("expected zero to pass, got count=%d err=%v", count, err)
+	}
+	if _, err := ValidatePaneCount(-1); err == nil {
+		t.Fatalf("expected error for negative count")
+	}
+	if _, err := ValidatePaneCount(limits.MaxPanes + 1); err == nil {
+		t.Fatalf("expected error for count above max")
+	}
+	if count, err := ValidatePaneCount(limits.MaxPanes); err != nil || count != limits.MaxPanes {
+		t.Fatalf("expected max count to pass, got count=%d err=%v", count, err)
 	}
 }

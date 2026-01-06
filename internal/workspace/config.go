@@ -24,6 +24,7 @@ func LoadConfig(path string) (*layout.Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, err
 	}
+	layout.ApplyDefaults(&cfg)
 	return &cfg, nil
 }
 

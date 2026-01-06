@@ -143,7 +143,7 @@ func buildDashboardKeyMap(cfg layout.DashboardKeymapConfig) (*dashboardKeyMap, e
 		},
 		{
 			name:     "kill",
-			desc:     "kill session",
+			desc:     "close session",
 			defaults: []string{"ctrl+x"},
 			override: cfg.Kill,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.kill = b },

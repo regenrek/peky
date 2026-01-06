@@ -32,6 +32,8 @@ const (
 	StateSettingsMenu
 	StatePerformanceMenu
 	StateDebugMenu
+	StatePekyDialog
+	StateAuthDialog
 )
 
 // DashboardTab represents the active tab within the dashboard view.
@@ -150,6 +152,7 @@ type PaneItem struct {
 	Title         string
 	Command       string
 	StartCommand  string
+	Cwd           string
 	Tool          string
 	PID           int
 	Active        bool
@@ -270,6 +273,14 @@ type dashboardSnapshotMsg struct {
 
 // refreshTickMsg triggers the next refresh.
 type refreshTickMsg struct{}
+
+// pekySpinnerTickMsg advances the Peky spinner.
+type pekySpinnerTickMsg struct{}
+
+// pekyPromptClearMsg clears the Peky prompt line after a delay.
+type pekyPromptClearMsg struct {
+	ID int64
+}
 
 // selectionRefreshMsg triggers a debounced refresh for selection changes.
 type selectionRefreshMsg struct {

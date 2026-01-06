@@ -19,6 +19,8 @@ const (
 	tilePadRight  = 1
 	tilePadTop    = 0
 	tilePadBottom = 0
+
+	DashboardTileHeaderLines = 2
 )
 
 func BorderSizes(borders TileBorders) (int, int) {
@@ -50,6 +52,20 @@ func TileMetricsFor(width, height int, borders TileBorders) TileMetrics {
 		ContentWidth: contentWidth,
 		InnerHeight:  innerHeight,
 	}
+}
+
+func DashboardTilePreviewLines(innerHeight, previewLines int) int {
+	if previewLines < 0 {
+		previewLines = 0
+	}
+	available := previewLines
+	if innerHeight-DashboardTileHeaderLines < available {
+		available = innerHeight - DashboardTileHeaderLines
+	}
+	if available < 0 {
+		return 0
+	}
+	return available
 }
 
 func boolToInt(v bool) int {
