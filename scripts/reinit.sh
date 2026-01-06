@@ -11,6 +11,32 @@ fi
 peky_bin="${gobin}/peky"
 peak_bin="${gobin}/peakypanes"
 
+pid_list() {
+  printf "%s" "$1" | tr '\n' ' ' | xargs
+}
+
+kill_pids() {
+  local label="$1"
+  local signal="$2"
+  local raw="$3"
+  local list
+  list="$(pid_list "$raw")"
+  if [[ -z "$list" ]]; then
+    return 0
+  fi
+  echo "reinit: ${label}: ${list}"
+  while IFS= read -r pid; do
+    if [[ -z "$pid" ]]; then
+      continue
+    fi
+    if [[ -n "$signal" ]]; then
+      kill "$signal" "$pid" || true
+    else
+      kill "$pid" || true
+    fi
+  done <<<"$raw"
+}
+
 kill_all=false
 skip_daemon_restart=false
 for arg in "$@"; do
@@ -32,24 +58,15 @@ if [[ -z "$pids" ]]; then
   echo "reinit: no running daemon found"
   ps -ax -o pid=,command= | rg "peky" || true
 else
-  echo "reinit: stopping daemon(s): $pids"
-  kill "$pids" || true
+  kill_pids "stopping daemon(s)" "" "$pids"
 fi
 
 if [[ "$kill_all" == true ]]; then
   ui_pids_raw="$(pgrep -x "peky" || true)"
   peak_ui_pids_raw="$(pgrep -x "peakypanes" || true)"
-  ui_pids=()
-  peak_ui_pids=()
-  if [[ -n "$ui_pids_raw" ]]; then
-    readarray -t ui_pids <<<"$ui_pids_raw"
-  fi
-  if [[ -n "$peak_ui_pids_raw" ]]; then
-    readarray -t peak_ui_pids <<<"$peak_ui_pids_raw"
-  fi
-  if (( ${#ui_pids[@]} > 0 || ${#peak_ui_pids[@]} > 0 )); then
-    echo "reinit: stopping UI process(es): ${ui_pids[*]} ${peak_ui_pids[*]}"
-    kill "${ui_pids[@]}" "${peak_ui_pids[@]}" || true
+  ui_pids="$(printf "%s\n%s\n" "$ui_pids_raw" "$peak_ui_pids_raw")"
+  if [[ -n "$(pid_list "$ui_pids")" ]]; then
+    kill_pids "stopping UI process(es)" "" "$ui_pids"
   fi
 fi
 
@@ -57,24 +74,15 @@ sleep 0.5
 
 still_running="$(pgrep -f "peky.*daemon" || true)"
 if [[ -n "$still_running" ]]; then
-  echo "reinit: force-killing daemon(s): $still_running"
-  kill -9 "$still_running" || true
+  kill_pids "force-killing daemon(s)" "-9" "$still_running"
 fi
 
 if [[ "$kill_all" == true ]]; then
   still_ui_raw="$(pgrep -x "peky" || true)"
   still_peak_ui_raw="$(pgrep -x "peakypanes" || true)"
-  still_ui=()
-  still_peak_ui=()
-  if [[ -n "$still_ui_raw" ]]; then
-    readarray -t still_ui <<<"$still_ui_raw"
-  fi
-  if [[ -n "$still_peak_ui_raw" ]]; then
-    readarray -t still_peak_ui <<<"$still_peak_ui_raw"
-  fi
-  if (( ${#still_ui[@]} > 0 || ${#still_peak_ui[@]} > 0 )); then
-    echo "reinit: force-killing UI process(es): ${still_ui[*]} ${still_peak_ui[*]}"
-    kill -9 "${still_ui[@]}" "${still_peak_ui[@]}" || true
+  still_ui="$(printf "%s\n%s\n" "$still_ui_raw" "$still_peak_ui_raw")"
+  if [[ -n "$(pid_list "$still_ui")" ]]; then
+    kill_pids "force-killing UI process(es)" "-9" "$still_ui"
   fi
 fi
 
