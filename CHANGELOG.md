@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 This format is based on Keep a Changelog.
 
-## Unreleased
+## 0.0.22 - 2026-01-06
 
 ### Added
 - Shared dashboard layout sizing helpers with SSOT geometry for render + hit-testing.
