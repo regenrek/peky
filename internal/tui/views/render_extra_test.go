@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/sessiond"
@@ -164,6 +165,43 @@ func TestViewStates(t *testing.T) {
 		out := Render(m)
 		if strings.TrimSpace(out) == "" {
 			t.Fatalf("Render(view=%d) empty", view)
+		}
+	}
+}
+
+func TestRenderPadsToScreenSize(t *testing.T) {
+	m := Model{
+		Width:             60,
+		Height:            16,
+		ActiveView:        viewDashboard,
+		HeaderLine:        "Peaky Panes",
+		EmptyStateMessage: "empty",
+		Projects:          []Project{{Name: "Proj"}},
+		DashboardColumns: []DashboardColumn{{
+			ProjectID:   "proj",
+			ProjectName: "Proj",
+			Panes: []DashboardPane{{
+				ProjectID:   "proj",
+				ProjectName: "Proj",
+				SessionName: "sess",
+				Pane:        Pane{Index: "0"},
+			}},
+		}},
+		DashboardSelectedProject: "proj",
+		SidebarProject:           &Project{Name: "Proj"},
+		SidebarSessions:          []Session{{Name: "sess", Status: sessionRunning}},
+		PreviewSession:           &Session{Name: "sess", Status: sessionRunning, Panes: []Pane{{Index: "0"}}},
+		QuickReplyInput:          textinput.New(),
+	}
+
+	out := Render(m)
+	lines := strings.Split(out, "\n")
+	if len(lines) != m.Height {
+		t.Fatalf("Render() lines=%d want=%d", len(lines), m.Height)
+	}
+	for i, line := range lines {
+		if w := lipgloss.Width(line); w != m.Width {
+			t.Fatalf("Render() line[%d] width=%d want=%d", i, w, m.Width)
 		}
 	}
 }
