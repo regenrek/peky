@@ -122,3 +122,37 @@ func TestBuildGeometryInternalDividerStopsAtFrame(t *testing.T) {
 		t.Fatalf("bottom junction rune = %q", got)
 	}
 }
+
+func TestBuildGeometryHorizontalDividerStopsAtVerticalDivider(t *testing.T) {
+	rects := map[string]layout.Rect{
+		"p1": {X: 0, Y: 0, W: 500, H: 500},
+		"p2": {X: 0, Y: 500, W: 500, H: 500},
+		"p3": {X: 500, Y: 0, W: 500, H: 1000},
+	}
+	preview := mouse.Rect{X: 0, Y: 0, W: 20, H: 10}
+	geom, ok := Build(preview, rects)
+	if !ok {
+		t.Fatalf("expected geometry")
+	}
+	cells := DividerCells(geom.Dividers)
+	glyphs := make(map[[2]int]rune, len(cells))
+	for _, cell := range cells {
+		glyphs[[2]int{cell.X, cell.Y}] = cell.Rune
+	}
+
+	dividerX := ScaleLayoutPos(preview.X, preview.W, 500)
+	dividerY := ScaleLayoutPos(preview.Y, preview.H, 500)
+	if dividerX < preview.X || dividerX >= preview.X+preview.W {
+		t.Fatalf("divider x out of bounds: %d", dividerX)
+	}
+	if dividerY < preview.Y || dividerY >= preview.Y+preview.H {
+		t.Fatalf("divider y out of bounds: %d", dividerY)
+	}
+
+	if got := glyphs[[2]int{dividerX, dividerY}]; got != '┤' {
+		t.Fatalf("junction rune = %q", got)
+	}
+	if _, ok := glyphs[[2]int{dividerX + 1, dividerY}]; ok {
+		t.Fatalf("unexpected divider cell to the right of junction at x=%d y=%d", dividerX+1, dividerY)
+	}
+}

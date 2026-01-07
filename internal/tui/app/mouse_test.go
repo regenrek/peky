@@ -363,8 +363,8 @@ func TestMouseMotionSetsCursorShapeColResizeOverDivider(t *testing.T) {
 	}
 	_, _ = m.updateDashboardMouse(msg)
 
-	if emitted != "\x1b]22;col-resize\x07" {
-		t.Fatalf("osc=%q want %q", emitted, "\x1b]22;col-resize\x07")
+	if emitted != "\x1b]22;col-resize\x07\x1b]22;ew-resize\x07" {
+		t.Fatalf("osc=%q want %q", emitted, "\x1b]22;col-resize\x07\x1b]22;ew-resize\x07")
 	}
 }
 
@@ -417,7 +417,7 @@ func TestMouseMotionSetsCursorShapeRowResizeOverDivider(t *testing.T) {
 	}
 	_, _ = m.updateDashboardMouse(msg)
 
-	if emitted != "\x1b]22;row-resize\x07" {
-		t.Fatalf("osc=%q want %q", emitted, "\x1b]22;row-resize\x07")
+	if emitted != "\x1b]22;row-resize\x07\x1b]22;ns-resize\x07" {
+		t.Fatalf("osc=%q want %q", emitted, "\x1b]22;row-resize\x07\x1b]22;ns-resize\x07")
 	}
 }

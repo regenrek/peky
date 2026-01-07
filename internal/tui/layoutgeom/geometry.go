@@ -794,8 +794,13 @@ func ScaleLayoutPos(base, span, pos int) int {
 	if span <= 0 {
 		return base
 	}
-	p := float64(pos) / float64(layout.LayoutBaseSize)
-	return base + int(math.Round(p*float64(span)))
+	if pos <= 0 {
+		return base
+	}
+	if pos >= layout.LayoutBaseSize {
+		return base + span
+	}
+	return base + (pos*span)/layout.LayoutBaseSize
 }
 
 func LayoutPosFromScreen(preview mouse.Rect, x, y int) (int, int, bool) {

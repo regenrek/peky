@@ -30,9 +30,9 @@ func oscForCursorShape(shape cursorShape) string {
 	case cursorShapePointer:
 		return "\x1b]22;pointer\x07"
 	case cursorShapeColResize:
-		return "\x1b]22;col-resize\x07"
+		return "\x1b]22;col-resize\x07\x1b]22;ew-resize\x07"
 	case cursorShapeRowResize:
-		return "\x1b]22;row-resize\x07"
+		return "\x1b]22;row-resize\x07\x1b]22;ns-resize\x07"
 	case cursorShapeDiagNWSE:
 		return "\x1b]22;nwse-resize\x07"
 	case cursorShapeDiagNESW:
