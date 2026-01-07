@@ -11,7 +11,7 @@ import (
 func TestResizeModeBlockedByTerminalFocus(t *testing.T) {
 	m := newTestModelLite()
 	m.terminalFocus = true
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
+	msg := tea.KeyMsg{Type: tea.KeyCtrlR}
 	_, handled := m.handleResizeKey(msg)
 	if !handled {
 		t.Fatalf("expected resize key handled")
@@ -23,7 +23,7 @@ func TestResizeModeBlockedByTerminalFocus(t *testing.T) {
 
 func TestResizeModeToggle(t *testing.T) {
 	m := newTestModelLite()
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
+	msg := tea.KeyMsg{Type: tea.KeyCtrlR}
 	_, handled := m.handleResizeKey(msg)
 	if !handled {
 		t.Fatalf("expected resize key handled")

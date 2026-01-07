@@ -45,7 +45,7 @@ Pane
 - rename pane via command palette (ctrl+p)
 - ctrl+y peek selected pane in new terminal
 - ctrl+k toggle terminal focus (native only; configurable via dashboard.keymap.terminal_focus)
-- r resize mode (keyboard only; arrows resize, tab cycles edges, s toggle snap, 0 reset sizes, z zoom, esc exit; hold alt to disable snap)
+- ctrl+r resize mode (keyboard only; arrows resize, tab cycles edges, s toggle snap, 0 reset sizes, z zoom, esc exit; hold alt to disable snap)
 - mouse: single-click selects a pane; double-click toggles terminal focus (native only); esc exits focus
 - mouse: drag dividers to resize; right-click pane for context menu (terminal focus off)
 - f7 scrollback mode (native only; configurable via dashboard.keymap.scrollback)
@@ -64,7 +64,7 @@ Mouse + snapping notes
 
 Other
 - ctrl+p command palette
-- ctrl+r refresh, ctrl+, edit config, ctrl+f filter, ctrl+c quit
+- f5 refresh, ctrl+, edit config, ctrl+f filter, ctrl+c quit
 
 ## Dashboard config (optional)
 
@@ -93,7 +93,7 @@ dashboard:
     pane_next: ["ctrl+d"]
     pane_prev: ["ctrl+a"]
     terminal_focus: ["ctrl+k"]
-    resize_mode: ["r"]
+    resize_mode: ["ctrl+r"]
     scrollback: ["f7"]
     copy_mode: ["f8"]
     toggle_panes: ["ctrl+u"]

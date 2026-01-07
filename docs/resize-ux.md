@@ -31,7 +31,7 @@ Drag Semantics
 - Click outside while dragging cancels (treated as Esc).
 
 Keyboard Resize Mode
-- Toggle resize mode: `r` (global in dashboard), exits with `esc`.
+- Toggle resize mode: `ctrl+r` (global in dashboard), exits with `esc`.
 - When active: overlay cheat sheet + active edge highlight.
 - Keys:
   - Arrow keys: nudge active edge by 10 units (grid step).

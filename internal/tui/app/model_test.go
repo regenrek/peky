@@ -141,4 +141,10 @@ func TestKeyBindings(t *testing.T) {
 	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlC}, km.quit) {
 		t.Error("quit binding should match ctrl+c")
 	}
+	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlR}, km.resizeMode) {
+		t.Error("resizeMode binding should match ctrl+r")
+	}
+	if !key.Matches(tea.KeyMsg{Type: tea.KeyF5}, km.refresh) {
+		t.Error("refresh binding should match f5")
+	}
 }
