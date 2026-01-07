@@ -492,10 +492,41 @@ func (c *Client) SendMouse(ctx context.Context, paneID string, event MouseEventP
 	return err
 }
 
-// ResizePane resizes a pane PTY.
-func (c *Client) ResizePane(ctx context.Context, paneID string, cols, rows int) error {
-	_, err := c.call(ctx, OpResizePane, ResizePaneRequest{PaneID: paneID, Cols: cols, Rows: rows}, nil)
-	return err
+// ResizePaneEdge resizes a layout edge for a pane.
+func (c *Client) ResizePaneEdge(ctx context.Context, sessionName, paneID string, edge ResizeEdge, delta int, snap bool, snapState SnapState) (LayoutOpResponse, error) {
+	var resp LayoutOpResponse
+	req := ResizePaneRequest{
+		SessionName: sessionName,
+		PaneID:      paneID,
+		Edge:        edge,
+		Delta:       delta,
+		Snap:        snap,
+		SnapState:   snapState,
+	}
+	if _, err := c.call(ctx, OpResizePane, req, &resp); err != nil {
+		return LayoutOpResponse{}, err
+	}
+	return resp, nil
+}
+
+// ResetPaneSizes resets layout sizes for a session or subtree.
+func (c *Client) ResetPaneSizes(ctx context.Context, sessionName, paneID string) (LayoutOpResponse, error) {
+	var resp LayoutOpResponse
+	req := ResetSizesRequest{SessionName: sessionName, PaneID: paneID}
+	if _, err := c.call(ctx, OpResetPaneSizes, req, &resp); err != nil {
+		return LayoutOpResponse{}, err
+	}
+	return resp, nil
+}
+
+// ZoomPane toggles or sets zoom on a pane.
+func (c *Client) ZoomPane(ctx context.Context, sessionName, paneID string, toggle bool) (LayoutOpResponse, error) {
+	var resp LayoutOpResponse
+	req := ZoomPaneRequest{SessionName: sessionName, PaneID: paneID, Toggle: toggle}
+	if _, err := c.call(ctx, OpZoomPane, req, &resp); err != nil {
+		return LayoutOpResponse{}, err
+	}
+	return resp, nil
 }
 
 // GetPaneView requests a rendered pane view.

@@ -106,11 +106,6 @@ func (m *Manager) buildGridPanes(ctx context.Context, path string, layoutCfg *la
 	titles := layout.ResolveGridTitles(layoutCfg, grid.Panes())
 	paneDefs := layoutCfg.Panes
 
-	cellW := LayoutBaseSize / grid.Columns
-	cellH := LayoutBaseSize / grid.Rows
-	remainderW := LayoutBaseSize % grid.Columns
-	remainderH := LayoutBaseSize % grid.Rows
-
 	panes := make([]*Pane, 0, grid.Panes())
 	total := grid.Panes()
 	for r := 0; r < grid.Rows; r++ {
@@ -133,16 +128,6 @@ func (m *Manager) buildGridPanes(ctx context.Context, path string, layoutCfg *la
 					cmd = paneDef.Cmd
 				}
 			}
-			left := c * cellW
-			top := r * cellH
-			width := cellW
-			height := cellH
-			if c == grid.Columns-1 {
-				width += remainderW
-			}
-			if r == grid.Rows-1 {
-				height += remainderH
-			}
 			pane, err := m.createPane(ctx, path, title, cmd, env)
 			if err != nil {
 				m.closePanes(panes)
@@ -152,10 +137,6 @@ func (m *Manager) buildGridPanes(ctx context.Context, path string, layoutCfg *la
 				pane.RestoreMode = resolvePaneRestoreMode(paneDefs[idx])
 			}
 			pane.Index = strconv.Itoa(idx)
-			pane.Left = left
-			pane.Top = top
-			pane.Width = width
-			pane.Height = height
 			if idx == 0 {
 				pane.Active = true
 			}
@@ -168,7 +149,6 @@ func (m *Manager) buildGridPanes(ctx context.Context, path string, layoutCfg *la
 
 func (m *Manager) buildSplitPanes(ctx context.Context, path string, defs []layout.PaneDef, env []string) ([]*Pane, error) {
 	var panes []*Pane
-	active := (*Pane)(nil)
 	total := len(defs)
 	for i, paneDef := range defs {
 		pane, err := m.createPane(ctx, path, paneDef.Title, paneDef.Cmd, env)
@@ -180,16 +160,6 @@ func (m *Manager) buildSplitPanes(ctx context.Context, path string, defs []layou
 		pane.Index = strconv.Itoa(i)
 		if i == 0 {
 			pane.Active = true
-			pane.Left, pane.Top, pane.Width, pane.Height = 0, 0, LayoutBaseSize, LayoutBaseSize
-			active = pane
-		} else if active != nil {
-			vertical := strings.EqualFold(paneDef.Split, "vertical") || strings.EqualFold(paneDef.Split, "v")
-			percent := parsePercent(paneDef.Size)
-			oldRect, newRect := splitRect(rectFromPane(active), vertical, percent)
-			active.Left, active.Top, active.Width, active.Height = oldRect.x, oldRect.y, oldRect.w, oldRect.h
-			pane.Left, pane.Top, pane.Width, pane.Height = newRect.x, newRect.y, newRect.w, newRect.h
-		} else {
-			pane.Left, pane.Top, pane.Width, pane.Height = 0, 0, LayoutBaseSize, LayoutBaseSize
 		}
 		panes = append(panes, pane)
 		m.pacePaneSpawn(ctx, pane, len(panes), total)

@@ -7,6 +7,7 @@ import (
 
 	uv "github.com/charmbracelet/ultraviolet"
 
+	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/native"
 	"github.com/regenrek/peakypanes/internal/terminal"
 )
@@ -31,6 +32,15 @@ func (m *focusManager) SplitPane(context.Context, string, string, bool, int) (st
 }
 func (m *focusManager) ClosePane(context.Context, string, string) error { return nil }
 func (m *focusManager) SwapPanes(string, string, string) error          { return nil }
+func (m *focusManager) ResizePaneEdge(string, string, layout.ResizeEdge, int, bool, layout.SnapState) (layout.ApplyResult, error) {
+	return layout.ApplyResult{}, nil
+}
+func (m *focusManager) ResetPaneSizes(string, string) (layout.ApplyResult, error) {
+	return layout.ApplyResult{}, nil
+}
+func (m *focusManager) ZoomPane(string, string, bool) (layout.ApplyResult, error) {
+	return layout.ApplyResult{}, nil
+}
 func (m *focusManager) SetPaneTool(string, string) error                { return nil }
 func (m *focusManager) SendInput(context.Context, string, []byte) error { return nil }
 func (m *focusManager) SendMouse(string, uv.MouseEvent, terminal.MouseRoute) error {

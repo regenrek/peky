@@ -100,6 +100,13 @@ func buildDashboardKeyMap(cfg layout.DashboardKeymapConfig) (*dashboardKeyMap, e
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.terminalFocus = b },
 		},
 		{
+			name:     "resize_mode",
+			desc:     "resize mode",
+			defaults: []string{"r"},
+			override: cfg.ResizeMode,
+			assign:   func(m *dashboardKeyMap, b key.Binding) { m.resizeMode = b },
+		},
+		{
 			name:     "toggle_panes",
 			desc:     "panes",
 			defaults: []string{"ctrl+u"},

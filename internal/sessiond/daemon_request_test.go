@@ -99,7 +99,7 @@ func TestHandleRequestPayloadStartSessionInvalidPath(t *testing.T) {
 
 func TestHandleRequestPayloadResizePaneMissing(t *testing.T) {
 	d := newTestDaemon(t)
-	payload, err := encodePayload(ResizePaneRequest{PaneID: "missing", Cols: 2, Rows: 2})
+	payload, err := encodePayload(ResizePaneRequest{SessionName: "sess", PaneID: "missing", Edge: ResizeEdgeLeft, Delta: 2, Snap: true})
 	if err != nil {
 		t.Fatalf("encode payload: %v", err)
 	}

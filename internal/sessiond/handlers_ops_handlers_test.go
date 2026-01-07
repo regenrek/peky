@@ -132,7 +132,15 @@ func TestHandlerErrorPaths(t *testing.T) {
 		{
 			name: "handleResizePane missing pane",
 			call: func() error {
-				payload, _ := encodePayload(ResizePaneRequest{PaneID: ""})
+				payload, _ := encodePayload(ResizePaneRequest{SessionName: "session", PaneID: "", Edge: ResizeEdgeLeft, Delta: 10})
+				_, err := d.handleResizePane(payload)
+				return err
+			},
+		},
+		{
+			name: "handleResizePane invalid edge",
+			call: func() error {
+				payload, _ := encodePayload(ResizePaneRequest{SessionName: "session", PaneID: "pane", Edge: ResizeEdge("diagonal"), Delta: 10})
 				_, err := d.handleResizePane(payload)
 				return err
 			},
@@ -140,8 +148,24 @@ func TestHandlerErrorPaths(t *testing.T) {
 		{
 			name: "handleResizePane manager missing",
 			call: func() error {
-				payload, _ := encodePayload(ResizePaneRequest{PaneID: "pane", Cols: 10, Rows: 10})
+				payload, _ := encodePayload(ResizePaneRequest{SessionName: "session", PaneID: "pane", Edge: ResizeEdgeRight, Delta: 10})
 				_, err := d.handleResizePane(payload)
+				return err
+			},
+		},
+		{
+			name: "handleResetPaneSizes missing session",
+			call: func() error {
+				payload, _ := encodePayload(ResetSizesRequest{SessionName: "", PaneID: "pane"})
+				_, err := d.handleResetPaneSizes(payload)
+				return err
+			},
+		},
+		{
+			name: "handleZoomPane missing pane",
+			call: func() error {
+				payload, _ := encodePayload(ZoomPaneRequest{SessionName: "session", PaneID: ""})
+				_, err := d.handleZoomPane(payload)
 				return err
 			},
 		},

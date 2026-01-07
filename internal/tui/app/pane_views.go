@@ -180,6 +180,10 @@ func (m *Model) paneViewRequests() []sessiond.PaneViewRequest {
 		m.logPaneViewSkipGlobal("snapshot_empty", m.dashboardColumnsDebug())
 		return nil
 	}
+	if m.resize.drag.active && m.settings.Resize.FreezeContentDuringDrag && m.state == StateDashboard && m.tab == TabProject {
+		m.logPaneViewSkipGlobal("resize_drag_freeze", m.paneViewSkipContext())
+		return nil
+	}
 	hits := m.paneHits()
 	if len(hits) == 0 {
 		m.logPaneViewSkipGlobal("no_hits", m.paneViewSkipContext())
@@ -1267,6 +1271,97 @@ func (m *Model) paneView(paneID string, cols, rows int, showCursor bool) string 
 	return rendered
 }
 
+func (m *Model) paneViewWithFallback(paneID string, cols, rows int, showCursor bool) string {
+	if m == nil {
+		return ""
+	}
+	if out := m.paneView(paneID, cols, rows, showCursor); out != "" {
+		return out
+	}
+	entry, ok := m.bestPaneViewEntry(paneID, cols, rows)
+	if !ok {
+		return ""
+	}
+	frame := resizePaneViewFrame(entry.frame, cols, rows)
+	if frame.Empty() {
+		return ""
+	}
+	return termrender.Render(frame, termrender.Options{
+		Profile:    m.paneViewProfile,
+		ShowCursor: showCursor,
+	})
+}
+
+func (m *Model) bestPaneViewEntry(paneID string, cols, rows int) (paneViewEntry, bool) {
+	if m == nil || m.paneViews == nil || paneID == "" {
+		return paneViewEntry{}, false
+	}
+	bestScore := 0
+	var best paneViewEntry
+	found := false
+	for key, entry := range m.paneViews {
+		if key.PaneID != paneID {
+			continue
+		}
+		if entry.frame.Empty() {
+			continue
+		}
+		score := abs(cols-key.Cols) + abs(rows-key.Rows)
+		if !found || score < bestScore {
+			bestScore = score
+			best = entry
+			found = true
+		}
+	}
+	return best, found
+}
+
+func resizePaneViewFrame(frame termframe.Frame, cols, rows int) termframe.Frame {
+	if cols <= 0 || rows <= 0 {
+		return termframe.Frame{}
+	}
+	out := termframe.Frame{
+		Cols:  cols,
+		Rows:  rows,
+		Cells: make([]termframe.Cell, cols*rows),
+	}
+	if frame.Empty() {
+		return out
+	}
+	maxX := min(cols, frame.Cols)
+	maxY := min(rows, frame.Rows)
+	for y := 0; y < maxY; y++ {
+		for x := 0; x < maxX; x++ {
+			cell := frame.CellAt(x, y)
+			if cell == nil || cell.Width == 0 {
+				continue
+			}
+			out.Cells[y*cols+x] = *cell
+		}
+	}
+	if frame.Cursor.Visible && frame.Cursor.X >= 0 && frame.Cursor.Y >= 0 {
+		if frame.Cursor.X < cols && frame.Cursor.Y < rows {
+			out.Cursor = frame.Cursor
+			out.Cursor.Visible = true
+		}
+	}
+	return out
+}
+
 func detectPaneViewProfile() colorprofile.Profile {
 	return colorprofile.Detect(os.Stdout, os.Environ())
+}
+
+func abs(v int) int {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

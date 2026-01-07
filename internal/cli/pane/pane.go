@@ -33,6 +33,8 @@ func Register(reg *root.Registry) {
 	reg.Register("pane.close", runClose)
 	reg.Register("pane.swap", runSwap)
 	reg.Register("pane.resize", runResize)
+	reg.Register("pane.reset-sizes", runResetSizes)
+	reg.Register("pane.zoom", runZoom)
 	reg.Register("pane.send", runSend)
 	reg.Register("pane.run", runRun)
 	reg.Register("pane.view", runView)
@@ -144,11 +146,21 @@ func runSplit(ctx root.CommandContext) error {
 		return err
 	}
 	defer cleanup()
+	layoutMode, err := parseLayoutOutputMode(ctx)
+	if err != nil {
+		return err
+	}
 	sessionName := ctx.Cmd.String("session")
 	paneIndex := intFlagString(ctx.Cmd, "index")
 	orientation := strings.ToLower(strings.TrimSpace(ctx.Cmd.String("orientation")))
 	vertical := orientation == "vertical"
 	percent := ctx.Cmd.Int("percent")
+	snapCtx, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
+	before, err := captureLayoutBefore(snapCtx, client, layoutMode, sessionName)
+	cancel()
+	if err != nil {
+		return err
+	}
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
 	defer cancel()
 	newIndex, err := client.SplitPane(ctxTimeout, sessionName, paneIndex, vertical, percent)
@@ -163,6 +175,12 @@ func runSplit(ctx root.CommandContext) error {
 		}
 	}
 	if ctx.JSON {
+		snapCtx, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
+		after, err := captureLayoutAfter(snapCtx, client, layoutMode, sessionName)
+		cancel()
+		if err != nil {
+			return err
+		}
 		meta = output.WithDuration(meta, start)
 		details := map[string]any{
 			"new_index": newIndex,
@@ -170,11 +188,15 @@ func runSplit(ctx root.CommandContext) error {
 		if focusedPaneID != "" {
 			details["focused_pane_id"] = focusedPaneID
 		}
-		return output.WriteSuccess(ctx.Out, meta, output.ActionResult{
+		result := output.ActionResult{
 			Action:  "pane.split",
 			Status:  "ok",
 			Details: details,
-		})
+		}
+		if layoutMode != layoutOutputNone {
+			result.Layout = buildLayoutState(sessionName, "", nil, before, after)
+		}
+		return output.WriteSuccess(ctx.Out, meta, result)
 	}
 	return writef(ctx.Out, "Split pane created %s\n", newIndex)
 }
@@ -187,49 +209,77 @@ func runClose(ctx root.CommandContext) error {
 		return err
 	}
 	defer cleanup()
+	layoutMode, err := parseLayoutOutputMode(ctx)
+	if err != nil {
+		return err
+	}
 	opts, err := parsePaneCloseOptions(ctx)
 	if err != nil {
 		return err
 	}
 	if opts.scope != "" {
+		if layoutMode != layoutOutputNone {
+			return fmt.Errorf("layout output not supported with scope closes")
+		}
 		return closePaneScope(ctx, client, opts.scope, start, meta)
 	}
-	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
-	defer cancel()
-	if opts.paneID != "" {
-		resolved, err := resolvePaneID(ctxTimeout, client, opts.paneID)
+	sessionName := opts.sessionName
+	paneID := opts.paneID
+	if paneID != "" {
+		resolveCtx, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
+		if layoutMode != layoutOutputNone {
+			sessionName, paneID, err = resolvePaneSession(resolveCtx, client, paneID)
+		} else {
+			paneID, err = resolvePaneID(resolveCtx, client, paneID)
+		}
+		cancel()
 		if err != nil {
 			return err
 		}
-		if err := client.ClosePaneByID(ctxTimeout, resolved); err != nil {
+	}
+	snapCtx, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
+	before, err := captureLayoutBefore(snapCtx, client, layoutMode, sessionName)
+	cancel()
+	if err != nil {
+		return err
+	}
+	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
+	defer cancel()
+	if paneID != "" {
+		if err := client.ClosePaneByID(ctxTimeout, paneID); err != nil {
 			return err
 		}
 	} else {
-		if err := client.ClosePane(ctxTimeout, opts.sessionName, opts.paneIndex); err != nil {
+		if err := client.ClosePane(ctxTimeout, sessionName, opts.paneIndex); err != nil {
 			return err
 		}
 	}
 	if ctx.JSON {
-		meta = output.WithDuration(meta, start)
-		target := opts.paneID
-		if target == "" {
-			target = fmt.Sprintf("%s:%s", opts.sessionName, opts.paneIndex)
-		} else if resolved, err := resolvePaneID(ctxTimeout, client, opts.paneID); err == nil {
-			target = resolved
+		snapCtx, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
+		after, err := captureLayoutAfter(snapCtx, client, layoutMode, sessionName)
+		cancel()
+		if err != nil {
+			return err
 		}
-		return output.WriteSuccess(ctx.Out, meta, output.ActionResult{
+		meta = output.WithDuration(meta, start)
+		target := paneID
+		if target == "" {
+			target = fmt.Sprintf("%s:%s", sessionName, opts.paneIndex)
+		}
+		result := output.ActionResult{
 			Action:  "pane.close",
 			Status:  "ok",
 			Targets: []output.TargetRef{{Type: "pane", ID: target}},
-		})
-	}
-	if opts.paneID != "" {
-		if resolved, err := resolvePaneID(ctxTimeout, client, opts.paneID); err == nil {
-			opts.paneID = resolved
 		}
-		return writef(ctx.Out, "Closed pane %s\n", opts.paneID)
+		if layoutMode != layoutOutputNone {
+			result.Layout = buildLayoutState(sessionName, paneID, nil, before, after)
+		}
+		return output.WriteSuccess(ctx.Out, meta, result)
 	}
-	return writef(ctx.Out, "Closed pane %s:%s\n", opts.sessionName, opts.paneIndex)
+	if paneID != "" {
+		return writef(ctx.Out, "Closed pane %s\n", paneID)
+	}
+	return writef(ctx.Out, "Closed pane %s:%s\n", sessionName, opts.paneIndex)
 }
 
 type paneCloseOptions struct {
@@ -277,20 +327,40 @@ func runSwap(ctx root.CommandContext) error {
 		return err
 	}
 	defer cleanup()
+	layoutMode, err := parseLayoutOutputMode(ctx)
+	if err != nil {
+		return err
+	}
 	sessionName := ctx.Cmd.String("session")
 	paneA := intFlagString(ctx.Cmd, "a")
 	paneB := intFlagString(ctx.Cmd, "b")
+	snapCtx, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
+	before, err := captureLayoutBefore(snapCtx, client, layoutMode, sessionName)
+	cancel()
+	if err != nil {
+		return err
+	}
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
 	defer cancel()
 	if err := client.SwapPanes(ctxTimeout, sessionName, paneA, paneB); err != nil {
 		return err
 	}
 	if ctx.JSON {
+		snapCtx, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
+		after, err := captureLayoutAfter(snapCtx, client, layoutMode, sessionName)
+		cancel()
+		if err != nil {
+			return err
+		}
 		meta = output.WithDuration(meta, start)
-		return output.WriteSuccess(ctx.Out, meta, output.ActionResult{
+		result := output.ActionResult{
 			Action: "pane.swap",
 			Status: "ok",
-		})
+		}
+		if layoutMode != layoutOutputNone {
+			result.Layout = buildLayoutState(sessionName, "", nil, before, after)
+		}
+		return output.WriteSuccess(ctx.Out, meta, result)
 	}
 	return writef(ctx.Out, "Swapped panes %s:%s and %s\n", sessionName, paneA, paneB)
 }
@@ -303,28 +373,212 @@ func runResize(ctx root.CommandContext) error {
 		return err
 	}
 	defer cleanup()
+	layoutMode, err := parseLayoutOutputMode(ctx)
+	if err != nil {
+		return err
+	}
 	paneID := ctx.Cmd.String("pane-id")
-	cols := ctx.Cmd.Int("cols")
-	rows := ctx.Cmd.Int("rows")
+	edge, err := parseResizeEdge(ctx.Cmd.String("edge"))
+	if err != nil {
+		return err
+	}
+	delta := ctx.Cmd.Int("delta")
+	snap := ctx.Cmd.Bool("snap")
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
 	defer cancel()
-	resolved, err := resolvePaneID(ctxTimeout, client, paneID)
+	sessionName, resolved, err := resolvePaneSession(ctxTimeout, client, paneID)
 	if err != nil {
 		return err
 	}
 	paneID = resolved
-	if err := client.ResizePane(ctxTimeout, paneID, cols, rows); err != nil {
+	snapCtx, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
+	before, err := captureLayoutBefore(snapCtx, client, layoutMode, sessionName)
+	cancel()
+	if err != nil {
+		return err
+	}
+	opResp, err := client.ResizePaneEdge(ctxTimeout, sessionName, paneID, edge, delta, snap, sessiond.SnapState{})
+	if err != nil {
 		return err
 	}
 	if ctx.JSON {
+		snapCtx, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
+		after, err := captureLayoutAfter(snapCtx, client, layoutMode, sessionName)
+		cancel()
+		if err != nil {
+			return err
+		}
 		meta = output.WithDuration(meta, start)
-		return output.WriteSuccess(ctx.Out, meta, output.ActionResult{
+		result := output.ActionResult{
 			Action:  "pane.resize",
 			Status:  "ok",
 			Targets: []output.TargetRef{{Type: "pane", ID: paneID}},
-		})
+		}
+		if layoutMode != layoutOutputNone {
+			result.Layout = buildLayoutState(sessionName, paneID, &opResp, before, after)
+		}
+		return output.WriteSuccess(ctx.Out, meta, result)
 	}
 	return writef(ctx.Out, "Resized pane %s\n", paneID)
+}
+
+func parseResizeEdge(value string) (sessiond.ResizeEdge, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case string(sessiond.ResizeEdgeLeft):
+		return sessiond.ResizeEdgeLeft, nil
+	case string(sessiond.ResizeEdgeRight):
+		return sessiond.ResizeEdgeRight, nil
+	case string(sessiond.ResizeEdgeUp):
+		return sessiond.ResizeEdgeUp, nil
+	case string(sessiond.ResizeEdgeDown):
+		return sessiond.ResizeEdgeDown, nil
+	default:
+		return "", fmt.Errorf("invalid resize edge %q", value)
+	}
+}
+
+func runResetSizes(ctx root.CommandContext) error {
+	start := time.Now()
+	meta := output.NewMeta("pane.reset-sizes", ctx.Deps.Version)
+	client, cleanup, err := connect(ctx)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	layoutMode, err := parseLayoutOutputMode(ctx)
+	if err != nil {
+		return err
+	}
+	sessionName := strings.TrimSpace(ctx.Cmd.String("session"))
+	paneID := strings.TrimSpace(ctx.Cmd.String("pane-id"))
+	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
+	defer cancel()
+
+	if paneID != "" && sessionName != "" {
+		return fmt.Errorf("pane-id cannot be combined with session")
+	}
+	if paneID != "" && sessionName == "" {
+		resolvedSession, resolvedPane, err := resolvePaneSession(ctxTimeout, client, paneID)
+		if err != nil {
+			return err
+		}
+		sessionName = resolvedSession
+		paneID = resolvedPane
+	} else if paneID != "" {
+		resolved, err := resolvePaneID(ctxTimeout, client, paneID)
+		if err != nil {
+			return err
+		}
+		paneID = resolved
+	}
+	if sessionName == "" {
+		return fmt.Errorf("session is required")
+	}
+
+	snapCtx, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
+	before, err := captureLayoutBefore(snapCtx, client, layoutMode, sessionName)
+	cancel()
+	if err != nil {
+		return err
+	}
+	opResp, err := client.ResetPaneSizes(ctxTimeout, sessionName, paneID)
+	if err != nil {
+		return err
+	}
+	if ctx.JSON {
+		snapCtx, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
+		after, err := captureLayoutAfter(snapCtx, client, layoutMode, sessionName)
+		cancel()
+		if err != nil {
+			return err
+		}
+		meta = output.WithDuration(meta, start)
+		details := map[string]any{}
+		if paneID != "" {
+			details["pane_id"] = paneID
+		}
+		details["session"] = sessionName
+		result := output.ActionResult{
+			Action:  "pane.reset-sizes",
+			Status:  "ok",
+			Details: details,
+		}
+		if layoutMode != layoutOutputNone {
+			result.Layout = buildLayoutState(sessionName, paneID, &opResp, before, after)
+		}
+		return output.WriteSuccess(ctx.Out, meta, result)
+	}
+	if paneID != "" {
+		return writef(ctx.Out, "Reset sizes for pane %s\n", paneID)
+	}
+	return writef(ctx.Out, "Reset sizes for session %s\n", sessionName)
+}
+
+func runZoom(ctx root.CommandContext) error {
+	start := time.Now()
+	meta := output.NewMeta("pane.zoom", ctx.Deps.Version)
+	client, cleanup, err := connect(ctx)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	layoutMode, err := parseLayoutOutputMode(ctx)
+	if err != nil {
+		return err
+	}
+	paneID := strings.TrimSpace(ctx.Cmd.String("pane-id"))
+	sessionName := strings.TrimSpace(ctx.Cmd.String("session"))
+	toggle := ctx.Cmd.Bool("toggle")
+	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
+	defer cancel()
+
+	if paneID == "" {
+		return fmt.Errorf("pane id is required")
+	}
+	if sessionName == "" {
+		resolvedSession, resolvedPane, err := resolvePaneSession(ctxTimeout, client, paneID)
+		if err != nil {
+			return err
+		}
+		sessionName = resolvedSession
+		paneID = resolvedPane
+	} else {
+		resolved, err := resolvePaneID(ctxTimeout, client, paneID)
+		if err != nil {
+			return err
+		}
+		paneID = resolved
+	}
+
+	snapCtx, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
+	before, err := captureLayoutBefore(snapCtx, client, layoutMode, sessionName)
+	cancel()
+	if err != nil {
+		return err
+	}
+	opResp, err := client.ZoomPane(ctxTimeout, sessionName, paneID, toggle)
+	if err != nil {
+		return err
+	}
+	if ctx.JSON {
+		snapCtx, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
+		after, err := captureLayoutAfter(snapCtx, client, layoutMode, sessionName)
+		cancel()
+		if err != nil {
+			return err
+		}
+		meta = output.WithDuration(meta, start)
+		result := output.ActionResult{
+			Action:  "pane.zoom",
+			Status:  "ok",
+			Targets: []output.TargetRef{{Type: "pane", ID: paneID}},
+		}
+		if layoutMode != layoutOutputNone {
+			result.Layout = buildLayoutState(sessionName, paneID, &opResp, before, after)
+		}
+		return output.WriteSuccess(ctx.Out, meta, result)
+	}
+	return writef(ctx.Out, "Zoom toggled for pane %s\n", paneID)
 }
 
 func runSend(ctx root.CommandContext) error {

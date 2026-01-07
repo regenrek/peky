@@ -32,25 +32,18 @@ func TestDashboardPaneHits(t *testing.T) {
 	}
 }
 
-func TestProjectPaneHitsLayoutAndGrid(t *testing.T) {
+func TestProjectPaneHitsLayout(t *testing.T) {
 	m := newTestModelLite()
 	m.state = StateDashboard
 	m.tab = TabProject
 	m.selection = selectionState{ProjectID: projectKey("/alpha", "Alpha"), Session: "alpha-1", Pane: "1"}
 
-	m.settings.PreviewMode = "layout"
 	layoutHits := m.projectPaneHits()
 	if len(layoutHits) != len(m.selectedSession().Panes) {
 		t.Fatalf("expected layout hits for panes")
 	}
-
-	m.settings.PreviewMode = "grid"
-	gridHits := m.projectPaneHits()
-	if len(gridHits) == 0 {
-		t.Fatalf("expected grid hits")
-	}
-	if gridHits[0].Content.Empty() {
-		t.Fatalf("expected grid content rect")
+	if layoutHits[0].Outer.Empty() {
+		t.Fatalf("expected outer rect for layout hit")
 	}
 }
 

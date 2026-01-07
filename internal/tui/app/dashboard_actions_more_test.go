@@ -30,7 +30,7 @@ func TestDashboardActionKeys(t *testing.T) {
 	}
 
 	m.setState(StateDashboard)
-	m.updateDashboard(keyRune('r'))
+	m.updateDashboard(keyRune('R'))
 	if m.toast.Text == "" {
 		t.Fatalf("expected refresh toast")
 	}

@@ -108,7 +108,7 @@ func TestRefreshPaneViewForHit(t *testing.T) {
 func TestRefreshCmdAndDaemonEvent(t *testing.T) {
 	m := newTestModelLite()
 	cfgPath := filepath.Join(t.TempDir(), "config.yml")
-	if err := os.WriteFile(cfgPath, []byte("dashboard:\n  preview_mode: grid\n"), 0o600); err != nil {
+	if err := os.WriteFile(cfgPath, []byte("dashboard:\n  refresh_ms: 2000\n"), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 	m.configPath = cfgPath

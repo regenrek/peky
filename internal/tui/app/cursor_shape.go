@@ -5,6 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/regenrek/peakypanes/internal/sessiond"
 	"github.com/regenrek/peakypanes/internal/tui/mouse"
 )
 
@@ -14,6 +15,10 @@ const (
 	cursorShapeUnknown cursorShape = iota
 	cursorShapeText
 	cursorShapePointer
+	cursorShapeColResize
+	cursorShapeRowResize
+	cursorShapeDiagNWSE
+	cursorShapeDiagNESW
 )
 
 const cursorShapeThrottle = 50 * time.Millisecond
@@ -24,6 +29,14 @@ func oscForCursorShape(shape cursorShape) string {
 		return "\x1b]22;text\x07"
 	case cursorShapePointer:
 		return "\x1b]22;pointer\x07"
+	case cursorShapeColResize:
+		return "\x1b]22;col-resize\x07"
+	case cursorShapeRowResize:
+		return "\x1b]22;row-resize\x07"
+	case cursorShapeDiagNWSE:
+		return "\x1b]22;nwse-resize\x07"
+	case cursorShapeDiagNESW:
+		return "\x1b]22;nesw-resize\x07"
 	default:
 		return ""
 	}
@@ -146,14 +159,30 @@ func (m *Model) cursorShapeAt(x, y int) (cursorShape, bool) {
 
 	bodyY := layout.padTop + layout.headerHeight + layout.headerGap
 	body := mouse.Rect{X: layout.padLeft, Y: bodyY, W: layout.contentWidth, H: layout.bodyHeight}
-	if !body.Contains(x, y) {
-		return cursorShapePointer, true
-	}
-
 	quickReplyY := bodyY + layout.bodyHeight
 	quickReply := mouse.Rect{X: layout.padLeft, Y: quickReplyY, W: layout.contentWidth, H: layout.quickReplyHeight}
 	if quickReply.Contains(x, y) {
 		return cursorShapeText, true
+	}
+	if !body.Contains(x, y) {
+		return cursorShapePointer, true
+	}
+
+	if hit, ok := m.resizeHitTest(x, y); ok {
+		switch hit.Kind {
+		case resizeHitEdge:
+			switch hit.Edge.Edge {
+			case sessiond.ResizeEdgeLeft, sessiond.ResizeEdgeRight:
+				return cursorShapeColResize, true
+			case sessiond.ResizeEdgeUp, sessiond.ResizeEdgeDown:
+				return cursorShapeRowResize, true
+			}
+		case resizeHitCorner:
+			diag := cornerCursorShape(hit.Corner)
+			if diag != cursorShapeUnknown {
+				return diag, true
+			}
+		}
 	}
 
 	if m.tab == TabDashboard {
@@ -171,4 +200,19 @@ func (m *Model) cursorShapeAt(x, y int) (cursorShape, bool) {
 		return cursorShapePointer, true
 	}
 	return cursorShapePointer, true
+}
+
+func cornerCursorShape(corner resizeCornerRef) cursorShape {
+	switch {
+	case corner.Vertical.Edge == sessiond.ResizeEdgeLeft && corner.Horizontal.Edge == sessiond.ResizeEdgeUp:
+		return cursorShapeDiagNWSE
+	case corner.Vertical.Edge == sessiond.ResizeEdgeRight && corner.Horizontal.Edge == sessiond.ResizeEdgeDown:
+		return cursorShapeDiagNWSE
+	case corner.Vertical.Edge == sessiond.ResizeEdgeRight && corner.Horizontal.Edge == sessiond.ResizeEdgeUp:
+		return cursorShapeDiagNESW
+	case corner.Vertical.Edge == sessiond.ResizeEdgeLeft && corner.Horizontal.Edge == sessiond.ResizeEdgeDown:
+		return cursorShapeDiagNESW
+	default:
+		return cursorShapeDiagNWSE
+	}
 }

@@ -3,6 +3,7 @@ package pane
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -145,11 +146,13 @@ func testCommand() *cli.Command {
 			&cli.StringFlag{Name: "grep"},
 			&cli.StringFlag{Name: "since"},
 			&cli.StringFlag{Name: "until"},
+			&cli.StringFlag{Name: "edge"},
 			&cli.IntFlag{Name: "index"},
 			&cli.IntFlag{Name: "a"},
 			&cli.IntFlag{Name: "b"},
 			&cli.IntFlag{Name: "cols"},
 			&cli.IntFlag{Name: "rows"},
+			&cli.IntFlag{Name: "delta"},
 			&cli.IntFlag{Name: "lines"},
 			&cli.IntFlag{Name: "count"},
 			&cli.IntFlag{Name: "delta-x"},
@@ -162,6 +165,10 @@ func testCommand() *cli.Command {
 			&cli.BoolFlag{Name: "require-ack"},
 			&cli.BoolFlag{Name: "focus", Value: true},
 			&cli.BoolFlag{Name: "all"},
+			&cli.BoolFlag{Name: "snap", Value: true},
+			&cli.BoolFlag{Name: "toggle", Value: true},
+			&cli.BoolFlag{Name: "after"},
+			&cli.BoolFlag{Name: "diff"},
 			&cli.BoolFlag{Name: "follow"},
 			&cli.BoolFlag{Name: "scrollback-toggle"},
 			&cli.BoolFlag{Name: "copy-toggle"},
@@ -487,15 +494,47 @@ func (f paneFlow) mustSwap() {
 	}
 }
 
-func (f paneFlow) mustResize(paneID string) {
+func (f paneFlow) mustSwapJSONLayout() {
 	f.t.Helper()
 	cmd := testCommand()
+	_ = cmd.Set("session", f.sessionName)
+	_ = cmd.Set("a", f.swapIndexA)
+	_ = cmd.Set("b", f.otherIndex)
+	_ = cmd.Set("after", "true")
+	var out bytes.Buffer
+	if err := runSwap(f.ctx(cmd, &out, true)); err != nil {
+		f.t.Fatalf("runSwap(json) error: %v", err)
+	}
+	assertLayoutEnvelope(f.t, out.Bytes(), false)
+}
+
+func (f paneFlow) mustResize(paneID string) {
+	f.t.Helper()
+	edge := f.resizeEdgeForPane(paneID)
+	cmd := testCommand()
 	_ = cmd.Set("pane-id", paneID)
-	_ = cmd.Set("cols", "100")
-	_ = cmd.Set("rows", "40")
+	_ = cmd.Set("edge", string(edge))
+	_ = cmd.Set("delta", "50")
+	_ = cmd.Set("snap", "true")
 	if err := runResize(f.ctx(cmd, io.Discard, false)); err != nil {
 		f.t.Fatalf("runResize() error: %v", err)
 	}
+}
+
+func (f paneFlow) mustResizeJSONLayout(paneID string) {
+	f.t.Helper()
+	edge := f.resizeEdgeForPane(paneID)
+	cmd := testCommand()
+	_ = cmd.Set("pane-id", paneID)
+	_ = cmd.Set("edge", string(edge))
+	_ = cmd.Set("delta", "10")
+	_ = cmd.Set("snap", "true")
+	_ = cmd.Set("diff", "true")
+	var out bytes.Buffer
+	if err := runResize(f.ctx(cmd, &out, true)); err != nil {
+		f.t.Fatalf("runResize(json diff) error: %v", err)
+	}
+	assertLayoutEnvelope(f.t, out.Bytes(), true)
 }
 
 func (f paneFlow) mustFocus(paneID string) {
@@ -530,9 +569,12 @@ func (f paneFlow) mustCloseOtherPane() {
 	f.t.Helper()
 	cmd := testCommand()
 	_ = cmd.Set("pane-id", f.otherPaneID)
-	if err := runClose(f.ctx(cmd, io.Discard, false)); err != nil {
-		f.t.Fatalf("runClose() error: %v", err)
+	_ = cmd.Set("diff", "true")
+	var out bytes.Buffer
+	if err := runClose(f.ctx(cmd, &out, true)); err != nil {
+		f.t.Fatalf("runClose(json) error: %v", err)
 	}
+	assertLayoutEnvelope(f.t, out.Bytes(), true)
 	updated := waitForSessionSnapshot(f.t, f.client, f.sessionName)
 	for _, p := range updated.Panes {
 		if p.ID == f.otherPaneID {
@@ -557,13 +599,80 @@ func TestPaneCommandFlow(t *testing.T) {
 	flow.mustKeyCtrlK(flow.paneID)
 	flow.mustTail(flow.paneID)
 	flow.mustSwap()
+	flow.mustSwapJSONLayout()
 	flow.mustResize(flow.paneID)
+	flow.mustResizeJSONLayout(flow.paneID)
 	flow.mustFocus(flow.paneID)
 	flow.mustSendFocused("ping")
 	flow.mustCloseOtherPane()
 	if _, err := strconv.Atoi(flow.paneIndex); err != nil {
 		t.Fatalf("pane index not numeric: %q", flow.paneIndex)
 	}
+}
+
+func assertLayoutEnvelope(t *testing.T, payload []byte, expectBefore bool) {
+	t.Helper()
+	var envelope struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(payload, &envelope); err != nil {
+		t.Fatalf("unmarshal json output: %v", err)
+	}
+	layoutRaw, ok := envelope.Data["layout"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing layout in json output: %v", envelope.Data)
+	}
+	if session, ok := layoutRaw["session"].(string); !ok || session == "" {
+		t.Fatalf("layout session missing: %v", layoutRaw)
+	}
+	if _, ok := layoutRaw["after"]; !ok {
+		t.Fatalf("layout after missing: %v", layoutRaw)
+	}
+	_, hasBefore := layoutRaw["before"]
+	if expectBefore && !hasBefore {
+		t.Fatalf("layout before missing: %v", layoutRaw)
+	}
+	if !expectBefore && hasBefore {
+		t.Fatalf("layout before unexpected: %v", layoutRaw)
+	}
+}
+
+func (f paneFlow) resizeEdgeForPane(paneID string) sessiond.ResizeEdge {
+	f.t.Helper()
+	snap := waitForSessionSnapshot(f.t, f.client, f.sessionName)
+	var target *native.PaneSnapshot
+	for i := range snap.Panes {
+		if snap.Panes[i].ID == paneID {
+			target = &snap.Panes[i]
+			break
+		}
+	}
+	if target == nil {
+		f.t.Fatalf("missing pane %q in snapshot", paneID)
+	}
+	for _, other := range snap.Panes {
+		if other.ID == paneID {
+			continue
+		}
+		if other.Left == target.Left && other.Width == target.Width {
+			if other.Top > target.Top {
+				return sessiond.ResizeEdgeDown
+			}
+			if other.Top < target.Top {
+				return sessiond.ResizeEdgeUp
+			}
+		}
+		if other.Top == target.Top && other.Height == target.Height {
+			if other.Left > target.Left {
+				return sessiond.ResizeEdgeRight
+			}
+			if other.Left < target.Left {
+				return sessiond.ResizeEdgeLeft
+			}
+		}
+	}
+	f.t.Fatalf("no resize edge found for pane %q", paneID)
+	return sessiond.ResizeEdgeLeft
 }
 
 func TestFocusedPaneTokenCommands(t *testing.T) {
@@ -675,17 +784,21 @@ func TestPaneAddFocusesNewPane(t *testing.T) {
 	addCmd := testCommand()
 	_ = addCmd.Set("session", sessionName)
 	_ = addCmd.Set("index", pane.Index)
+	_ = addCmd.Set("diff", "true")
+	var out bytes.Buffer
 	addCtx := root.CommandContext{
 		Context: context.Background(),
 		Cmd:     addCmd,
 		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
-		Out:     io.Discard,
+		Out:     &out,
 		ErrOut:  io.Discard,
 		Stdin:   strings.NewReader(""),
+		JSON:    true,
 	}
 	if err := runAdd(addCtx); err != nil {
 		t.Fatalf("runAdd() error: %v", err)
 	}
+	assertLayoutEnvelope(t, out.Bytes(), true)
 
 	updated := waitForSessionSnapshot(t, client, sessionName)
 	if len(updated.Panes) < 2 {
@@ -711,6 +824,39 @@ func TestPaneAddFocusesNewPane(t *testing.T) {
 	if focusSnap.FocusedPaneID != newPaneID {
 		t.Fatalf("expected focus %q, got %q", newPaneID, focusSnap.FocusedPaneID)
 	}
+}
+
+func TestPaneSplitJSONLayout(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	td := newTestDaemon(t)
+	client := dialTestClient(t, td)
+	path := t.TempDir()
+	sessionName := "sess-split-json"
+	writeTestLayout(t, path, sessionName)
+	snap := startTestSession(t, client, sessionName, path)
+	if len(snap.Panes) == 0 {
+		t.Fatalf("session snapshot missing panes")
+	}
+
+	splitCmd := testCommand()
+	_ = splitCmd.Set("session", sessionName)
+	_ = splitCmd.Set("index", snap.Panes[0].Index)
+	_ = splitCmd.Set("orientation", "vertical")
+	_ = splitCmd.Set("diff", "true")
+	var out bytes.Buffer
+	splitCtx := root.CommandContext{
+		Context: context.Background(),
+		Cmd:     splitCmd,
+		Deps:    root.Dependencies{Version: td.version, Connect: td.connect},
+		Out:     &out,
+		ErrOut:  io.Discard,
+		Stdin:   strings.NewReader(""),
+		JSON:    true,
+	}
+	if err := runSplit(splitCtx); err != nil {
+		t.Fatalf("runSplit(json) error: %v", err)
+	}
+	assertLayoutEnvelope(t, out.Bytes(), true)
 }
 
 func TestPaneAddCountAddsMultiple(t *testing.T) {

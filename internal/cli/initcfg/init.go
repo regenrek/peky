@@ -151,7 +151,10 @@ ghostty:
 #   thumbnail_lines: 1
 #   idle_seconds: 20
 #   show_thumbnails: true
-#   preview_mode: grid   # grid | layout
+#   resize:
+#     mouse_apply: live  # live | commit
+#     mouse_throttle_ms: 16
+#     freeze_content_during_drag: true
 #   attach_behavior: current  # current | detached
 #   project_roots:
 #     - ~/projects

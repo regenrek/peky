@@ -33,7 +33,7 @@ func (f *MouseMotionFilter) Filter(model tea.Model, msg tea.Msg) tea.Msg {
 		return msg
 	}
 	m, ok := model.(*Model)
-	if !ok || !m.allowMouseMotion() {
+	if !ok || !m.allowMouseMotionFor(mouse) {
 		f.reset()
 		return nil
 	}

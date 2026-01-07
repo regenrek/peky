@@ -42,7 +42,7 @@ peky
   workspace [list|open|close|close-all]
   clone|c
   session [list|start|kill|rename|focus|snapshot]
-  pane [list|rename|add|split|close|swap|resize|send|run|view|tail|snapshot|history|wait|tag|action|key|signal|focus]
+  pane [list|rename|add|split|close|swap|resize|reset-sizes|zoom|send|run|view|tail|snapshot|history|wait|tag|action|key|signal|focus]
   relay [create|list|stop|stop-all]
   events [watch|replay]
   context [pack]
@@ -117,7 +117,10 @@ peky pane close --scope session --all
 peky pane close --scope project --all
 peky pane close --scope all --all
 peky pane swap --session NAME --a INDEX --b INDEX
-peky pane resize --pane-id PANE --cols N --rows N
+peky pane resize --pane-id PANE --edge left|right|up|down --delta N [--snap=true]
+peky pane reset-sizes --session NAME
+peky pane reset-sizes --pane-id PANE
+peky pane zoom --pane-id PANE [--toggle=true]
 peky pane focus --pane-id PANE
 peky pane signal --pane-id PANE --signal TERM
 ```
@@ -225,3 +228,28 @@ You can extend or change slash shortcuts in `internal/cli/spec/commands.yaml`.
 ## JSON output
 
 All `--json` responses follow `docs/schemas/cli.schema.json`. Streaming commands (e.g. `pane tail`, `events watch`) emit frames with `meta.stream=true` and `meta.seq`.
+
+Layout-changing pane commands (`pane add`, `pane split`, `pane close`, `pane swap`, `pane resize`, `pane reset-sizes`, `pane zoom`) accept `--after` or `--diff` alongside `--json` to include layout snapshots in `data.layout`. `--after` emits the post-op tree; `--diff` emits `before` and `after`. Scope closes do not emit layout snapshots.
+
+Example:
+
+```bash
+peky pane resize --pane-id @focused --edge right --delta 50 --json --diff
+```
+
+```json
+{
+  "ok": true,
+  "data": {
+    "action": "pane.resize",
+    "status": "ok",
+    "layout": {
+      "session": "demo",
+      "pane_id": "pane-1",
+      "before": {"root": {"axis": 0, "size": 1000, "children": []}},
+      "after": {"root": {"axis": 0, "size": 1000, "children": []}}
+    }
+  },
+  "meta": {"command": "pane.resize", "schema_version": "1.0.0"}
+}
+```

@@ -13,9 +13,6 @@ import (
 	"github.com/regenrek/peakypanes/internal/tool"
 )
 
-// LayoutBaseSize is the normalized coordinate space for pane layouts.
-const LayoutBaseSize = 1000
-
 // PaneEventType identifies the kind of pane event.
 type PaneEventType uint8
 

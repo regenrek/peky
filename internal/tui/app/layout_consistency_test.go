@@ -78,7 +78,6 @@ func TestPaneViewRequestMatchesRenderSize(t *testing.T) {
 			m.tab = tc.tab
 			m.state = StateDashboard
 			m.pekyPromptLine = tc.pekyPromptLine
-			m.settings.PreviewMode = "grid"
 			if tc.width > 0 {
 				m.width = tc.width
 			} else {

@@ -14,6 +14,8 @@ import (
 	"github.com/regenrek/peakypanes/internal/sessiond"
 	"github.com/regenrek/peakypanes/internal/tui/agent"
 	"github.com/regenrek/peakypanes/internal/tui/dashlayout"
+	"github.com/regenrek/peakypanes/internal/tui/layoutgeom"
+	"github.com/regenrek/peakypanes/internal/tui/mouse"
 	"github.com/regenrek/peakypanes/internal/userpath"
 )
 
@@ -246,14 +248,14 @@ func TestPaneLayoutHelpers(t *testing.T) {
 	if dashlayout.PaneBlockHeight(2) != 6 {
 		t.Fatalf("dashboardPaneBlockHeight unexpected")
 	}
-	panes := []PaneItem{{Left: 0, Top: 0, Width: 10, Height: 5}, {Left: 10, Top: 5, Width: 5, Height: 5}}
-	maxW, maxH := paneBounds(panes)
-	if maxW != 15 || maxH != 10 {
-		t.Fatalf("paneBounds = %d %d", maxW, maxH)
+	preview := mouse.Rect{X: 0, Y: 0, W: 100, H: 40}
+	rects := map[string]layout.Rect{
+		"p1": {X: 0, Y: 0, W: 500, H: 1000},
+		"p2": {X: 500, Y: 0, W: 500, H: 1000},
 	}
-	x, y, w, h := scalePane(PaneItem{Left: 0, Top: 0, Width: 5, Height: 5}, 10, 10, 20, 10)
-	if w < 2 || h < 2 || x < 0 || y < 0 {
-		t.Fatalf("scalePane = %d %d %d %d", x, y, w, h)
+	geom, ok := layoutgeom.Build(preview, rects)
+	if !ok || len(geom.Panes) != 2 {
+		t.Fatalf("layoutgeom.Build() = %#v ok=%v", geom, ok)
 	}
 }
 

@@ -26,8 +26,12 @@ func newTestModelLite() *Model {
 		quickReplyHistoryIndex: -1,
 		quickReplyMenuIndex:    -1,
 		settings: DashboardConfig{
-			PreviewMode:  "grid",
 			PreviewLines: 12,
+			Resize: DashboardResizeSettings{
+				MouseApply:              ResizeMouseApplyLive,
+				MouseThrottle:           16 * time.Millisecond,
+				FreezeContentDuringDrag: true,
+			},
 			Performance: DashboardPerformance{
 				Preset:        PerfPresetMax,
 				RenderPolicy:  RenderPolicyVisible,
@@ -38,6 +42,7 @@ func newTestModelLite() *Model {
 		width:  120,
 		height: 40,
 	}
+	m.resize.snap = true
 	m.filterInput = textinput.New()
 	m.quickReplyInput = textinput.New()
 	m.setupProjectPicker()
@@ -108,11 +113,12 @@ func testKeyMap() *dashboardKeyMap {
 		attach:          key.NewBinding(key.WithKeys("enter")),
 		newSession:      key.NewBinding(key.WithKeys("s")),
 		terminalFocus:   key.NewBinding(key.WithKeys("t")),
+		resizeMode:      key.NewBinding(key.WithKeys("r")),
 		togglePanes:     key.NewBinding(key.WithKeys("g")),
 		toggleSidebar:   key.NewBinding(key.WithKeys("b")),
 		openProject:     key.NewBinding(key.WithKeys("o")),
 		commandPalette:  key.NewBinding(key.WithKeys("c")),
-		refresh:         key.NewBinding(key.WithKeys("r")),
+		refresh:         key.NewBinding(key.WithKeys("R")),
 		editConfig:      key.NewBinding(key.WithKeys("e")),
 		kill:            key.NewBinding(key.WithKeys("x")),
 		closeProject:    key.NewBinding(key.WithKeys("z")),

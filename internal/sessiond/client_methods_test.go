@@ -346,22 +346,65 @@ func TestClientSendMouse(t *testing.T) {
 	})
 }
 
-func TestClientResizePane(t *testing.T) {
+func TestClientResizePaneEdge(t *testing.T) {
 	runClientCase(t, clientCase{
-		name: "ResizePane",
+		name: "ResizePaneEdge",
 		op:   OpResizePane,
 		check: func(env Envelope) error {
 			var req ResizePaneRequest
 			if err := decodePayload(env.Payload, &req); err != nil {
 				return err
 			}
-			if req.PaneID != "pane" || req.Cols != 80 || req.Rows != 24 {
+			if req.SessionName != "sess" || req.PaneID != "pane" || req.Edge != ResizeEdgeLeft || req.Delta != 12 || !req.Snap || !req.SnapState.Active || req.SnapState.Target != 100 {
 				return fmt.Errorf("unexpected resize request")
 			}
 			return nil
 		},
 		call: func(c *Client) error {
-			return c.ResizePane(context.Background(), "pane", 80, 24)
+			_, err := c.ResizePaneEdge(context.Background(), "sess", "pane", ResizeEdgeLeft, 12, true, SnapState{Active: true, Target: 100})
+			return err
+		},
+	})
+}
+
+func TestClientResetPaneSizes(t *testing.T) {
+	runClientCase(t, clientCase{
+		name: "ResetPaneSizes",
+		op:   OpResetPaneSizes,
+		check: func(env Envelope) error {
+			var req ResetSizesRequest
+			if err := decodePayload(env.Payload, &req); err != nil {
+				return err
+			}
+			if req.SessionName != "sess" || req.PaneID != "pane" {
+				return fmt.Errorf("unexpected reset sizes request")
+			}
+			return nil
+		},
+		call: func(c *Client) error {
+			_, err := c.ResetPaneSizes(context.Background(), "sess", "pane")
+			return err
+		},
+	})
+}
+
+func TestClientZoomPane(t *testing.T) {
+	runClientCase(t, clientCase{
+		name: "ZoomPane",
+		op:   OpZoomPane,
+		check: func(env Envelope) error {
+			var req ZoomPaneRequest
+			if err := decodePayload(env.Payload, &req); err != nil {
+				return err
+			}
+			if req.SessionName != "sess" || req.PaneID != "pane" || !req.Toggle {
+				return fmt.Errorf("unexpected zoom request")
+			}
+			return nil
+		},
+		call: func(c *Client) error {
+			_, err := c.ZoomPane(context.Background(), "sess", "pane", true)
+			return err
 		},
 	})
 }

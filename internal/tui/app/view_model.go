@@ -21,7 +21,7 @@ func (m *Model) viewModel() views.Model {
 
 	var previewSession *SessionItem
 	if session := m.selectedSession(); session != nil {
-		previewSession = session
+		previewSession = m.previewSessionForView(session)
 	}
 
 	menu := m.quickReplyMenuState()
@@ -101,13 +101,48 @@ func (m *Model) viewModel() views.Model {
 		Keys:                  buildKeyHints(m.keys),
 		Toast:                 m.toastText(),
 		PreviewCompact:        m.settings.PreviewCompact,
-		PreviewMode:           m.settings.PreviewMode,
+		FreezePreviewContent:  m.settings.Resize.FreezeContentDuringDrag,
 		DashboardPreviewLines: dashboardPreviewLines(m.settings),
 		PaneView:              m.paneViewProvider(),
 		DialogHelp:            m.dialogHelpView(),
+		Resize:                m.resizeOverlayView(),
+		ContextMenu:           m.contextMenuView(),
 	}
 
 	return vm
+}
+
+func (m *Model) previewSessionForView(session *SessionItem) *SessionItem {
+	if m == nil || session == nil {
+		return session
+	}
+	engine := m.layoutEngineFor(session.Name)
+	if engine == nil || engine.Tree == nil {
+		return session
+	}
+	rects := engine.Tree.ViewRects()
+	if len(rects) == 0 {
+		return session
+	}
+	out := *session
+	out.Panes = append([]PaneItem(nil), session.Panes...)
+	for i := range out.Panes {
+		rect, ok := rects[out.Panes[i].ID]
+		if ok {
+			out.Panes[i].Left = rect.X
+			out.Panes[i].Top = rect.Y
+			out.Panes[i].Width = rect.W
+			out.Panes[i].Height = rect.H
+			continue
+		}
+		if engine.Tree.ZoomedPaneID != "" {
+			out.Panes[i].Left = 0
+			out.Panes[i].Top = 0
+			out.Panes[i].Width = 0
+			out.Panes[i].Height = 0
+		}
+	}
+	return &out
 }
 
 func toViewQuickReplySuggestions(entries []quickReplySuggestion) []views.QuickReplySuggestion {
@@ -140,7 +175,7 @@ func (m *Model) paneViewProvider() func(id string, width, height int, showCursor
 		if pane := m.paneByID(id); pane != nil && pane.Disconnected {
 			return m.offlinePaneView(pane, width, height)
 		}
-		return m.paneView(id, width, height, showCursor)
+		return m.paneViewWithFallback(id, width, height, showCursor)
 	}
 }
 
@@ -189,6 +224,7 @@ func buildKeyHints(keys *dashboardKeyMap) views.KeyHints {
 		TogglePanes:     keyLabel(keys.togglePanes),
 		ToggleSidebar:   keyLabel(keys.toggleSidebar),
 		TerminalFocus:   keyLabel(keys.terminalFocus),
+		ResizeMode:      keyLabel(keys.resizeMode),
 		Scrollback:      keyLabel(keys.scrollback),
 		CopyMode:        keyLabel(keys.copyMode),
 		Refresh:         keyLabel(keys.refresh),

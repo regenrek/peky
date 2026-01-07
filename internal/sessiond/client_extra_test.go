@@ -110,8 +110,8 @@ func TestClientPaneOps(t *testing.T) {
 	if err := client.SendMouse(ctx, "pane-1", MouseEventPayload{X: 1}); err != nil {
 		t.Fatalf("SendMouse: %v", err)
 	}
-	if err := client.ResizePane(ctx, "pane-1", 80, 24); err != nil {
-		t.Fatalf("ResizePane: %v", err)
+	if _, err := client.ResizePaneEdge(ctx, "alpha", "pane-1", ResizeEdgeRight, 12, true, SnapState{}); err != nil {
+		t.Fatalf("ResizePaneEdge: %v", err)
 	}
 	if _, err := client.GetPaneView(ctx, PaneViewRequest{PaneID: "pane-1", Cols: 10, Rows: 2}); err != nil {
 		t.Fatalf("GetPaneView: %v", err)

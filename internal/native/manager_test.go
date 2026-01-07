@@ -99,9 +99,15 @@ func TestRenamePaneUpdatesTitle(t *testing.T) {
 
 func TestClosePaneRetilesAndActivates(t *testing.T) {
 	m := newTestManager(t)
-	paneA := &Pane{ID: "p-1", Index: "0", Active: false, Width: 10, Height: 10}
-	paneB := &Pane{ID: "p-2", Index: "1", Active: false, Width: 10, Height: 10}
+	paneA := &Pane{ID: "p-1", Index: "0", Active: false}
+	paneB := &Pane{ID: "p-2", Index: "1", Active: false}
 	session := &Session{Name: "sess", Panes: []*Pane{paneA, paneB}}
+	layoutCfg := &layout.LayoutConfig{Grid: "1x2"}
+	engine, err := buildLayoutEngine(layoutCfg, session.Panes)
+	if err != nil {
+		t.Fatalf("buildLayoutEngine() error: %v", err)
+	}
+	session.Layout = engine
 	m.sessions["sess"] = session
 	m.panes[paneA.ID] = paneA
 	m.panes[paneB.ID] = paneB
@@ -115,7 +121,7 @@ func TestClosePaneRetilesAndActivates(t *testing.T) {
 	if !session.Panes[0].Active {
 		t.Fatalf("ClosePane() should activate remaining pane")
 	}
-	if session.Panes[0].Width != LayoutBaseSize || session.Panes[0].Height != LayoutBaseSize {
+	if session.Panes[0].Width != layout.LayoutBaseSize || session.Panes[0].Height != layout.LayoutBaseSize {
 		t.Fatalf("ClosePane() did not retile to full size")
 	}
 	if got := drainEvents(m.Events()); got < 2 {
@@ -125,10 +131,21 @@ func TestClosePaneRetilesAndActivates(t *testing.T) {
 
 func TestSwapPanesSwapsGeometry(t *testing.T) {
 	m := newTestManager(t)
-	paneA := &Pane{ID: "p-1", Index: "0", Left: 0, Top: 0, Width: 100, Height: 100}
-	paneB := &Pane{ID: "p-2", Index: "1", Left: 100, Top: 0, Width: 100, Height: 100}
+	paneA := &Pane{ID: "p-1", Index: "0"}
+	paneB := &Pane{ID: "p-2", Index: "1"}
 	session := &Session{Name: "sess", Panes: []*Pane{paneA, paneB}}
+	layoutCfg := &layout.LayoutConfig{Grid: "1x2"}
+	engine, err := buildLayoutEngine(layoutCfg, session.Panes)
+	if err != nil {
+		t.Fatalf("buildLayoutEngine() error: %v", err)
+	}
+	session.Layout = engine
 	m.sessions["sess"] = session
+	if err := applyLayoutToPanes(session); err != nil {
+		t.Fatalf("applyLayoutToPanes() error: %v", err)
+	}
+	initialLeftA := paneA.Left
+	initialLeftB := paneB.Left
 
 	if err := m.SwapPanes("sess", "0", "1"); err != nil {
 		t.Fatalf("SwapPanes() error: %v", err)
@@ -136,8 +153,44 @@ func TestSwapPanesSwapsGeometry(t *testing.T) {
 	if paneA.Index != "1" || paneB.Index != "0" {
 		t.Fatalf("SwapPanes() indexes=%q/%q", paneA.Index, paneB.Index)
 	}
-	if paneA.Left != 100 || paneB.Left != 0 {
+	if paneA.Left != initialLeftB || paneB.Left != initialLeftA {
 		t.Fatalf("SwapPanes() did not swap geometry")
+	}
+}
+
+func TestResizePaneEdgeNotifiesAffected(t *testing.T) {
+	m := newTestManager(t)
+	paneA := &Pane{ID: "p-1", Index: "0"}
+	paneB := &Pane{ID: "p-2", Index: "1"}
+	session := &Session{Name: "sess", Panes: []*Pane{paneA, paneB}}
+	layoutCfg := &layout.LayoutConfig{Grid: "1x2"}
+	engine, err := buildLayoutEngine(layoutCfg, session.Panes)
+	if err != nil {
+		t.Fatalf("buildLayoutEngine() error: %v", err)
+	}
+	session.Layout = engine
+	m.sessions["sess"] = session
+	m.panes[paneA.ID] = paneA
+	m.panes[paneB.ID] = paneB
+	if err := applyLayoutToPanes(session); err != nil {
+		t.Fatalf("applyLayoutToPanes() error: %v", err)
+	}
+	startWidthA := paneA.Width
+	startWidthB := paneB.Width
+	drainEvents(m.Events())
+
+	result, err := m.ResizePaneEdge("sess", "p-1", layout.ResizeEdgeRight, 100, false, layout.SnapState{})
+	if err != nil {
+		t.Fatalf("ResizePaneEdge() error: %v", err)
+	}
+	if len(result.Affected) < 2 {
+		t.Fatalf("expected affected panes, got %#v", result.Affected)
+	}
+	if paneA.Width == startWidthA && paneB.Width == startWidthB {
+		t.Fatalf("expected pane widths to change")
+	}
+	if got := drainEvents(m.Events()); got < 2 {
+		t.Fatalf("ResizePaneEdge() events=%d want >=2", got)
 	}
 }
 
@@ -267,28 +320,6 @@ func TestSplitCommandAndParsePercent(t *testing.T) {
 	}
 	if _, _, err := splitCommand(""); err == nil {
 		t.Fatalf("splitCommand() should fail on empty")
-	}
-
-	if parsePercent("50%") != 50 {
-		t.Fatalf("parsePercent(50%%) failed")
-	}
-	if parsePercent("0") != 0 {
-		t.Fatalf("parsePercent(0) failed")
-	}
-	if parsePercent("bad") != 0 {
-		t.Fatalf("parsePercent(bad) should be 0")
-	}
-}
-
-func TestSplitRect(t *testing.T) {
-	base := rect{x: 0, y: 0, w: 100, h: 40}
-	left, right := splitRect(base, false, 25)
-	if left.w != 75 || right.w != 25 {
-		t.Fatalf("splitRect horiz widths=%d/%d", left.w, right.w)
-	}
-	top, bottom := splitRect(base, true, 50)
-	if top.h != 20 || bottom.h != 20 {
-		t.Fatalf("splitRect vert heights=%d/%d", top.h, bottom.h)
 	}
 }
 

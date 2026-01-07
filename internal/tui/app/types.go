@@ -95,6 +95,11 @@ const (
 )
 
 const (
+	ResizeMouseApplyLive   = "live"
+	ResizeMouseApplyCommit = "commit"
+)
+
+const (
 	PreviewRenderCached = "cached"
 	PreviewRenderDirect = "direct"
 	PreviewRenderOff    = "off"
@@ -120,6 +125,7 @@ type SessionItem struct {
 	Name       string
 	Path       string
 	LayoutName string
+	LayoutTree *layout.TreeSnapshot
 	Status     Status
 	PaneCount  int
 	ActivePane string
@@ -207,6 +213,13 @@ type DashboardPerformance struct {
 	PaneViews     PaneViewPerformance
 }
 
+// DashboardResizeSettings stores resolved resize configuration.
+type DashboardResizeSettings struct {
+	MouseApply              string
+	MouseThrottle           time.Duration
+	FreezeContentDuringDrag bool
+}
+
 // DashboardConfig wraps dashboard settings after defaults applied.
 type DashboardConfig struct {
 	RefreshInterval    time.Duration
@@ -214,8 +227,8 @@ type DashboardConfig struct {
 	PreviewCompact     bool
 	IdleThreshold      time.Duration
 	StatusMatcher      statusMatcher
-	PreviewMode        string
 	SidebarHidden      bool
+	Resize             DashboardResizeSettings
 	ProjectRoots       []string
 	AgentDetection     AgentDetectionConfig
 	AttachBehavior     string

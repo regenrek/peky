@@ -20,6 +20,12 @@ func selectionFromMouse(sel mouse.Selection) selectionState {
 
 func (m *Model) updateDashboardMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	cursorCmd := m.updateCursorShape(msg)
+	if cmd, handled := m.handleResizeMouse(msg); handled {
+		return m, tea.Batch(cursorCmd, cmd)
+	}
+	if cmd, handled := m.handleContextMenuMouse(msg); handled {
+		return m, tea.Batch(cursorCmd, cmd)
+	}
 	if _, handled := m.handleQuickReplyClick(msg); handled {
 		m.updateTerminalMouseDrag(msg)
 		return m, cursorCmd
@@ -93,6 +99,23 @@ func (m *Model) allowMouseMotion() bool {
 		return true
 	}
 	return m.terminalMouseDrag
+}
+
+func (m *Model) allowMouseMotionFor(msg tea.MouseMsg) bool {
+	if m == nil {
+		return false
+	}
+	if m.resize.drag.active {
+		return true
+	}
+	if m.state == StateDashboard && m.tab == TabProject {
+		if hit, ok := m.resizeHitTest(msg.X, msg.Y); ok {
+			if hit.Kind == resizeHitEdge || hit.Kind == resizeHitCorner {
+				return true
+			}
+		}
+	}
+	return m.allowMouseMotion()
 }
 
 func (m *Model) applySelectionFromHit(sel mouse.Selection) bool {

@@ -4,450 +4,132 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	xansi "github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/cellbuf"
 
+	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/sessiond"
 	"github.com/regenrek/peakypanes/internal/tui/ansi"
-	"github.com/regenrek/peakypanes/internal/tui/panelayout"
+	"github.com/regenrek/peakypanes/internal/tui/layoutgeom"
+	"github.com/regenrek/peakypanes/internal/tui/mouse"
 	"github.com/regenrek/peakypanes/internal/tui/theme"
 )
 
-type paneTileRenderer func(pane Pane, width, height int, compact bool, target bool, borders tileBorders) string
-
-func renderPanePreview(panes []Pane, width, height int, mode string, compact bool, targetPane string, terminalFocus bool) string {
-	return renderPanePreviewWithRenderer(panes, width, height, panePreviewContext{
-		mode:          mode,
-		compact:       compact,
-		targetPane:    targetPane,
-		terminalFocus: terminalFocus,
-	})
-}
-
-type panePreviewContext struct {
-	mode          string
-	compact       bool
+type layoutPreviewContext struct {
+	freezeContent bool
 	targetPane    string
 	terminalFocus bool
-	renderer      paneTileRenderer
+	guides        []ResizeGuide
+	paneView      func(id string, width, height int, showCursor bool) string
 }
 
-func renderPanePreviewWithRenderer(panes []Pane, width, height int, ctx panePreviewContext) string {
-	if ctx.mode == "layout" {
-		return renderPaneLayout(panes, width, height, ctx.targetPane)
-	}
-	return renderPaneTilesWithRenderer(panes, width, height, ctx.compact, ctx.targetPane, ctx.terminalFocus, ctx.renderer)
-}
-
-func renderPaneLayout(panes []Pane, width, height int, targetPane string) string {
+func renderPaneLayout(panes []Pane, width, height int, ctx layoutPreviewContext) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
 	if len(panes) == 0 {
 		return padLines("No panes", width, height)
 	}
-	c := newCanvas(width, height)
-
-	maxW, maxH := paneBounds(panes)
-	if maxW == 0 || maxH == 0 {
-		return padLines("No panes", width, height)
-	}
-
+	preview := mouse.Rect{X: 0, Y: 0, W: width, H: height}
+	rects := make(map[string]layout.Rect, len(panes))
+	paneByID := make(map[string]Pane, len(panes))
 	for _, pane := range panes {
-		x1, y1, w, h := scalePane(pane, maxW, maxH, width, height)
-		if w < 2 || h < 2 {
+		if pane.ID == "" || pane.Width <= 0 || pane.Height <= 0 {
 			continue
 		}
-		c.drawBox(x1, y1, w, h)
-		title := pane.Title
-		if pane.Index == targetPane {
-			title = "TARGET " + title
+		rects[pane.ID] = layout.Rect{
+			X: pane.Left,
+			Y: pane.Top,
+			W: pane.Width,
+			H: pane.Height,
 		}
-		c.write(x1+1, y1+1, title, w-2)
-		c.write(x1+1, y1+2, pane.Command, w-2)
-		status := ansi.LastNonEmpty(pane.Preview)
-		if status == "" {
-			status = "idle"
+		paneByID[pane.ID] = pane
+	}
+	geom, ok := layoutgeom.Build(preview, rects)
+	if !ok {
+		return padLines("No panes", width, height)
+	}
+
+	base := padLines("", width, height)
+	buf := cellbuf.NewBuffer(width, height)
+	cellbuf.SetContent(buf, base)
+
+	for _, paneGeom := range geom.Panes {
+		pane, ok := paneByID[paneGeom.ID]
+		if !ok {
+			continue
 		}
-		c.write(x1+1, y1+3, status, w-2)
-	}
-
-	return c.String()
-}
-
-const (
-	borderLevelDefault = iota
-	borderLevelTarget
-	borderLevelFocus
-)
-
-func borderLevelForPane(pane Pane, targetPane string, terminalFocus bool) int {
-	if pane.Index == targetPane {
-		if terminalFocus {
-			return borderLevelFocus
+		outer := paneGeom.Screen
+		if outer.Empty() {
+			continue
 		}
-		return borderLevelTarget
+		rect := layoutgeom.ContentRect(geom, outer)
+		if rect.Empty() {
+			continue
+		}
+		content := layoutPaneContent(pane, rect.W, rect.H, ctx)
+		if strings.TrimSpace(content) == "" {
+			content = ""
+		}
+		content = padLines(content, rect.W, rect.H)
+		cellbuf.SetContentRect(buf, content, cellbuf.Rect(rect.X, rect.Y, rect.W, rect.H))
 	}
-	return borderLevelDefault
+
+	dividerCells := layoutgeom.DividerCells(geom.Dividers)
+	dividerMap := make(map[[2]int]rune, len(dividerCells))
+	for _, cell := range dividerCells {
+		if cell.X < 0 || cell.Y < 0 || cell.X >= width || cell.Y >= height {
+			continue
+		}
+		buf.SetCell(cell.X, cell.Y, cellbuf.NewCell(cell.Rune))
+		dividerMap[[2]int{cell.X, cell.Y}] = cell.Rune
+	}
+
+	highlight := paneHighlightStyle(ctx.terminalFocus)
+	for _, paneGeom := range geom.Panes {
+		if ctx.targetPane == "" || paneGeom.ID == "" {
+			continue
+		}
+		pane, ok := paneByID[paneGeom.ID]
+		if !ok || pane.Index != ctx.targetPane {
+			continue
+		}
+		applyPaneBorderHighlight(buf, geom, paneGeom, dividerMap, highlight)
+		break
+	}
+
+	if len(ctx.guides) > 0 && len(dividerMap) > 0 {
+		applyResizeGuideStyles(buf, dividerMap, ctx.guides)
+	}
+
+	return renderBufferLines(buf)
 }
 
-func borderColorFor(level int) lipgloss.TerminalColor {
-	switch level {
-	case borderLevelTarget:
-		return theme.BorderTarget
-	case borderLevelFocus:
-		return theme.BorderFocus
-	default:
-		return theme.Border
-	}
-}
-
-func maxBorderLevel(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func renderPaneTilesWithRenderer(panes []Pane, width, height int, compact bool, targetPane string, terminalFocus bool, renderer paneTileRenderer) string {
+func layoutPaneContent(pane Pane, width, height int, ctx layoutPreviewContext) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
-	if len(panes) == 0 {
-		return padLines("No panes", width, height)
-	}
-	if renderer == nil {
-		renderer = renderPaneTile
-	}
-
-	layout := computePaneGridLayout(len(panes), width, height)
-	paneLevels := paneBorderLevels(panes, targetPane, terminalFocus)
-	ctx := paneTileContext{
-		panes:      panes,
-		layout:     layout,
-		paneLevels: paneLevels,
-		renderer:   renderer,
-		compact:    compact,
-		targetPane: targetPane,
-	}
-
-	renderedRows := make([]string, 0, layout.rows)
-	for r := 0; r < layout.rows; r++ {
-		rowHeight := paneRowHeight(layout, r)
-		tiles := ctx.renderRow(r, rowHeight)
-		row := lipgloss.JoinHorizontal(lipgloss.Top, tiles...)
-		renderedRows = append(renderedRows, row)
-	}
-	return padLines(strings.Join(renderedRows, "\n"), width, height)
-}
-
-type paneGridLayout struct {
-	cols        int
-	rows        int
-	tileWidth   int
-	baseHeight  int
-	extraHeight int
-}
-
-func computePaneGridLayout(paneCount, width, height int) paneGridLayout {
-	grid := panelayout.Compute(paneCount, width, height)
-	return paneGridLayout{
-		cols:        grid.Cols,
-		rows:        grid.Rows,
-		tileWidth:   grid.TileWidth,
-		baseHeight:  grid.BaseHeight,
-		extraHeight: grid.ExtraHeight,
-	}
-}
-
-func paneBorderLevels(panes []Pane, targetPane string, terminalFocus bool) []int {
-	levels := make([]int, len(panes))
-	for i, pane := range panes {
-		levels[i] = borderLevelForPane(pane, targetPane, terminalFocus)
-	}
-	return levels
-}
-
-func paneRowHeight(layout paneGridLayout, row int) int {
-	grid := panelayout.Grid{
-		Cols:        layout.cols,
-		Rows:        layout.rows,
-		TileWidth:   layout.tileWidth,
-		BaseHeight:  layout.baseHeight,
-		ExtraHeight: layout.extraHeight,
-	}
-	return grid.RowHeight(row)
-}
-
-type paneTileContext struct {
-	panes      []Pane
-	layout     paneGridLayout
-	paneLevels []int
-	renderer   paneTileRenderer
-	compact    bool
-	targetPane string
-}
-
-func (ctx paneTileContext) renderRow(row, rowHeight int) []string {
-	tiles := make([]string, 0, ctx.layout.cols)
-	for c := 0; c < ctx.layout.cols; c++ {
-		idx := row*ctx.layout.cols + c
-		if idx >= len(ctx.panes) {
-			tiles = append(tiles, padLines("", ctx.layout.tileWidth, rowHeight))
-			continue
-		}
-		borders := paneTileBorders(ctx.layout, ctx.paneLevels, idx, row, c)
-		tiles = append(tiles, ctx.renderer(ctx.panes[idx], ctx.layout.tileWidth, rowHeight, ctx.compact, ctx.panes[idx].Index == ctx.targetPane, borders))
-	}
-	return tiles
-}
-
-func paneTileBorders(layout paneGridLayout, paneLevels []int, idx, row, col int) tileBorders {
-	level := paneLevels[idx]
-	rightLevel := borderLevelDefault
-	if col < layout.cols-1 {
-		neighbor := idx + 1
-		if neighbor < len(paneLevels) {
-			rightLevel = paneLevels[neighbor]
+	if ctx.paneView != nil && strings.TrimSpace(pane.ID) != "" {
+		showCursor := pane.Index == ctx.targetPane && ctx.terminalFocus
+		if content := ctx.paneView(pane.ID, width, height, showCursor); strings.TrimSpace(content) != "" {
+			return content
 		}
 	}
-	bottomLevel := borderLevelDefault
-	if row < layout.rows-1 {
-		neighbor := idx + layout.cols
-		if neighbor < len(paneLevels) {
-			bottomLevel = paneLevels[neighbor]
-		}
-	}
-	colors := tileBorderColors{
-		top:    borderColorFor(level),
-		left:   borderColorFor(level),
-		right:  borderColorFor(maxBorderLevel(level, rightLevel)),
-		bottom: borderColorFor(maxBorderLevel(level, bottomLevel)),
-	}
-	return tileBorders{
-		top:    row == 0,
-		left:   col == 0,
-		right:  true,
-		bottom: true,
-		colors: colors,
-	}
+	lines := layoutFallbackLines(pane, ctx.targetPane)
+	return strings.Join(lines, "\n")
 }
 
-type tileBorderColors struct {
-	top    lipgloss.TerminalColor
-	right  lipgloss.TerminalColor
-	bottom lipgloss.TerminalColor
-	left   lipgloss.TerminalColor
-}
-
-type tileBorders struct {
-	top    bool
-	right  bool
-	bottom bool
-	left   bool
-	colors tileBorderColors
-}
-
-func renderPaneTile(pane Pane, width, height int, compact bool, target bool, borders tileBorders) string {
+func layoutFallbackLines(pane Pane, targetPane string) []string {
 	title := pane.Title
-	if target {
+	if pane.Index == targetPane {
 		title = "TARGET " + title
 	}
-
-	style := lipgloss.NewStyle().
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderTop(borders.top).
-		BorderRight(borders.right).
-		BorderBottom(borders.bottom).
-		BorderLeft(borders.left).
-		BorderForeground(theme.Border).
-		BorderTopForeground(borders.colors.top).
-		BorderRightForeground(borders.colors.right).
-		BorderBottomForeground(borders.colors.bottom).
-		BorderLeftForeground(borders.colors.left).
-		Padding(0, 1)
-
-	frameW, frameH := style.GetFrameSize()
-	borderW := style.GetHorizontalBorderSize()
-	borderH := style.GetVerticalBorderSize()
-	contentWidth := width - frameW
-	if contentWidth < 1 {
-		contentWidth = 1
+	command := pane.Command
+	status := ansi.LastNonEmpty(pane.Preview)
+	if status == "" {
+		status = "idle"
 	}
-	innerHeight := height - frameH
-	if innerHeight < 1 {
-		innerHeight = 1
-	}
-	blockWidth := width - borderW
-	if blockWidth < 1 {
-		blockWidth = 1
-	}
-	blockHeight := height - borderH
-	if blockHeight < 1 {
-		blockHeight = 1
-	}
-	style = style.Width(blockWidth).Height(blockHeight)
-
-	header := fmt.Sprintf("%s %s", renderBadge(pane.Status), title)
-	lines := []string{truncateTileLine(header, contentWidth)}
-	if strings.TrimSpace(pane.Command) != "" {
-		lines = append(lines, truncateTileLine(pane.Command, contentWidth))
-	}
-
-	previewSource := pane.Preview
-	if compact {
-		previewSource = compactPreviewLines(previewSource)
-	}
-	previewSource = trimTrailingBlankLines(previewSource)
-
-	maxPreview := innerHeight - len(lines)
-	if maxPreview < 0 {
-		maxPreview = 0
-	}
-	previewLines := tailLines(previewSource, maxPreview)
-	lines = append(lines, truncateTileLines(previewLines, contentWidth)...)
-
-	content := strings.Join(lines, "\n")
-	return style.Render(content)
-}
-
-func (m Model) renderPaneTileLive(pane Pane, width, height int, compact bool, target bool, borders tileBorders) string {
-	title := paneTileTitle(pane, target)
-	style := paneTileStyle(borders)
-	style, contentWidth, innerHeight := paneTileLayoutFor(width, height, borders, style)
-
-	header := fmt.Sprintf("%s %s", renderBadge(pane.Status), title)
-	lines := []string{truncateTileLine(header, contentWidth)}
-	if strings.TrimSpace(pane.Command) != "" {
-		lines = append(lines, truncateTileLine(pane.Command, contentWidth))
-	}
-
-	maxPreview := innerHeight - len(lines)
-	if maxPreview < 0 {
-		maxPreview = 0
-	}
-	lines = append(lines, paneTilePreviewLines(m, pane, contentWidth, maxPreview, compact, target)...)
-
-	content := padLines(strings.Join(lines, "\n"), contentWidth, innerHeight)
-	return style.Render(content)
-}
-
-func paneTileTitle(pane Pane, target bool) string {
-	title := pane.Title
-	if target {
-		title = "TARGET " + title
-	}
-	return title
-}
-
-func paneTileStyle(borders tileBorders) lipgloss.Style {
-	return lipgloss.NewStyle().
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderTop(borders.top).
-		BorderRight(borders.right).
-		BorderBottom(borders.bottom).
-		BorderLeft(borders.left).
-		BorderForeground(theme.Border).
-		BorderTopForeground(borders.colors.top).
-		BorderRightForeground(borders.colors.right).
-		BorderBottomForeground(borders.colors.bottom).
-		BorderLeftForeground(borders.colors.left).
-		Padding(0, 1)
-}
-
-func paneTileLayoutFor(width, height int, borders tileBorders, style lipgloss.Style) (lipgloss.Style, int, int) {
-	metrics := panelayout.TileMetricsFor(width, height, panelayout.TileBorders{
-		Top:    borders.top,
-		Left:   borders.left,
-		Right:  borders.right,
-		Bottom: borders.bottom,
-	})
-	borderW, borderH := panelayout.BorderSizes(panelayout.TileBorders{
-		Top:    borders.top,
-		Left:   borders.left,
-		Right:  borders.right,
-		Bottom: borders.bottom,
-	})
-	contentWidth := metrics.ContentWidth
-	if contentWidth < 1 {
-		contentWidth = 1
-	}
-	innerHeight := metrics.InnerHeight
-	if innerHeight < 1 {
-		innerHeight = 1
-	}
-	blockWidth := width - borderW
-	if blockWidth < 1 {
-		blockWidth = 1
-	}
-	blockHeight := height - borderH
-	if blockHeight < 1 {
-		blockHeight = 1
-	}
-	style = style.Width(blockWidth).Height(blockHeight)
-	return style, contentWidth, innerHeight
-}
-
-func paneTilePreviewLines(m Model, pane Pane, contentWidth, maxPreview int, compact, target bool) []string {
-	if maxPreview <= 0 {
-		return nil
-	}
-	if live := paneTileLiveView(m, pane, contentWidth, maxPreview, target); live != "" {
-		return strings.Split(padLines(live, contentWidth, maxPreview), "\n")
-	}
-	previewSource := pane.Preview
-	if len(previewSource) == 0 {
-		if summary := strings.TrimSpace(pane.SummaryLine); summary != "" {
-			previewSource = []string{summary}
-		}
-	}
-	if compact {
-		previewSource = compactPreviewLines(previewSource)
-	}
-	previewSource = trimTrailingBlankLines(previewSource)
-	previewLines := tailLines(previewSource, maxPreview)
-	return truncateTileLines(previewLines, contentWidth)
-}
-
-func paneTileLiveView(m Model, pane Pane, contentWidth, maxPreview int, target bool) string {
-	if m.PaneView == nil || strings.TrimSpace(pane.ID) == "" {
-		return ""
-	}
-	return m.PaneView(pane.ID, contentWidth, maxPreview, target && m.TerminalFocus)
-}
-
-func paneBounds(panes []Pane) (int, int) {
-	maxW := 0
-	maxH := 0
-	for _, p := range panes {
-		if p.Left+p.Width > maxW {
-			maxW = p.Left + p.Width
-		}
-		if p.Top+p.Height > maxH {
-			maxH = p.Top + p.Height
-		}
-	}
-	return maxW, maxH
-}
-
-func scalePane(p Pane, totalW, totalH, width, height int) (int, int, int, int) {
-	x1 := int(float64(p.Left) / float64(totalW) * float64(width))
-	y1 := int(float64(p.Top) / float64(totalH) * float64(height))
-	x2 := int(float64(p.Left+p.Width) / float64(totalW) * float64(width))
-	y2 := int(float64(p.Top+p.Height) / float64(totalH) * float64(height))
-	w := x2 - x1
-	h := y2 - y1
-	if w < 2 {
-		w = 2
-	}
-	if h < 2 {
-		h = 2
-	}
-	if x1+w > width {
-		w = width - x1
-	}
-	if y1+h > height {
-		h = height - y1
-	}
-	return x1, y1, w, h
+	return []string{title, command, status}
 }
 
 func paneLabel(pane Pane) string {
@@ -462,4 +144,171 @@ func paneLabel(pane Pane) string {
 		return label
 	}
 	return fmt.Sprintf("%s %s", pane.Index, label)
+}
+
+func paneHighlightStyle(focused bool) cellbuf.Style {
+	color := xansi.XParseColor(string(theme.BorderTarget))
+	if focused {
+		color = xansi.XParseColor(string(theme.BorderFocus))
+	}
+	return cellbuf.Style{Fg: color}
+}
+
+func applyPaneBorderHighlight(buf *cellbuf.Buffer, geom layoutgeom.Geometry, pane layoutgeom.Pane, dividerMap map[[2]int]rune, style cellbuf.Style) {
+	if buf == nil || len(dividerMap) == 0 || pane.ID == "" {
+		return
+	}
+
+	edges := []sessiond.ResizeEdge{
+		sessiond.ResizeEdgeLeft,
+		sessiond.ResizeEdgeRight,
+		sessiond.ResizeEdgeUp,
+		sessiond.ResizeEdgeDown,
+	}
+	for _, edge := range edges {
+		rect, ok := layoutgeom.EdgeLineRect(geom, layoutgeom.EdgeRef{PaneID: pane.ID, Edge: edge})
+		if !ok || rect.Empty() {
+			continue
+		}
+		x0 := rect.X
+		y0 := rect.Y
+		x1 := rect.X + rect.W - 1
+		y1 := rect.Y + rect.H - 1
+		for y := y0; y <= y1; y++ {
+			for x := x0; x <= x1; x++ {
+				key := [2]int{x, y}
+				r, ok := dividerMap[key]
+				if !ok {
+					continue
+				}
+				cell := cellbuf.NewCell(r)
+				cell.Style = style
+				buf.SetCell(x, y, cell)
+			}
+		}
+	}
+}
+
+func resizeGuideStyle(active bool) cellbuf.Style {
+	color := xansi.XParseColor(string(theme.Accent))
+	if active {
+		color = xansi.XParseColor(string(theme.AccentFocus))
+	}
+	return cellbuf.Style{Fg: color}
+}
+
+func applyResizeGuideStyles(buf *cellbuf.Buffer, dividerMap map[[2]int]rune, guides []ResizeGuide) {
+	if buf == nil || len(dividerMap) == 0 || len(guides) == 0 {
+		return
+	}
+	for _, guide := range guides {
+		if guide.W <= 0 || guide.H <= 0 {
+			continue
+		}
+		style := resizeGuideStyle(guide.Active)
+		x0 := guide.X
+		y0 := guide.Y
+		x1 := guide.X + guide.W - 1
+		y1 := guide.Y + guide.H - 1
+		for y := y0; y <= y1; y++ {
+			for x := x0; x <= x1; x++ {
+				key := [2]int{x, y}
+				r, ok := dividerMap[key]
+				if !ok {
+					continue
+				}
+				cell := cellbuf.NewCell(r)
+				cell.Style = style
+				buf.SetCell(x, y, cell)
+			}
+		}
+		applyResizeGuideHandle(buf, dividerMap, guide, style)
+	}
+}
+
+func applyResizeGuideHandle(buf *cellbuf.Buffer, dividerMap map[[2]int]rune, guide ResizeGuide, style cellbuf.Style) {
+	if buf == nil || len(dividerMap) == 0 {
+		return
+	}
+	if guide.W <= 0 || guide.H <= 0 {
+		return
+	}
+
+	switch {
+	case guide.W == 1 && guide.H >= 3:
+		x := guide.X
+		y := pickNonJunctionY(dividerMap, x, guide.Y, guide.H)
+		if y < 0 {
+			return
+		}
+		setGuideHandleCell(buf, dividerMap, x, y, '↔', style)
+	case guide.H == 1 && guide.W >= 3:
+		y := guide.Y
+		x := pickNonJunctionX(dividerMap, y, guide.X, guide.W)
+		if x < 0 {
+			return
+		}
+		setGuideHandleCell(buf, dividerMap, x, y, '↕', style)
+	}
+}
+
+func pickNonJunctionY(dividerMap map[[2]int]rune, x, y0, h int) int {
+	if h <= 0 {
+		return -1
+	}
+	mid := y0 + h/2
+	for delta := 0; delta <= h/2; delta++ {
+		for _, y := range []int{mid + delta, mid - delta} {
+			if y < y0 || y >= y0+h {
+				continue
+			}
+			r, ok := dividerMap[[2]int{x, y}]
+			if !ok || isJunctionRune(r) {
+				continue
+			}
+			return y
+		}
+	}
+	return -1
+}
+
+func pickNonJunctionX(dividerMap map[[2]int]rune, y, x0, w int) int {
+	if w <= 0 {
+		return -1
+	}
+	mid := x0 + w/2
+	for delta := 0; delta <= w/2; delta++ {
+		for _, x := range []int{mid + delta, mid - delta} {
+			if x < x0 || x >= x0+w {
+				continue
+			}
+			r, ok := dividerMap[[2]int{x, y}]
+			if !ok || isJunctionRune(r) {
+				continue
+			}
+			return x
+		}
+	}
+	return -1
+}
+
+func isJunctionRune(r rune) bool {
+	switch r {
+	case '┼', '┬', '┴', '├', '┤', '┌', '┐', '└', '┘':
+		return true
+	default:
+		return false
+	}
+}
+
+func setGuideHandleCell(buf *cellbuf.Buffer, dividerMap map[[2]int]rune, x, y int, handle rune, style cellbuf.Style) {
+	if buf == nil {
+		return
+	}
+	if _, ok := dividerMap[[2]int{x, y}]; !ok {
+		return
+	}
+	cell := cellbuf.NewCell(handle)
+	cell.Style = style
+	buf.SetCell(x, y, cell)
 }

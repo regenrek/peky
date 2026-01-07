@@ -29,6 +29,7 @@ type Session struct {
 	Name       string
 	Path       string
 	LayoutName string
+	Layout     *layout.Engine
 	Panes      []*Pane
 	CreatedAt  time.Time
 	Env        []string
@@ -151,6 +152,16 @@ func (m *Manager) StartSession(ctx context.Context, spec SessionSpec) (*Session,
 		return nil, err
 	}
 	session.Panes = panes
+	layoutEngine, err := buildLayoutEngine(normalized.Layout, panes)
+	if err != nil {
+		m.closePanes(panes)
+		return nil, err
+	}
+	session.Layout = layoutEngine
+	if err := applyLayoutToPanes(session); err != nil {
+		m.closePanes(panes)
+		return nil, err
+	}
 	if slog.Default().Enabled(ctx, slog.LevelDebug) {
 		slog.Debug("native: session started", slog.String("session", session.Name), slog.Int("panes", len(panes)), slog.String("layout", session.LayoutName))
 	}
@@ -281,10 +292,15 @@ func (m *Manager) snapshotSessions() ([]SessionSnapshot, []panePreviewRef, []str
 	paneRefs := make([]panePreviewRef, 0, len(sessions)*2)
 	paneIDs := make([]string, 0, len(sessions)*2)
 	for si, session := range sessions {
+		var treeSnap *layout.TreeSnapshot
+		if session.Layout != nil {
+			treeSnap = layout.SnapshotTree(session.Layout.Tree)
+		}
 		out[si] = SessionSnapshot{
 			Name:       session.Name,
 			Path:       session.Path,
 			LayoutName: session.LayoutName,
+			LayoutTree: treeSnap,
 			CreatedAt:  session.CreatedAt,
 			Env:        append([]string(nil), session.Env...),
 		}
@@ -475,6 +491,7 @@ type SessionSnapshot struct {
 	Name       string
 	Path       string
 	LayoutName string
+	LayoutTree *layout.TreeSnapshot
 	Panes      []PaneSnapshot
 	CreatedAt  time.Time
 	Env        []string

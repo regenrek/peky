@@ -5,7 +5,7 @@ Running `peky` with no subcommand opens the dashboard UI in the current terminal
 The dashboard shows:
 - Projects on top (tabs)
 - Sessions on the left (with pane counts and expandable panes)
-- Live pane preview on the right (native panes are fully interactive)
+- Live pane layout canvas on the right (native panes are fully interactive)
 - Input bar (always visible) and target pane highlight for follow-ups
 
 Quick reply details:
@@ -45,9 +45,22 @@ Pane
 - rename pane via command palette (ctrl+p)
 - ctrl+y peek selected pane in new terminal
 - ctrl+k toggle terminal focus (native only; configurable via dashboard.keymap.terminal_focus)
+- r resize mode (keyboard only; arrows resize, tab cycles edges, s toggle snap, 0 reset sizes, z zoom, esc exit; hold alt to disable snap)
 - mouse: single-click selects a pane; double-click toggles terminal focus (native only); esc exits focus
+- mouse: drag dividers to resize; right-click pane for context menu (terminal focus off)
 - f7 scrollback mode (native only; configurable via dashboard.keymap.scrollback)
 - f8 copy mode (native only; configurable via dashboard.keymap.copy_mode)
+
+Terminal focus
+- Terminal focus (ctrl+k) forwards keys to the pane.
+- Resize dividers + cursor shapes still work in terminal focus.
+- Context menu requires terminal focus off.
+
+Mouse + snapping notes
+- Drag dividers to resize; corners resize both axes.
+- Right-click pane body for context menu.
+- Snap is on by default; hold alt to disable snap while dragging.
+- Ghostty: set right-click to open the terminal context menu so the dashboard can intercept it.
 
 Other
 - ctrl+p command palette
@@ -61,7 +74,10 @@ dashboard:
   preview_lines: 12
   preview_compact: true
   idle_seconds: 20
-  preview_mode: grid  # grid | layout
+  resize:
+    mouse_apply: live  # live | commit
+    mouse_throttle_ms: 16
+    freeze_content_during_drag: true
   sidebar:
     hidden: false
   attach_behavior: current  # current | detached
@@ -77,6 +93,7 @@ dashboard:
     pane_next: ["ctrl+d"]
     pane_prev: ["ctrl+a"]
     terminal_focus: ["ctrl+k"]
+    resize_mode: ["r"]
     scrollback: ["f7"]
     copy_mode: ["f8"]
     toggle_panes: ["ctrl+u"]

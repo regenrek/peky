@@ -21,6 +21,10 @@ func runAdd(ctx root.CommandContext) error {
 		return err
 	}
 	defer cleanup()
+	layoutMode, err := parseLayoutOutputMode(ctx)
+	if err != nil {
+		return err
+	}
 
 	opts, err := parseAddOptions(ctx)
 	if err != nil {
@@ -35,6 +39,12 @@ func runAdd(ctx root.CommandContext) error {
 		return err
 	}
 
+	snapCtx, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
+	before, err := captureLayoutBefore(snapCtx, client, layoutMode, targetSession)
+	cancel()
+	if err != nil {
+		return err
+	}
 	newIndexes, err := splitPaneCount(ctxTimeout, client, targetSession, targetIndex, opts)
 	if err != nil {
 		return err
@@ -47,13 +57,23 @@ func runAdd(ctx root.CommandContext) error {
 		}
 	}
 	if ctx.JSON {
+		snapCtx, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
+		after, err := captureLayoutAfter(snapCtx, client, layoutMode, targetSession)
+		cancel()
+		if err != nil {
+			return err
+		}
 		meta = output.WithDuration(meta, start)
 		details := paneAddDetails(targetSession, targetIndex, opts.orientation, newIndexes, focusedPaneID)
-		return output.WriteSuccess(ctx.Out, meta, output.ActionResult{
+		result := output.ActionResult{
 			Action:  "pane.add",
 			Status:  "ok",
 			Details: details,
-		})
+		}
+		if layoutMode != layoutOutputNone {
+			result.Layout = buildLayoutState(targetSession, "", nil, before, after)
+		}
+		return output.WriteSuccess(ctx.Out, meta, result)
 	}
 	return writePaneAddOutput(ctx.Out, newIndexes)
 }
@@ -194,21 +214,6 @@ func activePaneIndex(sessions []native.SessionSnapshot, sessionName string) (str
 		return "", fmt.Errorf("session %q has no panes", sessionName)
 	}
 	return "", fmt.Errorf("session %q not found", sessionName)
-}
-
-func findPaneByID(sessions []native.SessionSnapshot, paneID string) (string, string, bool) {
-	paneID = strings.TrimSpace(paneID)
-	if paneID == "" {
-		return "", "", false
-	}
-	for _, session := range sessions {
-		for _, pane := range session.Panes {
-			if pane.ID == paneID {
-				return session.Name, pane.Index, true
-			}
-		}
-	}
-	return "", "", false
 }
 
 func focusPaneByIndex(ctx context.Context, client *sessiond.Client, sessionName, paneIndex string) (string, error) {

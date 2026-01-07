@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/native"
 	"github.com/regenrek/peakypanes/internal/terminal"
 )
@@ -29,6 +30,15 @@ func (m *fakeScopeManager) SplitPane(context.Context, string, string, bool, int)
 }
 func (m *fakeScopeManager) ClosePane(context.Context, string, string) error { return nil }
 func (m *fakeScopeManager) SwapPanes(string, string, string) error          { return nil }
+func (m *fakeScopeManager) ResizePaneEdge(string, string, layout.ResizeEdge, int, bool, layout.SnapState) (layout.ApplyResult, error) {
+	return layout.ApplyResult{}, nil
+}
+func (m *fakeScopeManager) ResetPaneSizes(string, string) (layout.ApplyResult, error) {
+	return layout.ApplyResult{}, nil
+}
+func (m *fakeScopeManager) ZoomPane(string, string, bool) (layout.ApplyResult, error) {
+	return layout.ApplyResult{}, nil
+}
 func (m *fakeScopeManager) SetPaneTool(string, string) error                { return nil }
 func (m *fakeScopeManager) SendInput(context.Context, string, []byte) error { return nil }
 func (m *fakeScopeManager) SendMouse(string, uv.MouseEvent, terminal.MouseRoute) error {

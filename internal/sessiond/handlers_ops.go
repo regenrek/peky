@@ -471,7 +471,15 @@ func (d *Daemon) handleResizePane(payload []byte) ([]byte, error) {
 	if err := decodePayload(payload, &req); err != nil {
 		return nil, err
 	}
+	sessionName := strings.TrimSpace(req.SessionName)
 	paneID, err := requirePaneID(req.PaneID)
+	if err != nil {
+		return nil, err
+	}
+	if sessionName == "" {
+		return nil, errors.New("sessiond: session is required")
+	}
+	edge, err := resolveResizeEdge(req.Edge)
 	if err != nil {
 		return nil, err
 	}
@@ -479,15 +487,53 @@ func (d *Daemon) handleResizePane(payload []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	win := manager.Window(paneID)
-	if win == nil {
-		return nil, fmt.Errorf("sessiond: pane %q not found", paneID)
-	}
-	cols, rows := normalizeDimensions(req.Cols, req.Rows)
-	if err := win.Resize(cols, rows); err != nil {
+	snapState := layout.SnapState{Active: req.SnapState.Active, Target: req.SnapState.Target}
+	result, err := manager.ResizePaneEdge(sessionName, paneID, edge, req.Delta, req.Snap, snapState)
+	if err != nil {
 		return nil, err
 	}
-	return nil, nil
+	return encodePayload(layoutOpResponse(result))
+}
+
+func (d *Daemon) handleResetPaneSizes(payload []byte) ([]byte, error) {
+	var req ResetSizesRequest
+	if err := decodePayload(payload, &req); err != nil {
+		return nil, err
+	}
+	sessionName := strings.TrimSpace(req.SessionName)
+	if sessionName == "" {
+		return nil, errors.New("sessiond: session is required")
+	}
+	manager, err := d.requireManager()
+	if err != nil {
+		return nil, err
+	}
+	result, err := manager.ResetPaneSizes(sessionName, strings.TrimSpace(req.PaneID))
+	if err != nil {
+		return nil, err
+	}
+	return encodePayload(layoutOpResponse(result))
+}
+
+func (d *Daemon) handleZoomPane(payload []byte) ([]byte, error) {
+	var req ZoomPaneRequest
+	if err := decodePayload(payload, &req); err != nil {
+		return nil, err
+	}
+	sessionName := strings.TrimSpace(req.SessionName)
+	paneID := strings.TrimSpace(req.PaneID)
+	if sessionName == "" || paneID == "" {
+		return nil, errors.New("sessiond: session and pane are required")
+	}
+	manager, err := d.requireManager()
+	if err != nil {
+		return nil, err
+	}
+	result, err := manager.ZoomPane(sessionName, paneID, req.Toggle)
+	if err != nil {
+		return nil, err
+	}
+	return encodePayload(layoutOpResponse(result))
 }
 
 func (d *Daemon) handleTerminalActionPayload(payload []byte) ([]byte, error) {
@@ -524,6 +570,34 @@ func requirePaneID(value string) (string, error) {
 
 func normalizeDimensions(cols, rows int) (int, int) {
 	return limits.Clamp(cols, rows)
+}
+
+func resolveResizeEdge(edge ResizeEdge) (layout.ResizeEdge, error) {
+	value := strings.ToLower(strings.TrimSpace(string(edge)))
+	switch value {
+	case string(ResizeEdgeLeft):
+		return layout.ResizeEdgeLeft, nil
+	case string(ResizeEdgeRight):
+		return layout.ResizeEdgeRight, nil
+	case string(ResizeEdgeUp):
+		return layout.ResizeEdgeUp, nil
+	case string(ResizeEdgeDown):
+		return layout.ResizeEdgeDown, nil
+	default:
+		return layout.ResizeEdgeLeft, fmt.Errorf("sessiond: invalid resize edge %q", edge)
+	}
+}
+
+func layoutOpResponse(result layout.ApplyResult) LayoutOpResponse {
+	resp := LayoutOpResponse{
+		Changed:   result.Changed,
+		Snapped:   result.Snapped,
+		SnapState: SnapState{Active: result.SnapState.Active, Target: result.SnapState.Target},
+	}
+	if len(result.Affected) > 0 {
+		resp.Affected = append([]string(nil), result.Affected...)
+	}
+	return resp
 }
 
 func resolvePaneTargetByID(manager sessionManager, paneID string) (string, string, error) {

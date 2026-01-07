@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/limits"
 	"github.com/regenrek/peakypanes/internal/native"
 	"github.com/regenrek/peakypanes/internal/termframe"
@@ -64,6 +65,16 @@ func TestNormalizeDimensions(t *testing.T) {
 	cols, rows = normalizeDimensions(limits.PaneMaxCols+10, limits.PaneMaxRows+10)
 	if cols != limits.PaneMaxCols || rows != limits.PaneMaxRows {
 		t.Fatalf("expected clamp to %dx%d, got %dx%d", limits.PaneMaxCols, limits.PaneMaxRows, cols, rows)
+	}
+}
+
+func TestResolveResizeEdge(t *testing.T) {
+	edge, err := resolveResizeEdge(ResizeEdgeLeft)
+	if err != nil || edge != layout.ResizeEdgeLeft {
+		t.Fatalf("expected left edge, got %v err=%v", edge, err)
+	}
+	if _, err := resolveResizeEdge(ResizeEdge("bad")); err == nil {
+		t.Fatalf("expected error for invalid edge")
 	}
 }
 

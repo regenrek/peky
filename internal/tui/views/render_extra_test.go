@@ -7,6 +7,11 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
+
+	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/sessiond"
+	"github.com/regenrek/peakypanes/internal/tui/layoutgeom"
+	"github.com/regenrek/peakypanes/internal/tui/mouse"
 )
 
 func TestViewDashboardContentRenders(t *testing.T) {
@@ -49,22 +54,40 @@ func TestViewDashboardContentRenders(t *testing.T) {
 	}
 }
 
-func TestRenderPanePreviewModes(t *testing.T) {
+func TestRenderPaneLayout(t *testing.T) {
 	panes := []Pane{
-		{Index: "0", Title: "main", Left: 0, Top: 0, Width: 50, Height: 20, Active: true, Status: paneStatusRunning},
-		{Index: "1", Title: "side", Left: 50, Top: 0, Width: 50, Height: 20, Active: false, Status: paneStatusIdle},
+		{Index: "0", Title: "main", Left: 0, Top: 0, Width: 50, Height: 20, Active: true, Status: paneStatusRunning, ID: "p0"},
+		{Index: "1", Title: "side", Left: 50, Top: 0, Width: 50, Height: 20, Active: false, Status: paneStatusIdle, ID: "p1"},
 	}
-	grid := renderPanePreview(panes, 40, 10, "grid", true, "0", false)
-	if strings.TrimSpace(grid) == "" {
-		t.Fatalf("renderPanePreview(grid) empty")
+	out := renderPaneLayout(panes, 40, 10, layoutPreviewContext{targetPane: "1"})
+	if strings.TrimSpace(out) == "" {
+		t.Fatalf("renderPaneLayout empty")
 	}
-	layout := renderPanePreview(panes, 40, 10, "layout", false, "1", false)
-	if strings.TrimSpace(layout) == "" {
-		t.Fatalf("renderPanePreview(layout) empty")
+}
+
+func TestRenderPaneLayoutShowsResizeHandleGlyph(t *testing.T) {
+	panes := []Pane{
+		{Index: "0", Title: "left", Left: 0, Top: 0, Width: 500, Height: layout.LayoutBaseSize, Active: true, Status: paneStatusRunning, ID: "p0"},
+		{Index: "1", Title: "right", Left: 500, Top: 0, Width: 500, Height: layout.LayoutBaseSize, Active: false, Status: paneStatusIdle, ID: "p1"},
 	}
-	tiles := renderPanePreview(panes, 40, 10, "tiles", false, "", false)
-	if strings.TrimSpace(tiles) == "" {
-		t.Fatalf("renderPanePreview(tiles) empty")
+	preview := mouse.Rect{X: 0, Y: 0, W: 40, H: 10}
+	rects := map[string]layout.Rect{
+		"p0": {X: 0, Y: 0, W: 500, H: layout.LayoutBaseSize},
+		"p1": {X: 500, Y: 0, W: 500, H: layout.LayoutBaseSize},
+	}
+	geom, ok := layoutgeom.Build(preview, rects)
+	if !ok {
+		t.Fatalf("expected geometry")
+	}
+	line, ok := layoutgeom.EdgeLineRect(geom, layoutgeom.EdgeRef{PaneID: "p0", Edge: sessiond.ResizeEdgeRight})
+	if !ok || line.Empty() {
+		t.Fatalf("expected divider line rect")
+	}
+	out := renderPaneLayout(panes, preview.W, preview.H, layoutPreviewContext{
+		guides: []ResizeGuide{{X: line.X, Y: line.Y, W: line.W, H: line.H, Active: false}},
+	})
+	if !strings.Contains(out, "↔") {
+		t.Fatalf("expected resize handle glyph in output")
 	}
 }
 

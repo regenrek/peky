@@ -74,9 +74,6 @@ func TestBuildSplitPanesWithStubWindow(t *testing.T) {
 	if !panes[0].Active {
 		t.Fatalf("first pane should be active")
 	}
-	if panes[0].Width == 0 || panes[1].Width == 0 {
-		t.Fatalf("expected split geometry to be set")
-	}
 }
 
 func TestCreatePaneInvalidCommand(t *testing.T) {
