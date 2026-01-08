@@ -401,21 +401,31 @@ func (m Model) viewFooter(width int) string {
 }
 
 func (m Model) viewServerStatus() string {
-	const slot = 4
-	if m.ServerDown {
+	const slot = 8
+	status := strings.ToLower(strings.TrimSpace(m.ServerStatus))
+	switch status {
+	case "down":
 		word := theme.StatusError.Render("down")
 		pad := slot - lipgloss.Width(word)
 		if pad < 0 {
 			pad = 0
 		}
 		return theme.ListDimmed.Render(strings.Repeat(" ", pad)) + word
+	case "restored":
+		word := theme.StatusWarning.Render("restored")
+		pad := slot - lipgloss.Width(word)
+		if pad < 0 {
+			pad = 0
+		}
+		return theme.ListDimmed.Render(strings.Repeat(" ", pad)) + word
+	default:
+		word := theme.ListDimmed.Render("up")
+		pad := slot - lipgloss.Width(word)
+		if pad < 0 {
+			pad = 0
+		}
+		return theme.ListDimmed.Render(strings.Repeat(" ", pad)) + word
 	}
-	word := theme.ListDimmed.Render("up")
-	pad := slot - lipgloss.Width(word)
-	if pad < 0 {
-		pad = 0
-	}
-	return theme.ListDimmed.Render(strings.Repeat(" ", pad)) + word
 }
 
 func (m Model) viewQuickReply(width int) string {

@@ -66,14 +66,18 @@ func (m *Model) handleServerStatusClick(msg tea.MouseMsg) (tea.Cmd, bool) {
 	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
 		return nil, false
 	}
-	if !m.serverDown() {
-		return nil, false
-	}
 	rect, ok := m.serverStatusRect()
 	if !ok || !rect.Contains(msg.X, msg.Y) {
 		return nil, false
 	}
-	m.setState(StateRestartNotice)
+	switch m.serverStatus() {
+	case "restored":
+		m.setState(StateRestartNotice)
+	case "down":
+		m.setState(StateConfirmRestart)
+	default:
+		return nil, false
+	}
 	return nil, true
 }
 

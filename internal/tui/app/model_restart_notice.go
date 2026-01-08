@@ -21,7 +21,6 @@ func (m *Model) updateRestartNotice(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.startFreshFromRestart()
 		return m, nil
 	case "s":
-		m.setRestartNoticePending(false)
 		m.setState(StateDashboard)
 		return m, m.focusFirstStalePane()
 	}

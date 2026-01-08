@@ -112,7 +112,7 @@ func (m *Model) serverStatusRect() (mouse.Rect, bool) {
 	if !ok || footer.W <= 0 || footer.H <= 0 {
 		return mouse.Rect{}, false
 	}
-	const slot = 4
+	const slot = 8
 	if footer.W < slot {
 		return mouse.Rect{X: footer.X, Y: footer.Y, W: footer.W, H: 1}, true
 	}

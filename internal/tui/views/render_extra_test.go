@@ -213,7 +213,7 @@ func TestFooterRendersServerStatus(t *testing.T) {
 		t.Fatalf("footer=%q want suffix up", plain)
 	}
 
-	m.ServerDown = true
+	m.ServerStatus = "down"
 	out = Render(m)
 	lines = strings.Split(out, "\n")
 	footer = ""
@@ -229,6 +229,24 @@ func TestFooterRendersServerStatus(t *testing.T) {
 	plain = strings.TrimRight(ansi.Strip(footer), " ")
 	if !strings.HasSuffix(plain, "down") {
 		t.Fatalf("footer=%q want suffix down", plain)
+	}
+
+	m.ServerStatus = "restored"
+	out = Render(m)
+	lines = strings.Split(out, "\n")
+	footer = ""
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.Contains(lines[i], "quit") {
+			footer = lines[i]
+			break
+		}
+	}
+	if footer == "" {
+		t.Fatalf("expected footer line containing quit")
+	}
+	plain = strings.TrimRight(ansi.Strip(footer), " ")
+	if !strings.HasSuffix(plain, "restored") {
+		t.Fatalf("footer=%q want suffix restored", plain)
 	}
 }
 
