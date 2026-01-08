@@ -37,6 +37,14 @@ kill_pids() {
   done <<<"$raw"
 }
 
+ui_pids() {
+  # ps columns: pid, comm (exe name), args (full argv)
+  # Keep daemon alive by never killing processes whose args include " daemon ".
+  ps -ax -o pid=,comm=,args= | awk '
+    ($2 == "peky" || $2 == "peakypanes") && ($0 !~ /[[:space:]]daemon([[:space:]]|$)/) { print $1 }
+  '
+}
+
 kill_all=false
 skip_daemon_restart=false
 keep_daemon=false
@@ -71,12 +79,7 @@ else
 fi
 
 if [[ "$kill_all" == true ]]; then
-  ui_pids_raw="$(pgrep -x "peky" || true)"
-  peak_ui_pids_raw="$(pgrep -x "peakypanes" || true)"
-  if [[ "$keep_daemon" == true ]]; then
-    ui_pids_raw=""
-  fi
-  ui_pids="$(printf "%s\n%s\n" "$ui_pids_raw" "$peak_ui_pids_raw")"
+  ui_pids="$(ui_pids || true)"
   if [[ -n "$(pid_list "$ui_pids")" ]]; then
     kill_pids "stopping UI process(es)" "" "$ui_pids"
   fi
