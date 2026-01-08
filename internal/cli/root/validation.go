@@ -13,9 +13,22 @@ func validateArgs(cmdSpec spec.Command, cmd *cli.Command) error {
 	if len(cmdSpec.Args) == 0 {
 		return nil
 	}
-	args := cmd.Args().Slice()
-	for i, argSpec := range cmdSpec.Args {
-		if argSpec.Required && len(args) <= i {
+	for _, argSpec := range cmdSpec.Args {
+		if !argSpec.Required {
+			continue
+		}
+		name := strings.TrimSpace(argSpec.Name)
+		if name == "" {
+			continue
+		}
+		if argSpec.Variadic {
+			values := cmd.StringArgs(name)
+			if len(values) == 0 {
+				return fmt.Errorf("missing argument %q", argSpec.Name)
+			}
+			continue
+		}
+		if strings.TrimSpace(cmd.StringArg(name)) == "" {
 			return fmt.Errorf("missing argument %q", argSpec.Name)
 		}
 	}
@@ -82,21 +95,17 @@ func fieldPresent(field string, cmdSpec spec.Command, cmd *cli.Command) bool {
 	}
 	for _, arg := range cmdSpec.Args {
 		if arg.Name == field {
-			idx := argIndex(cmdSpec.Args, field)
-			if idx < 0 {
+			if arg.Variadic {
+				values := cmd.StringArgs(field)
+				for _, value := range values {
+					if strings.TrimSpace(value) != "" {
+						return true
+					}
+				}
 				return false
 			}
-			return len(cmd.Args().Slice()) > idx && strings.TrimSpace(cmd.Args().Get(idx)) != ""
+			return strings.TrimSpace(cmd.StringArg(field)) != ""
 		}
 	}
 	return cmd.IsSet(field)
-}
-
-func argIndex(args []spec.Arg, name string) int {
-	for i, arg := range args {
-		if arg.Name == name {
-			return i
-		}
-	}
-	return -1
 }
