@@ -10,7 +10,9 @@ The dashboard shows:
 
 Quick reply details:
 - The input is always active; type and press enter to send to the highlighted pane.
-- Use esc to clear.
+- When the input is empty, terminal-like keys are passed through to the selected pane (interactive prompts):
+  - enter, esc, arrows, tab, home/end, pgup/pgdown, ctrl+l
+- Use esc with non-empty input to clear.
 - Type / to see slash commands and press tab to autocomplete.
 - Toggle terminal focus to send raw keystrokes into the pane.
 
@@ -32,7 +34,6 @@ Project
 - alt+c close project (hides from tabs; sessions keep running; press k in the dialog to kill)
 
 Session
-- enter attach/start session (when reply is empty)
 - ctrl+n new session (pick layout)
 - ctrl+x close session
 - rename session via command palette (ctrl+p)

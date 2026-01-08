@@ -3,6 +3,7 @@
 Scope
 - Resize handles always active in the project layout canvas, regardless of terminal focus.
 - Terminal focus (Ctrl+K) forwards keys to the pane; context menu remains UI-only.
+- Quick reply passthrough: when the input is empty, terminal-like navigation keys are forwarded to the selected pane for interactive prompts.
 - Ghostty-first; use standard mouse/cursor protocols (OSC 22 cursor shapes).
 
 Definitions

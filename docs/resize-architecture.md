@@ -16,6 +16,7 @@ UI mode (terminal focus off):
 - Drag resize: left press on edge/corner starts drag, motion updates preview (mouse_throttle_ms), release commits, outside click cancels.
 - Right-click (Button3): opens context menu on pane body.
 - Cursor shapes: OSC 22 col/row/diag-resize on hover, pointer/text elsewhere.
+- Quick reply passthrough: when the input is empty, Enter/Esc/arrows/tab are forwarded to the selected pane for interactive prompts.
 
 Terminal mode (Ctrl+K):
 - Mouse/keys pass through via `SendMouse` and key forwarding.
