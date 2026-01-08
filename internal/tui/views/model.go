@@ -64,6 +64,7 @@ type Model struct {
 	DialogHelp               DialogHelp
 	Resize                   ResizeOverlay
 	ContextMenu              ContextMenu
+	ServerDown               bool
 }
 
 type Project struct {

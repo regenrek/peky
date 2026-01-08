@@ -101,6 +101,25 @@ func fitLine(text string, width int) string {
 	return truncated + strings.Repeat(" ", padding)
 }
 
+func fitLineSuffix(text, suffix string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	suffixW := lipgloss.Width(suffix)
+	if suffixW <= 0 {
+		return fitLine(text, width)
+	}
+	if suffixW >= width {
+		return ansi.Truncate(suffix, width, "")
+	}
+	leftW := width - suffixW - 1
+	if leftW <= 0 {
+		return ansi.Truncate(suffix, width, "")
+	}
+	left := fitLine(text, leftW)
+	return left + " " + suffix
+}
+
 func centerLine(text string, width int) string {
 	if width <= 0 {
 		return ""

@@ -12,6 +12,12 @@ func TestLayoutMetricsRects(t *testing.T) {
 	if _, ok := m.headerRect(); ok {
 		t.Fatalf("expected header rect to be false for zero size")
 	}
+	if _, ok := m.footerRect(); ok {
+		t.Fatalf("expected footer rect to be false for zero size")
+	}
+	if _, ok := m.serverStatusRect(); ok {
+		t.Fatalf("expected server status rect to be false for zero size")
+	}
 
 	m.width = 120
 	m.height = 40
@@ -23,5 +29,15 @@ func TestLayoutMetricsRects(t *testing.T) {
 	header, ok := m.headerRect()
 	if !ok || header.W <= 0 || header.H <= 0 {
 		t.Fatalf("expected header rect, got %#v ok=%v", header, ok)
+	}
+
+	footer, ok := m.footerRect()
+	if !ok || footer.W <= 0 || footer.H <= 0 {
+		t.Fatalf("expected footer rect, got %#v ok=%v", footer, ok)
+	}
+
+	status, ok := m.serverStatusRect()
+	if !ok || status.W <= 0 || status.H <= 0 {
+		t.Fatalf("expected server status rect, got %#v ok=%v", status, ok)
 	}
 }

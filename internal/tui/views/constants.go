@@ -23,6 +23,7 @@ const (
 	viewDebugMenu
 	viewPekyDialog
 	viewAuthDialog
+	viewRestartNotice
 )
 
 // Tab ordering must match app.DashboardTab.

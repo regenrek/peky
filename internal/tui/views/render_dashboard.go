@@ -394,10 +394,28 @@ func (m Model) viewFooter(width int) string {
 	base = theme.ListDimmed.Render(base) + modeHintRendered
 	toast := m.Toast
 	if toast == "" {
-		return fitLine(base, width)
+		return fitLineSuffix(base, m.viewServerStatus(), width)
 	}
 	line := fmt.Sprintf("%s  %s", base, toast)
-	return fitLine(line, width)
+	return fitLineSuffix(line, m.viewServerStatus(), width)
+}
+
+func (m Model) viewServerStatus() string {
+	const slot = 4
+	if m.ServerDown {
+		word := theme.StatusError.Render("down")
+		pad := slot - lipgloss.Width(word)
+		if pad < 0 {
+			pad = 0
+		}
+		return theme.ListDimmed.Render(strings.Repeat(" ", pad)) + word
+	}
+	word := theme.ListDimmed.Render("up")
+	pad := slot - lipgloss.Width(word)
+	if pad < 0 {
+		pad = 0
+	}
+	return theme.ListDimmed.Render(strings.Repeat(" ", pad)) + word
 }
 
 func (m Model) viewQuickReply(width int) string {

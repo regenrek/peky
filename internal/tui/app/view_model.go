@@ -107,9 +107,20 @@ func (m *Model) viewModel() views.Model {
 		DialogHelp:            m.dialogHelpView(),
 		Resize:                m.resizeOverlayView(),
 		ContextMenu:           m.contextMenuView(),
+		ServerDown:            m.serverDown(),
 	}
 
 	return vm
+}
+
+func (m *Model) serverDown() bool {
+	if m == nil {
+		return false
+	}
+	if m.daemonDisconnected {
+		return true
+	}
+	return m.restartNoticePending
 }
 
 func (m *Model) previewSessionForView(session *SessionItem) *SessionItem {

@@ -97,6 +97,7 @@ var keyHandlers = map[ViewState]keyHandler{
 	StateProjectRootSetup: func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateProjectRootSetup(msg) },
 	StatePekyDialog:       func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updatePekyDialog(msg) },
 	StateAuthDialog:       func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateAuthDialog(msg) },
+	StateRestartNotice:    func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateRestartNotice(msg) },
 }
 
 type updateHandler func(*Model, tea.Msg) (tea.Model, tea.Cmd)

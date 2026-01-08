@@ -39,4 +39,5 @@ var viewRenderers = map[int]func(Model) string{
 	viewProjectRootSetup:        func(m Model) string { return m.viewProjectRootSetup() },
 	viewPekyDialog:              func(m Model) string { return m.viewPekyDialog() },
 	viewAuthDialog:              func(m Model) string { return m.viewAuthDialog() },
+	viewRestartNotice:           func(m Model) string { return m.viewRestartNotice() },
 }

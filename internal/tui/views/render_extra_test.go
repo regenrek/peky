@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/sessiond"
@@ -151,6 +152,7 @@ func TestViewStates(t *testing.T) {
 		viewConfirmCloseProject,
 		viewConfirmCloseAllProjects,
 		viewConfirmRestart,
+		viewRestartNotice,
 		viewRenameSession,
 		viewRenamePane,
 		viewProjectRootSetup,
@@ -166,6 +168,67 @@ func TestViewStates(t *testing.T) {
 		if strings.TrimSpace(out) == "" {
 			t.Fatalf("Render(view=%d) empty", view)
 		}
+	}
+}
+
+func TestFooterRendersServerStatus(t *testing.T) {
+	m := Model{
+		Width:             80,
+		Height:            24,
+		ActiveView:        viewDashboard,
+		HeaderLine:        "Peaky Panes",
+		EmptyStateMessage: "empty",
+		Projects:          []Project{{Name: "Proj"}},
+		DashboardColumns: []DashboardColumn{{
+			ProjectID:   "proj",
+			ProjectName: "Proj",
+			Panes: []DashboardPane{{
+				ProjectID:   "proj",
+				ProjectName: "Proj",
+				SessionName: "sess",
+				Pane:        Pane{Index: "0"},
+			}},
+		}},
+		DashboardSelectedProject: "proj",
+		SidebarProject:           &Project{Name: "Proj"},
+		SidebarSessions:          []Session{{Name: "sess", Status: sessionRunning}},
+		PreviewSession:           &Session{Name: "sess", Status: sessionRunning, Panes: []Pane{{Index: "0"}}},
+		QuickReplyInput:          textinput.New(),
+	}
+
+	out := Render(m)
+	lines := strings.Split(out, "\n")
+	footer := ""
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.Contains(lines[i], "quit") {
+			footer = lines[i]
+			break
+		}
+	}
+	if footer == "" {
+		t.Fatalf("expected footer line containing quit")
+	}
+	plain := strings.TrimRight(ansi.Strip(footer), " ")
+	if !strings.HasSuffix(plain, "up") {
+		t.Fatalf("footer=%q want suffix up", plain)
+	}
+
+	m.ServerDown = true
+	out = Render(m)
+	lines = strings.Split(out, "\n")
+	footer = ""
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.Contains(lines[i], "quit") {
+			footer = lines[i]
+			break
+		}
+	}
+	if footer == "" {
+		t.Fatalf("expected footer line containing quit")
+	}
+	plain = strings.TrimRight(ansi.Strip(footer), " ")
+	if !strings.HasSuffix(plain, "down") {
+		t.Fatalf("footer=%q want suffix down", plain)
 	}
 }
 

@@ -60,17 +60,18 @@ type dashboardKeyMap struct {
 
 // Model implements tea.Model for peakypanes TUI.
 type Model struct {
-	client             *sessiond.Client
-	paneViewClient     *sessiond.Client
-	daemonVersion      string
-	daemonDisconnected bool
-	reconnectInFlight  bool
-	reconnectBackoff   time.Duration
-	reconnectToastAt   time.Time
-	state              ViewState
-	tab                DashboardTab
-	width              int
-	height             int
+	client               *sessiond.Client
+	paneViewClient       *sessiond.Client
+	daemonVersion        string
+	daemonDisconnected   bool
+	restartNoticePending bool
+	reconnectInFlight    bool
+	reconnectBackoff     time.Duration
+	reconnectToastAt     time.Time
+	state                ViewState
+	tab                  DashboardTab
+	width                int
+	height               int
 
 	configPath string
 

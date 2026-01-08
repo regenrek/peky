@@ -26,6 +26,9 @@ func (m *Model) updateDashboardMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if cmd, handled := m.handleContextMenuMouse(msg); handled {
 		return m, tea.Batch(cursorCmd, cmd)
 	}
+	if cmd, handled := m.handleServerStatusClick(msg); handled {
+		return m, tea.Batch(cursorCmd, cmd)
+	}
 	if _, handled := m.handleQuickReplyClick(msg); handled {
 		m.updateTerminalMouseDrag(msg)
 		return m, cursorCmd
@@ -54,6 +57,24 @@ func (m *Model) updateDashboardMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		},
 	})
 	return m, tea.Batch(cursorCmd, cmd)
+}
+
+func (m *Model) handleServerStatusClick(msg tea.MouseMsg) (tea.Cmd, bool) {
+	if m == nil {
+		return nil, false
+	}
+	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
+		return nil, false
+	}
+	if !m.serverDown() {
+		return nil, false
+	}
+	rect, ok := m.serverStatusRect()
+	if !ok || !rect.Contains(msg.X, msg.Y) {
+		return nil, false
+	}
+	m.setState(StateRestartNotice)
+	return nil, true
 }
 
 func (m *Model) handleQuickReplyClick(msg tea.MouseMsg) (tea.Cmd, bool) {
