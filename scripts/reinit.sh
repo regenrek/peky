@@ -78,7 +78,7 @@ else
   fi
 fi
 
-if [[ "$kill_all" == true ]]; then
+if [[ "$kill_all" == true && "$keep_daemon" != true ]]; then
   ui_pids="$(ui_pids || true)"
   if [[ -n "$(pid_list "$ui_pids")" ]]; then
     kill_pids "stopping UI process(es)" "" "$ui_pids"
