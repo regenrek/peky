@@ -18,6 +18,12 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if cmd, handled := m.handleTerminalFocusToggle(msg); handled {
 		return m, cmd
 	}
+	if cmd, handled := m.handleContextMenuKey(msg); handled {
+		return m, cmd
+	}
+	if cmd, handled := m.handleResizeKey(msg); handled {
+		return m, cmd
+	}
 	if cmd, handled := m.handleProjectNav(msg); handled {
 		return m, cmd
 	}
@@ -87,8 +93,24 @@ func (m *Model) handleTerminalFocusToggle(msg tea.KeyMsg) (tea.Cmd, bool) {
 		m.setToast("Terminal focus is only available for PeakyPanes-managed sessions", toastInfo)
 		return nil, true
 	}
-	m.setTerminalFocus(!m.terminalFocus)
-	return m.refreshPaneViewsCmd(), true
+	next := !m.terminalFocus
+	var cmd tea.Cmd
+	if next {
+		if m.resize.drag.active {
+			cmd = m.cancelResizeDrag()
+		}
+		if m.contextMenu.open {
+			m.closeContextMenu()
+		}
+		if m.resize.mode {
+			m.exitResizeMode()
+		}
+	}
+	m.setTerminalFocus(next)
+	if cmd == nil {
+		return m.refreshPaneViewsCmd(), true
+	}
+	return tea.Batch(cmd, m.refreshPaneViewsCmd()), true
 }
 
 func (m *Model) handleProjectNav(msg tea.KeyMsg) (tea.Cmd, bool) {

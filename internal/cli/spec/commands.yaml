@@ -421,6 +421,12 @@ commands:
             type: bool
             default: true
             description: Focus the newly added pane.
+          - name: after
+            type: bool
+            description: Include post-op layout tree in JSON output (requires --json).
+          - name: diff
+            type: bool
+            description: Include before/after layout trees in JSON output (requires --json).
         json:
           supported: true
           schema_ref: "#/$defs/ActionResponse"
@@ -450,6 +456,12 @@ commands:
             type: bool
             default: true
             description: Focus the newly added pane.
+          - name: after
+            type: bool
+            description: Include post-op layout tree in JSON output (requires --json).
+          - name: diff
+            type: bool
+            description: Include before/after layout trees in JSON output (requires --json).
         json:
           supported: true
           schema_ref: "#/$defs/ActionResponse"
@@ -475,6 +487,12 @@ commands:
           - name: all
             type: bool
             description: Confirm closing all panes in a scope.
+          - name: after
+            type: bool
+            description: Include post-op layout tree in JSON output (requires --json; not valid with --scope).
+          - name: diff
+            type: bool
+            description: Include before/after layout trees in JSON output (requires --json; not valid with --scope).
         constraints:
           - type: exactly_one
             fields: [pane-id, session, scope]
@@ -503,12 +521,18 @@ commands:
             type: int
             required: true
             description: Second pane index.
+          - name: after
+            type: bool
+            description: Include post-op layout tree in JSON output (requires --json).
+          - name: diff
+            type: bool
+            description: Include before/after layout trees in JSON output (requires --json).
         json:
           supported: true
           schema_ref: "#/$defs/ActionResponse"
       - name: resize
         id: pane.resize
-        summary: Resize a pane
+        summary: Resize a pane edge
         side_effects: true
         confirm: true
         flags:
@@ -516,12 +540,75 @@ commands:
             type: string
             required: true
             description: Pane id (use @focused for current focus).
-          - name: cols
+          - name: edge
+            type: enum
+            enum: [left, right, up, down]
+            required: true
+            description: Split edge to resize.
+          - name: delta
             type: int
-            description: Columns to resize to.
-          - name: rows
-            type: int
-            description: Rows to resize to.
+            required: true
+            description: Delta in layout units (base 1000).
+          - name: snap
+            type: bool
+            default: true
+            description: Enable snapping while resizing.
+          - name: after
+            type: bool
+            description: Include post-op layout tree in JSON output (requires --json).
+          - name: diff
+            type: bool
+            description: Include before/after layout trees in JSON output (requires --json).
+        json:
+          supported: true
+          schema_ref: "#/$defs/ActionResponse"
+      - name: reset-sizes
+        id: pane.reset-sizes
+        summary: Reset pane sizes
+        side_effects: true
+        confirm: true
+        flags:
+          - name: session
+            type: string
+            description: Session name.
+          - name: pane-id
+            type: string
+            description: Pane id (use @focused for current focus).
+          - name: after
+            type: bool
+            description: Include post-op layout tree in JSON output (requires --json).
+          - name: diff
+            type: bool
+            description: Include before/after layout trees in JSON output (requires --json).
+        constraints:
+          - type: exactly_one
+            fields: [pane-id, session]
+        json:
+          supported: true
+          schema_ref: "#/$defs/ActionResponse"
+      - name: zoom
+        id: pane.zoom
+        summary: Toggle pane zoom
+        side_effects: true
+        confirm: true
+        flags:
+          - name: pane-id
+            type: string
+            required: true
+            description: Pane id (use @focused for current focus).
+          - name: session
+            type: string
+            description: Session name.
+          - name: toggle
+            type: bool
+            default: true
+            description: Toggle zoom state.
+          - name: after
+            type: bool
+            description: Include post-op layout tree in JSON output (requires --json).
+          - name: diff
+            type: bool
+            description: Include before/after layout trees in JSON output (requires --json).
         json:
           supported: true
           schema_ref: "#/$defs/ActionResponse"

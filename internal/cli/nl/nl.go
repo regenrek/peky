@@ -510,6 +510,7 @@ func executePlan(ctx root.CommandContext, plan output.NLPlan) (output.NLExecutio
 	}
 	reg := root.NewRegistry()
 	catalog.RegisterAll(reg)
+	Register(reg)
 	for _, cmd := range plan.Commands {
 		step := output.NLExecutionStep{ID: cmd.ID, Command: cmd.Command, Status: "pending"}
 		step.StartedAt = time.Now().UTC()

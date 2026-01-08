@@ -31,7 +31,7 @@ func TestOverlayCenteredBasic(t *testing.T) {
 	}
 }
 
-func TestRenderPaneTileKeepsLastPreviewLine(t *testing.T) {
+func TestLayoutFallbackKeepsLastPreviewLine(t *testing.T) {
 	pane := Pane{
 		Title:  "t",
 		Status: paneStatusIdle,
@@ -41,22 +41,9 @@ func TestRenderPaneTileKeepsLastPreviewLine(t *testing.T) {
 			"hi",
 		},
 	}
-
-	colors := tileBorderColors{
-		top:    borderColorFor(borderLevelDefault),
-		right:  borderColorFor(borderLevelDefault),
-		bottom: borderColorFor(borderLevelDefault),
-		left:   borderColorFor(borderLevelDefault),
-	}
-	out := renderPaneTile(pane, 12, 6, false, false, tileBorders{
-		top:    true,
-		right:  true,
-		bottom: true,
-		left:   true,
-		colors: colors,
-	})
-	if !strings.Contains(out, "hi") {
-		t.Fatalf("renderPaneTile() missing last preview line: %q", out)
+	lines := layoutFallbackLines(pane, "")
+	if len(lines) < 3 || lines[2] != "hi" {
+		t.Fatalf("layoutFallbackLines() missing last preview line: %#v", lines)
 	}
 }
 
@@ -128,13 +115,13 @@ func TestViewDashboardQuickReplyMenuOverlay(t *testing.T) {
 
 func TestViewPreviewFitsSmallHeight(t *testing.T) {
 	m := Model{
-		PreviewMode: "grid",
 		PreviewSession: &Session{
 			Name:       "sess",
 			Status:     sessionRunning,
 			PaneCount:  1,
 			ActivePane: "0",
 			Panes: []Pane{{
+				ID:     "p1",
 				Index:  "0",
 				Title:  "shell",
 				Active: true,

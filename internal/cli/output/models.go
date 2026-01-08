@@ -1,6 +1,10 @@
 package output
 
-import "time"
+import (
+	"time"
+
+	"github.com/regenrek/peakypanes/internal/layout"
+)
 
 type TargetRef struct {
 	Type string `json:"type"`
@@ -21,6 +25,23 @@ type ActionResult struct {
 	Results  []TargetResult `json:"results,omitempty"`
 	Warnings []string       `json:"warnings,omitempty"`
 	Details  map[string]any `json:"details,omitempty"`
+	Layout   *LayoutState   `json:"layout,omitempty"`
+}
+
+type LayoutState struct {
+	Session   string               `json:"session"`
+	PaneID    string               `json:"pane_id,omitempty"`
+	Before    *layout.TreeSnapshot `json:"before,omitempty"`
+	After     *layout.TreeSnapshot `json:"after,omitempty"`
+	Changed   *bool                `json:"changed,omitempty"`
+	Snapped   *bool                `json:"snapped,omitempty"`
+	SnapState *LayoutSnapState     `json:"snap_state,omitempty"`
+	Affected  []string             `json:"affected,omitempty"`
+}
+
+type LayoutSnapState struct {
+	Active bool `json:"active"`
+	Target int  `json:"target"`
 }
 
 type SessionSummary struct {

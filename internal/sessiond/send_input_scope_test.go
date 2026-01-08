@@ -7,6 +7,7 @@ import (
 
 	uv "github.com/charmbracelet/ultraviolet"
 
+	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/native"
 	"github.com/regenrek/peakypanes/internal/terminal"
 )
@@ -33,7 +34,16 @@ func (m *scopeSendManager) SplitPane(context.Context, string, string, bool, int)
 }
 func (m *scopeSendManager) ClosePane(context.Context, string, string) error { return nil }
 func (m *scopeSendManager) SwapPanes(string, string, string) error          { return nil }
-func (m *scopeSendManager) SetPaneTool(string, string) error                { return nil }
+func (m *scopeSendManager) ResizePaneEdge(string, string, layout.ResizeEdge, int, bool, layout.SnapState) (layout.ApplyResult, error) {
+	return layout.ApplyResult{}, nil
+}
+func (m *scopeSendManager) ResetPaneSizes(string, string) (layout.ApplyResult, error) {
+	return layout.ApplyResult{}, nil
+}
+func (m *scopeSendManager) ZoomPane(string, string, bool) (layout.ApplyResult, error) {
+	return layout.ApplyResult{}, nil
+}
+func (m *scopeSendManager) SetPaneTool(string, string) error { return nil }
 func (m *scopeSendManager) SendInput(ctx context.Context, paneID string, input []byte) error {
 	if ch, ok := m.blockOn[paneID]; ok {
 		if ctx == nil {

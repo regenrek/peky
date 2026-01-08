@@ -97,6 +97,7 @@ var keyHandlers = map[ViewState]keyHandler{
 	StateProjectRootSetup: func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateProjectRootSetup(msg) },
 	StatePekyDialog:       func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updatePekyDialog(msg) },
 	StateAuthDialog:       func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateAuthDialog(msg) },
+	StateRestartNotice:    func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateRestartNotice(msg) },
 }
 
 type updateHandler func(*Model, tea.Msg) (tea.Model, tea.Cmd)
@@ -108,6 +109,9 @@ var updateHandlers = map[reflect.Type]updateHandler{
 	},
 	reflect.TypeOf(cursorShapeFlushMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleCursorShapeFlush(msg.(cursorShapeFlushMsg))
+	},
+	reflect.TypeOf(resizeDragFlushMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleResizeDragFlush(msg.(resizeDragFlushMsg))
 	},
 	reflect.TypeOf(refreshTickMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleRefreshTick(msg.(refreshTickMsg))
@@ -357,6 +361,7 @@ func (m *Model) applySnapshotState(msg dashboardSnapshotMsg) {
 	}
 	prevData := m.data
 	m.data = msg.Result.Data
+	m.syncLayoutEngines()
 	m.reconcilePaneInputDisabled()
 	m.settings = msg.Result.Settings
 	m.config = msg.Result.RawConfig

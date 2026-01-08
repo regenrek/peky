@@ -7,6 +7,13 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
+
+	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/sessiond"
+	"github.com/regenrek/peakypanes/internal/tui/layoutgeom"
+	"github.com/regenrek/peakypanes/internal/tui/mouse"
 )
 
 func TestViewDashboardContentRenders(t *testing.T) {
@@ -49,22 +56,40 @@ func TestViewDashboardContentRenders(t *testing.T) {
 	}
 }
 
-func TestRenderPanePreviewModes(t *testing.T) {
+func TestRenderPaneLayout(t *testing.T) {
 	panes := []Pane{
-		{Index: "0", Title: "main", Left: 0, Top: 0, Width: 50, Height: 20, Active: true, Status: paneStatusRunning},
-		{Index: "1", Title: "side", Left: 50, Top: 0, Width: 50, Height: 20, Active: false, Status: paneStatusIdle},
+		{Index: "0", Title: "main", Left: 0, Top: 0, Width: 50, Height: 20, Active: true, Status: paneStatusRunning, ID: "p0"},
+		{Index: "1", Title: "side", Left: 50, Top: 0, Width: 50, Height: 20, Active: false, Status: paneStatusIdle, ID: "p1"},
 	}
-	grid := renderPanePreview(panes, 40, 10, "grid", true, "0", false)
-	if strings.TrimSpace(grid) == "" {
-		t.Fatalf("renderPanePreview(grid) empty")
+	out := renderPaneLayout(panes, 40, 10, layoutPreviewContext{targetPane: "1"})
+	if strings.TrimSpace(out) == "" {
+		t.Fatalf("renderPaneLayout empty")
 	}
-	layout := renderPanePreview(panes, 40, 10, "layout", false, "1", false)
-	if strings.TrimSpace(layout) == "" {
-		t.Fatalf("renderPanePreview(layout) empty")
+}
+
+func TestRenderPaneLayoutShowsResizeHandleGlyph(t *testing.T) {
+	panes := []Pane{
+		{Index: "0", Title: "left", Left: 0, Top: 0, Width: 500, Height: layout.LayoutBaseSize, Active: true, Status: paneStatusRunning, ID: "p0"},
+		{Index: "1", Title: "right", Left: 500, Top: 0, Width: 500, Height: layout.LayoutBaseSize, Active: false, Status: paneStatusIdle, ID: "p1"},
 	}
-	tiles := renderPanePreview(panes, 40, 10, "tiles", false, "", false)
-	if strings.TrimSpace(tiles) == "" {
-		t.Fatalf("renderPanePreview(tiles) empty")
+	preview := mouse.Rect{X: 0, Y: 0, W: 40, H: 10}
+	rects := map[string]layout.Rect{
+		"p0": {X: 0, Y: 0, W: 500, H: layout.LayoutBaseSize},
+		"p1": {X: 500, Y: 0, W: 500, H: layout.LayoutBaseSize},
+	}
+	geom, ok := layoutgeom.Build(preview, rects)
+	if !ok {
+		t.Fatalf("expected geometry")
+	}
+	line, ok := layoutgeom.EdgeLineRect(geom, layoutgeom.EdgeRef{PaneID: "p0", Edge: sessiond.ResizeEdgeRight})
+	if !ok || line.Empty() {
+		t.Fatalf("expected divider line rect")
+	}
+	out := renderPaneLayout(panes, preview.W, preview.H, layoutPreviewContext{
+		guides: []ResizeGuide{{X: line.X, Y: line.Y, W: line.W, H: line.H, Active: false}},
+	})
+	if !strings.Contains(out, "↔") {
+		t.Fatalf("expected resize handle glyph in output")
 	}
 }
 
@@ -127,6 +152,7 @@ func TestViewStates(t *testing.T) {
 		viewConfirmCloseProject,
 		viewConfirmCloseAllProjects,
 		viewConfirmRestart,
+		viewRestartNotice,
 		viewRenameSession,
 		viewRenamePane,
 		viewProjectRootSetup,
@@ -141,6 +167,122 @@ func TestViewStates(t *testing.T) {
 		out := Render(m)
 		if strings.TrimSpace(out) == "" {
 			t.Fatalf("Render(view=%d) empty", view)
+		}
+	}
+}
+
+func TestFooterRendersServerStatus(t *testing.T) {
+	m := Model{
+		Width:             80,
+		Height:            24,
+		ActiveView:        viewDashboard,
+		HeaderLine:        "Peaky Panes",
+		EmptyStateMessage: "empty",
+		Projects:          []Project{{Name: "Proj"}},
+		DashboardColumns: []DashboardColumn{{
+			ProjectID:   "proj",
+			ProjectName: "Proj",
+			Panes: []DashboardPane{{
+				ProjectID:   "proj",
+				ProjectName: "Proj",
+				SessionName: "sess",
+				Pane:        Pane{Index: "0"},
+			}},
+		}},
+		DashboardSelectedProject: "proj",
+		SidebarProject:           &Project{Name: "Proj"},
+		SidebarSessions:          []Session{{Name: "sess", Status: sessionRunning}},
+		PreviewSession:           &Session{Name: "sess", Status: sessionRunning, Panes: []Pane{{Index: "0"}}},
+		QuickReplyInput:          textinput.New(),
+	}
+
+	out := Render(m)
+	lines := strings.Split(out, "\n")
+	footer := ""
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.Contains(lines[i], "quit") {
+			footer = lines[i]
+			break
+		}
+	}
+	if footer == "" {
+		t.Fatalf("expected footer line containing quit")
+	}
+	plain := strings.TrimRight(ansi.Strip(footer), " ")
+	if !strings.HasSuffix(plain, "up") {
+		t.Fatalf("footer=%q want suffix up", plain)
+	}
+
+	m.ServerStatus = "down"
+	out = Render(m)
+	lines = strings.Split(out, "\n")
+	footer = ""
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.Contains(lines[i], "quit") {
+			footer = lines[i]
+			break
+		}
+	}
+	if footer == "" {
+		t.Fatalf("expected footer line containing quit")
+	}
+	plain = strings.TrimRight(ansi.Strip(footer), " ")
+	if !strings.HasSuffix(plain, "down") {
+		t.Fatalf("footer=%q want suffix down", plain)
+	}
+
+	m.ServerStatus = "restored"
+	out = Render(m)
+	lines = strings.Split(out, "\n")
+	footer = ""
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.Contains(lines[i], "quit") {
+			footer = lines[i]
+			break
+		}
+	}
+	if footer == "" {
+		t.Fatalf("expected footer line containing quit")
+	}
+	plain = strings.TrimRight(ansi.Strip(footer), " ")
+	if !strings.HasSuffix(plain, "restored") {
+		t.Fatalf("footer=%q want suffix restored", plain)
+	}
+}
+
+func TestRenderPadsToScreenSize(t *testing.T) {
+	m := Model{
+		Width:             60,
+		Height:            16,
+		ActiveView:        viewDashboard,
+		HeaderLine:        "Peaky Panes",
+		EmptyStateMessage: "empty",
+		Projects:          []Project{{Name: "Proj"}},
+		DashboardColumns: []DashboardColumn{{
+			ProjectID:   "proj",
+			ProjectName: "Proj",
+			Panes: []DashboardPane{{
+				ProjectID:   "proj",
+				ProjectName: "Proj",
+				SessionName: "sess",
+				Pane:        Pane{Index: "0"},
+			}},
+		}},
+		DashboardSelectedProject: "proj",
+		SidebarProject:           &Project{Name: "Proj"},
+		SidebarSessions:          []Session{{Name: "sess", Status: sessionRunning}},
+		PreviewSession:           &Session{Name: "sess", Status: sessionRunning, Panes: []Pane{{Index: "0"}}},
+		QuickReplyInput:          textinput.New(),
+	}
+
+	out := Render(m)
+	lines := strings.Split(out, "\n")
+	if len(lines) != m.Height {
+		t.Fatalf("Render() lines=%d want=%d", len(lines), m.Height)
+	}
+	for i, line := range lines {
+		if w := lipgloss.Width(line); w != m.Width {
+			t.Fatalf("Render() line[%d] width=%d want=%d", i, w, m.Width)
 		}
 	}
 }

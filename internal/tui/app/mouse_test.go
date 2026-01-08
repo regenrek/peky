@@ -5,7 +5,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/sessiond"
+	"github.com/regenrek/peakypanes/internal/tui/layoutgeom"
 	"github.com/regenrek/peakypanes/internal/tui/mouse"
 )
 
@@ -147,8 +149,8 @@ func TestMouseDragStartsWithoutTerminalFocus(t *testing.T) {
 	}
 
 	msg := tea.MouseMsg{
-		X:      hit.Content.X + 1,
-		Y:      hit.Content.Y + 1,
+		X:      hit.Content.X + hit.Content.W/2,
+		Y:      hit.Content.Y + hit.Content.H/2,
 		Action: tea.MouseActionPress,
 		Button: tea.MouseButtonLeft,
 	}
@@ -290,5 +292,132 @@ func TestMouseMotionSetsCursorShapePointerOverHeader(t *testing.T) {
 
 	if emitted != "\x1b]22;pointer\x07" {
 		t.Fatalf("osc=%q want %q", emitted, "\x1b]22;pointer\x07")
+	}
+}
+
+func TestMouseMotionSetsCursorShapeTextOverQuickReply(t *testing.T) {
+	m := newTestModel(t)
+	seedMouseTestData(m)
+	var emitted string
+	m.oscEmit = func(seq string) { emitted = seq }
+
+	rect, ok := m.quickReplyRect()
+	if !ok || rect.Empty() {
+		t.Fatalf("quick reply rect unavailable")
+	}
+	msg := tea.MouseMsg{X: rect.X + 2, Y: rect.Y + 1, Action: tea.MouseActionMotion, Button: tea.MouseButtonNone}
+
+	_, _ = m.updateDashboardMouse(msg)
+
+	if emitted != "\x1b]22;text\x07" {
+		t.Fatalf("osc=%q want %q", emitted, "\x1b]22;text\x07")
+	}
+}
+
+func TestMouseMotionSetsCursorShapeColResizeOverDivider(t *testing.T) {
+	m := newTestModelLite()
+	m.client = &sessiond.Client{}
+	m.tab = TabProject
+	m.state = StateDashboard
+	m.terminalFocus = false
+
+	session := findSessionByName(m.data.Projects, "alpha-1")
+	if session == nil {
+		t.Fatalf("expected session alpha-1")
+	}
+	session.LayoutTree = &layout.TreeSnapshot{
+		Root: layout.NodeSnapshot{
+			Axis: layout.AxisHorizontal,
+			Size: layout.LayoutBaseSize,
+			Children: []layout.NodeSnapshot{
+				{PaneID: "p1", Size: 500},
+				{PaneID: "p2", Size: 500},
+			},
+		},
+	}
+	m.syncLayoutEngines()
+
+	geom, ok := m.resizeGeometry()
+	if !ok || len(geom.Edges) == 0 {
+		t.Fatalf("expected resize geometry")
+	}
+	var targetRect mouse.Rect
+	for _, edge := range geom.Edges {
+		if edge.Axis != layoutgeom.SegmentVertical {
+			continue
+		}
+		targetRect = edge.HitRect
+		break
+	}
+	if targetRect.Empty() {
+		t.Fatalf("expected vertical edge hit rect")
+	}
+
+	var emitted string
+	m.oscEmit = func(seq string) { emitted = seq }
+	msg := tea.MouseMsg{
+		X:      targetRect.X + targetRect.W/2,
+		Y:      targetRect.Y + targetRect.H/2,
+		Action: tea.MouseActionMotion,
+		Button: tea.MouseButtonNone,
+	}
+	_, _ = m.updateDashboardMouse(msg)
+
+	if emitted != "\x1b]22;col-resize\x07\x1b]22;ew-resize\x07" {
+		t.Fatalf("osc=%q want %q", emitted, "\x1b]22;col-resize\x07\x1b]22;ew-resize\x07")
+	}
+}
+
+func TestMouseMotionSetsCursorShapeRowResizeOverDivider(t *testing.T) {
+	m := newTestModelLite()
+	m.client = &sessiond.Client{}
+	m.tab = TabProject
+	m.state = StateDashboard
+	m.terminalFocus = false
+
+	session := findSessionByName(m.data.Projects, "alpha-1")
+	if session == nil {
+		t.Fatalf("expected session alpha-1")
+	}
+	session.LayoutTree = &layout.TreeSnapshot{
+		Root: layout.NodeSnapshot{
+			Axis: layout.AxisVertical,
+			Size: layout.LayoutBaseSize,
+			Children: []layout.NodeSnapshot{
+				{PaneID: "p1", Size: 500},
+				{PaneID: "p2", Size: 500},
+			},
+		},
+	}
+	m.syncLayoutEngines()
+
+	geom, ok := m.resizeGeometry()
+	if !ok || len(geom.Edges) == 0 {
+		t.Fatalf("expected resize geometry")
+	}
+	var targetRect mouse.Rect
+	for _, edge := range geom.Edges {
+		if edge.Axis != layoutgeom.SegmentHorizontal {
+			continue
+		}
+		targetRect = edge.HitRect
+		break
+	}
+	if targetRect.Empty() {
+		t.Fatalf("expected horizontal edge hit rect")
+	}
+
+	var emitted string
+	m.oscEmit = func(seq string) { emitted = seq }
+	msg := tea.MouseMsg{
+		X:      targetRect.X + targetRect.W/2,
+		Y:      targetRect.Y + targetRect.H/2,
+		Action: tea.MouseActionMotion,
+		Button: tea.MouseButtonNone,
+	}
+	_, _ = m.updateDashboardMouse(msg)
+
+	if emitted != "\x1b]22;row-resize\x07\x1b]22;ns-resize\x07" {
+		t.Fatalf("osc=%q want %q", emitted, "\x1b]22;row-resize\x07\x1b]22;ns-resize\x07")
 	}
 }

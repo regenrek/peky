@@ -20,6 +20,15 @@ func selectionFromMouse(sel mouse.Selection) selectionState {
 
 func (m *Model) updateDashboardMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	cursorCmd := m.updateCursorShape(msg)
+	if cmd, handled := m.handleResizeMouse(msg); handled {
+		return m, tea.Batch(cursorCmd, cmd)
+	}
+	if cmd, handled := m.handleContextMenuMouse(msg); handled {
+		return m, tea.Batch(cursorCmd, cmd)
+	}
+	if cmd, handled := m.handleServerStatusClick(msg); handled {
+		return m, tea.Batch(cursorCmd, cmd)
+	}
 	if _, handled := m.handleQuickReplyClick(msg); handled {
 		m.updateTerminalMouseDrag(msg)
 		return m, cursorCmd
@@ -48,6 +57,28 @@ func (m *Model) updateDashboardMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		},
 	})
 	return m, tea.Batch(cursorCmd, cmd)
+}
+
+func (m *Model) handleServerStatusClick(msg tea.MouseMsg) (tea.Cmd, bool) {
+	if m == nil {
+		return nil, false
+	}
+	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
+		return nil, false
+	}
+	rect, ok := m.serverStatusRect()
+	if !ok || !rect.Contains(msg.X, msg.Y) {
+		return nil, false
+	}
+	switch m.serverStatus() {
+	case "restored":
+		m.setState(StateRestartNotice)
+	case "down":
+		m.setState(StateConfirmRestart)
+	default:
+		return nil, false
+	}
+	return nil, true
 }
 
 func (m *Model) handleQuickReplyClick(msg tea.MouseMsg) (tea.Cmd, bool) {
@@ -93,6 +124,23 @@ func (m *Model) allowMouseMotion() bool {
 		return true
 	}
 	return m.terminalMouseDrag
+}
+
+func (m *Model) allowMouseMotionFor(msg tea.MouseMsg) bool {
+	if m == nil {
+		return false
+	}
+	if m.resize.drag.active {
+		return true
+	}
+	if m.state == StateDashboard && m.tab == TabProject {
+		if hit, ok := m.resizeHitTest(msg.X, msg.Y); ok {
+			if hit.Kind == resizeHitEdge || hit.Kind == resizeHitCorner {
+				return true
+			}
+		}
+	}
+	return m.allowMouseMotion()
 }
 
 func (m *Model) applySelectionFromHit(sel mouse.Selection) bool {

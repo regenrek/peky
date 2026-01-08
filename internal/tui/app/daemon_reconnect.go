@@ -85,6 +85,7 @@ func reconnectDaemon(version string) daemonReconnectMsg {
 }
 
 func (m *Model) handleDaemonReconnect(msg daemonReconnectMsg) tea.Cmd {
+	wasDisconnected := m.daemonDisconnected
 	m.reconnectInFlight = false
 	if msg.Err != nil || msg.Client == nil {
 		if m.daemonDisconnected && time.Since(m.reconnectToastAt) >= reconnectToastInterval {
@@ -100,6 +101,9 @@ func (m *Model) handleDaemonReconnect(msg daemonReconnectMsg) tea.Cmd {
 	m.client = msg.Client
 	m.paneViewClient = msg.PaneViewClient
 	m.daemonDisconnected = false
+	if wasDisconnected {
+		m.restartNoticePending = true
+	}
 	m.reconnectBackoff = 0
 	m.reconnectToastAt = time.Time{}
 	m.paneViewSeq = nil

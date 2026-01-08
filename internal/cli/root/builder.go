@@ -128,19 +128,14 @@ func runHandler(ctx context.Context, cliCmd *cli.Command, cmdSpec spec.Command, 
 	if handler == nil {
 		return nil
 	}
-	args := []string{}
-	if cliCmd != nil {
-		if parsed := cliCmd.Args(); parsed != nil {
-			args = parsed.Slice()
-		}
-	}
+	args := positionalArgs(cmdSpec, cliCmd)
 	commandCtx := CommandContext{
 		Context: ctx,
 		Args:    args,
 		Spec:    cmdSpec,
 		Cmd:     cliCmd,
 		Deps:    deps,
-		JSON:    cliCmd.Bool("json"),
+		JSON:    cliCmd != nil && cliCmd.Bool("json"),
 		Out:     deps.Stdout,
 		ErrOut:  deps.Stderr,
 		Stdin:   deps.Stdin,
@@ -168,6 +163,36 @@ func runHandler(ctx context.Context, cliCmd *cli.Command, cmdSpec spec.Command, 
 		return cli.Exit("", 1)
 	}
 	return nil
+}
+
+func positionalArgs(cmdSpec spec.Command, cmd *cli.Command) []string {
+	if cmd == nil || len(cmdSpec.Args) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(cmdSpec.Args))
+	for _, argSpec := range cmdSpec.Args {
+		name := strings.TrimSpace(argSpec.Name)
+		if name == "" {
+			continue
+		}
+		if argSpec.Variadic {
+			values := cmd.StringArgs(name)
+			for _, value := range values {
+				value = strings.TrimSpace(value)
+				if value == "" {
+					continue
+				}
+				out = append(out, value)
+			}
+			continue
+		}
+		value := strings.TrimSpace(cmd.StringArg(name))
+		if value == "" {
+			continue
+		}
+		out = append(out, value)
+	}
+	return out
 }
 
 func argsUsage(args []spec.Arg) string {

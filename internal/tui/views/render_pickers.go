@@ -252,6 +252,9 @@ func (m Model) viewHelp() string {
 	left.WriteString("  /peky Toggle agent mode\n")
 	left.WriteString("  shift+tab Toggle agent mode\n")
 	left.WriteString(fmt.Sprintf("  %s Toggle terminal focus (Peaky Panes sessions)\n", m.Keys.TerminalFocus))
+	if m.Keys.ResizeMode != "" {
+		left.WriteString(fmt.Sprintf("  %s Resize mode\n", m.Keys.ResizeMode))
+	}
 	left.WriteString(fmt.Sprintf("  %s Scrollback mode (Peaky Panes sessions)\n", m.Keys.Scrollback))
 	left.WriteString(fmt.Sprintf("  %s Copy mode (Peaky Panes sessions)\n", m.Keys.CopyMode))
 	left.WriteString("  mouse Wheel scrollback (shift=1, ctrl=page)\n")

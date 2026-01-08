@@ -17,6 +17,12 @@ func (m *Model) setTerminalFocus(enabled bool) {
 	}
 	m.terminalFocus = enabled
 	if enabled {
+		if m.contextMenu.open {
+			m.closeContextMenu()
+		}
+		if m.resize.mode {
+			m.exitResizeMode()
+		}
 		if m.filterActive {
 			m.filterActive = false
 			m.filterInput.Blur()

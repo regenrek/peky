@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -13,6 +12,7 @@ import (
 
 	uv "github.com/charmbracelet/ultraviolet"
 
+	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/sessionrestore"
 	"github.com/regenrek/peakypanes/internal/terminal"
 )
@@ -171,23 +171,52 @@ func (m *Manager) ClosePane(ctx context.Context, sessionName, paneIndex string) 
 	if err := checkContext(ctx); err != nil {
 		return err
 	}
-
-	paneWindow, paneID, notifyIDs, lastPane, err := m.removePaneFromSession(sessionName, paneIndex)
+	m.mu.Lock()
+	session, ok := m.sessions[sessionName]
+	if !ok {
+		m.mu.Unlock()
+		return fmt.Errorf("native: session %q not found", sessionName)
+	}
+	paneIdx, pane := findPaneByIndexAndPosition(session.Panes, paneIndex)
+	if pane == nil {
+		m.mu.Unlock()
+		return fmt.Errorf("native: pane %q not found in %q", paneIndex, sessionName)
+	}
+	if session.Layout == nil {
+		m.mu.Unlock()
+		return errors.New("native: layout engine unavailable")
+	}
+	result, err := session.Layout.Apply(layout.CloseOp{PaneID: pane.ID})
 	if err != nil {
+		m.mu.Unlock()
 		return err
 	}
+	session.Panes = append(session.Panes[:paneIdx], session.Panes[paneIdx+1:]...)
+	delete(m.panes, pane.ID)
+	m.dropPreviewCache(pane.ID)
+	if pane.output != nil {
+		pane.output.disable()
+	}
+	if len(session.Panes) > 0 {
+		if !anyPaneActive(session.Panes) {
+			session.Panes[0].Active = true
+		}
+		if err := applyLayoutToPanes(session); err != nil {
+			m.mu.Unlock()
+			return err
+		}
+	}
+	paneWindow := pane.window
+	m.mu.Unlock()
+
 	if paneWindow != nil {
 		_ = paneWindow.Close()
 	}
-	m.notifyPane(paneID)
-	if lastPane {
-		return nil
-	}
 	m.applyScrollbackBudgets()
-	for _, id := range notifyIDs {
+	m.notifyPane(pane.ID)
+	for _, id := range result.Affected {
 		m.notifyPane(id)
 	}
-	m.version.Add(1)
 	return nil
 }
 
@@ -201,41 +230,6 @@ func checkContext(ctx context.Context) error {
 	default:
 		return nil
 	}
-}
-
-func (m *Manager) removePaneFromSession(sessionName, paneIndex string) (*terminal.Window, string, []string, bool, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	session, ok := m.sessions[sessionName]
-	if !ok {
-		return nil, "", nil, false, fmt.Errorf("native: session %q not found", sessionName)
-	}
-	paneIdx, pane := findPaneByIndexAndPosition(session.Panes, paneIndex)
-	if pane == nil {
-		return nil, "", nil, false, fmt.Errorf("native: pane %q not found in %q", paneIndex, sessionName)
-	}
-
-	session.Panes = append(session.Panes[:paneIdx], session.Panes[paneIdx+1:]...)
-	delete(m.panes, pane.ID)
-	m.dropPreviewCache(pane.ID)
-	if pane.output != nil {
-		pane.output.disable()
-	}
-	paneWindow := pane.window
-
-	if len(session.Panes) == 0 {
-		return paneWindow, pane.ID, nil, true, nil
-	}
-	if !anyPaneActive(session.Panes) {
-		session.Panes[0].Active = true
-	}
-	retilePanes(session.Panes)
-	notifyIDs := make([]string, 0, len(session.Panes))
-	for _, remaining := range session.Panes {
-		notifyIDs = append(notifyIDs, remaining.ID)
-	}
-	return paneWindow, pane.ID, notifyIDs, false, nil
 }
 
 func findPaneByIndexAndPosition(panes []*Pane, paneIndex string) (int, *Pane) {
@@ -258,22 +252,10 @@ func (m *Manager) SplitPane(ctx context.Context, sessionName, paneIndex string, 
 		return "", errors.New("native: session and pane are required")
 	}
 
-	m.mu.RLock()
-	session, ok := m.sessions[sessionName]
-	if !ok {
-		m.mu.RUnlock()
-		return "", fmt.Errorf("native: session %q not found", sessionName)
+	targetRestore, startDir, env, err := m.splitPanePreflight(sessionName, paneIndex)
+	if err != nil {
+		return "", err
 	}
-	target := findPaneByIndex(session.Panes, paneIndex)
-	if target == nil {
-		m.mu.RUnlock()
-		return "", fmt.Errorf("native: pane %q not found in %q", paneIndex, sessionName)
-	}
-	targetRestore := target.RestoreMode
-	newIndex := nextPaneIndex(session.Panes)
-	startDir := strings.TrimSpace(session.Path)
-	env := append([]string(nil), session.Env...)
-	m.mu.RUnlock()
 
 	if strings.TrimSpace(startDir) != "" {
 		if err := validatePath(startDir); err != nil {
@@ -286,38 +268,81 @@ func (m *Manager) SplitPane(ctx context.Context, sessionName, paneIndex string, 
 	}
 	pane.RestoreMode = targetRestore
 
-	m.mu.Lock()
-	session, ok = m.sessions[sessionName]
-	if !ok {
-		m.mu.Unlock()
+	axis := layout.AxisHorizontal
+	if vertical {
+		axis = layout.AxisVertical
+	}
+	result, newIndex, err := m.splitPaneCommit(sessionName, paneIndex, pane, axis, percent)
+	if err != nil {
 		_ = pane.window.Close()
-		return "", fmt.Errorf("native: session %q not found", sessionName)
+		return "", err
 	}
-	target = findPaneByIndex(session.Panes, paneIndex)
-	if target == nil {
-		m.mu.Unlock()
-		_ = pane.window.Close()
-		return "", fmt.Errorf("native: pane %q not found in %q", paneIndex, sessionName)
-	}
-	oldRect, newRect := splitRect(rectFromPane(target), vertical, percent)
-	target.Left, target.Top, target.Width, target.Height = oldRect.x, oldRect.y, oldRect.w, oldRect.h
-
-	for _, existing := range session.Panes {
-		existing.Active = false
-	}
-	pane.Index = newIndex
-	pane.Active = true
-	pane.Left, pane.Top, pane.Width, pane.Height = newRect.x, newRect.y, newRect.w, newRect.h
-	pane.SetLastActive(time.Now())
-	session.Panes = append(session.Panes, pane)
-	m.panes[pane.ID] = pane
-	m.mu.Unlock()
 
 	m.applyScrollbackBudgets()
 	m.forwardUpdates(pane)
 	m.notifyPane(pane.ID)
-	m.version.Add(1)
-	return pane.Index, nil
+	for _, id := range result.Affected {
+		m.notifyPane(id)
+	}
+	return newIndex, nil
+}
+
+func (m *Manager) splitPanePreflight(sessionName, paneIndex string) (sessionrestore.Mode, string, []string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	session, ok := m.sessions[sessionName]
+	if !ok {
+		return sessionrestore.ModeDefault, "", nil, fmt.Errorf("native: session %q not found", sessionName)
+	}
+	target := findPaneByIndex(session.Panes, paneIndex)
+	if target == nil {
+		return sessionrestore.ModeDefault, "", nil, fmt.Errorf("native: pane %q not found in %q", paneIndex, sessionName)
+	}
+	startDir := strings.TrimSpace(session.Path)
+	env := append([]string(nil), session.Env...)
+	return target.RestoreMode, startDir, env, nil
+}
+
+func (m *Manager) splitPaneCommit(sessionName, paneIndex string, pane *Pane, axis layout.Axis, percent int) (layout.ApplyResult, string, error) {
+	if m == nil || pane == nil {
+		return layout.ApplyResult{}, "", errors.New("native: split commit requires manager and pane")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	session, ok := m.sessions[sessionName]
+	if !ok {
+		return layout.ApplyResult{}, "", fmt.Errorf("native: session %q not found", sessionName)
+	}
+	target := findPaneByIndex(session.Panes, paneIndex)
+	if target == nil {
+		return layout.ApplyResult{}, "", fmt.Errorf("native: pane %q not found in %q", paneIndex, sessionName)
+	}
+	if session.Layout == nil {
+		return layout.ApplyResult{}, "", errors.New("native: layout engine unavailable")
+	}
+	result, err := session.Layout.Apply(layout.SplitOp{
+		PaneID:    target.ID,
+		NewPaneID: pane.ID,
+		Axis:      axis,
+		Percent:   percent,
+	})
+	if err != nil {
+		return layout.ApplyResult{}, "", err
+	}
+	for _, existing := range session.Panes {
+		existing.Active = false
+	}
+	pane.Index = nextPaneIndex(session.Panes)
+	pane.Active = true
+	pane.SetLastActive(time.Now())
+	session.Panes = append(session.Panes, pane)
+	m.panes[pane.ID] = pane
+	if err := applyLayoutToPanes(session); err != nil {
+		return layout.ApplyResult{}, "", err
+	}
+	return result, pane.Index, nil
 }
 
 // SwapPanes swaps two panes within the same session.
@@ -347,14 +372,21 @@ func (m *Manager) SwapPanes(sessionName, paneA, paneB string) error {
 		m.mu.Unlock()
 		return fmt.Errorf("native: panes %q and %q not found in %q", paneA, paneB, sessionName)
 	}
-
-	firstRect := rectFromPane(first)
-	secondRect := rectFromPane(second)
-	first.Left, first.Top, first.Width, first.Height = secondRect.x, secondRect.y, secondRect.w, secondRect.h
-	second.Left, second.Top, second.Width, second.Height = firstRect.x, firstRect.y, firstRect.w, firstRect.h
+	if session.Layout == nil {
+		m.mu.Unlock()
+		return errors.New("native: layout engine unavailable")
+	}
+	result, err := session.Layout.Apply(layout.SwapOp{PaneA: first.ID, PaneB: second.ID})
+	if err != nil {
+		m.mu.Unlock()
+		return err
+	}
 	first.Index, second.Index = second.Index, first.Index
-
 	sortPanesByIndex(session.Panes)
+	if err := applyLayoutToPanes(session); err != nil {
+		m.mu.Unlock()
+		return err
+	}
 	firstSeq := uint64(0)
 	if first.window != nil {
 		firstSeq = first.window.UpdateSeq()
@@ -363,11 +395,13 @@ func (m *Manager) SwapPanes(sessionName, paneA, paneB string) error {
 	if second.window != nil {
 		secondSeq = second.window.UpdateSeq()
 	}
-	m.version.Add(1)
 	m.mu.Unlock()
 
 	m.notify(first.ID, firstSeq)
 	m.notify(second.ID, secondSeq)
+	for _, id := range result.Affected {
+		m.notifyPane(id)
+	}
 	return nil
 }
 
@@ -471,96 +505,4 @@ func sortPanesByIndex(panes []*Pane) {
 		}
 		return left < right
 	})
-}
-
-func retilePanes(panes []*Pane) {
-	if len(panes) == 0 {
-		return
-	}
-	sortPanesByIndex(panes)
-
-	count := len(panes)
-	cols := int(math.Ceil(math.Sqrt(float64(count))))
-	if cols <= 0 {
-		cols = 1
-	}
-	rows := int(math.Ceil(float64(count) / float64(cols)))
-	if rows <= 0 {
-		rows = 1
-	}
-
-	cellW := LayoutBaseSize / cols
-	cellH := LayoutBaseSize / rows
-	remainderW := LayoutBaseSize % cols
-	remainderH := LayoutBaseSize % rows
-
-	for i, pane := range panes {
-		row := i / cols
-		col := i % cols
-		left := col * cellW
-		top := row * cellH
-		width := cellW
-		height := cellH
-		if col == cols-1 {
-			width += remainderW
-		}
-		if row == rows-1 {
-			height += remainderH
-		}
-		pane.Left = left
-		pane.Top = top
-		pane.Width = width
-		pane.Height = height
-	}
-}
-
-type rect struct {
-	x int
-	y int
-	w int
-	h int
-}
-
-func rectFromPane(p *Pane) rect {
-	if p == nil {
-		return rect{x: 0, y: 0, w: LayoutBaseSize, h: LayoutBaseSize}
-	}
-	return rect{x: p.Left, y: p.Top, w: p.Width, h: p.Height}
-}
-
-func splitRect(r rect, vertical bool, percent int) (rect, rect) {
-	if percent <= 0 || percent >= 100 {
-		percent = 50
-	}
-	if vertical {
-		newH := r.h * percent / 100
-		if newH <= 0 || newH >= r.h {
-			newH = r.h / 2
-		}
-		oldH := r.h - newH
-		oldRect := rect{x: r.x, y: r.y, w: r.w, h: oldH}
-		newRect := rect{x: r.x, y: r.y + oldH, w: r.w, h: newH}
-		return oldRect, newRect
-	}
-	newW := r.w * percent / 100
-	if newW <= 0 || newW >= r.w {
-		newW = r.w / 2
-	}
-	oldW := r.w - newW
-	oldRect := rect{x: r.x, y: r.y, w: oldW, h: r.h}
-	newRect := rect{x: r.x + oldW, y: r.y, w: newW, h: r.h}
-	return oldRect, newRect
-}
-
-func parsePercent(size string) int {
-	size = strings.TrimSpace(size)
-	if size == "" {
-		return 0
-	}
-	size = strings.TrimSuffix(size, "%")
-	pct, err := strconv.Atoi(size)
-	if err != nil {
-		return 0
-	}
-	return pct
 }

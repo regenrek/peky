@@ -76,6 +76,12 @@ var requestHandlers = map[Op]requestHandler{
 	OpResizePane: func(d *Daemon, payload []byte) ([]byte, error) {
 		return d.handleResizePane(payload)
 	},
+	OpResetPaneSizes: func(d *Daemon, payload []byte) ([]byte, error) {
+		return d.handleResetPaneSizes(payload)
+	},
+	OpZoomPane: func(d *Daemon, payload []byte) ([]byte, error) {
+		return d.handleZoomPane(payload)
+	},
 	OpPaneView: func(d *Daemon, payload []byte) ([]byte, error) {
 		return d.handlePaneView(payload)
 	},

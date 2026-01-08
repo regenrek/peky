@@ -17,6 +17,7 @@ type dashboardLayout struct {
 	headerGap        int
 	bodyHeight       int
 	quickReplyHeight int
+	pekyPromptHeight int
 	footerHeight     int
 }
 
@@ -50,6 +51,7 @@ func (m *Model) dashboardLayoutInternal(logCtx string) (dashboardLayout, bool) {
 		headerGap:        layout.HeaderGap,
 		bodyHeight:       layout.BodyHeight,
 		quickReplyHeight: layout.QuickReplyHeight,
+		pekyPromptHeight: layout.PekyPromptHeight,
 		footerHeight:     layout.FooterHeight,
 	}, true
 }
@@ -86,5 +88,38 @@ func (m *Model) quickReplyRect() (mouse.Rect, bool) {
 		Y: quickReplyY,
 		W: layout.contentWidth,
 		H: layout.quickReplyHeight,
+	}, true
+}
+
+func (m *Model) footerRect() (mouse.Rect, bool) {
+	layout, ok := m.dashboardLayoutInternal("footerRect")
+	if !ok {
+		return mouse.Rect{}, false
+	}
+	bodyY := layout.padTop + layout.headerHeight + layout.headerGap
+	quickReplyY := bodyY + layout.bodyHeight
+	footerY := quickReplyY + layout.quickReplyHeight + layout.pekyPromptHeight
+	return mouse.Rect{
+		X: layout.padLeft,
+		Y: footerY,
+		W: layout.contentWidth,
+		H: layout.footerHeight,
+	}, true
+}
+
+func (m *Model) serverStatusRect() (mouse.Rect, bool) {
+	footer, ok := m.footerRect()
+	if !ok || footer.W <= 0 || footer.H <= 0 {
+		return mouse.Rect{}, false
+	}
+	const slot = 8
+	if footer.W < slot {
+		return mouse.Rect{X: footer.X, Y: footer.Y, W: footer.W, H: 1}, true
+	}
+	return mouse.Rect{
+		X: footer.X + footer.W - slot,
+		Y: footer.Y,
+		W: slot,
+		H: 1,
 	}, true
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/terminal"
 )
 
@@ -11,15 +12,23 @@ func TestSplitPaneWithStubWindow(t *testing.T) {
 	origNewWindow := newWindow
 	defer func() { newWindow = origNewWindow }()
 	newWindow = func(opts terminal.Options) (*terminal.Window, error) {
-		return &terminal.Window{}, nil
+		opts.Command = "true"
+		opts.Args = nil
+		return terminal.NewWindow(opts)
 	}
 
 	m := newTestManager(t)
 	session := &Session{Name: "sess", Path: t.TempDir()}
-	pane := &Pane{ID: "p-1", Index: "0", Width: LayoutBaseSize, Height: LayoutBaseSize}
+	pane := &Pane{ID: "p-1", Index: "0"}
 	session.Panes = []*Pane{pane}
+	engine, err := buildLayoutEngine(&layout.LayoutConfig{Grid: "1x1"}, session.Panes)
+	if err != nil {
+		t.Fatalf("buildLayoutEngine() error: %v", err)
+	}
+	session.Layout = engine
 	m.sessions[session.Name] = session
 	m.panes[pane.ID] = pane
+	m.nextID.Store(1)
 
 	newIndex, err := m.SplitPane(context.Background(), session.Name, pane.Index, true, 50)
 	if err != nil {

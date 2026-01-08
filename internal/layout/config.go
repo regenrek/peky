@@ -123,6 +123,13 @@ type DashboardSidebarConfig struct {
 	Hidden *bool `yaml:"hidden,omitempty"`
 }
 
+// DashboardResizeConfig configures pane resizing behavior.
+type DashboardResizeConfig struct {
+	MouseApply              string `yaml:"mouse_apply,omitempty"` // live | commit
+	MouseThrottleMS         int    `yaml:"mouse_throttle_ms,omitempty"`
+	FreezeContentDuringDrag *bool  `yaml:"freeze_content_during_drag,omitempty"`
+}
+
 // DashboardKeymapConfig defines dashboard key bindings.
 type DashboardKeymapConfig struct {
 	ProjectLeft     []string `yaml:"project_left,omitempty"`
@@ -136,6 +143,7 @@ type DashboardKeymapConfig struct {
 	Attach          []string `yaml:"attach,omitempty"`
 	NewSession      []string `yaml:"new_session,omitempty"`
 	TerminalFocus   []string `yaml:"terminal_focus,omitempty"`
+	ResizeMode      []string `yaml:"resize_mode,omitempty"`
 	TogglePanes     []string `yaml:"toggle_panes,omitempty"`
 	ToggleSidebar   []string `yaml:"toggle_sidebar,omitempty"`
 	OpenProject     []string `yaml:"open_project,omitempty"`
@@ -194,8 +202,8 @@ type DashboardConfig struct {
 	PreviewCompact     *bool                  `yaml:"preview_compact,omitempty"`
 	IdleSeconds        int                    `yaml:"idle_seconds,omitempty"`
 	StatusRegex        StatusRegexConfig      `yaml:"status_regex,omitempty"`
-	PreviewMode        string                 `yaml:"preview_mode,omitempty"` // grid | layout
 	Sidebar            DashboardSidebarConfig `yaml:"sidebar,omitempty"`
+	Resize             DashboardResizeConfig  `yaml:"resize,omitempty"`
 	ProjectRoots       []string               `yaml:"project_roots,omitempty"`
 	AgentDetection     AgentDetectionConfig   `yaml:"agent_detection,omitempty"`
 	AttachBehavior     string                 `yaml:"attach_behavior,omitempty"`      // current | detached

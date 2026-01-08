@@ -128,6 +128,7 @@ func (m *Model) updateConfirmQuit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.confirmQuitRunning = 0
 		m.setState(StateDashboard)
 		m.pendingQuit = quitActionStop
+		m.setRestartNoticePending(true)
 		m.setToast("Stopping daemon...", toastInfo)
 		return m, m.stopDaemonCmd()
 	case "n", "esc":
@@ -587,12 +588,31 @@ func (m *Model) addPaneSplit(vertical bool) tea.Cmd {
 		m.setToast("No session selected", toastWarning)
 		return nil
 	}
-	if session.Status == StatusStopped {
-		m.setToast("Session not running", toastWarning)
+	pane := m.selectedPane()
+	if pane == nil {
+		m.setToast("No pane selected", toastWarning)
 		return nil
 	}
-	if m.selectedPane() == nil {
+	return m.addPaneSplitFor(session.Name, pane.ID, vertical)
+}
+
+func (m *Model) addPaneSplitFor(sessionName, paneID string, vertical bool) tea.Cmd {
+	sessionName = strings.TrimSpace(sessionName)
+	paneID = strings.TrimSpace(paneID)
+	if sessionName == "" || paneID == "" {
 		m.setToast("No pane selected", toastWarning)
+		return nil
+	}
+	session := m.selectedSession()
+	if session == nil || session.Name != sessionName {
+		session = findSessionByName(m.data.Projects, sessionName)
+	}
+	if session == nil {
+		m.setToast("Session not found", toastWarning)
+		return nil
+	}
+	if session.Status == StatusStopped {
+		m.setToast("Session not running", toastWarning)
 		return nil
 	}
 	startDir := strings.TrimSpace(session.Path)
@@ -612,7 +632,7 @@ func (m *Model) addPaneSplit(vertical bool) tea.Cmd {
 		m.setToast("Add pane failed: session client unavailable", toastError)
 		return nil
 	}
-	pane := m.selectedPane()
+	pane := findPaneByID(session.Panes, paneID)
 	if pane == nil {
 		m.setToast("No pane selected", toastWarning)
 		return nil
@@ -629,6 +649,8 @@ func (m *Model) addPaneSplit(vertical bool) tea.Cmd {
 	sel.Pane = newIndex
 	m.applySelection(sel)
 	m.selectionVersion++
+	m.lastSplitVertical = vertical
+	m.lastSplitSet = true
 	m.setToast("Added pane", toastSuccess)
 	return m.requestRefreshCmd()
 }
@@ -675,4 +697,16 @@ func (m *Model) swapPaneWith(target PaneSwapChoice) tea.Cmd {
 	m.selectionVersion++
 	m.setToast("Swapped panes", toastSuccess)
 	return m.requestRefreshCmd()
+}
+
+func findPaneByID(panes []PaneItem, paneID string) *PaneItem {
+	if paneID == "" {
+		return nil
+	}
+	for i := range panes {
+		if panes[i].ID == paneID {
+			return &panes[i]
+		}
+	}
+	return nil
 }

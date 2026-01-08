@@ -58,10 +58,13 @@ type Model struct {
 	Keys                     KeyHints
 	Toast                    string
 	PreviewCompact           bool
-	PreviewMode              string
+	FreezePreviewContent     bool
 	DashboardPreviewLines    int
 	PaneView                 func(id string, width, height int, showCursor bool) string
 	DialogHelp               DialogHelp
+	Resize                   ResizeOverlay
+	ContextMenu              ContextMenu
+	ServerStatus             string
 }
 
 type Project struct {
@@ -75,6 +78,40 @@ type DialogHelp struct {
 	Title string
 	Body  string
 	Open  bool
+}
+
+type ResizeOverlay struct {
+	Active      bool
+	Dragging    bool
+	SnapEnabled bool
+	SnapActive  bool
+	EdgeLabel   string
+	ModeKey     string
+	Guides      []ResizeGuide
+	Label       string
+	LabelX      int
+	LabelY      int
+}
+
+type ResizeGuide struct {
+	X      int
+	Y      int
+	W      int
+	H      int
+	Active bool
+}
+
+type ContextMenu struct {
+	Open     bool
+	X        int
+	Y        int
+	Items    []ContextMenuItem
+	Selected int
+}
+
+type ContextMenuItem struct {
+	Label   string
+	Enabled bool
 }
 
 type Session struct {
@@ -127,6 +164,7 @@ type KeyHints struct {
 	TogglePanes     string
 	ToggleSidebar   string
 	TerminalFocus   string
+	ResizeMode      string
 	Scrollback      string
 	CopyMode        string
 	Refresh         string

@@ -8,6 +8,7 @@ import (
 
 	uv "github.com/charmbracelet/ultraviolet"
 
+	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/native"
 	"github.com/regenrek/peakypanes/internal/terminal"
 )
@@ -36,7 +37,16 @@ func (m *fakeRelayManager) SplitPane(context.Context, string, string, bool, int)
 }
 func (m *fakeRelayManager) ClosePane(context.Context, string, string) error { return nil }
 func (m *fakeRelayManager) SwapPanes(string, string, string) error          { return nil }
-func (m *fakeRelayManager) SetPaneTool(string, string) error                { return nil }
+func (m *fakeRelayManager) ResizePaneEdge(string, string, layout.ResizeEdge, int, bool, layout.SnapState) (layout.ApplyResult, error) {
+	return layout.ApplyResult{}, nil
+}
+func (m *fakeRelayManager) ResetPaneSizes(string, string) (layout.ApplyResult, error) {
+	return layout.ApplyResult{}, nil
+}
+func (m *fakeRelayManager) ZoomPane(string, string, bool) (layout.ApplyResult, error) {
+	return layout.ApplyResult{}, nil
+}
+func (m *fakeRelayManager) SetPaneTool(string, string) error { return nil }
 func (m *fakeRelayManager) SendInput(_ context.Context, paneID string, input []byte) error {
 	if m.sent == nil {
 		m.sent = make(map[string][][]byte)

@@ -124,6 +124,7 @@ layout:
 ## Dashboard
 
 The dashboard shows projects, sessions, live previews, and a quick-reply bar for slash commands and broadcasts.
+When the quick reply input is empty, common terminal keys (Enter/Esc/arrows/tab) are forwarded to the selected pane for interactive prompts.
 See [docs/dashboard.md](docs/dashboard.md) for keybindings, slash command behavior, and dashboard configuration.
 
 ## CLI

@@ -9,6 +9,7 @@ import (
 
 	uv "github.com/charmbracelet/ultraviolet"
 
+	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/native"
 	"github.com/regenrek/peakypanes/internal/termframe"
 	"github.com/regenrek/peakypanes/internal/terminal"
@@ -30,6 +31,23 @@ type fakeManager struct {
 	lastRename           [2]string
 	lastSwap             [3]string
 	lastTool             [2]string
+	lastResize           struct {
+		sessionName string
+		paneID      string
+		edge        layout.ResizeEdge
+		delta       int
+		snap        bool
+		snapState   layout.SnapState
+	}
+	lastReset struct {
+		sessionName string
+		paneID      string
+	}
+	lastZoom struct {
+		sessionName string
+		paneID      string
+		toggle      bool
+	}
 }
 
 func (m *fakeManager) SessionNames() []string { return m.sessions }
@@ -66,6 +84,26 @@ func (m *fakeManager) ClosePane(context.Context, string, string) error {
 func (m *fakeManager) SwapPanes(sessionName, paneA, paneB string) error {
 	m.lastSwap = [3]string{sessionName, paneA, paneB}
 	return nil
+}
+func (m *fakeManager) ResizePaneEdge(sessionName, paneID string, edge layout.ResizeEdge, delta int, snap bool, snapState layout.SnapState) (layout.ApplyResult, error) {
+	m.lastResize.sessionName = sessionName
+	m.lastResize.paneID = paneID
+	m.lastResize.edge = edge
+	m.lastResize.delta = delta
+	m.lastResize.snap = snap
+	m.lastResize.snapState = snapState
+	return layout.ApplyResult{Changed: true, Affected: []string{paneID}}, nil
+}
+func (m *fakeManager) ResetPaneSizes(sessionName, paneID string) (layout.ApplyResult, error) {
+	m.lastReset.sessionName = sessionName
+	m.lastReset.paneID = paneID
+	return layout.ApplyResult{Changed: true}, nil
+}
+func (m *fakeManager) ZoomPane(sessionName, paneID string, toggle bool) (layout.ApplyResult, error) {
+	m.lastZoom.sessionName = sessionName
+	m.lastZoom.paneID = paneID
+	m.lastZoom.toggle = toggle
+	return layout.ApplyResult{Changed: true}, nil
 }
 func (m *fakeManager) SetPaneTool(paneID, tool string) error {
 	m.lastTool = [2]string{paneID, tool}
@@ -170,15 +208,47 @@ func TestHandleResizePaneSuccess(t *testing.T) {
 	manager := &fakeManager{windowID: "pane-1", window: win}
 	d := &Daemon{manager: manager}
 
-	payload, err := encodePayload(ResizePaneRequest{PaneID: "pane-1", Cols: 3, Rows: 4})
+	payload, err := encodePayload(ResizePaneRequest{SessionName: "alpha", PaneID: "pane-1", Edge: ResizeEdgeRight, Delta: 12, Snap: true})
 	if err != nil {
 		t.Fatalf("encodePayload: %v", err)
 	}
 	if _, err := d.handleResizePane(payload); err != nil {
 		t.Fatalf("handleResizePane: %v", err)
 	}
-	if win.resizeCols != 3 || win.resizeRows != 4 {
-		t.Fatalf("expected resize 3x4, got %dx%d", win.resizeCols, win.resizeRows)
+	if manager.lastResize.sessionName != "alpha" || manager.lastResize.paneID != "pane-1" || manager.lastResize.edge != layout.ResizeEdgeRight || manager.lastResize.delta != 12 || !manager.lastResize.snap {
+		t.Fatalf("unexpected resize call: %#v", manager.lastResize)
+	}
+}
+
+func TestHandleResetPaneSizesSuccess(t *testing.T) {
+	manager := &fakeManager{}
+	d := &Daemon{manager: manager}
+
+	payload, err := encodePayload(ResetSizesRequest{SessionName: "alpha", PaneID: "pane-1"})
+	if err != nil {
+		t.Fatalf("encodePayload: %v", err)
+	}
+	if _, err := d.handleResetPaneSizes(payload); err != nil {
+		t.Fatalf("handleResetPaneSizes: %v", err)
+	}
+	if manager.lastReset.sessionName != "alpha" || manager.lastReset.paneID != "pane-1" {
+		t.Fatalf("unexpected reset call: %#v", manager.lastReset)
+	}
+}
+
+func TestHandleZoomPaneSuccess(t *testing.T) {
+	manager := &fakeManager{}
+	d := &Daemon{manager: manager}
+
+	payload, err := encodePayload(ZoomPaneRequest{SessionName: "alpha", PaneID: "pane-1", Toggle: true})
+	if err != nil {
+		t.Fatalf("encodePayload: %v", err)
+	}
+	if _, err := d.handleZoomPane(payload); err != nil {
+		t.Fatalf("handleZoomPane: %v", err)
+	}
+	if manager.lastZoom.sessionName != "alpha" || manager.lastZoom.paneID != "pane-1" || !manager.lastZoom.toggle {
+		t.Fatalf("unexpected zoom call: %#v", manager.lastZoom)
 	}
 }
 

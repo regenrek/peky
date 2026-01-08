@@ -43,17 +43,6 @@ func truncateTileLine(text string, width int) string {
 	return ansi.Truncate(text, width, "…")
 }
 
-func truncateTileLines(lines []string, width int) []string {
-	if len(lines) == 0 {
-		return nil
-	}
-	out := make([]string, len(lines))
-	for i, line := range lines {
-		out[i] = truncateTileLine(line, width)
-	}
-	return out
-}
-
 func tailLines(lines []string, max int) []string {
 	if max <= 0 {
 		return nil
@@ -62,17 +51,6 @@ func tailLines(lines []string, max int) []string {
 		return lines
 	}
 	return lines[len(lines)-max:]
-}
-
-func trimTrailingBlankLines(lines []string) []string {
-	end := len(lines)
-	for end > 0 {
-		if !tuiansi.IsBlank(lines[end-1]) {
-			break
-		}
-		end--
-	}
-	return lines[:end]
 }
 
 func compactPreviewLines(lines []string) []string {
@@ -121,6 +99,25 @@ func fitLine(text string, width int) string {
 		return truncated
 	}
 	return truncated + strings.Repeat(" ", padding)
+}
+
+func fitLineSuffix(text, suffix string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	suffixW := lipgloss.Width(suffix)
+	if suffixW <= 0 {
+		return fitLine(text, width)
+	}
+	if suffixW >= width {
+		return ansi.Truncate(suffix, width, "")
+	}
+	leftW := width - suffixW - 1
+	if leftW <= 0 {
+		return ansi.Truncate(suffix, width, "")
+	}
+	left := fitLine(text, leftW)
+	return left + " " + suffix
 }
 
 func centerLine(text string, width int) string {
@@ -260,10 +257,11 @@ func clamp(value, min, max int) int {
 
 func renderBufferLines(buf *cellbuf.Buffer) string {
 	height := buf.Bounds().Dy()
+	width := buf.Bounds().Dx()
 	lines := make([]string, height)
 	for y := 0; y < height; y++ {
 		_, line := cellbuf.RenderLine(buf, y)
-		lines[y] = line
+		lines[y] = fitLine(line, width)
 	}
 	return strings.Join(lines, "\n")
 }

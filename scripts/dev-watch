@@ -58,8 +58,8 @@ Examples:
   scripts/dev-watch -- --layout auto
   scripts/dev-watch --watch cmd,internal -- --layout auto
   scripts/dev-watch --debug-events
-  scripts/dev-watch --debug-events --daemon-log /tmp/peakypanes-daemon.log
-  scripts/dev-watch --debug-events --debug-log /tmp/peakypanes-ui.log
+  scripts/dev-watch --debug-events --daemon-log /tmp/peakypanes-dev-$UID/daemon.log
+  scripts/dev-watch --debug-events --debug-log /tmp/peakypanes-dev-$UID/ui.log
 
 Flags:
   --debug-events    Enable debug event logs (PEAKYPANES_DEBUG_EVENTS=1)
@@ -72,11 +72,15 @@ fi
 
 if [[ -n "$debug_events" ]]; then
   export PEAKYPANES_DEBUG_EVENTS=1
+  uid="${UID:-$(id -u)}"
+  devroot="${PEAKYPANES_RUNTIME_DIR:-/tmp/peakypanes-dev-$uid}"
+  mkdir -p "$devroot"
+  chmod 700 "$devroot" || true
   if [[ -z "$daemon_log" ]]; then
-    daemon_log="/tmp/peakypanes-daemon.log"
+    daemon_log="$devroot/daemon.log"
   fi
   if [[ -z "$debug_log" ]]; then
-    debug_log="/tmp/peakypanes-ui.log"
+    debug_log="$devroot/ui.log"
   fi
 fi
 if [[ -n "$daemon_log" ]]; then

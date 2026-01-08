@@ -154,6 +154,7 @@ func (idx *dashboardGroupIndex) mergeSession(group *ProjectGroup, session native
 			Name:       session.Name,
 			Path:       normalizeProjectPath(session.Path),
 			LayoutName: session.LayoutName,
+			LayoutTree: session.LayoutTree,
 			Status:     StatusRunning,
 			PaneCount:  paneCount,
 			ActivePane: activePane,
@@ -165,6 +166,7 @@ func (idx *dashboardGroupIndex) mergeSession(group *ProjectGroup, session native
 	item.Status = StatusRunning
 	item.Path = normalizeProjectPath(session.Path)
 	item.LayoutName = session.LayoutName
+	item.LayoutTree = session.LayoutTree
 	item.PaneCount = paneCount
 	item.ActivePane = activePane
 	item.Panes = panes

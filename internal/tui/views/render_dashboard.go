@@ -49,7 +49,9 @@ func (m Model) viewDashboardContent() string {
 	}
 	sections = append(sections, footer)
 	view := lipgloss.JoinVertical(lipgloss.Top, sections...)
-	return m.overlayQuickReplyMenu(view, contentWidth, contentHeight, layout.HeaderHeight, layout.HeaderGap, layout.BodyHeight)
+	view = m.overlayQuickReplyMenu(view, contentWidth, contentHeight, layout.HeaderHeight, layout.HeaderGap, layout.BodyHeight)
+	view = m.overlayResizeOverlay(view, contentWidth, contentHeight, layout.HeaderHeight, layout.HeaderGap, layout.BodyHeight)
+	return m.overlayContextMenu(view, contentWidth, contentHeight)
 }
 
 func (m Model) viewHeader(width int) string {
@@ -342,12 +344,12 @@ func (m Model) viewPreview(width, height int) string {
 		gridHeight = 1
 	}
 	gridWidth := width
-	grid := renderPanePreviewWithRenderer(panes, gridWidth, gridHeight, panePreviewContext{
-		mode:          m.PreviewMode,
-		compact:       m.PreviewCompact,
+	grid := renderPaneLayout(panes, gridWidth, gridHeight, layoutPreviewContext{
+		freezeContent: m.FreezePreviewContent && m.Resize.Dragging,
 		targetPane:    m.SelectionPane,
 		terminalFocus: m.TerminalFocus,
-		renderer:      m.renderPaneTileLive,
+		guides:        m.Resize.Guides,
+		paneView:      m.PaneView,
 	})
 	lines = append(lines, grid)
 
@@ -392,10 +394,38 @@ func (m Model) viewFooter(width int) string {
 	base = theme.ListDimmed.Render(base) + modeHintRendered
 	toast := m.Toast
 	if toast == "" {
-		return fitLine(base, width)
+		return fitLineSuffix(base, m.viewServerStatus(), width)
 	}
 	line := fmt.Sprintf("%s  %s", base, toast)
-	return fitLine(line, width)
+	return fitLineSuffix(line, m.viewServerStatus(), width)
+}
+
+func (m Model) viewServerStatus() string {
+	const slot = 8
+	status := strings.ToLower(strings.TrimSpace(m.ServerStatus))
+	switch status {
+	case "down":
+		word := theme.StatusError.Render("down")
+		pad := slot - lipgloss.Width(word)
+		if pad < 0 {
+			pad = 0
+		}
+		return theme.ListDimmed.Render(strings.Repeat(" ", pad)) + word
+	case "restored":
+		word := theme.StatusWarning.Render("restored")
+		pad := slot - lipgloss.Width(word)
+		if pad < 0 {
+			pad = 0
+		}
+		return theme.ListDimmed.Render(strings.Repeat(" ", pad)) + word
+	default:
+		word := theme.ListDimmed.Render("up")
+		pad := slot - lipgloss.Width(word)
+		if pad < 0 {
+			pad = 0
+		}
+		return theme.ListDimmed.Render(strings.Repeat(" ", pad)) + word
+	}
 }
 
 func (m Model) viewQuickReply(width int) string {
@@ -468,6 +498,161 @@ func (m Model) overlayQuickReplyMenu(base string, width, height, headerHeight, h
 		menuY = 0
 	}
 	return overlayAt(base, menu, width, height, menuX, menuY)
+}
+
+func (m Model) overlayResizeOverlay(base string, width, height, headerHeight, headerGap, bodyHeight int) string {
+	if width <= 0 || height <= 0 {
+		return base
+	}
+	if len(m.Resize.Guides) == 0 && !m.Resize.Active && strings.TrimSpace(m.Resize.Label) == "" {
+		return base
+	}
+	base = overlayResizeLabel(base, width, height, m.Resize)
+	return overlayResizeHUD(base, width, height, headerHeight, headerGap, bodyHeight, m.Resize)
+}
+
+func overlayResizeLabel(base string, width, height int, resize ResizeOverlay) string {
+	if strings.TrimSpace(resize.Label) == "" || width <= 0 || height <= 0 {
+		return base
+	}
+	label := renderResizeLabel(resize.Label)
+	if strings.TrimSpace(label) == "" {
+		return base
+	}
+	labelW := lipgloss.Width(label)
+	labelH := lipgloss.Height(label)
+	if labelW <= 0 || labelH <= 0 {
+		return base
+	}
+	x, y := clampOverlayPosition(resize.LabelX, resize.LabelY, width, height, labelW, labelH)
+	return overlayAt(base, label, width, height, x, y)
+}
+
+func overlayResizeHUD(base string, width, height, headerHeight, headerGap, bodyHeight int, resize ResizeOverlay) string {
+	if !resize.Active || width <= 0 || height <= 0 {
+		return base
+	}
+	hud := renderResizeHUD(resize)
+	if strings.TrimSpace(hud) == "" {
+		return base
+	}
+	hudW := lipgloss.Width(hud)
+	hudH := lipgloss.Height(hud)
+	if hudW <= 0 || hudH <= 0 {
+		return base
+	}
+	bodyY := headerHeight + headerGap
+	hudX, hudY := clampOverlayPosition(width-hudW-1, bodyY+bodyHeight-hudH-1, width, height, hudW, hudH)
+	return overlayAt(base, hud, width, height, hudX, hudY)
+}
+
+func clampOverlayPosition(x, y, width, height, w, h int) (int, int) {
+	if x+w > width {
+		x = width - w
+	}
+	if y+h > height {
+		y = height - h
+	}
+	if x < 0 {
+		x = 0
+	}
+	if y < 0 {
+		y = 0
+	}
+	return x, y
+}
+
+func renderResizeHUD(resize ResizeOverlay) string {
+	if !resize.Active {
+		return ""
+	}
+	title := "Resize mode"
+	if resize.ModeKey != "" {
+		title = title + " (" + resize.ModeKey + ")"
+	}
+	snap := "snap off"
+	if resize.SnapEnabled {
+		snap = "snap on"
+	}
+	if resize.SnapActive {
+		snap = snap + " • snapped"
+	}
+	label := resize.EdgeLabel
+	if label == "" {
+		label = "edge: pick a handle"
+	} else {
+		label = "edge: " + label
+	}
+	lines := []string{
+		theme.DialogTitle.Render(title),
+		theme.DialogLabel.Render(label),
+		theme.DialogLabel.Render("arrows resize • tab cycle • " + snap),
+		theme.DialogLabel.Render("shift/ctrl = faster • alt = nosnap • s snap • 0 reset • z zoom • esc exit"),
+	}
+	content := strings.Join(lines, "\n")
+	return theme.DialogCompact.Render(content)
+}
+
+func renderResizeLabel(text string) string {
+	if strings.TrimSpace(text) == "" {
+		return ""
+	}
+	style := lipgloss.NewStyle().
+		Foreground(theme.TextPrimary).
+		Background(theme.Accent).
+		Padding(0, 1)
+	return style.Render(text)
+}
+
+func (m Model) overlayContextMenu(base string, width, height int) string {
+	if !m.ContextMenu.Open || width <= 0 || height <= 0 {
+		return base
+	}
+	menu := renderContextMenu(m.ContextMenu)
+	if strings.TrimSpace(menu) == "" {
+		return base
+	}
+	return overlayAt(base, menu, width, height, m.ContextMenu.X, m.ContextMenu.Y)
+}
+
+func renderContextMenu(menu ContextMenu) string {
+	if len(menu.Items) == 0 {
+		return ""
+	}
+	width := contextMenuWidth(menu.Items)
+	lines := make([]string, 0, len(menu.Items))
+	base := lipgloss.NewStyle().Foreground(theme.TextPrimary).Background(theme.SurfaceAlt)
+	selected := lipgloss.NewStyle().Foreground(theme.TextPrimary).Background(theme.Accent).Bold(true)
+	disabled := lipgloss.NewStyle().Foreground(theme.TextDim).Background(theme.SurfaceAlt)
+	for i, item := range menu.Items {
+		prefix := " "
+		style := base
+		if i == menu.Selected {
+			prefix = "›"
+			style = selected
+		}
+		if !item.Enabled {
+			style = disabled
+		}
+		line := prefix + " " + item.Label
+		line = padRight(line, width)
+		lines = append(lines, style.Render(line))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func contextMenuWidth(items []ContextMenuItem) int {
+	maxLabel := 0
+	for _, item := range items {
+		if l := len(item.Label); l > maxLabel {
+			maxLabel = l
+		}
+	}
+	width := maxLabel + 4
+	if width < 10 {
+		width = 10
+	}
+	return width
 }
 
 func (m Model) viewPekyPromptLine(width int) string {

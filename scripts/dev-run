@@ -56,8 +56,8 @@ Examples:
   scripts/dev-run
   scripts/dev-run start --layout auto
   scripts/dev-run --debug-events
-  scripts/dev-run --debug-events --daemon-log /tmp/peakypanes-daemon.log
-  scripts/dev-run --debug-events --debug-log /tmp/peakypanes-ui.log
+  scripts/dev-run --debug-events --daemon-log /tmp/peakypanes-dev-$UID/daemon.log
+  scripts/dev-run --debug-events --debug-log /tmp/peakypanes-dev-$UID/ui.log
 
 Flags:
   --debug-events    Enable debug event logs (PEAKYPANES_DEBUG_EVENTS=1)
@@ -88,11 +88,16 @@ peak_bin="${gobin}/peky"
 log_file="${DEV_RUN_LOG:-/tmp/peakypanes-dev-run-inner.log}"
 
 if [[ -n "$debug_events" ]]; then
+  uid="${UID:-$(id -u)}"
+  devroot="${PEAKYPANES_RUNTIME_DIR:-/tmp/peakypanes-dev-$uid}"
+  mkdir -p "$devroot"
+  chmod 700 "$devroot" || true
+
   if [[ -z "$daemon_log" ]]; then
-    daemon_log="/tmp/peakypanes-daemon.log"
+    daemon_log="$devroot/daemon.log"
   fi
   if [[ -z "$debug_log" ]]; then
-    debug_log="/tmp/peakypanes-ui.log"
+    debug_log="$devroot/ui.log"
   fi
 fi
 

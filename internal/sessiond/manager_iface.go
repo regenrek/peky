@@ -5,6 +5,7 @@ import (
 
 	uv "github.com/charmbracelet/ultraviolet"
 
+	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/native"
 	"github.com/regenrek/peakypanes/internal/termframe"
 	"github.com/regenrek/peakypanes/internal/terminal"
@@ -59,6 +60,9 @@ type sessionManager interface {
 	SplitPane(ctx context.Context, sessionName, paneIndex string, vertical bool, percent int) (string, error)
 	ClosePane(ctx context.Context, sessionName, paneIndex string) error
 	SwapPanes(sessionName, paneA, paneB string) error
+	ResizePaneEdge(sessionName, paneID string, edge layout.ResizeEdge, delta int, snap bool, snapState layout.SnapState) (layout.ApplyResult, error)
+	ResetPaneSizes(sessionName, paneID string) (layout.ApplyResult, error)
+	ZoomPane(sessionName, paneID string, toggle bool) (layout.ApplyResult, error)
 	SetPaneTool(paneID, tool string) error
 	SendInput(ctx context.Context, paneID string, input []byte) error
 	SendMouse(paneID string, event uv.MouseEvent, route terminal.MouseRoute) error

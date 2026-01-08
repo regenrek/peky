@@ -12,10 +12,13 @@ import (
 )
 
 const (
-	defaultRefreshMS    = 2000
-	defaultPreviewLines = 12
-	defaultIdleSeconds  = 20
-	minDashboardPreview = 10
+	defaultRefreshMS             = 2000
+	defaultPreviewLines          = 12
+	defaultIdleSeconds           = 20
+	minDashboardPreview          = 10
+	defaultResizeMouseThrottleMS = 16
+	minResizeMouseThrottleMS     = 4
+	maxResizeMouseThrottleMS     = 100
 )
 
 var (
@@ -126,10 +129,6 @@ func defaultDashboardConfig(cfg layout.DashboardConfig) (DashboardConfig, error)
 	idleSeconds := positiveIntOrDefault(cfg.IdleSeconds, defaultIdleSeconds)
 	previewCompact := boolOrDefault(cfg.PreviewCompact, true)
 	agentDetection := resolveAgentDetection(cfg.AgentDetection)
-	previewMode, err := resolvePreviewMode(cfg.PreviewMode)
-	if err != nil {
-		return DashboardConfig{}, err
-	}
 	sidebarHidden := boolOrDefault(cfg.Sidebar.Hidden, false)
 	attachBehavior, err := resolveAttachBehavior(cfg.AttachBehavior)
 	if err != nil {
@@ -149,6 +148,10 @@ func defaultDashboardConfig(cfg layout.DashboardConfig) (DashboardConfig, error)
 	if err != nil {
 		return DashboardConfig{}, err
 	}
+	resizeSettings, err := resolveResizeConfig(cfg.Resize)
+	if err != nil {
+		return DashboardConfig{}, err
+	}
 	performance, err := resolvePerformanceConfig(cfg.Performance)
 	if err != nil {
 		return DashboardConfig{}, err
@@ -159,8 +162,8 @@ func defaultDashboardConfig(cfg layout.DashboardConfig) (DashboardConfig, error)
 		PreviewCompact:     previewCompact,
 		IdleThreshold:      time.Duration(idleSeconds) * time.Second,
 		StatusMatcher:      matcher,
-		PreviewMode:        previewMode,
 		SidebarHidden:      sidebarHidden,
+		Resize:             resizeSettings,
 		ProjectRoots:       projectRoots,
 		AgentDetection:     agentDetection,
 		AttachBehavior:     attachBehavior,
@@ -196,17 +199,6 @@ func resolveAgentDetection(cfg layout.AgentDetectionConfig) AgentDetectionConfig
 	return agentDetection
 }
 
-func resolvePreviewMode(value string) (string, error) {
-	previewMode := strings.TrimSpace(value)
-	if previewMode == "" {
-		previewMode = "grid"
-	}
-	if previewMode != "grid" && previewMode != "layout" {
-		return "", fmt.Errorf("invalid preview_mode %q (use grid or layout)", previewMode)
-	}
-	return previewMode, nil
-}
-
 func resolveAttachBehavior(value string) (string, error) {
 	attachBehavior, ok := normalizeAttachBehavior(value)
 	if !ok {
@@ -229,6 +221,34 @@ func resolveQuitBehavior(value string) (string, error) {
 		return "", fmt.Errorf("invalid quit_behavior %q (use prompt, keep, or stop)", value)
 	}
 	return quitBehavior, nil
+}
+
+func resolveResizeConfig(cfg layout.DashboardResizeConfig) (DashboardResizeSettings, error) {
+	mode := strings.ToLower(strings.TrimSpace(cfg.MouseApply))
+	if mode == "" {
+		mode = ResizeMouseApplyLive
+	}
+	switch mode {
+	case ResizeMouseApplyLive, ResizeMouseApplyCommit:
+	default:
+		return DashboardResizeSettings{}, fmt.Errorf("invalid dashboard.resize.mouse_apply %q (use live or commit)", mode)
+	}
+	throttleMS := cfg.MouseThrottleMS
+	if throttleMS <= 0 {
+		throttleMS = defaultResizeMouseThrottleMS
+	}
+	if throttleMS < minResizeMouseThrottleMS {
+		throttleMS = minResizeMouseThrottleMS
+	}
+	if throttleMS > maxResizeMouseThrottleMS {
+		throttleMS = maxResizeMouseThrottleMS
+	}
+	freeze := boolOrDefault(cfg.FreezeContentDuringDrag, true)
+	return DashboardResizeSettings{
+		MouseApply:              mode,
+		MouseThrottle:           time.Duration(throttleMS) * time.Millisecond,
+		FreezeContentDuringDrag: freeze,
+	}, nil
 }
 
 func resolvePerformanceConfig(cfg layout.PerformanceConfig) (DashboardPerformance, error) {

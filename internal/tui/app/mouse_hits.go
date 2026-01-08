@@ -2,9 +2,10 @@ package app
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
+	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/tui/layoutgeom"
 	"github.com/regenrek/peakypanes/internal/tui/mouse"
 	"github.com/regenrek/peakypanes/internal/tui/panelayout"
 )
@@ -203,10 +204,12 @@ func (m *Model) validateProjectPreviewRect(preview mouse.Rect, perfKey string) b
 }
 
 func (m *Model) projectPaneHitsForPreview(project *ProjectGroup, session *SessionItem, preview mouse.Rect) []mouse.PaneHit {
-	if m.settings.PreviewMode == "layout" {
-		return projectPaneLayoutHits(project, session, session.Panes, preview)
+	rects := m.projectPaneLayoutRects(session)
+	geom, ok := layoutgeom.Build(preview, rects)
+	if !ok {
+		return nil
 	}
-	return projectPaneTileHits(project, session, session.Panes, preview)
+	return projectPaneLayoutHits(project, session, geom)
 }
 
 func (m *Model) logProjectPaneHitsSkip(reason, detail, perfKey string) {
@@ -217,75 +220,58 @@ func (m *Model) logProjectPaneHitsSkip(reason, detail, perfKey string) {
 	logPerfEvery(perfKey, perfLogInterval, "tui: pane hits project skip reason=%s %s", reason, detail)
 }
 
-func projectPaneLayoutHits(project *ProjectGroup, session *SessionItem, panes []PaneItem, preview mouse.Rect) []mouse.PaneHit {
-	maxW, maxH := paneBounds(panes)
-	if maxW == 0 || maxH == 0 {
+func (m *Model) projectPaneLayoutRects(session *SessionItem) map[string]layout.Rect {
+	if session == nil {
 		return nil
 	}
-
-	hits := make([]mouse.PaneHit, 0, len(panes))
-	for _, pane := range panes {
-		x1, y1, w, h := scalePane(pane, maxW, maxH, preview.W, preview.H)
-		if w <= 0 || h <= 0 {
+	if engine := m.layoutEngineFor(session.Name); engine != nil && engine.Tree != nil {
+		rects := engine.Tree.ViewRects()
+		if len(rects) > 0 {
+			return rects
+		}
+	}
+	rects := make(map[string]layout.Rect, len(session.Panes))
+	for _, pane := range session.Panes {
+		if pane.ID == "" || pane.Width <= 0 || pane.Height <= 0 {
 			continue
 		}
-		outer := mouse.Rect{
-			X: preview.X + x1,
-			Y: preview.Y + y1,
-			W: w,
-			H: h,
+		rects[pane.ID] = layout.Rect{
+			X: pane.Left,
+			Y: pane.Top,
+			W: pane.Width,
+			H: pane.Height,
+		}
+	}
+	return rects
+}
+
+func projectPaneLayoutHits(project *ProjectGroup, session *SessionItem, geom layoutgeom.Geometry) []mouse.PaneHit {
+	if len(geom.Panes) == 0 {
+		return nil
+	}
+	hits := make([]mouse.PaneHit, 0, len(geom.Panes))
+	for _, pane := range geom.Panes {
+		outer := pane.Screen
+		if outer.Empty() {
+			continue
+		}
+		content := layoutgeom.ContentRect(geom, outer)
+		index := ""
+		if session != nil {
+			if item := findPaneByID(session.Panes, pane.ID); item != nil {
+				index = item.Index
+			}
 		}
 		hits = append(hits, mouse.PaneHit{
 			PaneID: pane.ID,
 			Selection: mouse.Selection{
 				ProjectID: project.ID,
 				Session:   session.Name,
-				Pane:      pane.Index,
+				Pane:      index,
 			},
 			Outer:   outer,
-			Content: mouse.Rect{},
+			Content: content,
 		})
-	}
-	return hits
-}
-
-func projectPaneTileHits(project *ProjectGroup, session *SessionItem, panes []PaneItem, preview mouse.Rect) []mouse.PaneHit {
-	layout := panelayout.Compute(len(panes), preview.W, preview.H)
-
-	hits := make([]mouse.PaneHit, 0, len(panes))
-	for r := 0; r < layout.Rows; r++ {
-		rowHeight := layout.RowHeight(r)
-		rowY := layout.RowY(preview.Y, r)
-		for c := 0; c < layout.Cols; c++ {
-			idx := r*layout.Cols + c
-			if idx >= len(panes) {
-				continue
-			}
-			pane := panes[idx]
-			outer := mouse.Rect{
-				X: preview.X + c*layout.TileWidth,
-				Y: rowY,
-				W: layout.TileWidth,
-				H: rowHeight,
-			}
-			borders := tileBorders{
-				top:    r == 0,
-				left:   c == 0,
-				right:  true,
-				bottom: true,
-			}
-			content := projectTileContentRect(outer, pane, borders)
-			hits = append(hits, mouse.PaneHit{
-				PaneID: pane.ID,
-				Selection: mouse.Selection{
-					ProjectID: project.ID,
-					Session:   session.Name,
-					Pane:      pane.Index,
-				},
-				Outer:   outer,
-				Content: content,
-			})
-		}
 	}
 	return hits
 }
@@ -305,22 +291,6 @@ func dashboardPaneContentRect(outer mouse.Rect, previewLines int) mouse.Rect {
 		W: inner.W,
 		H: available,
 	}
-}
-
-func projectTileContentRect(outer mouse.Rect, pane PaneItem, borders tileBorders) mouse.Rect {
-	inner := tileInnerRect(outer, borders)
-	if inner.Empty() {
-		return mouse.Rect{}
-	}
-	headerLines := 1
-	if strings.TrimSpace(pane.Command) != "" {
-		headerLines++
-	}
-	available := inner.H - headerLines
-	if available <= 0 {
-		return mouse.Rect{}
-	}
-	return mouse.Rect{X: inner.X, Y: inner.Y + headerLines, W: inner.W, H: available}
 }
 
 func tileInnerRect(outer mouse.Rect, borders tileBorders) mouse.Rect {

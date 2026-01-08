@@ -3,6 +3,22 @@
 All notable changes to this project will be documented in this file.
 This format is based on Keep a Changelog.
 
+## 0.0.23 - 2026-01-08
+
+### Added
+- Quick reply passthrough keys for interactive prompts (empty input routes Enter/Esc/arrows/tab/ctrl+l to the selected pane).
+- Daemon footer status: `up` / `restored` / `down` with recovery dialogs for stale/dead panes.
+- Keyboard resize mode (ctrl+r) and right-click context menu actions for split/close/zoom/reset.
+
+### Changed
+- TUI resize preview/render pipeline now uses a single SSOT geometry for content + borders + hit-testing.
+- Dev workflow now writes logs under a private per-user tmp dir instead of world-writable `/tmp` paths.
+
+### Fixed
+- Border/guide rendering gaps and divider junction corruption under hover/drag.
+- Pane rendering during resize drag (cached frames render instead of blank).
+- CLI parsing for positional args under `urfave/cli/v3` (no more args mis-parsing).
+
 ## 0.0.22 - 2026-01-06
 
 ### Added

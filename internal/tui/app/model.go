@@ -42,6 +42,7 @@ type dashboardKeyMap struct {
 	attach          key.Binding
 	newSession      key.Binding
 	terminalFocus   key.Binding
+	resizeMode      key.Binding
 	togglePanes     key.Binding
 	toggleSidebar   key.Binding
 	openProject     key.Binding
@@ -59,17 +60,18 @@ type dashboardKeyMap struct {
 
 // Model implements tea.Model for peakypanes TUI.
 type Model struct {
-	client             *sessiond.Client
-	paneViewClient     *sessiond.Client
-	daemonVersion      string
-	daemonDisconnected bool
-	reconnectInFlight  bool
-	reconnectBackoff   time.Duration
-	reconnectToastAt   time.Time
-	state              ViewState
-	tab                DashboardTab
-	width              int
-	height             int
+	client               *sessiond.Client
+	paneViewClient       *sessiond.Client
+	daemonVersion        string
+	daemonDisconnected   bool
+	restartNoticePending bool
+	reconnectInFlight    bool
+	reconnectBackoff     time.Duration
+	reconnectToastAt     time.Time
+	state                ViewState
+	tab                  DashboardTab
+	width                int
+	height               int
 
 	configPath string
 
@@ -86,6 +88,9 @@ type Model struct {
 
 	keys *dashboardKeyMap
 
+	layoutEngines       map[string]*layout.Engine
+	layoutEngineVersion uint64
+
 	expandedSessions map[string]bool
 
 	filterInput  textinput.Model
@@ -101,7 +106,8 @@ type Model struct {
 	quickReplyMode         quickReplyMode
 	quickReplyFileCache    quickReplyFileCache
 
-	mouse mouse.Handler
+	mouse       mouse.Handler
+	contextMenu contextMenuState
 
 	oscEmit func(string)
 
@@ -176,6 +182,8 @@ type Model struct {
 	paneMouseMotion   map[string]bool
 	paneInputDisabled map[string]struct{}
 
+	resize resizeState
+
 	paneViewSeq           map[paneViewKey]uint64
 	paneViewLastReq       map[paneViewKey]time.Time
 	paneViewFirst         map[string]struct{}
@@ -193,6 +201,9 @@ type Model struct {
 	paneUpdatePerf    map[string]*paneUpdatePerf
 	paneViewQueuedAt  map[string]time.Time
 	panePerfLastPrune time.Time
+
+	lastSplitVertical bool
+	lastSplitSet      bool
 
 	lastUrgentRefreshAt time.Time
 
@@ -236,6 +247,7 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 		configPath:         configPath,
 		expandedSessions:   make(map[string]bool),
 		selectionByProject: make(map[string]selectionState),
+		layoutEngines:      make(map[string]*layout.Engine),
 		paneViews:          make(map[paneViewKey]paneViewEntry),
 		paneMouseMotion:    make(map[string]bool),
 		paneViewProfile:    detectPaneViewProfile(),
@@ -251,6 +263,7 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 		cursorShapeNow:         time.Now,
 		pekyViewport:           viewport.New(0, 0),
 	}
+	m.resize.snap = true
 
 	m.filterInput = textinput.New()
 	m.filterInput.Placeholder = "filter sessions"
@@ -294,6 +307,9 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 		return nil, err
 	}
 	m.config = cfg
+	if restartNoticeFlagActive(m.restartNoticeFlagPath()) {
+		m.restartNoticePending = true
+	}
 	settings, err := defaultDashboardConfig(cfg.Dashboard)
 	if err != nil {
 		_ = paneViewClient.Close()

@@ -2,10 +2,19 @@ package views
 
 // Render is the entry point for rendering the active TUI view.
 func Render(m Model) string {
-	if render := viewRenderers[m.ActiveView]; render != nil {
-		return render(m)
+	width := m.Width
+	height := m.Height
+	if width <= 0 || height <= 0 {
+		if render := viewRenderers[m.ActiveView]; render != nil {
+			return render(m)
+		}
+		return m.viewDashboard()
 	}
-	return m.viewDashboard()
+
+	if render := viewRenderers[m.ActiveView]; render != nil {
+		return padLines(render(m), width, height)
+	}
+	return padLines(m.viewDashboard(), width, height)
 }
 
 var viewRenderers = map[int]func(Model) string{
@@ -30,4 +39,5 @@ var viewRenderers = map[int]func(Model) string{
 	viewProjectRootSetup:        func(m Model) string { return m.viewProjectRootSetup() },
 	viewPekyDialog:              func(m Model) string { return m.viewPekyDialog() },
 	viewAuthDialog:              func(m Model) string { return m.viewAuthDialog() },
+	viewRestartNotice:           func(m Model) string { return m.viewRestartNotice() },
 }

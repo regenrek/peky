@@ -24,8 +24,10 @@ func TestDefaultDashboardConfigDefaults(t *testing.T) {
 	assertInt(t, "PreviewLines", cfg.PreviewLines, 12)
 	assertDuration(t, "IdleThreshold", cfg.IdleThreshold, 20*time.Second)
 	assertBool(t, "PreviewCompact", cfg.PreviewCompact, true)
-	assertString(t, "PreviewMode", cfg.PreviewMode, "grid")
 	assertBool(t, "SidebarHidden", cfg.SidebarHidden, false)
+	assertString(t, "Resize.MouseApply", cfg.Resize.MouseApply, ResizeMouseApplyLive)
+	assertDuration(t, "Resize.MouseThrottle", cfg.Resize.MouseThrottle, 16*time.Millisecond)
+	assertBool(t, "Resize.FreezeContentDuringDrag", cfg.Resize.FreezeContentDuringDrag, true)
 	assertString(t, "AttachBehavior", cfg.AttachBehavior, AttachBehaviorCurrent)
 	assertString(t, "PaneNavigationMode", cfg.PaneNavigationMode, PaneNavigationSpatial)
 	assertString(t, "QuitBehavior", cfg.QuitBehavior, QuitBehaviorPrompt)
@@ -44,8 +46,8 @@ func TestDefaultDashboardConfigOverrides(t *testing.T) {
 		PreviewLines:       5,
 		IdleSeconds:        3,
 		PreviewCompact:     &compact,
-		PreviewMode:        "layout",
 		Sidebar:            layout.DashboardSidebarConfig{Hidden: &sidebarHidden},
+		Resize:             layout.DashboardResizeConfig{MouseApply: "commit", MouseThrottleMS: 40, FreezeContentDuringDrag: boolPtr(false)},
 		AttachBehavior:     "detached",
 		PaneNavigationMode: "memory",
 		QuitBehavior:       "keep",
@@ -69,8 +71,10 @@ func TestDefaultDashboardConfigOverrides(t *testing.T) {
 	assertInt(t, "PreviewLines", cfg.PreviewLines, 5)
 	assertDuration(t, "IdleThreshold", cfg.IdleThreshold, 3*time.Second)
 	assertBool(t, "PreviewCompact", cfg.PreviewCompact, false)
-	assertString(t, "PreviewMode", cfg.PreviewMode, "layout")
 	assertBool(t, "SidebarHidden", cfg.SidebarHidden, true)
+	assertString(t, "Resize.MouseApply", cfg.Resize.MouseApply, ResizeMouseApplyCommit)
+	assertDuration(t, "Resize.MouseThrottle", cfg.Resize.MouseThrottle, 40*time.Millisecond)
+	assertBool(t, "Resize.FreezeContentDuringDrag", cfg.Resize.FreezeContentDuringDrag, false)
 	assertString(t, "AttachBehavior", cfg.AttachBehavior, AttachBehaviorDetached)
 	assertString(t, "PaneNavigationMode", cfg.PaneNavigationMode, PaneNavigationMemory)
 	assertString(t, "QuitBehavior", cfg.QuitBehavior, QuitBehaviorKeep)
@@ -82,10 +86,27 @@ func TestDefaultDashboardConfigOverrides(t *testing.T) {
 	assertDuration(t, "Performance.PaneViews.MinIntervalFocused", cfg.Performance.PaneViews.MinIntervalFocused, 10*time.Millisecond)
 }
 
-func TestDefaultDashboardConfigInvalidPreviewMode(t *testing.T) {
-	_, err := defaultDashboardConfig(layout.DashboardConfig{PreviewMode: "bad"})
+func TestDefaultDashboardConfigInvalidResizeMouseApply(t *testing.T) {
+	_, err := defaultDashboardConfig(layout.DashboardConfig{Resize: layout.DashboardResizeConfig{MouseApply: "bad"}})
 	if err == nil {
 		t.Fatalf("defaultDashboardConfig() expected error")
+	}
+}
+
+func TestDefaultDashboardConfigResizeThrottleClamp(t *testing.T) {
+	cfg, err := defaultDashboardConfig(layout.DashboardConfig{Resize: layout.DashboardResizeConfig{MouseThrottleMS: 1}})
+	if err != nil {
+		t.Fatalf("defaultDashboardConfig() error: %v", err)
+	}
+	if cfg.Resize.MouseThrottle != 4*time.Millisecond {
+		t.Fatalf("Resize.MouseThrottle = %s", cfg.Resize.MouseThrottle)
+	}
+	cfg, err = defaultDashboardConfig(layout.DashboardConfig{Resize: layout.DashboardResizeConfig{MouseThrottleMS: 1000}})
+	if err != nil {
+		t.Fatalf("defaultDashboardConfig() error: %v", err)
+	}
+	if cfg.Resize.MouseThrottle != 100*time.Millisecond {
+		t.Fatalf("Resize.MouseThrottle = %s", cfg.Resize.MouseThrottle)
 	}
 }
 
@@ -122,6 +143,10 @@ func assertStringSlice(t *testing.T, name string, got []string, want []string) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("%s = %#v", name, got)
 	}
+}
+
+func boolPtr(value bool) *bool {
+	return &value
 }
 
 func TestDefaultDashboardConfigInvalidAttachBehavior(t *testing.T) {

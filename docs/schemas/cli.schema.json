@@ -111,6 +111,53 @@
         "message": {"type": "string"}
       }
     },
+    "LayoutSnapState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["active", "target"],
+      "properties": {
+        "active": {"type": "boolean"},
+        "target": {"type": "integer"}
+      }
+    },
+    "LayoutNodeSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["axis", "size"],
+      "properties": {
+        "pane_id": {"type": "string"},
+        "axis": {"type": "integer", "enum": [0, 1]},
+        "size": {"type": "integer"},
+        "children": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/LayoutNodeSnapshot"}
+        }
+      }
+    },
+    "LayoutTreeSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root"],
+      "properties": {
+        "root": {"$ref": "#/$defs/LayoutNodeSnapshot"},
+        "zoomed_pane_id": {"type": "string"}
+      }
+    },
+    "LayoutState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["session"],
+      "properties": {
+        "session": {"type": "string"},
+        "pane_id": {"type": "string"},
+        "before": {"$ref": "#/$defs/LayoutTreeSnapshot"},
+        "after": {"$ref": "#/$defs/LayoutTreeSnapshot"},
+        "changed": {"type": "boolean"},
+        "snapped": {"type": "boolean"},
+        "snap_state": {"$ref": "#/$defs/LayoutSnapState"},
+        "affected": {"type": "array", "items": {"type": "string"}}
+      }
+    },
     "ActionResult": {
       "type": "object",
       "additionalProperties": false,
@@ -128,7 +175,8 @@
           "items": {"$ref": "#/$defs/TargetResult"}
         },
         "warnings": {"type": "array", "items": {"type": "string"}},
-        "details": {"type": "object", "additionalProperties": true}
+        "details": {"type": "object", "additionalProperties": true},
+        "layout": {"$ref": "#/$defs/LayoutState"}
       }
     },
     "ActionResponse": {
@@ -161,6 +209,8 @@
                         "pane.close",
                         "pane.swap",
                         "pane.resize",
+                        "pane.reset-sizes",
+                        "pane.zoom",
                         "pane.send",
                         "pane.run",
                         "pane.action",

@@ -28,6 +28,8 @@ const (
 	OpSendInputTool  Op = "send_input_tool"
 	OpSendMouse      Op = "send_mouse"
 	OpResizePane     Op = "resize_pane"
+	OpResetPaneSizes Op = "reset_pane_sizes"
+	OpZoomPane       Op = "zoom_pane"
 	OpPaneView       Op = "pane_view"
 	OpPaneOutput     Op = "pane_output"
 	OpPaneSnapshot   Op = "pane_snapshot"
@@ -256,11 +258,48 @@ type SendMouseRequest struct {
 	Event  MouseEventPayload
 }
 
-// ResizePaneRequest resizes the PTY for a pane.
+type ResizeEdge string
+
+const (
+	ResizeEdgeLeft  ResizeEdge = "left"
+	ResizeEdgeRight ResizeEdge = "right"
+	ResizeEdgeUp    ResizeEdge = "up"
+	ResizeEdgeDown  ResizeEdge = "down"
+)
+
+type SnapState struct {
+	Active bool
+	Target int
+}
+
+// ResizePaneRequest resizes a split edge for a pane.
 type ResizePaneRequest struct {
-	PaneID string
-	Cols   int
-	Rows   int
+	SessionName string
+	PaneID      string
+	Edge        ResizeEdge
+	Delta       int
+	Snap        bool
+	SnapState   SnapState
+}
+
+type LayoutOpResponse struct {
+	Changed   bool
+	Snapped   bool
+	SnapState SnapState
+	Affected  []string
+}
+
+// ResetSizesRequest resets pane sizes.
+type ResetSizesRequest struct {
+	SessionName string
+	PaneID      string
+}
+
+// ZoomPaneRequest toggles pane zoom.
+type ZoomPaneRequest struct {
+	SessionName string
+	PaneID      string
+	Toggle      bool
 }
 
 type PaneViewPriority int

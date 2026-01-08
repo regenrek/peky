@@ -112,6 +112,15 @@ func (m Model) viewConfirmRestart() string {
 	})
 }
 
+func (m Model) viewRestartNotice() string {
+	body := "Panes are dead - you can still view them"
+	return m.renderConfirmDialog("Peakypanes was restarted", body, []dialogChoice{
+		{Key: "enter", Label: "Start fresh"},
+		{Key: "s", Label: "Check stale panes"},
+		{Key: "esc", Label: "close"},
+	})
+}
+
 func (m Model) renderConfirmDialog(title, body string, choices []dialogChoice) string {
 	content := dialogContent(
 		dialogTitleStyle.Render(title),

@@ -37,12 +37,25 @@ kill_pids() {
   done <<<"$raw"
 }
 
+ui_pids() {
+  # ps columns: pid, comm (exe name), args (full argv)
+  # Keep daemon alive by never killing processes whose args include " daemon ".
+  ps -ax -o pid=,comm=,args= | awk '
+    ($2 == "peky" || $2 == "peakypanes") && ($0 !~ /[[:space:]]daemon([[:space:]]|$)/) { print $1 }
+  '
+}
+
 kill_all=false
 skip_daemon_restart=false
+keep_daemon=false
 for arg in "$@"; do
   case "$arg" in
     --all)
       kill_all=true
+      ;;
+    --keep-daemon|--no-daemon|--preserve-daemon)
+      keep_daemon=true
+      skip_daemon_restart=true
       ;;
     --no-daemon-restart|--skip-daemon-restart)
       skip_daemon_restart=true
@@ -53,18 +66,20 @@ done
 echo "reinit: go install ./cmd/peky ./cmd/peakypanes"
 go install ./cmd/peky ./cmd/peakypanes
 
-pids="$(pgrep -f "peky.*daemon|peakypanes.*daemon" || true)"
-if [[ -z "$pids" ]]; then
-  echo "reinit: no running daemon found"
-  ps -ax -o pid=,command= | rg "peky" || true
+if [[ "$keep_daemon" == true ]]; then
+  echo "reinit: keeping daemon running"
 else
-  kill_pids "stopping daemon(s)" "" "$pids"
+  pids="$(pgrep -f "peky.*daemon|peakypanes.*daemon" || true)"
+  if [[ -z "$pids" ]]; then
+    echo "reinit: no running daemon found"
+    ps -ax -o pid=,command= | rg "peky" || true
+  else
+    kill_pids "stopping daemon(s)" "" "$pids"
+  fi
 fi
 
-if [[ "$kill_all" == true ]]; then
-  ui_pids_raw="$(pgrep -x "peky" || true)"
-  peak_ui_pids_raw="$(pgrep -x "peakypanes" || true)"
-  ui_pids="$(printf "%s\n%s\n" "$ui_pids_raw" "$peak_ui_pids_raw")"
+if [[ "$kill_all" == true && "$keep_daemon" != true ]]; then
+  ui_pids="$(ui_pids || true)"
   if [[ -n "$(pid_list "$ui_pids")" ]]; then
     kill_pids "stopping UI process(es)" "" "$ui_pids"
   fi
@@ -72,9 +87,11 @@ fi
 
 sleep 0.5
 
-still_running="$(pgrep -f "peky.*daemon" || true)"
-if [[ -n "$still_running" ]]; then
-  kill_pids "force-killing daemon(s)" "-9" "$still_running"
+if [[ "$keep_daemon" != true ]]; then
+  still_running="$(pgrep -f "peky.*daemon" || true)"
+  if [[ -n "$still_running" ]]; then
+    kill_pids "force-killing daemon(s)" "-9" "$still_running"
+  fi
 fi
 
 if [[ "$kill_all" == true ]]; then
