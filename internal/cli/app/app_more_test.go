@@ -18,7 +18,7 @@ func TestRunnerCommandsSmoke(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 
-	var exitCode int = -1
+	exitCode := -1
 	prevExiter := cli.OsExiter
 	prevErrWriter := cli.ErrWriter
 	cli.OsExiter = func(code int) { exitCode = code }
