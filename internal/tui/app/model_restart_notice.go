@@ -1,10 +1,14 @@
 package app
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+const restartNoticeFlagFile = ".pp-restart-notice"
 
 func (m *Model) updateRestartNotice(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch strings.ToLower(strings.TrimSpace(msg.String())) {
@@ -12,16 +16,56 @@ func (m *Model) updateRestartNotice(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.setState(StateDashboard)
 		return m, nil
 	case "enter", "f":
-		m.restartNoticePending = false
+		m.setRestartNoticePending(false)
 		m.setState(StateDashboard)
 		m.startFreshFromRestart()
 		return m, nil
 	case "s":
-		m.restartNoticePending = false
+		m.setRestartNoticePending(false)
 		m.setState(StateDashboard)
 		return m, m.focusFirstStalePane()
 	}
 	return m, nil
+}
+
+func (m *Model) restartNoticeFlagPath() string {
+	if m == nil {
+		return ""
+	}
+	configPath := strings.TrimSpace(m.configPath)
+	if configPath == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(configPath), restartNoticeFlagFile)
+}
+
+func restartNoticeFlagActive(path string) bool {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return false
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(data)) == "1"
+}
+
+func (m *Model) setRestartNoticePending(active bool) {
+	if m == nil {
+		return
+	}
+	m.restartNoticePending = active
+	path := m.restartNoticeFlagPath()
+	if path == "" {
+		return
+	}
+	value := "0\n"
+	if active {
+		value = "1\n"
+	}
+	_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	_ = os.WriteFile(path, []byte(value), 0o600)
 }
 
 func (m *Model) startFreshFromRestart() {

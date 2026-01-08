@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -49,5 +50,25 @@ func TestDaemonReconnectSetsRestartNoticePending(t *testing.T) {
 	_ = m.handleDaemonReconnect(daemonReconnectMsg{Client: client, PaneViewClient: paneClient})
 	if !m.restartNoticePending {
 		t.Fatalf("expected restartNoticePending=true")
+	}
+}
+
+func TestRestartNoticeFlagActive(t *testing.T) {
+	dir := t.TempDir()
+	flag := dir + "/" + restartNoticeFlagFile
+	if restartNoticeFlagActive(flag) {
+		t.Fatalf("expected inactive for missing flag")
+	}
+	if err := os.WriteFile(flag, []byte("1\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if !restartNoticeFlagActive(flag) {
+		t.Fatalf("expected active for flag=1")
+	}
+	if err := os.WriteFile(flag, []byte("0\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if restartNoticeFlagActive(flag) {
+		t.Fatalf("expected inactive for flag=0")
 	}
 }

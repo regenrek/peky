@@ -128,6 +128,7 @@ func (m *Model) updateConfirmQuit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.confirmQuitRunning = 0
 		m.setState(StateDashboard)
 		m.pendingQuit = quitActionStop
+		m.setRestartNoticePending(true)
 		m.setToast("Stopping daemon...", toastInfo)
 		return m, m.stopDaemonCmd()
 	case "n", "esc":

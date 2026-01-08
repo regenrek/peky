@@ -307,6 +307,9 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 		return nil, err
 	}
 	m.config = cfg
+	if restartNoticeFlagActive(m.restartNoticeFlagPath()) {
+		m.restartNoticePending = true
+	}
 	settings, err := defaultDashboardConfig(cfg.Dashboard)
 	if err != nil {
 		_ = paneViewClient.Close()
