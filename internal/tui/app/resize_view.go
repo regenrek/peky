@@ -22,6 +22,17 @@ func (m *Model) resizeOverlayView() views.ResizeOverlay {
 	if !ok {
 		return views.ResizeOverlay{}
 	}
+	overlay := m.baseResizeOverlay()
+	guides, activeEdge, activeEdgeOK := m.resizeOverlayGuides(geom)
+	if len(guides) > 0 {
+		overlay.Guides = adjustGuidesForPreviewLocal(guides, geom.Preview)
+	}
+	overlay.EdgeLabel = m.resizeEdgeLabel()
+	m.applyResizeOverlayLabel(&overlay, layout, geom, activeEdge, activeEdgeOK)
+	return overlay
+}
+
+func (m *Model) baseResizeOverlay() views.ResizeOverlay {
 	snapEnabled := m.resize.snap
 	snapActive := m.resize.key.snapState.Active
 	if m.resize.drag.active {
@@ -37,40 +48,50 @@ func (m *Model) resizeOverlayView() views.ResizeOverlay {
 	if m.keys != nil {
 		overlay.ModeKey = keyLabel(m.keys.resizeMode)
 	}
-
-	var guides []views.ResizeGuide
-	var activeEdge resizeEdgeRef
-	activeEdgeOK := false
-	switch {
-	case m.resize.drag.active:
-		activeEdge = m.resize.drag.edge
-		activeEdgeOK = activeEdge.PaneID != ""
-		if m.resize.drag.cornerActive {
-			activeEdge = m.resize.drag.corner.Vertical
-			activeEdgeOK = activeEdge.PaneID != ""
-		}
-		guides = append(guides, m.resizeGuidesForActive(geom, true)...)
-	case m.resize.mode:
-		activeEdge, activeEdgeOK = m.activeResizeEdge()
-		guides = append(guides, m.resizeGuidesForActive(geom, false)...)
-	case m.resize.hover.hasEdge || m.resize.hover.hasCorner:
-		guides = append(guides, m.resizeGuidesForHover(geom)...)
-	}
-
-	if len(guides) > 0 {
-		overlay.Guides = adjustGuidesForPreviewLocal(guides, geom.Preview)
-	}
-	overlay.EdgeLabel = m.resizeEdgeLabel()
-	if m.resize.drag.active && activeEdgeOK {
-		if label, ok := resizeSizeLabel(geom, activeEdge); ok {
-			if x, y, ok := m.resizeLabelPosition(layout, geom, activeEdge); ok {
-				overlay.Label = label
-				overlay.LabelX = x
-				overlay.LabelY = y
-			}
-		}
-	}
 	return overlay
+}
+
+func (m *Model) resizeOverlayGuides(geom resizeGeometry) ([]views.ResizeGuide, resizeEdgeRef, bool) {
+	if m == nil {
+		return nil, resizeEdgeRef{}, false
+	}
+	if m.resize.drag.active {
+		active := m.resize.drag.edge
+		ok := active.PaneID != ""
+		if m.resize.drag.cornerActive {
+			active = m.resize.drag.corner.Vertical
+			ok = active.PaneID != ""
+		}
+		return m.resizeGuidesForActive(geom, true), active, ok
+	}
+	if m.resize.mode {
+		active, ok := m.activeResizeEdge()
+		return m.resizeGuidesForActive(geom, false), active, ok
+	}
+	if m.resize.hover.hasEdge || m.resize.hover.hasCorner {
+		return m.resizeGuidesForHover(geom), resizeEdgeRef{}, false
+	}
+	return nil, resizeEdgeRef{}, false
+}
+
+func (m *Model) applyResizeOverlayLabel(overlay *views.ResizeOverlay, layout dashboardLayout, geom resizeGeometry, activeEdge resizeEdgeRef, activeEdgeOK bool) {
+	if m == nil || overlay == nil {
+		return
+	}
+	if !m.resize.drag.active || !activeEdgeOK {
+		return
+	}
+	label, ok := resizeSizeLabel(geom, activeEdge)
+	if !ok {
+		return
+	}
+	x, y, ok := m.resizeLabelPosition(layout, geom, activeEdge)
+	if !ok {
+		return
+	}
+	overlay.Label = label
+	overlay.LabelX = x
+	overlay.LabelY = y
 }
 
 func (m *Model) resizeGuidesForActive(geom resizeGeometry, dragging bool) []views.ResizeGuide {

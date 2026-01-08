@@ -105,46 +105,29 @@ func TestKeyBindings(t *testing.T) {
 		t.Fatalf("buildDashboardKeyMap() error: %v", err)
 	}
 
-	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlQ}, km.projectLeft) {
-		t.Error("projectLeft binding should match ctrl+q")
+	cases := []struct {
+		name    string
+		msg     tea.KeyMsg
+		binding key.Binding
+	}{
+		{name: "projectLeft", msg: tea.KeyMsg{Type: tea.KeyCtrlQ}, binding: km.projectLeft},
+		{name: "projectRight", msg: tea.KeyMsg{Type: tea.KeyCtrlE}, binding: km.projectRight},
+		{name: "sessionUp", msg: tea.KeyMsg{Type: tea.KeyCtrlW}, binding: km.sessionUp},
+		{name: "sessionDown", msg: tea.KeyMsg{Type: tea.KeyCtrlS}, binding: km.sessionDown},
+		{name: "attach", msg: tea.KeyMsg{Type: tea.KeyEnter}, binding: km.attach},
+		{name: "paneNext", msg: tea.KeyMsg{Type: tea.KeyCtrlD}, binding: km.paneNext},
+		{name: "panePrev", msg: tea.KeyMsg{Type: tea.KeyCtrlA}, binding: km.panePrev},
+		{name: "togglePanes", msg: tea.KeyMsg{Type: tea.KeyCtrlU}, binding: km.togglePanes},
+		{name: "toggleSidebar", msg: tea.KeyMsg{Type: tea.KeyCtrlB}, binding: km.toggleSidebar},
+		{name: "closeProject", msg: tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}, Alt: true}, binding: km.closeProject},
+		{name: "help", msg: tea.KeyMsg{Type: tea.KeyCtrlG}, binding: km.help},
+		{name: "quit", msg: tea.KeyMsg{Type: tea.KeyCtrlC}, binding: km.quit},
+		{name: "resizeMode", msg: tea.KeyMsg{Type: tea.KeyCtrlR}, binding: km.resizeMode},
+		{name: "refresh", msg: tea.KeyMsg{Type: tea.KeyF5}, binding: km.refresh},
 	}
-	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlE}, km.projectRight) {
-		t.Error("projectRight binding should match ctrl+e")
-	}
-	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlW}, km.sessionUp) {
-		t.Error("sessionUp binding should match ctrl+w")
-	}
-	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlS}, km.sessionDown) {
-		t.Error("sessionDown binding should match ctrl+s")
-	}
-	if !key.Matches(tea.KeyMsg{Type: tea.KeyEnter}, km.attach) {
-		t.Error("attach binding should match Enter key")
-	}
-	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlD}, km.paneNext) {
-		t.Error("paneNext binding should match ctrl+d")
-	}
-	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlA}, km.panePrev) {
-		t.Error("panePrev binding should match ctrl+a")
-	}
-	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlU}, km.togglePanes) {
-		t.Error("togglePanes binding should match ctrl+u")
-	}
-	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlB}, km.toggleSidebar) {
-		t.Error("toggleSidebar binding should match ctrl+b")
-	}
-	if !key.Matches(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}, Alt: true}, km.closeProject) {
-		t.Error("closeProject binding should match alt+c")
-	}
-	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlG}, km.help) {
-		t.Error("help binding should match ctrl+g")
-	}
-	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlC}, km.quit) {
-		t.Error("quit binding should match ctrl+c")
-	}
-	if !key.Matches(tea.KeyMsg{Type: tea.KeyCtrlR}, km.resizeMode) {
-		t.Error("resizeMode binding should match ctrl+r")
-	}
-	if !key.Matches(tea.KeyMsg{Type: tea.KeyF5}, km.refresh) {
-		t.Error("refresh binding should match f5")
+	for _, c := range cases {
+		if !key.Matches(c.msg, c.binding) {
+			t.Errorf("%s binding did not match %#v", c.name, c.msg)
+		}
 	}
 }

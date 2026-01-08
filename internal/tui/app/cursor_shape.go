@@ -152,54 +152,95 @@ func (m *Model) cursorShapeAt(x, y int) (cursorShape, bool) {
 		return cursorShapePointer, true
 	}
 
-	header := mouse.Rect{X: layout.padLeft, Y: layout.padTop, W: layout.contentWidth, H: layout.headerHeight}
-	if header.Contains(x, y) {
-		return cursorShapePointer, true
+	if shape, ok := cursorShapeInHeaderOrFooter(layout, x, y); ok {
+		return shape, true
 	}
 
-	bodyY := layout.padTop + layout.headerHeight + layout.headerGap
-	body := mouse.Rect{X: layout.padLeft, Y: bodyY, W: layout.contentWidth, H: layout.bodyHeight}
-	quickReplyY := bodyY + layout.bodyHeight
-	quickReply := mouse.Rect{X: layout.padLeft, Y: quickReplyY, W: layout.contentWidth, H: layout.quickReplyHeight}
-	if quickReply.Contains(x, y) {
-		return cursorShapeText, true
-	}
+	body := dashboardBodyRect(layout)
 	if !body.Contains(x, y) {
 		return cursorShapePointer, true
 	}
 
-	if hit, ok := m.resizeHitTest(x, y); ok {
-		switch hit.Kind {
-		case resizeHitEdge:
-			switch hit.Edge.Edge {
-			case sessiond.ResizeEdgeLeft, sessiond.ResizeEdgeRight:
-				return cursorShapeColResize, true
-			case sessiond.ResizeEdgeUp, sessiond.ResizeEdgeDown:
-				return cursorShapeRowResize, true
-			}
-		case resizeHitCorner:
-			diag := cornerCursorShape(hit.Corner)
-			if diag != cursorShapeUnknown {
-				return diag, true
-			}
-		}
+	if shape, ok := m.cursorShapeForResizeHit(x, y); ok {
+		return shape, true
 	}
+	return m.cursorShapeForBody(layout, body, x, y), true
+}
 
-	if m.tab == TabDashboard {
+func cursorShapeInHeaderOrFooter(layout dashboardLayout, x, y int) (cursorShape, bool) {
+	header := mouse.Rect{X: layout.padLeft, Y: layout.padTop, W: layout.contentWidth, H: layout.headerHeight}
+	if header.Contains(x, y) {
+		return cursorShapePointer, true
+	}
+	quickReply := dashboardQuickReplyRect(layout)
+	if quickReply.Contains(x, y) {
 		return cursorShapeText, true
 	}
-	if m.tab == TabProject {
+	return cursorShapeUnknown, false
+}
+
+func dashboardBodyRect(layout dashboardLayout) mouse.Rect {
+	bodyY := layout.padTop + layout.headerHeight + layout.headerGap
+	return mouse.Rect{X: layout.padLeft, Y: bodyY, W: layout.contentWidth, H: layout.bodyHeight}
+}
+
+func dashboardQuickReplyRect(layout dashboardLayout) mouse.Rect {
+	bodyY := layout.padTop + layout.headerHeight + layout.headerGap
+	quickReplyY := bodyY + layout.bodyHeight
+	return mouse.Rect{X: layout.padLeft, Y: quickReplyY, W: layout.contentWidth, H: layout.quickReplyHeight}
+}
+
+func (m *Model) cursorShapeForResizeHit(x, y int) (cursorShape, bool) {
+	if m == nil {
+		return cursorShapeUnknown, false
+	}
+	hit, ok := m.resizeHitTest(x, y)
+	if !ok {
+		return cursorShapeUnknown, false
+	}
+	switch hit.Kind {
+	case resizeHitEdge:
+		return cursorShapeForEdge(hit.Edge.Edge)
+	case resizeHitCorner:
+		diag := cornerCursorShape(hit.Corner)
+		if diag != cursorShapeUnknown {
+			return diag, true
+		}
+	}
+	return cursorShapeUnknown, false
+}
+
+func cursorShapeForEdge(edge sessiond.ResizeEdge) (cursorShape, bool) {
+	switch edge {
+	case sessiond.ResizeEdgeLeft, sessiond.ResizeEdgeRight:
+		return cursorShapeColResize, true
+	case sessiond.ResizeEdgeUp, sessiond.ResizeEdgeDown:
+		return cursorShapeRowResize, true
+	default:
+		return cursorShapeUnknown, false
+	}
+}
+
+func (m *Model) cursorShapeForBody(layout dashboardLayout, body mouse.Rect, x, y int) cursorShape {
+	if m == nil {
+		return cursorShapePointer
+	}
+	switch m.tab {
+	case TabDashboard:
+		return cursorShapeText
+	case TabProject:
 		project := m.selectedProject()
 		if project == nil || m.sidebarHidden(project) {
-			return cursorShapeText, true
+			return cursorShapeText
 		}
 		preview := m.projectSidebarPreviewRect(body)
 		if preview.Contains(x, y) {
-			return cursorShapeText, true
+			return cursorShapeText
 		}
-		return cursorShapePointer, true
+		return cursorShapePointer
+	default:
+		return cursorShapePointer
 	}
-	return cursorShapePointer, true
 }
 
 func cornerCursorShape(corner resizeCornerRef) cursorShape {

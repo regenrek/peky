@@ -507,52 +507,59 @@ func (m Model) overlayResizeOverlay(base string, width, height, headerHeight, he
 	if len(m.Resize.Guides) == 0 && !m.Resize.Active && strings.TrimSpace(m.Resize.Label) == "" {
 		return base
 	}
-	if m.Resize.Label != "" {
-		label := renderResizeLabel(m.Resize.Label)
-		if strings.TrimSpace(label) != "" {
-			labelW := lipgloss.Width(label)
-			labelH := lipgloss.Height(label)
-			if labelW > 0 && labelH > 0 {
-				x := m.Resize.LabelX
-				y := m.Resize.LabelY
-				if x+labelW > width {
-					x = width - labelW
-				}
-				if y+labelH > height {
-					y = height - labelH
-				}
-				if x < 0 {
-					x = 0
-				}
-				if y < 0 {
-					y = 0
-				}
-				base = overlayAt(base, label, width, height, x, y)
-			}
-		}
+	base = overlayResizeLabel(base, width, height, m.Resize)
+	return overlayResizeHUD(base, width, height, headerHeight, headerGap, bodyHeight, m.Resize)
+}
+
+func overlayResizeLabel(base string, width, height int, resize ResizeOverlay) string {
+	if strings.TrimSpace(resize.Label) == "" || width <= 0 || height <= 0 {
+		return base
 	}
-	if m.Resize.Active {
-		hud := renderResizeHUD(m.Resize)
-		if strings.TrimSpace(hud) == "" {
-			return base
-		}
-		hudW := lipgloss.Width(hud)
-		hudH := lipgloss.Height(hud)
-		if hudW <= 0 || hudH <= 0 {
-			return base
-		}
-		bodyY := headerHeight + headerGap
-		hudX := width - hudW - 1
-		hudY := bodyY + bodyHeight - hudH - 1
-		if hudX < 0 {
-			hudX = 0
-		}
-		if hudY < 0 {
-			hudY = 0
-		}
-		base = overlayAt(base, hud, width, height, hudX, hudY)
+	label := renderResizeLabel(resize.Label)
+	if strings.TrimSpace(label) == "" {
+		return base
 	}
-	return base
+	labelW := lipgloss.Width(label)
+	labelH := lipgloss.Height(label)
+	if labelW <= 0 || labelH <= 0 {
+		return base
+	}
+	x, y := clampOverlayPosition(resize.LabelX, resize.LabelY, width, height, labelW, labelH)
+	return overlayAt(base, label, width, height, x, y)
+}
+
+func overlayResizeHUD(base string, width, height, headerHeight, headerGap, bodyHeight int, resize ResizeOverlay) string {
+	if !resize.Active || width <= 0 || height <= 0 {
+		return base
+	}
+	hud := renderResizeHUD(resize)
+	if strings.TrimSpace(hud) == "" {
+		return base
+	}
+	hudW := lipgloss.Width(hud)
+	hudH := lipgloss.Height(hud)
+	if hudW <= 0 || hudH <= 0 {
+		return base
+	}
+	bodyY := headerHeight + headerGap
+	hudX, hudY := clampOverlayPosition(width-hudW-1, bodyY+bodyHeight-hudH-1, width, height, hudW, hudH)
+	return overlayAt(base, hud, width, height, hudX, hudY)
+}
+
+func clampOverlayPosition(x, y, width, height, w, h int) (int, int) {
+	if x+w > width {
+		x = width - w
+	}
+	if y+h > height {
+		y = height - h
+	}
+	if x < 0 {
+		x = 0
+	}
+	if y < 0 {
+		y = 0
+	}
+	return x, y
 }
 
 func renderResizeHUD(resize ResizeOverlay) string {

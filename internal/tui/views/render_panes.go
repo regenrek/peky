@@ -30,6 +30,25 @@ func renderPaneLayout(panes []Pane, width, height int, ctx layoutPreviewContext)
 	if len(panes) == 0 {
 		return padLines("No panes", width, height)
 	}
+	geom, paneByID, ok := buildPaneLayoutGeometry(panes, width, height)
+	if !ok {
+		return padLines("No panes", width, height)
+	}
+
+	buf := newPaneLayoutBuffer(width, height)
+	renderPaneLayoutContent(buf, geom, paneByID, ctx)
+	dividerMap := drawPaneLayoutDividers(buf, geom, width, height)
+	highlightTargetPaneBorder(buf, geom, paneByID, dividerMap, ctx)
+	if len(ctx.guides) > 0 && len(dividerMap) > 0 {
+		applyResizeGuideStyles(buf, dividerMap, ctx.guides)
+	}
+	return renderBufferLines(buf)
+}
+
+func buildPaneLayoutGeometry(panes []Pane, width, height int) (layoutgeom.Geometry, map[string]Pane, bool) {
+	if width <= 0 || height <= 0 || len(panes) == 0 {
+		return layoutgeom.Geometry{}, nil, false
+	}
 	preview := mouse.Rect{X: 0, Y: 0, W: width, H: height}
 	rects := make(map[string]layout.Rect, len(panes))
 	paneByID := make(map[string]Pane, len(panes))
@@ -37,23 +56,26 @@ func renderPaneLayout(panes []Pane, width, height int, ctx layoutPreviewContext)
 		if pane.ID == "" || pane.Width <= 0 || pane.Height <= 0 {
 			continue
 		}
-		rects[pane.ID] = layout.Rect{
-			X: pane.Left,
-			Y: pane.Top,
-			W: pane.Width,
-			H: pane.Height,
-		}
+		rects[pane.ID] = layout.Rect{X: pane.Left, Y: pane.Top, W: pane.Width, H: pane.Height}
 		paneByID[pane.ID] = pane
 	}
 	geom, ok := layoutgeom.Build(preview, rects)
 	if !ok {
-		return padLines("No panes", width, height)
+		return layoutgeom.Geometry{}, nil, false
 	}
+	return geom, paneByID, true
+}
 
-	base := padLines("", width, height)
+func newPaneLayoutBuffer(width, height int) *cellbuf.Buffer {
 	buf := cellbuf.NewBuffer(width, height)
-	cellbuf.SetContent(buf, base)
+	cellbuf.SetContent(buf, padLines("", width, height))
+	return buf
+}
 
+func renderPaneLayoutContent(buf *cellbuf.Buffer, geom layoutgeom.Geometry, paneByID map[string]Pane, ctx layoutPreviewContext) {
+	if buf == nil || len(paneByID) == 0 {
+		return
+	}
 	for _, paneGeom := range geom.Panes {
 		pane, ok := paneByID[paneGeom.ID]
 		if !ok {
@@ -67,16 +89,18 @@ func renderPaneLayout(panes []Pane, width, height int, ctx layoutPreviewContext)
 		if rect.Empty() {
 			continue
 		}
-		content := layoutPaneContent(pane, rect.W, rect.H, ctx)
-		if strings.TrimSpace(content) == "" {
-			content = ""
-		}
+		content := strings.TrimSpace(layoutPaneContent(pane, rect.W, rect.H, ctx))
 		content = padLines(content, rect.W, rect.H)
 		cellbuf.SetContentRect(buf, content, cellbuf.Rect(rect.X, rect.Y, rect.W, rect.H))
 	}
+}
 
+func drawPaneLayoutDividers(buf *cellbuf.Buffer, geom layoutgeom.Geometry, width, height int) map[[2]int]rune {
 	dividerCells := layoutgeom.DividerCells(geom.Dividers)
 	dividerMap := make(map[[2]int]rune, len(dividerCells))
+	if buf == nil || width <= 0 || height <= 0 {
+		return dividerMap
+	}
 	for _, cell := range dividerCells {
 		if cell.X < 0 || cell.Y < 0 || cell.X >= width || cell.Y >= height {
 			continue
@@ -84,10 +108,16 @@ func renderPaneLayout(panes []Pane, width, height int, ctx layoutPreviewContext)
 		buf.SetCell(cell.X, cell.Y, cellbuf.NewCell(cell.Rune))
 		dividerMap[[2]int{cell.X, cell.Y}] = cell.Rune
 	}
+	return dividerMap
+}
 
+func highlightTargetPaneBorder(buf *cellbuf.Buffer, geom layoutgeom.Geometry, paneByID map[string]Pane, dividerMap map[[2]int]rune, ctx layoutPreviewContext) {
+	if buf == nil || ctx.targetPane == "" || len(paneByID) == 0 || len(dividerMap) == 0 {
+		return
+	}
 	highlight := paneHighlightStyle(ctx.terminalFocus)
 	for _, paneGeom := range geom.Panes {
-		if ctx.targetPane == "" || paneGeom.ID == "" {
+		if paneGeom.ID == "" {
 			continue
 		}
 		pane, ok := paneByID[paneGeom.ID]
@@ -95,14 +125,8 @@ func renderPaneLayout(panes []Pane, width, height int, ctx layoutPreviewContext)
 			continue
 		}
 		applyPaneBorderHighlight(buf, geom, paneGeom, dividerMap, highlight)
-		break
+		return
 	}
-
-	if len(ctx.guides) > 0 && len(dividerMap) > 0 {
-		applyResizeGuideStyles(buf, dividerMap, ctx.guides)
-	}
-
-	return renderBufferLines(buf)
 }
 
 func layoutPaneContent(pane Pane, width, height int, ctx layoutPreviewContext) string {

@@ -10,6 +10,22 @@ import (
 )
 
 func TestClientWrapperMethodsHitDaemonHandlers(t *testing.T) {
+	tc := newDaemonTestClient(t)
+	assertClientWrapperBasics(t, tc)
+	assertClientWrapperMissingTargetErrors(t, tc)
+	assertClientWrapperRelayMethods(t, tc)
+	assertClientWrapperEventsReplay(t, tc)
+}
+
+type daemonTestClient struct {
+	socket string
+	client *Client
+	ctx    context.Context
+}
+
+func newDaemonTestClient(t *testing.T) daemonTestClient {
+	t.Helper()
+
 	base := t.TempDir()
 	if runtime.GOOS != "windows" {
 		if dir, err := os.MkdirTemp("/tmp", "ppd-"); err == nil {
@@ -35,82 +51,78 @@ func TestClientWrapperMethodsHitDaemonHandlers(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+	t.Cleanup(cancel)
 	client, err := Dial(ctx, socket, "test")
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
 	t.Cleanup(func() { _ = client.Close() })
 
-	if got := client.Version(); got != "test" {
+	return daemonTestClient{socket: socket, client: client, ctx: ctx}
+}
+
+func assertClientWrapperBasics(t *testing.T, tc daemonTestClient) {
+	t.Helper()
+	if got := tc.client.Version(); got != "test" {
 		t.Fatalf("Version=%q want=%q", got, "test")
 	}
+}
 
-	if err := client.RenamePaneByID(ctx, "missing", "title"); err == nil {
-		t.Fatalf("expected RenamePaneByID error")
-	}
-	if err := client.ClosePaneByID(ctx, "missing"); err == nil {
-		t.Fatalf("expected ClosePaneByID error")
-	}
-	if err := client.SendInputAction(ctx, "missing", []byte("x"), "action", "summary"); err == nil {
-		t.Fatalf("expected SendInputAction error")
-	}
-	if _, err := client.SendInputScope(ctx, "", []byte("x")); err == nil {
-		t.Fatalf("expected SendInputScope error")
-	}
-	if _, err := client.SendInputScopeAction(ctx, "", []byte("x"), "action", "summary"); err == nil {
-		t.Fatalf("expected SendInputScopeAction error")
-	}
+func assertClientWrapperMissingTargetErrors(t *testing.T, tc daemonTestClient) {
+	t.Helper()
 
-	if _, err := client.PaneOutput(ctx, PaneOutputRequest{}); err == nil {
-		t.Fatalf("expected PaneOutput error")
+	calls := []struct {
+		name string
+		fn   func() error
+	}{
+		{name: "RenamePaneByID", fn: func() error { return tc.client.RenamePaneByID(tc.ctx, "missing", "title") }},
+		{name: "ClosePaneByID", fn: func() error { return tc.client.ClosePaneByID(tc.ctx, "missing") }},
+		{name: "SendInputAction", fn: func() error { return tc.client.SendInputAction(tc.ctx, "missing", []byte("x"), "action", "summary") }},
+		{name: "SendInputScope", fn: func() error { _, err := tc.client.SendInputScope(tc.ctx, "", []byte("x")); return err }},
+		{name: "SendInputScopeAction", fn: func() error {
+			_, err := tc.client.SendInputScopeAction(tc.ctx, "", []byte("x"), "action", "summary")
+			return err
+		}},
+		{name: "PaneOutput", fn: func() error { _, err := tc.client.PaneOutput(tc.ctx, PaneOutputRequest{}); return err }},
+		{name: "PaneSnapshot", fn: func() error { _, err := tc.client.PaneSnapshot(tc.ctx, "", 10); return err }},
+		{name: "PaneHistory", fn: func() error { _, err := tc.client.PaneHistory(tc.ctx, PaneHistoryRequest{}); return err }},
+		{name: "PaneWait", fn: func() error { _, err := tc.client.PaneWait(tc.ctx, PaneWaitRequest{}); return err }},
+		{name: "PaneTags", fn: func() error { _, err := tc.client.PaneTags(tc.ctx, ""); return err }},
+		{name: "AddPaneTags", fn: func() error { _, err := tc.client.AddPaneTags(tc.ctx, "", []string{"tag"}); return err }},
+		{name: "RemovePaneTags", fn: func() error { _, err := tc.client.RemovePaneTags(tc.ctx, "", []string{"tag"}); return err }},
+		{name: "FocusSession", fn: func() error { return tc.client.FocusSession(tc.ctx, "") }},
+		{name: "FocusPane", fn: func() error { return tc.client.FocusPane(tc.ctx, "") }},
+		{name: "SignalPane", fn: func() error { return tc.client.SignalPane(tc.ctx, "", "TERM") }},
+		{name: "RelayCreate", fn: func() error { _, err := tc.client.RelayCreate(tc.ctx, RelayConfig{}); return err }},
+		{name: "RelayStop", fn: func() error { return tc.client.RelayStop(tc.ctx, "") }},
 	}
-	if _, err := client.PaneSnapshot(ctx, "", 10); err == nil {
-		t.Fatalf("expected PaneSnapshot error")
+	for _, call := range calls {
+		if err := call.fn(); err == nil {
+			t.Fatalf("expected %s error", call.name)
+		}
 	}
-	if _, err := client.PaneHistory(ctx, PaneHistoryRequest{}); err == nil {
-		t.Fatalf("expected PaneHistory error")
-	}
-	if _, err := client.PaneWait(ctx, PaneWaitRequest{}); err == nil {
-		t.Fatalf("expected PaneWait error")
-	}
+}
 
-	if _, err := client.PaneTags(ctx, ""); err == nil {
-		t.Fatalf("expected PaneTags error")
-	}
-	if _, err := client.AddPaneTags(ctx, "", []string{"tag"}); err == nil {
-		t.Fatalf("expected AddPaneTags error")
-	}
-	if _, err := client.RemovePaneTags(ctx, "", []string{"tag"}); err == nil {
-		t.Fatalf("expected RemovePaneTags error")
-	}
+func assertClientWrapperRelayMethods(t *testing.T, tc daemonTestClient) {
+	t.Helper()
 
-	if err := client.FocusSession(ctx, ""); err == nil {
-		t.Fatalf("expected FocusSession error")
-	}
-	if err := client.FocusPane(ctx, ""); err == nil {
-		t.Fatalf("expected FocusPane error")
-	}
-	if err := client.SignalPane(ctx, "", "TERM"); err == nil {
-		t.Fatalf("expected SignalPane error")
-	}
-
-	if _, err := client.RelayCreate(ctx, RelayConfig{}); err == nil {
-		t.Fatalf("expected RelayCreate error")
-	}
-	if relays, err := client.RelayList(ctx); err != nil || len(relays) != 0 {
+	relays, err := tc.client.RelayList(tc.ctx)
+	if err != nil || len(relays) != 0 {
 		t.Fatalf("RelayList relays=%v err=%v", relays, err)
 	}
-	if err := client.RelayStop(ctx, ""); err == nil {
-		t.Fatalf("expected RelayStop error")
-	}
-	if err := client.RelayStopAll(ctx); err != nil {
+	if err := tc.client.RelayStopAll(tc.ctx); err != nil {
 		t.Fatalf("RelayStopAll: %v", err)
 	}
+}
 
-	if resp, err := client.EventsReplay(ctx, EventsReplayRequest{Limit: 10}); err != nil {
+func assertClientWrapperEventsReplay(t *testing.T, tc daemonTestClient) {
+	t.Helper()
+
+	resp, err := tc.client.EventsReplay(tc.ctx, EventsReplayRequest{Limit: 10})
+	if err != nil {
 		t.Fatalf("EventsReplay: %v", err)
-	} else if len(resp.Events) != 0 {
+	}
+	if len(resp.Events) != 0 {
 		t.Fatalf("EventsReplay events=%v want empty", resp.Events)
 	}
 }

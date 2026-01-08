@@ -296,56 +296,89 @@ func mergeDividerSegments(segments []DividerSegment) []DividerSegment {
 	if len(segments) <= 1 {
 		return segments
 	}
+	vertical, horizontal := splitDividerSegmentsByAxis(segments)
+	merged := make([]DividerSegment, 0, len(segments))
+	merged = append(merged, mergeVerticalDividerSegments(vertical)...)
+	merged = append(merged, mergeHorizontalDividerSegments(horizontal)...)
+	sort.Slice(merged, func(i, j int) bool {
+		if merged[i].Axis != merged[j].Axis {
+			return merged[i].Axis < merged[j].Axis
+		}
+		if merged[i].Axis == SegmentVertical {
+			if merged[i].Rect.X != merged[j].Rect.X {
+				return merged[i].Rect.X < merged[j].Rect.X
+			}
+			return merged[i].Rect.Y < merged[j].Rect.Y
+		}
+		if merged[i].Rect.Y != merged[j].Rect.Y {
+			return merged[i].Rect.Y < merged[j].Rect.Y
+		}
+		return merged[i].Rect.X < merged[j].Rect.X
+	})
+	return merged
+}
+
+func splitDividerSegmentsByAxis(segments []DividerSegment) (vertical []DividerSegment, horizontal []DividerSegment) {
+	for _, seg := range segments {
+		switch seg.Axis {
+		case SegmentVertical:
+			vertical = append(vertical, seg)
+		case SegmentHorizontal:
+			horizontal = append(horizontal, seg)
+		}
+	}
+	return vertical, horizontal
+}
+
+func mergeVerticalDividerSegments(segments []DividerSegment) []DividerSegment {
+	if len(segments) <= 1 {
+		return segments
+	}
 	sort.Slice(segments, func(i, j int) bool {
-		if segments[i].Axis != segments[j].Axis {
-			return segments[i].Axis < segments[j].Axis
-		}
-		if segments[i].Axis == SegmentVertical {
-			if segments[i].Rect.X != segments[j].Rect.X {
-				return segments[i].Rect.X < segments[j].Rect.X
-			}
-			if segments[i].Rect.Y != segments[j].Rect.Y {
-				return segments[i].Rect.Y < segments[j].Rect.Y
-			}
-			return segments[i].Rect.H < segments[j].Rect.H
-		}
-		if segments[i].Rect.Y != segments[j].Rect.Y {
-			return segments[i].Rect.Y < segments[j].Rect.Y
-		}
 		if segments[i].Rect.X != segments[j].Rect.X {
 			return segments[i].Rect.X < segments[j].Rect.X
 		}
-		return segments[i].Rect.W < segments[j].Rect.W
+		return segments[i].Rect.Y < segments[j].Rect.Y
 	})
-
 	merged := make([]DividerSegment, 0, len(segments))
 	current := segments[0]
 	for i := 1; i < len(segments); i++ {
 		next := segments[i]
-		if current.Axis != next.Axis {
+		if current.Rect.X != next.Rect.X {
 			merged = append(merged, current)
 			current = next
 			continue
 		}
-		if current.Axis == SegmentVertical {
-			if current.Rect.X != next.Rect.X {
-				merged = append(merged, current)
-				current = next
-				continue
-			}
-			end := current.Rect.Y + current.Rect.H - 1
-			nextStart := next.Rect.Y
-			nextEnd := next.Rect.Y + next.Rect.H - 1
-			if nextStart <= end+1 {
-				if nextEnd > end {
-					current.Rect.H = nextEnd - current.Rect.Y + 1
-				}
-				continue
-			}
+		end := current.Rect.Y + current.Rect.H - 1
+		nextStart := next.Rect.Y
+		nextEnd := next.Rect.Y + next.Rect.H - 1
+		if nextStart > end+1 {
 			merged = append(merged, current)
 			current = next
 			continue
 		}
+		if nextEnd > end {
+			current.Rect.H = nextEnd - current.Rect.Y + 1
+		}
+	}
+	merged = append(merged, current)
+	return merged
+}
+
+func mergeHorizontalDividerSegments(segments []DividerSegment) []DividerSegment {
+	if len(segments) <= 1 {
+		return segments
+	}
+	sort.Slice(segments, func(i, j int) bool {
+		if segments[i].Rect.Y != segments[j].Rect.Y {
+			return segments[i].Rect.Y < segments[j].Rect.Y
+		}
+		return segments[i].Rect.X < segments[j].Rect.X
+	})
+	merged := make([]DividerSegment, 0, len(segments))
+	current := segments[0]
+	for i := 1; i < len(segments); i++ {
+		next := segments[i]
 		if current.Rect.Y != next.Rect.Y {
 			merged = append(merged, current)
 			current = next
@@ -354,14 +387,14 @@ func mergeDividerSegments(segments []DividerSegment) []DividerSegment {
 		end := current.Rect.X + current.Rect.W - 1
 		nextStart := next.Rect.X
 		nextEnd := next.Rect.X + next.Rect.W - 1
-		if nextStart <= end+1 {
-			if nextEnd > end {
-				current.Rect.W = nextEnd - current.Rect.X + 1
-			}
+		if nextStart > end+1 {
+			merged = append(merged, current)
+			current = next
 			continue
 		}
-		merged = append(merged, current)
-		current = next
+		if nextEnd > end {
+			current.Rect.W = nextEnd - current.Rect.X + 1
+		}
 	}
 	merged = append(merged, current)
 	return merged
@@ -373,63 +406,75 @@ func DividerCells(segments []DividerSegment) []DividerCell {
 	}
 	masks := make(map[point]lineMask, len(segments)*4)
 	for _, seg := range segments {
-		rect := seg.Rect
-		if rect.Empty() {
-			continue
-		}
-		switch seg.Axis {
-		case SegmentVertical:
-			y1 := rect.Y
-			y2 := rect.Y + rect.H - 1
-			if y2 < y1 {
-				y1, y2 = y2, y1
-			}
-			for y := y1; y <= y2; y++ {
-				mask := masks[point{X: rect.X, Y: y}]
-				if y1 == y2 {
-					mask |= lineUp | lineDown
-				} else {
-					if y > y1 {
-						mask |= lineUp
-					}
-					if y < y2 {
-						mask |= lineDown
-					}
-				}
-				masks[point{X: rect.X, Y: y}] = mask
-			}
-		case SegmentHorizontal:
-			x1 := rect.X
-			x2 := rect.X + rect.W - 1
-			if x2 < x1 {
-				x1, x2 = x2, x1
-			}
-			for x := x1; x <= x2; x++ {
-				mask := masks[point{X: x, Y: rect.Y}]
-				if x1 == x2 {
-					mask |= lineLeft | lineRight
-				} else {
-					if x > x1 {
-						mask |= lineLeft
-					}
-					if x < x2 {
-						mask |= lineRight
-					}
-				}
-				masks[point{X: x, Y: rect.Y}] = mask
-			}
-		}
+		applyDividerSegmentMask(masks, seg)
 	}
 	if len(masks) == 0 {
 		return nil
 	}
+	return dividerCellsFromMasks(masks)
+}
+
+func applyDividerSegmentMask(masks map[point]lineMask, seg DividerSegment) {
+	rect := seg.Rect
+	if rect.Empty() {
+		return
+	}
+	switch seg.Axis {
+	case SegmentVertical:
+		applyVerticalSegmentMasks(masks, rect)
+	case SegmentHorizontal:
+		applyHorizontalSegmentMasks(masks, rect)
+	}
+}
+
+func applyVerticalSegmentMasks(masks map[point]lineMask, rect mouse.Rect) {
+	y1 := rect.Y
+	y2 := rect.Y + rect.H - 1
+	if y2 < y1 {
+		y1, y2 = y2, y1
+	}
+	for y := y1; y <= y2; y++ {
+		mask := masks[point{X: rect.X, Y: y}]
+		if y1 == y2 {
+			mask |= lineUp | lineDown
+		} else {
+			if y > y1 {
+				mask |= lineUp
+			}
+			if y < y2 {
+				mask |= lineDown
+			}
+		}
+		masks[point{X: rect.X, Y: y}] = mask
+	}
+}
+
+func applyHorizontalSegmentMasks(masks map[point]lineMask, rect mouse.Rect) {
+	x1 := rect.X
+	x2 := rect.X + rect.W - 1
+	if x2 < x1 {
+		x1, x2 = x2, x1
+	}
+	for x := x1; x <= x2; x++ {
+		mask := masks[point{X: x, Y: rect.Y}]
+		if x1 == x2 {
+			mask |= lineLeft | lineRight
+		} else {
+			if x > x1 {
+				mask |= lineLeft
+			}
+			if x < x2 {
+				mask |= lineRight
+			}
+		}
+		masks[point{X: x, Y: rect.Y}] = mask
+	}
+}
+
+func dividerCellsFromMasks(masks map[point]lineMask) []DividerCell {
 	cells := make([]DividerCell, 0, len(masks))
 	for pt, mask := range masks {
-		cells = append(cells, DividerCell{
-			X:    pt.X,
-			Y:    pt.Y,
-			Rune: mask.rune(),
-		})
+		cells = append(cells, DividerCell{X: pt.X, Y: pt.Y, Rune: mask.rune()})
 	}
 	sort.Slice(cells, func(i, j int) bool {
 		if cells[i].Y != cells[j].Y {
@@ -519,48 +564,73 @@ func EdgeHitRect(geom Geometry, ref EdgeRef) (mouse.Rect, bool) {
 }
 
 func PanesForEdge(geom Geometry, ref EdgeRef) (Pane, Pane, bool) {
-	var pane Pane
-	found := false
-	for _, candidate := range geom.Panes {
-		if candidate.ID == ref.PaneID {
-			pane = candidate
-			found = true
-			break
-		}
-	}
-	if !found {
+	pane, ok := findPaneByID(geom.Panes, ref.PaneID)
+	if !ok {
 		return Pane{}, Pane{}, false
 	}
-	for _, other := range geom.Panes {
+	neighbor, ok := neighborPaneForEdge(geom.Panes, pane, ref.Edge)
+	if !ok {
+		return Pane{}, Pane{}, false
+	}
+	return pane, neighbor, true
+}
+
+func findPaneByID(panes []Pane, paneID string) (Pane, bool) {
+	for _, candidate := range panes {
+		if candidate.ID == paneID {
+			return candidate, true
+		}
+	}
+	return Pane{}, false
+}
+
+func neighborPaneForEdge(panes []Pane, pane Pane, edge sessiond.ResizeEdge) (Pane, bool) {
+	switch edge {
+	case sessiond.ResizeEdgeLeft, sessiond.ResizeEdgeRight:
+		return neighborForVerticalEdge(panes, pane, edge)
+	case sessiond.ResizeEdgeUp, sessiond.ResizeEdgeDown:
+		return neighborForHorizontalEdge(panes, pane, edge)
+	default:
+		return Pane{}, false
+	}
+}
+
+func neighborForVerticalEdge(panes []Pane, pane Pane, edge sessiond.ResizeEdge) (Pane, bool) {
+	for _, other := range panes {
 		if other.ID == pane.ID {
 			continue
 		}
-		switch ref.Edge {
-		case sessiond.ResizeEdgeLeft, sessiond.ResizeEdgeRight:
-			left, right, ok := sharedVerticalEdge(pane, other)
-			if !ok {
-				continue
-			}
-			if ref.Edge == sessiond.ResizeEdgeRight && left.ID == pane.ID {
-				return pane, right, true
-			}
-			if ref.Edge == sessiond.ResizeEdgeLeft && right.ID == pane.ID {
-				return pane, left, true
-			}
-		case sessiond.ResizeEdgeUp, sessiond.ResizeEdgeDown:
-			top, bottom, ok := sharedHorizontalEdge(pane, other)
-			if !ok {
-				continue
-			}
-			if ref.Edge == sessiond.ResizeEdgeDown && top.ID == pane.ID {
-				return pane, bottom, true
-			}
-			if ref.Edge == sessiond.ResizeEdgeUp && bottom.ID == pane.ID {
-				return pane, top, true
-			}
+		left, right, ok := sharedVerticalEdge(pane, other)
+		if !ok {
+			continue
+		}
+		if edge == sessiond.ResizeEdgeRight && left.ID == pane.ID {
+			return right, true
+		}
+		if edge == sessiond.ResizeEdgeLeft && right.ID == pane.ID {
+			return left, true
 		}
 	}
-	return Pane{}, Pane{}, false
+	return Pane{}, false
+}
+
+func neighborForHorizontalEdge(panes []Pane, pane Pane, edge sessiond.ResizeEdge) (Pane, bool) {
+	for _, other := range panes {
+		if other.ID == pane.ID {
+			continue
+		}
+		top, bottom, ok := sharedHorizontalEdge(pane, other)
+		if !ok {
+			continue
+		}
+		if edge == sessiond.ResizeEdgeDown && top.ID == pane.ID {
+			return bottom, true
+		}
+		if edge == sessiond.ResizeEdgeUp && bottom.ID == pane.ID {
+			return top, true
+		}
+	}
+	return Pane{}, false
 }
 
 func edgeLineRectFromPane(preview mouse.Rect, rect layout.Rect, ref EdgeRef) mouse.Rect {

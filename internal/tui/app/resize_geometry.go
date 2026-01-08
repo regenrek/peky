@@ -29,42 +29,67 @@ func (m *Model) resizeGeometry() (resizeGeometry, bool) {
 	if m == nil || m.state != StateDashboard || m.tab != TabProject {
 		return resizeGeometry{}, false
 	}
-	session := m.selectedSession()
-	if session == nil || session.Name == "" {
+	sessionName, selectedID, preview, ok := m.resizeGeometryInputs()
+	if !ok {
 		return resizeGeometry{}, false
 	}
-	selectedID := ""
+	if geom, ok := m.resizeGeometryCached(sessionName, selectedID, preview); ok {
+		return geom, true
+	}
+	geom, ok := m.buildResizeGeometry(sessionName, preview)
+	if !ok {
+		return resizeGeometry{}, false
+	}
+	m.storeResizeGeometryCache(sessionName, selectedID, preview, geom)
+	return geom, true
+}
+
+func (m *Model) resizeGeometryInputs() (sessionName, selectedID string, preview mouse.Rect, ok bool) {
+	if m == nil {
+		return "", "", mouse.Rect{}, false
+	}
+	session := m.selectedSession()
+	if session == nil || session.Name == "" {
+		return "", "", mouse.Rect{}, false
+	}
+	selectedID = ""
 	if sel := m.selectedPane(); sel != nil {
 		selectedID = sel.ID
 	}
 	body, project, active, ok := m.projectPaneHitsContext()
 	if !ok || project == nil || active == nil {
-		return resizeGeometry{}, false
+		return "", "", mouse.Rect{}, false
 	}
-	preview, ok := m.projectPaneHitsPreview(body, project)
+	preview, ok = m.projectPaneHitsPreview(body, project)
 	if !ok {
+		return "", "", mouse.Rect{}, false
+	}
+	return session.Name, selectedID, preview, true
+}
+
+func (m *Model) resizeGeometryCached(sessionName, selectedID string, preview mouse.Rect) (resizeGeometry, bool) {
+	if m == nil || !m.resize.cache.hasPreview {
 		return resizeGeometry{}, false
 	}
-	if m.resize.cache.hasPreview &&
-		m.resize.cache.session == session.Name &&
-		m.resize.cache.version == m.layoutEngineVersion &&
-		m.resize.cache.selected == selectedID &&
-		m.resize.cache.preview == preview {
-		return m.resize.cache.geometry, true
-	}
-	geom, ok := m.buildResizeGeometry(session.Name, preview)
-	if !ok {
+	cache := m.resize.cache
+	if cache.session != sessionName || cache.version != m.layoutEngineVersion || cache.selected != selectedID || cache.preview != preview {
 		return resizeGeometry{}, false
+	}
+	return cache.geometry, true
+}
+
+func (m *Model) storeResizeGeometryCache(sessionName, selectedID string, preview mouse.Rect, geom resizeGeometry) {
+	if m == nil {
+		return
 	}
 	m.resize.cache = resizeGeomCache{
 		version:    m.layoutEngineVersion,
-		session:    session.Name,
+		session:    sessionName,
 		selected:   selectedID,
 		preview:    preview,
 		geometry:   geom,
 		hasPreview: true,
 	}
-	return geom, true
 }
 
 func (m *Model) buildResizeGeometry(sessionName string, preview mouse.Rect) (resizeGeometry, bool) {

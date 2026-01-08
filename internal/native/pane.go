@@ -252,21 +252,10 @@ func (m *Manager) SplitPane(ctx context.Context, sessionName, paneIndex string, 
 		return "", errors.New("native: session and pane are required")
 	}
 
-	m.mu.RLock()
-	session, ok := m.sessions[sessionName]
-	if !ok {
-		m.mu.RUnlock()
-		return "", fmt.Errorf("native: session %q not found", sessionName)
+	targetRestore, startDir, env, err := m.splitPanePreflight(sessionName, paneIndex)
+	if err != nil {
+		return "", err
 	}
-	target := findPaneByIndex(session.Panes, paneIndex)
-	if target == nil {
-		m.mu.RUnlock()
-		return "", fmt.Errorf("native: pane %q not found in %q", paneIndex, sessionName)
-	}
-	targetRestore := target.RestoreMode
-	startDir := strings.TrimSpace(session.Path)
-	env := append([]string(nil), session.Env...)
-	m.mu.RUnlock()
 
 	if strings.TrimSpace(startDir) != "" {
 		if err := validatePath(startDir); err != nil {
@@ -279,27 +268,59 @@ func (m *Manager) SplitPane(ctx context.Context, sessionName, paneIndex string, 
 	}
 	pane.RestoreMode = targetRestore
 
-	m.mu.Lock()
-	session, ok = m.sessions[sessionName]
-	if !ok {
-		m.mu.Unlock()
-		_ = pane.window.Close()
-		return "", fmt.Errorf("native: session %q not found", sessionName)
-	}
-	target = findPaneByIndex(session.Panes, paneIndex)
-	if target == nil {
-		m.mu.Unlock()
-		_ = pane.window.Close()
-		return "", fmt.Errorf("native: pane %q not found in %q", paneIndex, sessionName)
-	}
-	if session.Layout == nil {
-		m.mu.Unlock()
-		_ = pane.window.Close()
-		return "", errors.New("native: layout engine unavailable")
-	}
 	axis := layout.AxisHorizontal
 	if vertical {
 		axis = layout.AxisVertical
+	}
+	result, newIndex, err := m.splitPaneCommit(sessionName, paneIndex, pane, axis, percent)
+	if err != nil {
+		_ = pane.window.Close()
+		return "", err
+	}
+
+	m.applyScrollbackBudgets()
+	m.forwardUpdates(pane)
+	m.notifyPane(pane.ID)
+	for _, id := range result.Affected {
+		m.notifyPane(id)
+	}
+	return newIndex, nil
+}
+
+func (m *Manager) splitPanePreflight(sessionName, paneIndex string) (sessionrestore.Mode, string, []string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	session, ok := m.sessions[sessionName]
+	if !ok {
+		return sessionrestore.ModeDefault, "", nil, fmt.Errorf("native: session %q not found", sessionName)
+	}
+	target := findPaneByIndex(session.Panes, paneIndex)
+	if target == nil {
+		return sessionrestore.ModeDefault, "", nil, fmt.Errorf("native: pane %q not found in %q", paneIndex, sessionName)
+	}
+	startDir := strings.TrimSpace(session.Path)
+	env := append([]string(nil), session.Env...)
+	return target.RestoreMode, startDir, env, nil
+}
+
+func (m *Manager) splitPaneCommit(sessionName, paneIndex string, pane *Pane, axis layout.Axis, percent int) (layout.ApplyResult, string, error) {
+	if m == nil || pane == nil {
+		return layout.ApplyResult{}, "", errors.New("native: split commit requires manager and pane")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	session, ok := m.sessions[sessionName]
+	if !ok {
+		return layout.ApplyResult{}, "", fmt.Errorf("native: session %q not found", sessionName)
+	}
+	target := findPaneByIndex(session.Panes, paneIndex)
+	if target == nil {
+		return layout.ApplyResult{}, "", fmt.Errorf("native: pane %q not found in %q", paneIndex, sessionName)
+	}
+	if session.Layout == nil {
+		return layout.ApplyResult{}, "", errors.New("native: layout engine unavailable")
 	}
 	result, err := session.Layout.Apply(layout.SplitOp{
 		PaneID:    target.ID,
@@ -308,9 +329,7 @@ func (m *Manager) SplitPane(ctx context.Context, sessionName, paneIndex string, 
 		Percent:   percent,
 	})
 	if err != nil {
-		m.mu.Unlock()
-		_ = pane.window.Close()
-		return "", err
+		return layout.ApplyResult{}, "", err
 	}
 	for _, existing := range session.Panes {
 		existing.Active = false
@@ -321,19 +340,9 @@ func (m *Manager) SplitPane(ctx context.Context, sessionName, paneIndex string, 
 	session.Panes = append(session.Panes, pane)
 	m.panes[pane.ID] = pane
 	if err := applyLayoutToPanes(session); err != nil {
-		m.mu.Unlock()
-		_ = pane.window.Close()
-		return "", err
+		return layout.ApplyResult{}, "", err
 	}
-	m.mu.Unlock()
-
-	m.applyScrollbackBudgets()
-	m.forwardUpdates(pane)
-	m.notifyPane(pane.ID)
-	for _, id := range result.Affected {
-		m.notifyPane(id)
-	}
-	return pane.Index, nil
+	return result, pane.Index, nil
 }
 
 // SwapPanes swaps two panes within the same session.

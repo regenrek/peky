@@ -43,30 +43,29 @@ func (m *Model) handleContextMenuMouse(msg tea.MouseMsg) (tea.Cmd, bool) {
 		return nil, false
 	}
 	if m.contextMenu.open {
-		if msg.Action == tea.MouseActionMotion {
-			if rect, _, _, ok := m.contextMenuLayout(); ok && rect.Contains(msg.X, msg.Y) {
-				idx := msg.Y - rect.Y
-				if idx >= 0 && idx < len(m.contextMenu.items) && m.contextMenu.index != idx {
-					m.contextMenu.index = idx
-				}
-			}
-			return nil, true
-		}
-		if msg.Action == tea.MouseActionPress {
-			if rect, _, _, ok := m.contextMenuLayout(); ok && rect.Contains(msg.X, msg.Y) {
-				if msg.Button == tea.MouseButtonLeft {
-					idx := msg.Y - rect.Y
-					if idx >= 0 && idx < len(m.contextMenu.items) {
-						m.contextMenu.index = idx
-						return m.applyContextMenu(), true
-					}
-				}
-				return nil, true
-			}
-			m.closeContextMenu()
-			return nil, true
-		}
+		return m.handleContextMenuMouseOpen(msg)
+	}
+	return m.handleContextMenuMouseClosed(msg)
+}
+
+func (m *Model) handleContextMenuMouseOpen(msg tea.MouseMsg) (tea.Cmd, bool) {
+	if m == nil || !m.contextMenu.open {
+		return nil, false
+	}
+	switch msg.Action {
+	case tea.MouseActionMotion:
+		m.contextMenuHoverAt(msg.X, msg.Y)
 		return nil, true
+	case tea.MouseActionPress:
+		return m.contextMenuPress(msg), true
+	default:
+		return nil, true
+	}
+}
+
+func (m *Model) handleContextMenuMouseClosed(msg tea.MouseMsg) (tea.Cmd, bool) {
+	if m == nil || m.contextMenu.open {
+		return nil, false
 	}
 	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonRight {
 		return nil, false
@@ -77,6 +76,41 @@ func (m *Model) handleContextMenuMouse(msg tea.MouseMsg) (tea.Cmd, bool) {
 	}
 	m.openContextMenu(msg.X, msg.Y, hit)
 	return nil, true
+}
+
+func (m *Model) contextMenuHoverAt(x, y int) {
+	if m == nil || !m.contextMenu.open {
+		return
+	}
+	rect, _, _, ok := m.contextMenuLayout()
+	if !ok || !rect.Contains(x, y) {
+		return
+	}
+	idx := y - rect.Y
+	if idx < 0 || idx >= len(m.contextMenu.items) || m.contextMenu.index == idx {
+		return
+	}
+	m.contextMenu.index = idx
+}
+
+func (m *Model) contextMenuPress(msg tea.MouseMsg) tea.Cmd {
+	if m == nil || !m.contextMenu.open {
+		return nil
+	}
+	rect, _, _, ok := m.contextMenuLayout()
+	if !ok || !rect.Contains(msg.X, msg.Y) {
+		m.closeContextMenu()
+		return nil
+	}
+	if msg.Button != tea.MouseButtonLeft {
+		return nil
+	}
+	idx := msg.Y - rect.Y
+	if idx < 0 || idx >= len(m.contextMenu.items) {
+		return nil
+	}
+	m.contextMenu.index = idx
+	return m.applyContextMenu()
 }
 
 func (m *Model) handleContextMenuKey(msg tea.KeyMsg) (tea.Cmd, bool) {
@@ -188,27 +222,52 @@ func (m *Model) applyContextMenu() tea.Cmd {
 	if m == nil || !m.contextMenu.open {
 		return nil
 	}
-	if m.contextMenu.index < 0 || m.contextMenu.index >= len(m.contextMenu.items) {
+	item, ok := m.contextMenuSelectedItem()
+	if !ok {
 		m.closeContextMenu()
 		return nil
 	}
-	item := m.contextMenu.items[m.contextMenu.index]
 	if !item.Enabled {
 		return nil
 	}
-	sessionName := m.contextMenu.session
-	paneID := m.contextMenu.paneID
-	paneIndex := m.contextMenu.paneIndex
-	if paneIndex == "" && paneID != "" {
-		if session := findSessionByName(m.data.Projects, sessionName); session != nil {
-			if pane := findPaneByID(session.Panes, paneID); pane != nil {
-				paneIndex = pane.Index
-			}
-		}
-	}
+	sessionName, paneID, paneIndex := m.contextMenuTargets()
 	m.closeContextMenu()
+	return m.applyContextMenuItem(item.ID, sessionName, paneID, paneIndex)
+}
 
-	switch item.ID {
+func (m *Model) contextMenuSelectedItem() (contextMenuItem, bool) {
+	if m == nil || !m.contextMenu.open {
+		return contextMenuItem{}, false
+	}
+	if m.contextMenu.index < 0 || m.contextMenu.index >= len(m.contextMenu.items) {
+		return contextMenuItem{}, false
+	}
+	return m.contextMenu.items[m.contextMenu.index], true
+}
+
+func (m *Model) contextMenuTargets() (sessionName, paneID, paneIndex string) {
+	if m == nil {
+		return "", "", ""
+	}
+	sessionName = m.contextMenu.session
+	paneID = m.contextMenu.paneID
+	paneIndex = m.contextMenu.paneIndex
+	if paneIndex != "" || paneID == "" {
+		return sessionName, paneID, paneIndex
+	}
+	session := findSessionByName(m.data.Projects, sessionName)
+	if session == nil {
+		return sessionName, paneID, paneIndex
+	}
+	pane := findPaneByID(session.Panes, paneID)
+	if pane == nil {
+		return sessionName, paneID, paneIndex
+	}
+	return sessionName, paneID, pane.Index
+}
+
+func (m *Model) applyContextMenuItem(id, sessionName, paneID, paneIndex string) tea.Cmd {
+	switch id {
 	case contextMenuAddLast:
 		return m.addPaneSplitFor(sessionName, paneID, m.lastSplitVertical)
 	case contextMenuSplitRight:

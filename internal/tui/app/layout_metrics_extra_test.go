@@ -2,7 +2,7 @@ package app
 
 import "testing"
 
-func TestLayoutMetricsRects(t *testing.T) {
+func TestLayoutMetricsRectsZeroSize(t *testing.T) {
 	m := newTestModelLite()
 	m.width = 0
 	m.height = 0
@@ -18,7 +18,10 @@ func TestLayoutMetricsRects(t *testing.T) {
 	if _, ok := m.serverStatusRect(); ok {
 		t.Fatalf("expected server status rect to be false for zero size")
 	}
+}
 
+func TestLayoutMetricsRectsNonZero(t *testing.T) {
+	m := newTestModelLite()
 	m.width = 120
 	m.height = 40
 	body, ok := m.dashboardBodyRect()

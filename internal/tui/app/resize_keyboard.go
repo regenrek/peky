@@ -85,7 +85,8 @@ func (m *Model) handleResizeModeKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 		return m.toggleZoomPane(), true
 	}
 
-	step, axis, ok := resizeNudgeForKey(msg.String())
+	keyStr := msg.String()
+	step, axis, ok := resizeNudgeForKey(keyStr)
 	if !ok {
 		return nil, true
 	}
@@ -93,22 +94,11 @@ func (m *Model) handleResizeModeKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 	if !ok {
 		return nil, true
 	}
-	delta := step
-	if axis == layout.AxisHorizontal && (edge.Edge == sessiond.ResizeEdgeLeft || edge.Edge == sessiond.ResizeEdgeRight) {
-		if msg.String() == "left" || strings.Contains(msg.String(), "left") {
-			delta = -step
-		}
-		if msg.String() == "right" || strings.Contains(msg.String(), "right") {
-			delta = step
-		}
-	} else if axis == layout.AxisVertical && (edge.Edge == sessiond.ResizeEdgeUp || edge.Edge == sessiond.ResizeEdgeDown) {
-		if msg.String() == "up" || strings.Contains(msg.String(), "up") {
-			delta = -step
-		}
-		if msg.String() == "down" || strings.Contains(msg.String(), "down") {
-			delta = step
-		}
-	} else {
+	if !resizeEdgeMatchesAxis(edge.Edge, axis) {
+		return nil, true
+	}
+	delta, ok := resizeDeltaForAxis(axis, keyStr, step)
+	if !ok {
 		return nil, true
 	}
 	return m.applyKeyboardResize(edge, delta), true
@@ -131,6 +121,40 @@ func resizeNudgeForKey(key string) (int, layout.Axis, bool) {
 	default:
 		return 0, layout.AxisHorizontal, false
 	}
+}
+
+func resizeEdgeMatchesAxis(edge sessiond.ResizeEdge, axis layout.Axis) bool {
+	switch axis {
+	case layout.AxisHorizontal:
+		return edge == sessiond.ResizeEdgeLeft || edge == sessiond.ResizeEdgeRight
+	case layout.AxisVertical:
+		return edge == sessiond.ResizeEdgeUp || edge == sessiond.ResizeEdgeDown
+	default:
+		return false
+	}
+}
+
+func resizeDeltaForAxis(axis layout.Axis, key string, step int) (int, bool) {
+	if step == 0 {
+		return 0, false
+	}
+	switch axis {
+	case layout.AxisHorizontal:
+		if key == "left" || strings.Contains(key, "left") {
+			return -step, true
+		}
+		if key == "right" || strings.Contains(key, "right") {
+			return step, true
+		}
+	case layout.AxisVertical:
+		if key == "up" || strings.Contains(key, "up") {
+			return -step, true
+		}
+		if key == "down" || strings.Contains(key, "down") {
+			return step, true
+		}
+	}
+	return 0, false
 }
 
 func (m *Model) defaultResizeEdge() (resizeEdgeRef, bool) {

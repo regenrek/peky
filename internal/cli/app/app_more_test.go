@@ -12,7 +12,13 @@ import (
 	"github.com/regenrek/peakypanes/internal/cli/root"
 )
 
-func TestRunnerCommandsSmoke(t *testing.T) {
+type runnerHarness struct {
+	run func(args ...string) (out string, exitCode int, err error)
+}
+
+func newRunnerHarness(t *testing.T) runnerHarness {
+	t.Helper()
+
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
@@ -34,7 +40,7 @@ func TestRunnerCommandsSmoke(t *testing.T) {
 		AppName: "peky",
 		Connect: nil,
 	}
-	run := func(args ...string) error {
+	run := func(args ...string) (string, int, error) {
 		out.Reset()
 		deps := baseDeps
 		deps.Stdout = &out
@@ -42,108 +48,142 @@ func TestRunnerCommandsSmoke(t *testing.T) {
 		deps.Stdin = strings.NewReader("")
 		runner, err := NewRunner(deps)
 		if err != nil {
-			return err
+			return "", -1, err
 		}
 		exitCode = -1
-		return runner.Run(context.Background(), args)
+		err = runner.Run(context.Background(), args)
+		return out.String(), normalizeExitCode(exitCode, err), err
 	}
+	return runnerHarness{run: run}
+}
 
-	err := run("peky", "--version")
+func normalizeExitCode(exitCode int, err error) int {
 	if err != nil {
-		if _, ok := err.(cli.ExitCoder); !ok {
-			t.Fatalf("--version unexpected error: %T %v", err, err)
+		if ec, ok := err.(cli.ExitCoder); ok {
+			return ec.ExitCode()
 		}
 	}
-	if exitCode != 0 {
-		t.Fatalf("--version exitCode=%d", exitCode)
+	if exitCode >= 0 {
+		return exitCode
 	}
-	if !strings.Contains(out.String(), "peky test") {
-		t.Fatalf("--version output = %q", out.String())
+	if err == nil {
+		return 0
 	}
+	return -1
+}
 
-	err = run("peky", "version")
+func requireExitCode(t *testing.T, got, want int, out string) {
+	t.Helper()
+	if got != want {
+		t.Fatalf("exitCode=%d want=%d out=%q", got, want, out)
+	}
+}
+
+func requireContains(t *testing.T, out, want string) {
+	t.Helper()
+	if !strings.Contains(out, want) {
+		t.Fatalf("out=%q want substring %q", out, want)
+	}
+}
+
+func requireExitCoderOrNil(t *testing.T, err error) {
+	t.Helper()
+	if err == nil {
+		return
+	}
+	if _, ok := err.(cli.ExitCoder); ok {
+		return
+	}
+	t.Fatalf("unexpected error: %T %v", err, err)
+}
+
+func TestRunnerVersionFlag(t *testing.T) {
+	h := newRunnerHarness(t)
+
+	out, code, err := h.run("peky", "--version")
+	requireExitCoderOrNil(t, err)
+	requireExitCode(t, code, 0, out)
+	requireContains(t, out, "peky test")
+}
+
+func TestRunnerVersionCommand(t *testing.T) {
+	h := newRunnerHarness(t)
+
+	out, code, err := h.run("peky", "version")
 	if err != nil {
 		t.Fatalf("version error: %v", err)
 	}
-	if !strings.Contains(out.String(), "peky test") {
-		t.Fatalf("version output = %q", out.String())
-	}
+	requireExitCode(t, code, 0, out)
+	requireContains(t, out, "peky test")
+}
 
-	err = run("peky", "layouts", "--json")
+func TestRunnerJSONCommands(t *testing.T) {
+	h := newRunnerHarness(t)
+
+	out, code, err := h.run("peky", "layouts", "--json")
 	if err != nil {
 		t.Fatalf("layouts --json error: %v", err)
 	}
-	if !strings.Contains(out.String(), "\"ok\":true") {
-		t.Fatalf("layouts --json output = %q", out.String())
-	}
+	requireExitCode(t, code, 0, out)
+	requireContains(t, out, "\"ok\":true")
 
-	err = run("peky", "--json", "layouts", "export", "auto")
+	out, code, err = h.run("peky", "--json", "layouts", "export", "auto")
 	if err != nil {
 		t.Fatalf("layouts export auto --json error: %v", err)
 	}
-	if !strings.Contains(out.String(), "\"name\":\"auto\"") {
-		t.Fatalf("layouts export output = %q", out.String())
-	}
+	requireExitCode(t, code, 0, out)
+	requireContains(t, out, "\"name\":\"auto\"")
 
-	err = run("peky", "context", "pack", "--include", "errors", "--json")
+	out, code, err = h.run("peky", "context", "pack", "--include", "errors", "--json")
 	if err != nil {
 		t.Fatalf("context pack error: %v", err)
 	}
-	if !strings.Contains(out.String(), "\"ok\":true") {
-		t.Fatalf("context pack output = %q", out.String())
-	}
+	requireExitCode(t, code, 0, out)
+	requireContains(t, out, "\"ok\":true")
 
-	err = run("peky", "nl", "plan", "list", "sessions", "--json")
+	out, code, err = h.run("peky", "nl", "plan", "list", "sessions", "--json")
 	if err != nil {
 		t.Fatalf("nl plan error: %v", err)
 	}
-	if !strings.Contains(out.String(), "\"plan_id\"") {
-		t.Fatalf("nl plan output = %q", out.String())
-	}
+	requireExitCode(t, code, 0, out)
+	requireContains(t, out, "\"plan_id\"")
+}
 
-	err = run("peky", "help")
+func TestRunnerHelp(t *testing.T) {
+	h := newRunnerHarness(t)
+
+	out, code, err := h.run("peky", "help")
 	if err != nil {
 		t.Fatalf("help error: %v", err)
 	}
-	if !strings.Contains(out.String(), "USAGE:") {
-		t.Fatalf("help output = %q", out.String())
-	}
+	requireExitCode(t, code, 0, out)
+	requireContains(t, out, "USAGE:")
+}
 
-	exitCode = -1
-	err = run("peky", "start", "--json", "--yes")
-	if err != nil {
-		if _, ok := err.(cli.ExitCoder); !ok {
-			t.Fatalf("start unexpected error: %T %v", err, err)
-		}
-	}
-	if exitCode != 1 || !strings.Contains(out.String(), "daemon connection not configured") {
-		t.Fatalf("start exitCode=%d out=%q", exitCode, out.String())
-	}
+func TestRunnerCommandsNeedDaemon(t *testing.T) {
+	h := newRunnerHarness(t)
 
-	exitCode = -1
-	err = run("peky", "events", "replay", "--json")
-	if err != nil {
-		if _, ok := err.(cli.ExitCoder); !ok {
-			t.Fatalf("events replay unexpected error: %T %v", err, err)
-		}
+	cases := []struct {
+		args       []string
+		wantSubstr string
+	}{
+		{args: []string{"peky", "start", "--json", "--yes"}, wantSubstr: "daemon connection not configured"},
+		{args: []string{"peky", "events", "replay", "--json"}, wantSubstr: "daemon connection not configured"},
+		{args: []string{"peky", "relay", "list", "--json"}, wantSubstr: "daemon connection not configured"},
 	}
-	if exitCode != 1 || !strings.Contains(out.String(), "daemon connection not configured") {
-		t.Fatalf("events replay exitCode=%d out=%q", exitCode, out.String())
+	for _, c := range cases {
+		out, code, err := h.run(c.args...)
+		requireExitCoderOrNil(t, err)
+		requireExitCode(t, code, 1, out)
+		requireContains(t, out, c.wantSubstr)
 	}
+}
 
-	exitCode = -1
-	err = run("peky", "relay", "list", "--json")
-	if err != nil {
-		if _, ok := err.(cli.ExitCoder); !ok {
-			t.Fatalf("relay list unexpected error: %T %v", err, err)
-		}
-	}
-	if exitCode != 1 || !strings.Contains(out.String(), "daemon connection not configured") {
-		t.Fatalf("relay list exitCode=%d out=%q", exitCode, out.String())
-	}
+func TestRunnerCloneNeedsRepo(t *testing.T) {
+	h := newRunnerHarness(t)
 
-	err = run("peky", "clone")
+	out, code, err := h.run("peky", "clone")
 	if err == nil || !strings.Contains(err.Error(), "missing argument \"repo\"") {
-		t.Fatalf("clone err=%v", err)
+		t.Fatalf("err=%v out=%q code=%d", err, out, code)
 	}
 }

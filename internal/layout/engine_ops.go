@@ -348,33 +348,10 @@ func splitLeaf(tree *Tree, leaf, newLeaf *Node, axis Axis, percent, minSize int)
 	if !ok {
 		return fmt.Errorf("layout: missing rect for pane %q", leaf.PaneID)
 	}
-	total := rect.W
-	if axis == AxisVertical {
-		total = rect.H
-	}
-	if total <= 1 {
-		return errors.New("layout: split target too small")
-	}
-	if percent <= 0 || percent >= 100 {
-		percent = 50
-	}
-	newSize := total * percent / 100
-	if newSize <= 0 || newSize >= total {
-		newSize = total / 2
-	}
-	oldSize := total - newSize
-	if minSize <= 0 {
-		minSize = 1
-	}
-	if oldSize < minSize || newSize < minSize {
-		if total < minSize*2 {
-			return fmt.Errorf("layout: split min size %d not satisfied", minSize)
-		}
-		newSize = total / 2
-		oldSize = total - newSize
-		if oldSize < minSize || newSize < minSize {
-			return fmt.Errorf("layout: split min size %d not satisfied", minSize)
-		}
+	total := splitAxisTotal(rect, axis)
+	oldSize, newSize, err := splitComputeSizes(total, percent, minSize)
+	if err != nil {
+		return err
 	}
 
 	parent := leaf.Parent
@@ -384,7 +361,49 @@ func splitLeaf(tree *Tree, leaf, newLeaf *Node, axis Axis, percent, minSize int)
 	newLeaf.Parent = split
 	newLeaf.Size = newSize
 	split.Children = []*Node{leaf, newLeaf}
+	return replaceLeafWithSplit(tree, parent, leaf, split)
+}
 
+func splitAxisTotal(rect Rect, axis Axis) int {
+	if axis == AxisVertical {
+		return rect.H
+	}
+	return rect.W
+}
+
+func splitComputeSizes(total, percent, minSize int) (oldSize, newSize int, err error) {
+	if total <= 1 {
+		return 0, 0, errors.New("layout: split target too small")
+	}
+	if percent <= 0 || percent >= 100 {
+		percent = 50
+	}
+	newSize = total * percent / 100
+	if newSize <= 0 || newSize >= total {
+		newSize = total / 2
+	}
+	oldSize = total - newSize
+	if minSize <= 0 {
+		minSize = 1
+	}
+	if oldSize >= minSize && newSize >= minSize {
+		return oldSize, newSize, nil
+	}
+	if total < minSize*2 {
+		return 0, 0, fmt.Errorf("layout: split min size %d not satisfied", minSize)
+	}
+	newSize = total / 2
+	oldSize = total - newSize
+	if oldSize < minSize || newSize < minSize {
+		return 0, 0, fmt.Errorf("layout: split min size %d not satisfied", minSize)
+	}
+	return oldSize, newSize, nil
+}
+
+func replaceLeafWithSplit(tree *Tree, parent, leaf, split *Node) error {
+	if tree == nil || split == nil {
+		return errors.New("layout: split requires tree and split node")
+	}
 	if parent == nil {
 		tree.Root = split
 		return nil
@@ -392,7 +411,7 @@ func splitLeaf(tree *Tree, leaf, newLeaf *Node, axis Axis, percent, minSize int)
 	for i, child := range parent.Children {
 		if child == leaf {
 			parent.Children[i] = split
-			break
+			return nil
 		}
 	}
 	return nil
