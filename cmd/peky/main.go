@@ -7,7 +7,8 @@ import (
 )
 
 var version = "dev"
+var osExit = os.Exit
 
 func main() {
-	os.Exit(entry.Run(os.Args, version))
+	osExit(entry.Run(os.Args, version))
 }
