@@ -14,6 +14,9 @@ func (m *Model) updateQuickReply(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.applyQuickReplyCompletionOnTab(msg) {
 		return m, nil
 	}
+	if handled, cmd := m.handleQuickReplyPassthrough(msg); handled {
+		return m, cmd
+	}
 	if handled, cmd := m.handleQuickReplyPaneNav(msg); handled {
 		return m, cmd
 	}
@@ -34,6 +37,32 @@ func (m *Model) updateQuickReply(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.quickReplyInput, cmd = m.quickReplyInput.Update(msg)
 	m.updateQuickReplyMenuSelection()
 	return m, cmd
+}
+
+func (m *Model) handleQuickReplyPassthrough(msg tea.KeyMsg) (bool, tea.Cmd) {
+	if m == nil || m.terminalFocus || m.quickReplyMode != quickReplyModePane {
+		return false, nil
+	}
+	if m.quickReplyHistoryActive() {
+		return false, nil
+	}
+	if strings.TrimSpace(m.quickReplyInput.Value()) != "" {
+		return false, nil
+	}
+
+	switch msg.String() {
+	case "enter", "esc", "up", "down", "left", "right", "tab", "pgup", "pgdown", "home", "end", "ctrl+l":
+	default:
+		return false, nil
+	}
+	if menu := m.quickReplyMenuState(); menu.kind != quickReplyMenuNone {
+		return false, nil
+	}
+	payload := encodeKeyMsg(msg)
+	if len(payload) == 0 {
+		return true, nil
+	}
+	return true, m.sendPaneInputCmd(payload, "quick reply passthrough")
 }
 
 func (m *Model) handleQuickReplyModeToggle(msg tea.KeyMsg) bool {
@@ -107,7 +136,7 @@ func (m *Model) handleQuickReplySubmit(msg tea.KeyMsg) (bool, tea.Cmd) {
 		if m.quickReplyMode == quickReplyModePeky {
 			return true, NewInfoCmd("Enter a prompt")
 		}
-		return true, m.attachOrStart()
+		return true, nil
 	}
 	if m.quickReplyMode == quickReplyModePeky {
 		if outcome := m.handleAgentSlashCommand(text); outcome.Handled {
