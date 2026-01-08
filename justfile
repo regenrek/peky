@@ -7,7 +7,9 @@ dev:
   @bash -cu 'set -euo pipefail; gobin="${GOBIN:-$(go env GOPATH)/bin}"; peak="$gobin/peakypanes"; \
     uid="${UID:-$(id -u)}"; devroot="/tmp/peakypanes-dev-$uid"; \
     export PEAKYPANES_DATA_DIR="$devroot"; export PEAKYPANES_RUNTIME_DIR="$devroot"; export PEAKYPANES_CONFIG_DIR="$devroot"; \
-    mkdir -p "$devroot"; chmod 700 "$devroot"; export PEAKYPANES_LOG_FILE="$devroot/peakypanes-dev.log"; \
+    mkdir -p "$devroot"; chmod 700 "$devroot"; \
+    if [[ ! -f "$PEAKYPANES_CONFIG_DIR/config.yml" ]]; then : > "$PEAKYPANES_CONFIG_DIR/config.yml"; chmod 600 "$PEAKYPANES_CONFIG_DIR/config.yml"; fi; \
+    export PEAKYPANES_LOG_FILE="$devroot/peakypanes-dev.log"; \
     PEAKYPANES_LOG_LEVEL=debug PEAKYPANES_LOG_FORMAT=text PEAKYPANES_LOG_SINK=file \
     PEAKYPANES_LOG_FILE="$PEAKYPANES_LOG_FILE" PEAKYPANES_LOG_ADD_SOURCE=1 \
     PEAKYPANES_LOG_INCLUDE_PAYLOADS=1 PEAKYPANES_PERF_TRACE_ALL=1 \
@@ -21,7 +23,9 @@ watch:
   @bash -cu 'set -euo pipefail; gobin="${GOBIN:-$(go env GOPATH)/bin}"; peak="$gobin/peakypanes"; \
     uid="${UID:-$(id -u)}"; devroot="/tmp/peakypanes-dev-$uid"; \
     export PEAKYPANES_DATA_DIR="$devroot"; export PEAKYPANES_RUNTIME_DIR="$devroot"; export PEAKYPANES_CONFIG_DIR="$devroot"; \
-    mkdir -p "$devroot"; chmod 700 "$devroot"; export PEAKYPANES_LOG_FILE="$devroot/peakypanes-dev.log"; \
+    mkdir -p "$devroot"; chmod 700 "$devroot"; \
+    if [[ ! -f "$PEAKYPANES_CONFIG_DIR/config.yml" ]]; then : > "$PEAKYPANES_CONFIG_DIR/config.yml"; chmod 600 "$PEAKYPANES_CONFIG_DIR/config.yml"; fi; \
+    export PEAKYPANES_LOG_FILE="$devroot/peakypanes-dev.log"; \
     PEAKYPANES_LOG_LEVEL=debug PEAKYPANES_LOG_FORMAT=text PEAKYPANES_LOG_SINK=file \
     PEAKYPANES_LOG_FILE="$PEAKYPANES_LOG_FILE" PEAKYPANES_LOG_ADD_SOURCE=1 \
     PEAKYPANES_LOG_INCLUDE_PAYLOADS=1 PEAKYPANES_PERF_TRACE_ALL=1 \
@@ -35,7 +39,9 @@ devfresh:
   @bash -cu 'set -euo pipefail; gobin="${GOBIN:-$(go env GOPATH)/bin}"; peak="$gobin/peakypanes"; \
     uid="${UID:-$(id -u)}"; devroot="/tmp/peakypanes-dev-$uid"; \
     export PEAKYPANES_DATA_DIR="$devroot"; export PEAKYPANES_RUNTIME_DIR="$devroot"; export PEAKYPANES_CONFIG_DIR="$devroot"; \
-    mkdir -p "$devroot"; chmod 700 "$devroot"; export PEAKYPANES_LOG_FILE="$devroot/peakypanes-dev.log"; \
+    mkdir -p "$devroot"; chmod 700 "$devroot"; \
+    if [[ ! -f "$PEAKYPANES_CONFIG_DIR/config.yml" ]]; then : > "$PEAKYPANES_CONFIG_DIR/config.yml"; chmod 600 "$PEAKYPANES_CONFIG_DIR/config.yml"; fi; \
+    export PEAKYPANES_LOG_FILE="$devroot/peakypanes-dev.log"; \
     PEAKYPANES_FRESH_CONFIG=1 PEAKYPANES_LOG_LEVEL=debug PEAKYPANES_LOG_FORMAT=text \
     PEAKYPANES_LOG_SINK=file PEAKYPANES_LOG_FILE="$PEAKYPANES_LOG_FILE" \
     PEAKYPANES_LOG_ADD_SOURCE=1 PEAKYPANES_LOG_INCLUDE_PAYLOADS=1 \
