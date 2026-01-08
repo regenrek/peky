@@ -66,6 +66,17 @@ Other
 - ctrl+p command palette
 - f5 refresh, ctrl+, edit config, ctrl+f filter, ctrl+c quit
 
+## Daemon status (footer)
+
+Bottom-right indicator:
+- `up` (dim): daemon reachable
+- `restored` (yellow): daemon was restarted; panes may be stale/dead (still viewable)
+- `down` (red): daemon unreachable
+
+Click the indicator:
+- `restored`: opens a dialog with actions: **Start fresh** or **Check stale panes**
+- `down`: prompts to restart the daemon
+
 ## Dashboard config (optional)
 
 ```yaml

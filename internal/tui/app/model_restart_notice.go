@@ -63,7 +63,7 @@ func (m *Model) setRestartNoticePending(active bool) {
 	if active {
 		value = "1\n"
 	}
-	_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	_ = os.MkdirAll(filepath.Dir(path), 0o700)
 	_ = os.WriteFile(path, []byte(value), 0o600)
 }
 
