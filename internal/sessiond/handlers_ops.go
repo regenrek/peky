@@ -797,6 +797,10 @@ func mousePayloadToEvent(payload MouseEventPayload) (uv.MouseEvent, terminal.Mou
 	if !ok {
 		return nil, terminal.MouseRouteAuto, false
 	}
+	button, wheel, ok := mousePayloadButton(payload)
+	if !ok {
+		return nil, terminal.MouseRouteAuto, false
+	}
 	mod := uv.KeyMod(0)
 	if payload.Shift {
 		mod |= uv.ModShift
@@ -807,8 +811,8 @@ func mousePayloadToEvent(payload MouseEventPayload) (uv.MouseEvent, terminal.Mou
 	if payload.Ctrl {
 		mod |= uv.ModCtrl
 	}
-	mouse := uv.Mouse{X: payload.X, Y: payload.Y, Button: uv.MouseButton(payload.Button), Mod: mod}
-	if payload.Wheel {
+	mouse := uv.Mouse{X: payload.X, Y: payload.Y, Button: button, Mod: mod}
+	if wheel {
 		return uv.MouseWheelEvent(mouse), route, true
 	}
 	switch payload.Action {
@@ -820,5 +824,27 @@ func mousePayloadToEvent(payload MouseEventPayload) (uv.MouseEvent, terminal.Mou
 		return uv.MouseMotionEvent(mouse), route, true
 	default:
 		return nil, terminal.MouseRouteAuto, false
+	}
+}
+
+func mousePayloadButton(payload MouseEventPayload) (uv.MouseButton, bool, bool) {
+	// Protocol button codes (do not rely on upstream tea/uv enum values).
+	switch payload.Button {
+	case 1:
+		return uv.MouseLeft, false, true
+	case 2:
+		return uv.MouseMiddle, false, true
+	case 3:
+		return uv.MouseRight, false, true
+	case 4:
+		return uv.MouseWheelUp, true, true
+	case 5:
+		return uv.MouseWheelDown, true, true
+	case 6:
+		return uv.MouseWheelLeft, true, true
+	case 7:
+		return uv.MouseWheelRight, true, true
+	default:
+		return uv.MouseNone, false, false
 	}
 }

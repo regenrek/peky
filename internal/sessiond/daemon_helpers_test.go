@@ -30,11 +30,12 @@ func (e assertError) Error() string { return string(e) }
 
 func TestMousePayloadToEvent(t *testing.T) {
 	assertMousePayloadInvalid(t, "negative", MouseEventPayload{X: -1, Y: 0})
-	assertMousePayloadWheel(t, "wheel", MouseEventPayload{X: 1, Y: 2, Button: 1, Wheel: true}, MouseRouteAuto)
+	assertMousePayloadWheel(t, "wheel", MouseEventPayload{X: 1, Y: 2, Button: 4, Wheel: true}, MouseRouteAuto)
 	assertMousePayloadPress(t, "press", MouseEventPayload{X: 1, Y: 2, Button: 1, Action: MouseActionPress}, MouseRouteAuto)
 	assertMousePayloadRelease(t, "release", MouseEventPayload{X: 1, Y: 2, Button: 1, Action: MouseActionRelease}, MouseRouteAuto)
 	assertMousePayloadMotion(t, "motion", MouseEventPayload{X: 1, Y: 2, Button: 1, Action: MouseActionMotion}, MouseRouteAuto)
 	assertMousePayloadInvalid(t, "unknown-action", MouseEventPayload{X: 1, Y: 2, Button: 1, Action: MouseActionUnknown})
+	assertMousePayloadInvalid(t, "unknown-button", MouseEventPayload{X: 1, Y: 2, Button: 99, Action: MouseActionPress})
 	assertMousePayloadInvalid(t, "invalid-route", MouseEventPayload{X: 1, Y: 2, Button: 1, Action: MouseActionPress, Route: MouseRoute("bogus")})
 }
 
@@ -54,8 +55,12 @@ func assertMousePayloadWheel(t *testing.T, name string, payload MouseEventPayloa
 	if route != wantRoute {
 		t.Fatalf("%s: expected route %q, got %q", name, wantRoute, route)
 	}
-	if _, ok := evt.(uv.MouseWheelEvent); !ok {
+	wheel, ok := evt.(uv.MouseWheelEvent)
+	if !ok {
 		t.Fatalf("%s: expected wheel event type", name)
+	}
+	if wheel.Button != uv.MouseWheelUp {
+		t.Fatalf("%s: expected button %v, got %v", name, uv.MouseWheelUp, wheel.Button)
 	}
 }
 
@@ -68,8 +73,12 @@ func assertMousePayloadPress(t *testing.T, name string, payload MouseEventPayloa
 	if route != wantRoute {
 		t.Fatalf("%s: expected route %q, got %q", name, wantRoute, route)
 	}
-	if _, ok := evt.(uv.MouseClickEvent); !ok {
+	click, ok := evt.(uv.MouseClickEvent)
+	if !ok {
 		t.Fatalf("%s: expected click event type", name)
+	}
+	if click.Button != uv.MouseLeft {
+		t.Fatalf("%s: expected button %v, got %v", name, uv.MouseLeft, click.Button)
 	}
 }
 
