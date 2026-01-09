@@ -137,6 +137,7 @@ func (m *Model) applySelection(sel selectionState) {
 	nextPaneID := m.selectedPaneID()
 	if prevPaneID != nextPaneID {
 		m.clearOfflineScroll()
+		m.clearPaneAgentUnread(nextPaneID)
 	}
 	m.queueFocusSync(prev, sel)
 }

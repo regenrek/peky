@@ -29,12 +29,14 @@ func TestBuildDashboardDataOrderStable(t *testing.T) {
 		Config:   cfg,
 		Settings: settings,
 		Sessions: sessionsA,
+		PaneGit:  nil,
 	})
 	resB := buildDashboardData(dashboardSnapshotInput{
 		Tab:      TabProject,
 		Config:   cfg,
 		Settings: settings,
 		Sessions: sessionsB,
+		PaneGit:  nil,
 	})
 
 	for _, project := range resA.Data.Projects {
@@ -63,6 +65,7 @@ func TestBuildDashboardDataCoalescesConfigByKey(t *testing.T) {
 		Tab:      TabProject,
 		Config:   cfg,
 		Settings: settings,
+		PaneGit:  nil,
 	})
 
 	if len(result.Data.Projects) != 1 {
@@ -96,6 +99,7 @@ func TestBuildDashboardDataCoalescesRelativeConfigPath(t *testing.T) {
 		Config:   cfg,
 		Settings: settings,
 		Sessions: sessions,
+		PaneGit:  nil,
 	})
 
 	if len(result.Data.Projects) != 1 {

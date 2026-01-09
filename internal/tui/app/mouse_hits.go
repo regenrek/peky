@@ -209,7 +209,7 @@ func (m *Model) projectPaneHitsForPreview(project *ProjectGroup, session *Sessio
 	if !ok {
 		return nil
 	}
-	return projectPaneLayoutHits(project, session, geom)
+	return projectPaneLayoutHits(project, session, geom, m.settings.PaneTopbar.Enabled)
 }
 
 func (m *Model) logProjectPaneHitsSkip(reason, detail, perfKey string) {
@@ -245,7 +245,7 @@ func (m *Model) projectPaneLayoutRects(session *SessionItem) map[string]layout.R
 	return rects
 }
 
-func projectPaneLayoutHits(project *ProjectGroup, session *SessionItem, geom layoutgeom.Geometry) []mouse.PaneHit {
+func projectPaneLayoutHits(project *ProjectGroup, session *SessionItem, geom layoutgeom.Geometry, paneTopbar bool) []mouse.PaneHit {
 	if len(geom.Panes) == 0 {
 		return nil
 	}
@@ -262,6 +262,11 @@ func projectPaneLayoutHits(project *ProjectGroup, session *SessionItem, geom lay
 				index = item.Index
 			}
 		}
+		topbar := mouse.Rect{}
+		if paneTopbar && content.H >= 2 {
+			topbar = mouse.Rect{X: content.X, Y: content.Y, W: content.W, H: 1}
+			content = mouse.Rect{X: content.X, Y: content.Y + 1, W: content.W, H: content.H - 1}
+		}
 		hits = append(hits, mouse.PaneHit{
 			PaneID: pane.ID,
 			Selection: mouse.Selection{
@@ -270,6 +275,7 @@ func projectPaneLayoutHits(project *ProjectGroup, session *SessionItem, geom lay
 				Pane:      index,
 			},
 			Outer:   outer,
+			Topbar:  topbar,
 			Content: content,
 		})
 	}

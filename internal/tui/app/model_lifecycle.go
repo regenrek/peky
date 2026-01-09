@@ -111,6 +111,7 @@ func (m Model) refreshCmd(seq uint64) tea.Cmd {
 		var sessions []native.SessionSnapshot
 		focusedSession := ""
 		focusedPaneID := ""
+		var paneGit map[string]sessiond.PaneGitMeta
 		if client != nil {
 			previewLines := settings.PreviewLines
 			if dashboard := dashboardPreviewLines(settings); dashboard > previewLines {
@@ -125,6 +126,7 @@ func (m Model) refreshCmd(seq uint64) tea.Cmd {
 				sessions = snapshot.Sessions
 				focusedSession = snapshot.FocusedSession
 				focusedPaneID = snapshot.FocusedPaneID
+				paneGit = snapshot.PaneGit
 			}
 			if perfDebugEnabled() {
 				snapshotDur := time.Since(snapshotStart)
@@ -141,6 +143,7 @@ func (m Model) refreshCmd(seq uint64) tea.Cmd {
 					Config:         cfg,
 					Settings:       settings,
 					Sessions:       nil,
+					PaneGit:        nil,
 					FocusedSession: focusedSession,
 					FocusedPaneID:  focusedPaneID,
 				})
@@ -159,6 +162,7 @@ func (m Model) refreshCmd(seq uint64) tea.Cmd {
 			Config:         cfg,
 			Settings:       settings,
 			Sessions:       sessions,
+			PaneGit:        paneGit,
 			FocusedSession: focusedSession,
 			FocusedPaneID:  focusedPaneID,
 		})

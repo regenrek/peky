@@ -161,6 +161,14 @@ type PaneItem struct {
 	StartCommand  string
 	Cwd           string
 	Tool          string
+	GitRoot       string
+	GitBranch     string
+	GitDirty      bool
+	GitWorktree   bool
+	AgentTool     string
+	AgentState    string // running | idle
+	AgentUpdated  time.Time
+	AgentUnread   bool
 	PID           int
 	Active        bool
 	Left          int
@@ -232,11 +240,16 @@ type DashboardConfig struct {
 	Resize             DashboardResizeSettings
 	ProjectRoots       []string
 	AgentDetection     AgentDetectionConfig
+	PaneTopbar         PaneTopbarSettings
 	AttachBehavior     string
 	PaneNavigationMode string
 	QuitBehavior       string
 	HiddenProjects     map[string]struct{}
 	Performance        DashboardPerformance
+}
+
+type PaneTopbarSettings struct {
+	Enabled bool
 }
 
 // selectionState tracks the current selection by stable project ID.
@@ -263,6 +276,7 @@ type dashboardSnapshotInput struct {
 	Config         *layout.Config
 	Settings       DashboardConfig
 	Sessions       []native.SessionSnapshot
+	PaneGit        map[string]sessiond.PaneGitMeta
 	FocusedSession string
 	FocusedPaneID  string
 }
@@ -290,6 +304,9 @@ type refreshTickMsg struct{}
 
 // pekySpinnerTickMsg advances the Peky spinner.
 type pekySpinnerTickMsg struct{}
+
+// paneTopbarSpinnerTickMsg advances the pane topbar spinner.
+type paneTopbarSpinnerTickMsg struct{}
 
 // pekyPromptClearMsg clears the Peky prompt line after a delay.
 type pekyPromptClearMsg struct {

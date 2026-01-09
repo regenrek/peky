@@ -1,6 +1,8 @@
 package app
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -161,6 +163,44 @@ func TestMouseDragStartsWithoutTerminalFocus(t *testing.T) {
 	}
 }
 
+func TestMousePaneTopbarClickOpensPaneDetailsDialog(t *testing.T) {
+	m := newTestModelLite()
+	m.settings.PaneTopbar.Enabled = true
+	m.data.Projects[0].Sessions[0].Panes = []PaneItem{{
+		ID:     "p1",
+		Index:  "1",
+		Title:  "one",
+		Cwd:    "/tmp/demo",
+		Left:   0,
+		Top:    0,
+		Width:  layout.LayoutBaseSize,
+		Height: layout.LayoutBaseSize,
+	}}
+	m.selection = selectionState{ProjectID: m.data.Projects[0].ID, Session: m.data.Projects[0].Sessions[0].Name, Pane: "1"}
+
+	hits := m.paneHits()
+	if len(hits) == 0 {
+		t.Fatalf("expected pane hits")
+	}
+	hit := hits[0]
+	if hit.Topbar.Empty() {
+		t.Fatalf("expected topbar rect")
+	}
+	msg := tea.MouseMsg{X: hit.Topbar.X + 1, Y: hit.Topbar.Y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft}
+
+	_, _ = m.updateDashboardMouse(msg)
+
+	if m.state != StatePekyDialog {
+		t.Fatalf("state=%v want %v", m.state, StatePekyDialog)
+	}
+	if m.pekyDialogTitle != "Pane details" {
+		t.Fatalf("dialog title=%q", m.pekyDialogTitle)
+	}
+	if !strings.Contains(m.pekyViewport.View(), "CWD:") {
+		t.Fatalf("expected CWD in dialog: %q", m.pekyViewport.View())
+	}
+}
+
 func seedMouseTestData(m *Model) {
 	m.tab = TabDashboard
 	m.data = DashboardData{Projects: []ProjectGroup{{
@@ -254,6 +294,134 @@ func TestMouseQuickReplyClickExitsTerminalFocus(t *testing.T) {
 	m.updateDashboard(keyRune('x'))
 	if got := m.quickReplyInput.Value(); got != "x" {
 		t.Fatalf("quickReplyInput=%q want %q", got, "x")
+	}
+}
+
+func TestMouseQuickReplySelectionCopiesToClipboard(t *testing.T) {
+	m := newTestModel(t)
+	seedMouseTestData(m)
+	m.quickReplyInput.SetValue("hello world")
+
+	var copied string
+	prev := writeClipboard
+	writeClipboard = func(text string) error {
+		copied = text
+		return nil
+	}
+	defer func() { writeClipboard = prev }()
+
+	inputRect, ok := m.quickReplyInputBounds()
+	if !ok || inputRect.Empty() {
+		t.Fatalf("quick reply input rect unavailable")
+	}
+	press := tea.MouseMsg{X: inputRect.X, Y: inputRect.Y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft}
+	motion := tea.MouseMsg{X: inputRect.X + 5, Y: inputRect.Y, Action: tea.MouseActionMotion, Button: tea.MouseButtonNone}
+	release := tea.MouseMsg{X: inputRect.X + 5, Y: inputRect.Y, Action: tea.MouseActionRelease, Button: tea.MouseButtonNone}
+
+	_, _ = m.updateDashboardMouse(press)
+	_, _ = m.updateDashboardMouse(motion)
+	_, _ = m.updateDashboardMouse(release)
+
+	if copied != "hello" {
+		t.Fatalf("clipboard=%q want %q", copied, "hello")
+	}
+	if m.quickReplyMouseSel.active {
+		t.Fatalf("expected quick reply selection cleared")
+	}
+}
+
+func TestMouseQuickReplySelectionDoesNotCopyEmptyRange(t *testing.T) {
+	m := newTestModel(t)
+	seedMouseTestData(m)
+	m.quickReplyInput.SetValue("hello")
+
+	called := false
+	prev := writeClipboard
+	writeClipboard = func(text string) error {
+		called = true
+		return nil
+	}
+	defer func() { writeClipboard = prev }()
+
+	inputRect, ok := m.quickReplyInputBounds()
+	if !ok || inputRect.Empty() {
+		t.Fatalf("quick reply input rect unavailable")
+	}
+	press := tea.MouseMsg{X: inputRect.X, Y: inputRect.Y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft}
+	release := tea.MouseMsg{X: inputRect.X, Y: inputRect.Y, Action: tea.MouseActionRelease, Button: tea.MouseButtonNone}
+
+	_, _ = m.updateDashboardMouse(press)
+	_, _ = m.updateDashboardMouse(release)
+
+	if called {
+		t.Fatalf("expected clipboard not called for empty selection")
+	}
+	if m.quickReplyMouseSel.active {
+		t.Fatalf("expected quick reply selection cleared")
+	}
+}
+
+func TestMouseQuickReplySelectionDoesNotCopyWhitespace(t *testing.T) {
+	m := newTestModel(t)
+	seedMouseTestData(m)
+	m.quickReplyInput.SetValue("  hi")
+
+	var copied string
+	prev := writeClipboard
+	writeClipboard = func(text string) error {
+		copied = text
+		return nil
+	}
+	defer func() { writeClipboard = prev }()
+
+	inputRect, ok := m.quickReplyInputBounds()
+	if !ok || inputRect.Empty() {
+		t.Fatalf("quick reply input rect unavailable")
+	}
+	press := tea.MouseMsg{X: inputRect.X, Y: inputRect.Y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft}
+	motion := tea.MouseMsg{X: inputRect.X + 2, Y: inputRect.Y, Action: tea.MouseActionMotion, Button: tea.MouseButtonNone}
+	release := tea.MouseMsg{X: inputRect.X + 2, Y: inputRect.Y, Action: tea.MouseActionRelease, Button: tea.MouseButtonNone}
+
+	_, _ = m.updateDashboardMouse(press)
+	_, _ = m.updateDashboardMouse(motion)
+	_, _ = m.updateDashboardMouse(release)
+
+	if copied != "" {
+		t.Fatalf("expected no clipboard write for whitespace selection, got %q", copied)
+	}
+	if m.toast.Text != "" {
+		t.Fatalf("expected no toast for whitespace selection, got %q", m.toast.Text)
+	}
+}
+
+func TestMouseQuickReplySelectionClipboardErrorShowsToast(t *testing.T) {
+	m := newTestModel(t)
+	seedMouseTestData(m)
+	m.quickReplyInput.SetValue("hello world")
+
+	prev := writeClipboard
+	writeClipboard = func(text string) error {
+		return errors.New("boom")
+	}
+	defer func() { writeClipboard = prev }()
+
+	inputRect, ok := m.quickReplyInputBounds()
+	if !ok || inputRect.Empty() {
+		t.Fatalf("quick reply input rect unavailable")
+	}
+	press := tea.MouseMsg{X: inputRect.X, Y: inputRect.Y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft}
+	motion := tea.MouseMsg{X: inputRect.X + 5, Y: inputRect.Y, Action: tea.MouseActionMotion, Button: tea.MouseButtonNone}
+	release := tea.MouseMsg{X: inputRect.X + 5, Y: inputRect.Y, Action: tea.MouseActionRelease, Button: tea.MouseButtonNone}
+
+	_, _ = m.updateDashboardMouse(press)
+	_, _ = m.updateDashboardMouse(motion)
+	_, _ = m.updateDashboardMouse(release)
+
+	if m.toast.Text != "Copy failed" {
+		t.Fatalf("toast=%q want %q", m.toast.Text, "Copy failed")
+	}
+	if m.toast.Level != toastWarning {
+		t.Fatalf("toastLevel=%v want %v", m.toast.Level, toastWarning)
 	}
 }
 

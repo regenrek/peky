@@ -238,11 +238,22 @@ func defaultDaemonLogFile() (string, error) {
 }
 
 func waitForDaemon(ctx context.Context, socketPath, version string) error {
+	return waitForDaemonWithTimeout(ctx, socketPath, version, 10*time.Second)
+}
+
+func waitForDaemonWithTimeout(ctx context.Context, socketPath, version string, fallbackTimeout time.Duration) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	deadline := time.NewTimer(10 * time.Second)
-	defer deadline.Stop()
+	var deadlineCh <-chan time.Time
+	if _, ok := ctx.Deadline(); !ok {
+		if fallbackTimeout <= 0 {
+			fallbackTimeout = 10 * time.Second
+		}
+		deadline := time.NewTimer(fallbackTimeout)
+		defer deadline.Stop()
+		deadlineCh = deadline.C
+	}
 	ticker := time.NewTicker(150 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -250,7 +261,7 @@ func waitForDaemon(ctx context.Context, socketPath, version string) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-deadline.C:
+		case <-deadlineCh:
 			return fmt.Errorf("sessiond: daemon did not start")
 		case <-ticker.C:
 			if err := probeDaemon(ctx, socketPath, version); err == nil {

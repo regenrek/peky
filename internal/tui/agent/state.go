@@ -39,13 +39,26 @@ type DetectionConfig struct {
 	Claude bool
 }
 
+// PaneState is a validated, TTL-checked snapshot of the agent state file.
+type PaneState struct {
+	PaneID     string
+	Tool       string
+	Status     Status
+	UpdatedAt  time.Time
+	RawState   string
+	RawTool    string
+	SourcePath string
+}
+
 func agentStateDir() string {
 	if dir := strings.TrimSpace(os.Getenv("PEAKYPANES_AGENT_STATE_DIR")); dir != "" {
 		return dir
 	}
 	runtimeDir := strings.TrimSpace(os.Getenv("XDG_RUNTIME_DIR"))
 	if runtimeDir == "" {
-		runtimeDir = os.TempDir()
+		// Keep in sync with scripts/agent-state/* defaults.
+		// On macOS, os.TempDir() is often not /tmp, which breaks cross-process coordination.
+		runtimeDir = "/tmp"
 	}
 	return filepath.Join(runtimeDir, "peakypanes", "agent-state")
 }
@@ -109,29 +122,46 @@ func agentDetectionAllowed(tool string, cfg DetectionConfig) bool {
 
 // ClassifyState reads the agent state file for the pane and classifies it.
 func ClassifyState(paneID string, cfg DetectionConfig, now time.Time) (Status, bool) {
-	if !cfg.Codex && !cfg.Claude {
-		return StatusIdle, false
-	}
-	if strings.TrimSpace(paneID) == "" {
-		return StatusIdle, false
-	}
-	state, err := readAgentState(paneID)
-	if err != nil {
-		return StatusIdle, false
-	}
-	if state.PaneID != "" && state.PaneID != paneID {
-		return StatusIdle, false
-	}
-	if !agentDetectionAllowed(state.Tool, cfg) {
-		return StatusIdle, false
-	}
-	updatedAt := state.updatedAt()
-	if updatedAt.IsZero() || now.Sub(updatedAt) > defaultAgentStateTTL {
-		return StatusIdle, false
-	}
-	status, ok := agentStatusFromState(state.State)
+	state, ok := ReadPaneState(paneID, cfg, now)
 	if !ok {
 		return StatusIdle, false
 	}
-	return status, true
+	return state.Status, true
+}
+
+// ReadPaneState reads the agent state file for the pane and returns the validated snapshot.
+func ReadPaneState(paneID string, cfg DetectionConfig, now time.Time) (PaneState, bool) {
+	if !cfg.Codex && !cfg.Claude {
+		return PaneState{}, false
+	}
+	if strings.TrimSpace(paneID) == "" {
+		return PaneState{}, false
+	}
+	raw, err := readAgentState(paneID)
+	if err != nil {
+		return PaneState{}, false
+	}
+	if raw.PaneID != "" && raw.PaneID != paneID {
+		return PaneState{}, false
+	}
+	if !agentDetectionAllowed(raw.Tool, cfg) {
+		return PaneState{}, false
+	}
+	updatedAt := raw.updatedAt()
+	if updatedAt.IsZero() || now.Sub(updatedAt) > defaultAgentStateTTL {
+		return PaneState{}, false
+	}
+	status, ok := agentStatusFromState(raw.State)
+	if !ok {
+		return PaneState{}, false
+	}
+	return PaneState{
+		PaneID:     paneID,
+		Tool:       strings.ToLower(strings.TrimSpace(raw.Tool)),
+		Status:     status,
+		UpdatedAt:  updatedAt,
+		RawState:   raw.State,
+		RawTool:    raw.Tool,
+		SourcePath: agentStatePath(paneID),
+	}, true
 }

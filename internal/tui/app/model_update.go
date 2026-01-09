@@ -119,6 +119,9 @@ var updateHandlers = map[reflect.Type]updateHandler{
 	reflect.TypeOf(pekySpinnerTickMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handlePekySpinnerTick()
 	},
+	reflect.TypeOf(paneTopbarSpinnerTickMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handlePaneTopbarSpinnerTick()
+	},
 	reflect.TypeOf(pekyPromptClearMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handlePekyPromptClear(msg.(pekyPromptClearMsg))
 	},
@@ -375,6 +378,7 @@ func (m *Model) applySnapshotState(msg dashboardSnapshotMsg) {
 	} else {
 		m.applySelection(resolveSelectionForTab(m.tab, m.data.Projects, m.selection))
 	}
+	m.updatePaneAgentUnread()
 	m.syncExpandedSessions()
 	if m.refreshSelectionForProjectConfig() {
 		m.setToast("Project config changed: selection refreshed", toastInfo)
@@ -385,6 +389,9 @@ func (m *Model) handleSnapshotPostApply() tea.Cmd {
 	cmds := make([]tea.Cmd, 0, 2)
 	if pumpCmd := m.snapshotPumpCmd(); pumpCmd != nil {
 		cmds = append(cmds, pumpCmd)
+	}
+	if spinnerCmd := m.maybeStartPaneTopbarSpinner(); spinnerCmd != nil {
+		cmds = append(cmds, spinnerCmd)
 	}
 	if refreshCmd := m.refreshPaneViewsCmd(); refreshCmd != nil {
 		cmds = append(cmds, refreshCmd)

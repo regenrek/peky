@@ -105,6 +105,7 @@ type Model struct {
 	quickReplyMenuKind     quickReplyMenuKind
 	quickReplyMode         quickReplyMode
 	quickReplyFileCache    quickReplyFileCache
+	quickReplyMouseSel     quickReplyMouseSelection
 
 	mouse       mouse.Handler
 	contextMenu contextMenuState
@@ -197,6 +198,10 @@ type Model struct {
 	paneViewPumpBackoff    time.Duration
 	paneLastSize           map[string]paneSize
 	paneLastFallback       map[string]time.Time
+	paneAgentLast          map[string]paneAgentSeen
+	paneAgentUnread        map[string]bool
+	paneTopbarSpinnerIndex int
+	paneTopbarSpinnerOn    bool
 
 	paneUpdatePerf    map[string]*paneUpdatePerf
 	paneViewQueuedAt  map[string]time.Time

@@ -136,9 +136,6 @@ func (w *Window) EnterScrollback() {
 	if w == nil {
 		return
 	}
-	if w.IsAltScreen() {
-		return
-	}
 	w.stateMu.Lock()
 	w.ScrollbackMode = true
 	w.stateMu.Unlock()
@@ -162,9 +159,6 @@ func (w *Window) ScrollUp(lines int) {
 	if w == nil || lines <= 0 {
 		return
 	}
-	if w.IsAltScreen() {
-		return
-	}
 	sbLen := w.ScrollbackLen()
 	if sbLen <= 0 {
 		return
@@ -179,9 +173,6 @@ func (w *Window) ScrollUp(lines int) {
 
 func (w *Window) ScrollDown(lines int) {
 	if w == nil || lines <= 0 {
-		return
-	}
-	if w.IsAltScreen() {
 		return
 	}
 
@@ -214,7 +205,7 @@ func (w *Window) PageDown() {
 }
 
 func (w *Window) ScrollToTop() {
-	if w == nil || w.IsAltScreen() {
+	if w == nil {
 		return
 	}
 	sbLen := w.ScrollbackLen()

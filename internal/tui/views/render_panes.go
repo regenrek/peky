@@ -21,6 +21,8 @@ type layoutPreviewContext struct {
 	terminalFocus bool
 	guides        []ResizeGuide
 	paneView      func(id string, width, height int, showCursor bool) string
+	paneTopbar    bool
+	topbarSpinner string
 }
 
 func renderPaneLayout(panes []Pane, width, height int, ctx layoutPreviewContext) string {
@@ -89,9 +91,19 @@ func renderPaneLayoutContent(buf *cellbuf.Buffer, geom layoutgeom.Geometry, pane
 		if rect.Empty() {
 			continue
 		}
-		content := strings.TrimSpace(layoutPaneContent(pane, rect.W, rect.H, ctx))
-		content = padLines(content, rect.W, rect.H)
-		cellbuf.SetContentRect(buf, content, cellbuf.Rect(rect.X, rect.Y, rect.W, rect.H))
+		topbarEnabled := ctx.paneTopbar && rect.H >= 2
+		if topbarEnabled {
+			topbar := renderPaneTopbar(pane, rect.W, ctx.topbarSpinner)
+			topbar = theme.PaneTopbar.Render(fitLine(topbar, rect.W))
+			cellbuf.SetContentRect(buf, topbar, cellbuf.Rect(rect.X, rect.Y, rect.W, 1))
+		}
+		contentRect := rect
+		if topbarEnabled {
+			contentRect = mouse.Rect{X: rect.X, Y: rect.Y + 1, W: rect.W, H: rect.H - 1}
+		}
+		content := strings.TrimSpace(layoutPaneContent(pane, contentRect.W, contentRect.H, ctx))
+		content = padLines(content, contentRect.W, contentRect.H)
+		cellbuf.SetContentRect(buf, content, cellbuf.Rect(contentRect.X, contentRect.Y, contentRect.W, contentRect.H))
 	}
 }
 

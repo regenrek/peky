@@ -237,6 +237,45 @@ func TestMouseWheelAltScreenForwarding(t *testing.T) {
 	}
 }
 
+func TestMouseWheelAltScreenHostSelectionUsesScrollback(t *testing.T) {
+	emu := &fakeEmu{
+		cols: 5,
+		rows: 3,
+		sb: [][]uv.Cell{
+			mkCellsLine("S0", 5),
+			mkCellsLine("S1", 5),
+			mkCellsLine("S2", 5),
+			mkCellsLine("S3", 5),
+			mkCellsLine("S4", 5),
+		},
+		screen: [][]uv.Cell{
+			mkCellsLine("A0", 5),
+			mkCellsLine("A1", 5),
+			mkCellsLine("A2", 5),
+		},
+	}
+	w := &Window{
+		term:    emu,
+		cols:    5,
+		rows:    3,
+		updates: make(chan struct{}, 2),
+	}
+
+	w.altScreen.Store(true)
+	w.updateMouseMode(ansi.ModeMouseX10, true)
+
+	emu.sentMouse = nil
+	if !w.SendMouse(uv.MouseWheelEvent{X: 0, Y: 0, Button: uv.MouseWheelUp}, MouseRouteHostSelection) {
+		t.Fatalf("expected wheel handled for host selection in alt-screen")
+	}
+	if emu.sentMouse != nil {
+		t.Fatalf("expected wheel not forwarded to app for host selection, got %T", emu.sentMouse)
+	}
+	if got := w.GetScrollbackOffset(); got != 3 {
+		t.Fatalf("expected scrollback offset 3, got %d", got)
+	}
+}
+
 func TestMouseWheelScrollbackOverridesMouseMode(t *testing.T) {
 	emu := &fakeEmu{
 		cols: 5,

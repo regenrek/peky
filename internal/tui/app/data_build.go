@@ -7,6 +7,8 @@ import (
 
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/native"
+	"github.com/regenrek/peakypanes/internal/sessiond"
+	"github.com/regenrek/peakypanes/internal/tui/agent"
 )
 
 func buildDashboardData(input dashboardSnapshotInput) dashboardSnapshotResult {
@@ -19,7 +21,7 @@ func buildDashboardData(input dashboardSnapshotInput) dashboardSnapshotResult {
 
 	index := newDashboardGroupIndex(len(input.Config.Projects) + len(input.Sessions))
 	index.addConfigProjects(input.Config, input.Settings)
-	index.mergeNativeSessions(input.Sessions, input.Settings)
+	index.mergeNativeSessions(input.Sessions, input.PaneGit, input.Settings)
 
 	groups := index.groups
 	sortProjectGroups(groups, input.Config)
@@ -106,7 +108,7 @@ func (idx *dashboardGroupIndex) addConfigProjects(cfg *layout.Config, settings D
 	}
 }
 
-func (idx *dashboardGroupIndex) mergeNativeSessions(nativeSessions []native.SessionSnapshot, settings DashboardConfig) {
+func (idx *dashboardGroupIndex) mergeNativeSessions(nativeSessions []native.SessionSnapshot, paneGit map[string]sessiond.PaneGitMeta, settings DashboardConfig) {
 	now := time.Now()
 	for _, s := range nativeSessions {
 		path := normalizeProjectPath(s.Path)
@@ -125,7 +127,7 @@ func (idx *dashboardGroupIndex) mergeNativeSessions(nativeSessions []native.Sess
 			})
 			group = &idx.groups[pos]
 		}
-		idx.mergeSession(group, s, settings, now)
+		idx.mergeSession(group, s, paneGit, settings, now)
 	}
 }
 
@@ -143,8 +145,16 @@ func (idx *dashboardGroupIndex) groupForSession(name, path string) *ProjectGroup
 	return nil
 }
 
-func (idx *dashboardGroupIndex) mergeSession(group *ProjectGroup, session native.SessionSnapshot, settings DashboardConfig, now time.Time) {
-	panes := panesFromNative(session.Panes, settings, now)
+func (idx *dashboardGroupIndex) mergeSession(group *ProjectGroup, session native.SessionSnapshot, paneGit map[string]sessiond.PaneGitMeta, settings DashboardConfig, now time.Time) {
+	panes := panesFromNative(session.Panes, paneGit, settings, now)
+	sessionPath := normalizeProjectPath(session.Path)
+	if sessionPath != "" {
+		for i := range panes {
+			if strings.TrimSpace(panes[i].Cwd) == "" {
+				panes[i].Cwd = sessionPath
+			}
+		}
+	}
 	activePane := activePaneIndex(panes)
 	paneCount := len(panes)
 
@@ -301,11 +311,15 @@ func configProjectOrder(cfg *layout.Config) map[string]int {
 	return order
 }
 
-func panesFromNative(panes []native.PaneSnapshot, settings DashboardConfig, now time.Time) []PaneItem {
+func panesFromNative(panes []native.PaneSnapshot, paneGit map[string]sessiond.PaneGitMeta, settings DashboardConfig, now time.Time) []PaneItem {
 	if len(panes) == 0 {
 		return nil
 	}
 	items := make([]PaneItem, len(panes))
+	cfg := agent.DetectionConfig{
+		Codex:  settings.AgentDetection.Codex,
+		Claude: settings.AgentDetection.Claude,
+	}
 	for i, p := range panes {
 		item := PaneItem{
 			ID:            p.ID,
@@ -329,6 +343,25 @@ func panesFromNative(panes []native.PaneSnapshot, settings DashboardConfig, now 
 			SnapshotAt:    p.SnapshotAt,
 			LastActive:    p.LastActive,
 			Preview:       p.Preview,
+		}
+		if meta, ok := paneGit[item.ID]; ok {
+			item.GitRoot = meta.Root
+			item.GitBranch = meta.Branch
+			item.GitDirty = meta.Dirty
+			item.GitWorktree = meta.Worktree
+		}
+		if state, ok := agent.ReadPaneState(item.ID, cfg, now); ok {
+			item.AgentTool = state.Tool
+			item.AgentUpdated = state.UpdatedAt
+			switch state.Status {
+			case agent.StatusRunning:
+				item.AgentState = "running"
+			default:
+				item.AgentState = "idle"
+			}
+		}
+		if item.AgentTool == "" {
+			item.AgentTool = strings.TrimSpace(item.Tool)
 		}
 		item.Status = classifyPane(item, item.Preview, settings, now)
 		items[i] = item

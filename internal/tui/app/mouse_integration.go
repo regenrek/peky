@@ -29,9 +29,12 @@ func (m *Model) updateDashboardMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if cmd, handled := m.handleServerStatusClick(msg); handled {
 		return m, tea.Batch(cursorCmd, cmd)
 	}
-	if _, handled := m.handleQuickReplyClick(msg); handled {
+	if cmd, handled := m.handleQuickReplyMouse(msg); handled {
 		m.updateTerminalMouseDrag(msg)
-		return m, cursorCmd
+		return m, tea.Batch(cursorCmd, cmd)
+	}
+	if cmd, handled := m.handlePaneTopbarClick(msg); handled {
+		return m, tea.Batch(cursorCmd, cmd)
 	}
 	m.updateTerminalMouseDrag(msg)
 	if cmd, handled := m.handleOfflineScrollWheel(msg); handled {
@@ -78,28 +81,6 @@ func (m *Model) handleServerStatusClick(msg tea.MouseMsg) (tea.Cmd, bool) {
 	default:
 		return nil, false
 	}
-	return nil, true
-}
-
-func (m *Model) handleQuickReplyClick(msg tea.MouseMsg) (tea.Cmd, bool) {
-	if m == nil {
-		return nil, false
-	}
-	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
-		return nil, false
-	}
-	rect, ok := m.quickReplyRect()
-	if !ok || !rect.Contains(msg.X, msg.Y) {
-		return nil, false
-	}
-	if m.terminalFocus {
-		m.setTerminalFocus(false)
-	}
-	if m.filterActive {
-		m.filterActive = false
-		m.filterInput.Blur()
-	}
-	m.quickReplyInput.Focus()
 	return nil, true
 }
 

@@ -63,6 +63,7 @@ func (d *Daemon) handleSnapshot(payload []byte) ([]byte, error) {
 		Sessions:       sessions,
 		FocusedSession: focusedSession,
 		FocusedPaneID:  focusedPane,
+		PaneGit:        d.collectPaneGit(ctx, sessions),
 	}
 	return encodePayload(resp)
 }

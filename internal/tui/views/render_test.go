@@ -2,11 +2,15 @@ package views
 
 import (
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/regenrek/peakypanes/internal/tui/theme"
 )
 
 func TestCompactPreviewLines(t *testing.T) {
@@ -87,6 +91,59 @@ func TestViewQuickReplyKeepsHeightWithSuggestions(t *testing.T) {
 	if len(lines) != 3 {
 		t.Fatalf("expected quick reply height 3, got %d", len(lines))
 	}
+}
+
+func TestViewQuickReplyRendersSelection(t *testing.T) {
+	input := textinput.New()
+	input.SetValue("hello world")
+	m := Model{
+		QuickReplyInput:           input,
+		QuickReplySelectionActive: true,
+		QuickReplySelectionStart:  0,
+		QuickReplySelectionEnd:    5,
+	}
+
+	out := m.viewQuickReply(40)
+	stripped := ansi.Strip(out)
+	if !strings.Contains(stripped, "hello world") {
+		t.Fatalf("expected content preserved, got %q", stripped)
+	}
+	if strings.Contains(out, "\x1b[") {
+		reverse := regexp.MustCompile("\x1b\\[[0-9;]*7[0-9;]*m")
+		if !reverse.MatchString(out) {
+			t.Fatalf("expected reverse-video sequence in output when ANSI present")
+		}
+	}
+}
+
+func TestRenderQuickReplyInputSelectionTrimsAndBounds(t *testing.T) {
+	base := lipgloss.NewStyle().
+		Foreground(theme.TextPrimary).
+		Background(theme.QuickReplyBg)
+
+	t.Run("clamp_swap_and_trim", func(t *testing.T) {
+		got := renderQuickReplyInputSelection(base, "hello\n", 10, -5)
+		if ansi.Strip(got) != "hello" {
+			t.Fatalf("expected selection output to preserve value, got %q", ansi.Strip(got))
+		}
+		if got == "" {
+			t.Fatalf("expected non-empty output")
+		}
+	})
+
+	t.Run("empty_after_clamp", func(t *testing.T) {
+		got := renderQuickReplyInputSelection(base, "hello\n", -5, 0)
+		if got != "" {
+			t.Fatalf("expected empty selection when start==end after clamp, got %q", ansi.Strip(got))
+		}
+	})
+
+	t.Run("empty_value", func(t *testing.T) {
+		got := renderQuickReplyInputSelection(base, "", 0, 1)
+		if got != "" {
+			t.Fatalf("expected empty selection for empty value, got %q", ansi.Strip(got))
+		}
+	})
 }
 
 func TestViewDashboardQuickReplyMenuOverlay(t *testing.T) {

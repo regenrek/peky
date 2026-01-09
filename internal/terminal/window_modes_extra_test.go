@@ -69,6 +69,23 @@ func TestCopyToggleSelectToggles(t *testing.T) {
 	}
 }
 
+func TestCopySelectionActive(t *testing.T) {
+	w := &Window{CopyMode: nil}
+	if w.CopySelectionActive() {
+		t.Fatalf("expected CopySelectionActive false when CopyMode nil")
+	}
+
+	w.CopyMode = &CopyMode{Active: true, Selecting: true}
+	if !w.CopySelectionActive() {
+		t.Fatalf("expected CopySelectionActive true")
+	}
+
+	w.CopyMode.Selecting = false
+	if w.CopySelectionActive() {
+		t.Fatalf("expected CopySelectionActive false when not selecting")
+	}
+}
+
 func TestAdjustToNonContinuation(t *testing.T) {
 	line := []uv.Cell{
 		{Content: "A", Width: 1},

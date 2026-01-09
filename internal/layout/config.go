@@ -195,6 +195,11 @@ type HiddenProjectConfig struct {
 	Path string `yaml:"path,omitempty"`
 }
 
+// PaneTopbarConfig configures the per-pane topbar displayed inside panes.
+type PaneTopbarConfig struct {
+	Enabled *bool `yaml:"enabled,omitempty"`
+}
+
 // DashboardConfig configures the Peaky Panes dashboard UI.
 type DashboardConfig struct {
 	RefreshMS          int                    `yaml:"refresh_ms,omitempty"`
@@ -206,6 +211,7 @@ type DashboardConfig struct {
 	Resize             DashboardResizeConfig  `yaml:"resize,omitempty"`
 	ProjectRoots       []string               `yaml:"project_roots,omitempty"`
 	AgentDetection     AgentDetectionConfig   `yaml:"agent_detection,omitempty"`
+	PaneTopbar         PaneTopbarConfig       `yaml:"pane_topbar,omitempty"`
 	AttachBehavior     string                 `yaml:"attach_behavior,omitempty"`      // current | detached
 	PaneNavigationMode string                 `yaml:"pane_navigation_mode,omitempty"` // spatial | memory
 	QuitBehavior       string                 `yaml:"quit_behavior,omitempty"`        // prompt | keep | stop

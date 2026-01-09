@@ -4,67 +4,73 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
+	"time"
 )
 
 // Model supplies all view state needed to render the TUI. ActiveView and Tab
 // values must match the ordering of the app package enums.
 type Model struct {
-	Width                    int
-	Height                   int
-	ActiveView               int
-	Tab                      int
-	HeaderLine               string
-	EmptyStateMessage        string
-	SplashInfo               string
-	Projects                 []Project
-	DashboardColumns         []DashboardColumn
-	DashboardSelectedProject string
-	SidebarProject           *Project
-	SidebarSessions          []Session
-	SidebarHidden            bool
-	PreviewSession           *Session
-	SelectionProject         string
-	SelectionSession         string
-	SelectionPane            string
-	ExpandedSessions         map[string]bool
-	FilterActive             bool
-	FilterInput              textinput.Model
-	QuickReplyInput          textinput.Model
-	QuickReplyMode           string
-	QuickReplySuggestions    []QuickReplySuggestion
-	QuickReplySelected       int
-	TerminalFocus            bool
-	SupportsTerminalFocus    bool
-	ProjectPicker            list.Model
-	LayoutPicker             list.Model
-	PaneSwapPicker           list.Model
-	CommandPalette           list.Model
-	SettingsMenu             list.Model
-	PerformanceMenu          list.Model
-	DebugMenu                list.Model
-	AuthDialog               AuthDialog
-	PekyDialogTitle          string
-	PekyDialogFooter         string
-	PekyDialogViewport       viewport.Model
-	PekyDialogIsError        bool
-	PekyPromptLine           string
-	ConfirmKill              ConfirmKill
-	ConfirmQuit              ConfirmQuit
-	ConfirmCloseProject      ConfirmCloseProject
-	ConfirmCloseAllProjects  ConfirmCloseAllProjects
-	ConfirmClosePane         ConfirmClosePane
-	Rename                   Rename
-	ProjectRootInput         textinput.Model
-	Keys                     KeyHints
-	Toast                    string
-	PreviewCompact           bool
-	FreezePreviewContent     bool
-	DashboardPreviewLines    int
-	PaneView                 func(id string, width, height int, showCursor bool) string
-	DialogHelp               DialogHelp
-	Resize                   ResizeOverlay
-	ContextMenu              ContextMenu
-	ServerStatus             string
+	Width                     int
+	Height                    int
+	ActiveView                int
+	Tab                       int
+	HeaderLine                string
+	EmptyStateMessage         string
+	SplashInfo                string
+	Projects                  []Project
+	DashboardColumns          []DashboardColumn
+	DashboardSelectedProject  string
+	SidebarProject            *Project
+	SidebarSessions           []Session
+	SidebarHidden             bool
+	PreviewSession            *Session
+	SelectionProject          string
+	SelectionSession          string
+	SelectionPane             string
+	ExpandedSessions          map[string]bool
+	FilterActive              bool
+	FilterInput               textinput.Model
+	QuickReplyInput           textinput.Model
+	QuickReplyMode            string
+	QuickReplySelectionActive bool
+	QuickReplySelectionStart  int
+	QuickReplySelectionEnd    int
+	QuickReplySuggestions     []QuickReplySuggestion
+	QuickReplySelected        int
+	TerminalFocus             bool
+	SupportsTerminalFocus     bool
+	ProjectPicker             list.Model
+	LayoutPicker              list.Model
+	PaneSwapPicker            list.Model
+	CommandPalette            list.Model
+	SettingsMenu              list.Model
+	PerformanceMenu           list.Model
+	DebugMenu                 list.Model
+	AuthDialog                AuthDialog
+	PekyDialogTitle           string
+	PekyDialogFooter          string
+	PekyDialogViewport        viewport.Model
+	PekyDialogIsError         bool
+	PekyPromptLine            string
+	ConfirmKill               ConfirmKill
+	ConfirmQuit               ConfirmQuit
+	ConfirmCloseProject       ConfirmCloseProject
+	ConfirmCloseAllProjects   ConfirmCloseAllProjects
+	ConfirmClosePane          ConfirmClosePane
+	Rename                    Rename
+	ProjectRootInput          textinput.Model
+	Keys                      KeyHints
+	Toast                     string
+	PreviewCompact            bool
+	FreezePreviewContent      bool
+	DashboardPreviewLines     int
+	PaneTopbarEnabled         bool
+	PaneTopbarSpinner         string
+	PaneView                  func(id string, width, height int, showCursor bool) string
+	DialogHelp                DialogHelp
+	Resize                    ResizeOverlay
+	ContextMenu               ContextMenu
+	ServerStatus              string
 }
 
 type Project struct {
@@ -123,18 +129,28 @@ type Session struct {
 }
 
 type Pane struct {
-	ID          string
-	Index       string
-	Title       string
-	Command     string
-	Active      bool
-	Left        int
-	Top         int
-	Width       int
-	Height      int
-	Preview     []string
-	Status      int
-	SummaryLine string
+	ID           string
+	Index        string
+	Title        string
+	Command      string
+	Cwd          string
+	GitRoot      string
+	GitBranch    string
+	GitDirty     bool
+	GitWorktree  bool
+	Tool         string
+	AgentTool    string
+	AgentState   string // running | idle
+	AgentUpdated time.Time
+	AgentUnread  bool
+	Active       bool
+	Left         int
+	Top          int
+	Width        int
+	Height       int
+	Preview      []string
+	Status       int
+	SummaryLine  string
 }
 
 type DashboardColumn struct {

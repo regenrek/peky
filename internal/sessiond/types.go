@@ -97,12 +97,22 @@ type SnapshotRequest struct {
 	PreviewLines int
 }
 
+// PaneGitMeta describes git metadata for a pane's current working directory.
+type PaneGitMeta struct {
+	Root      string
+	Branch    string
+	Dirty     bool
+	Worktree  bool
+	UpdatedAt time.Time
+}
+
 // SnapshotResponse returns dashboard snapshots.
 type SnapshotResponse struct {
 	Version        uint64
 	Sessions       []native.SessionSnapshot
 	FocusedSession string
 	FocusedPaneID  string
+	PaneGit        map[string]PaneGitMeta
 }
 
 // StartSessionRequest starts a new session.

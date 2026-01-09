@@ -350,6 +350,8 @@ func (m Model) viewPreview(width, height int) string {
 		terminalFocus: m.TerminalFocus,
 		guides:        m.Resize.Guides,
 		paneView:      m.PaneView,
+		paneTopbar:    m.PaneTopbarEnabled,
+		topbarSpinner: m.PaneTopbarSpinner,
 	})
 	lines = append(lines, grid)
 
@@ -426,78 +428,6 @@ func (m Model) viewServerStatus() string {
 		}
 		return theme.ListDimmed.Render(strings.Repeat(" ", pad)) + word
 	}
-}
-
-func (m Model) viewQuickReply(width int) string {
-	if width <= 0 {
-		return ""
-	}
-	barWidth := width
-	contentWidth := barWidth - 4
-	if contentWidth < 10 {
-		contentWidth = 10
-	}
-
-	base := lipgloss.NewStyle().
-		Foreground(theme.TextPrimary).
-		Background(theme.QuickReplyBg)
-	accent := base.Foreground(theme.Accent).Render("▌ ")
-	label := ""
-	labelWidth := 0
-	if mode := strings.TrimSpace(m.QuickReplyMode); mode != "" {
-		label = base.Foreground(theme.Accent).Bold(true).Render(mode) + base.Render(" ")
-		labelWidth = lipgloss.Width(label)
-	}
-	inputWidth := contentWidth - lipgloss.Width(accent) - labelWidth
-	if inputWidth < 10 {
-		inputWidth = 10
-	}
-	if inputWidth > contentWidth {
-		inputWidth = contentWidth
-	}
-	m.QuickReplyInput.Width = inputWidth
-
-	line := accent + label + m.QuickReplyInput.View()
-	line = ansi.Truncate(line, contentWidth, "")
-	visible := lipgloss.Width(line)
-	if visible < contentWidth {
-		line += base.Render(strings.Repeat(" ", contentWidth-visible))
-	}
-
-	pad := base.Render(strings.Repeat(" ", 2))
-	blank := base.Render(strings.Repeat(" ", contentWidth))
-	lines := []string{
-		pad + blank + pad,
-		pad + line + pad,
-	}
-	lines = append(lines, pad+blank+pad)
-	return strings.Join(lines, "\n")
-}
-
-func (m Model) overlayQuickReplyMenu(base string, width, height, headerHeight, headerGap, bodyHeight int) string {
-	if len(m.QuickReplySuggestions) == 0 || width <= 0 || height <= 0 {
-		return base
-	}
-	menuX := 2
-	menuWidth := width - 4
-	if menuWidth < 10 {
-		menuWidth = width
-		menuX = 0
-	}
-	availableHeight := headerHeight + headerGap + bodyHeight
-	menu := renderQuickReplyMenu(m.QuickReplySuggestions, m.QuickReplySelected, menuWidth, availableHeight)
-	if strings.TrimSpace(menu) == "" {
-		return base
-	}
-	menuHeight := lipgloss.Height(menu)
-	if menuHeight <= 0 {
-		return base
-	}
-	menuY := availableHeight - menuHeight
-	if menuY < 0 {
-		menuY = 0
-	}
-	return overlayAt(base, menu, width, height, menuX, menuY)
 }
 
 func (m Model) overlayResizeOverlay(base string, width, height, headerHeight, headerGap, bodyHeight int) string {
@@ -653,32 +583,6 @@ func contextMenuWidth(items []ContextMenuItem) int {
 		width = 10
 	}
 	return width
-}
-
-func (m Model) viewPekyPromptLine(width int) string {
-	text := strings.TrimSpace(m.PekyPromptLine)
-	if text == "" || width <= 0 {
-		return ""
-	}
-	barWidth := width
-	contentWidth := barWidth - 4
-	if contentWidth < 10 {
-		contentWidth = 10
-	}
-	base := lipgloss.NewStyle().
-		Foreground(theme.TextPrimary).
-		Background(theme.QuickReplyTag)
-	label := base.Foreground(theme.Accent).Bold(true).Render("peky ")
-	flat := strings.ReplaceAll(text, "\n", " ")
-	flat = strings.Join(strings.Fields(flat), " ")
-	line := label + base.Render(flat)
-	line = ansi.Truncate(line, contentWidth, "")
-	visible := lipgloss.Width(line)
-	if visible < contentWidth {
-		line += base.Render(strings.Repeat(" ", contentWidth-visible))
-	}
-	pad := base.Render(strings.Repeat(" ", 2))
-	return pad + line + pad
 }
 
 func renderQuickReplyMenu(suggestions []QuickReplySuggestion, selectedIdx, width, maxHeight int) string {
