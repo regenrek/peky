@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -56,10 +57,14 @@ func runMenuWith(ctx root.CommandContext, autoStart *app.AutoStartSpec, deps men
 		newProgram = newProgramFn
 	}
 
-	ctxTimeout, cancel := context.WithTimeout(ctx.Context, 10*time.Second)
+	connectTimeout := 20 * time.Second
+	ctxTimeout, cancel := context.WithTimeout(ctx.Context, connectTimeout)
 	defer cancel()
 	client, err := connect(ctxTimeout, ctx.Deps.Version)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return fmt.Errorf("failed to connect to daemon within %s (try `%s daemon` to run it in the foreground): %w", connectTimeout, ctx.Deps.AppName, err)
+		}
 		return fmt.Errorf("failed to connect to daemon: %w", err)
 	}
 	defer func() { _ = client.Close() }()

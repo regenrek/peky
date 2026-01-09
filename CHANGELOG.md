@@ -19,6 +19,19 @@ This format is based on Keep a Changelog.
 - Pane rendering during resize drag (cached frames render instead of blank).
 - CLI parsing for positional args under `urfave/cli/v3` (no more args mis-parsing).
 
+## 0.0.24 - 2026-01-09
+
+### Added
+- Standalone `homebrew-tap` workflow for re-running tap updates on an existing tag.
+- Homebrew formula now includes a `brew services` definition and caveats.
+
+### Changed
+- Homebrew tap publish now updates the formula via GitHub Contents API (no git push).
+
+### Fixed
+- Avoid `peakypanes: failed to connect to daemon: context deadline exceeded` by starting daemon accept loop before restore load.
+- Dashboard connect timeout increased with a clearer foreground-daemon hint.
+
 ## 0.0.22 - 2026-01-06
 
 ### Added

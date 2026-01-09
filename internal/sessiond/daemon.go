@@ -203,20 +203,19 @@ func (d *Daemon) Start() error {
 		_ = os.Remove(d.pidPath)
 		return err
 	}
+	d.wg.Add(2)
+	go d.acceptLoop()
+	go d.eventLoop()
+
 	if d.restore != nil {
 		if err := d.restore.Load(d.ctx); err != nil {
 			slog.Warn("sessiond: restore load failed", slog.Any("err", err))
 		}
-	}
-	d.startProfiler()
-
-	d.wg.Add(2)
-	go d.acceptLoop()
-	go d.eventLoop()
-	if d.restore != nil {
 		d.wg.Add(1)
 		go d.restoreLoop()
 	}
+
+	d.startProfiler()
 
 	slog.Info("sessiond: daemon listening", slog.String("socket", d.socketPath))
 	return nil

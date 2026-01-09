@@ -8,7 +8,7 @@ Usage: scripts/update-homebrew-tap vX.Y.Z
 Updates the Homebrew tap formula in regenrek/homebrew-tap for the given tag by:
 - computing the sha256 of the source archive for that tag
 - writing Formula/peakypanes.rb
-- committing and pushing to the tap repo
+- committing via the GitHub Contents API
 
 Required environment variables:
 - TAP_PUSH_TOKEN: GitHub token with write access to regenrek/homebrew-tap
@@ -64,7 +64,15 @@ tarball_url="https://github.com/regenrek/peakypanes/archive/refs/tags/${tag}.tar
 if ! command -v curl >/dev/null 2>&1; then die "curl not found"; fi
 if ! command -v shasum >/dev/null 2>&1; then die "shasum not found"; fi
 if ! command -v base64 >/dev/null 2>&1; then die "base64 not found"; fi
-if ! command -v git >/dev/null 2>&1; then die "git not found"; fi
+if ! command -v gh >/dev/null 2>&1; then die "gh not found"; fi
+
+base64_decode() {
+  if base64 --help 2>/dev/null | grep -q -- '--decode'; then
+    base64 --decode
+    return
+  fi
+  base64 -D
+}
 
 sha256=$(
   curl -fsSL --max-time 120 "$tarball_url" \
@@ -79,12 +87,9 @@ tmp=$(mktemp -d)
 cleanup() { rm -rf "$tmp"; }
 trap cleanup EXIT
 
-auth_header_value=$(printf "x-access-token:%s" "$TAP_PUSH_TOKEN" | base64 | tr -d '\n')
+export GH_TOKEN="$TAP_PUSH_TOKEN"
 
-git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header_value}" \
-  clone --quiet --branch "$tap_branch" --depth 1 "https://github.com/${tap_repo}.git" "$tmp/tap"
-
-formula_path="$tmp/tap/Formula/peakypanes.rb"
+formula_path="$tmp/peakypanes.rb"
 mkdir -p "$(dirname "$formula_path")"
 
 cat >"$formula_path" <<EOF
@@ -101,6 +106,26 @@ class Peakypanes < Formula
     system "go", "build", *std_go_args(ldflags: ldflags, output: bin/"peakypanes"), "./cmd/peakypanes"
   end
 
+  service do
+    run [opt_bin/"peakypanes", "daemon"]
+    keep_alive true
+    working_dir HOMEBREW_PREFIX
+    log_path var/"log/peakypanes.log"
+    error_log_path var/"log/peakypanes.log"
+  end
+
+  def caveats
+    <<~EOS
+      Peakypanes runs a background daemon for managing sessions.
+
+      Start the daemon:
+        brew services start peakypanes
+
+      Then run:
+        peakypanes
+    EOS
+  end
+
   test do
     system "#{bin}/peky", "--version"
     system "#{bin}/peakypanes", "--version"
@@ -113,17 +138,40 @@ if [[ $desc_line =~ \"\.$ ]]; then
   die "formula desc ends with a period"
 fi
 
-if git -C "$tmp/tap" diff --quiet; then
+tap_path="Formula/peakypanes.rb"
+remote_sha=""
+remote_content=""
+if remote_sha=$(gh api -H "Accept: application/vnd.github+json" "repos/${tap_repo}/contents/${tap_path}?ref=${tap_branch}" --jq '.sha' 2>/dev/null); then
+  remote_content_b64=$(gh api -H "Accept: application/vnd.github+json" "repos/${tap_repo}/contents/${tap_path}?ref=${tap_branch}" --jq '.content' 2>/dev/null || true)
+  if [[ -n ${remote_content_b64:-} ]]; then
+    remote_content=$(printf '%s' "$remote_content_b64" | tr -d '\n' | base64_decode)
+  fi
+fi
+
+desired=$(cat "$formula_path")
+if [[ -n $remote_content && $remote_content == "$desired" ]]; then
   echo "update-homebrew-tap: no changes needed (${tag})"
   exit 0
 fi
 
-git -C "$tmp/tap" add "Formula/peakypanes.rb"
+content_b64=$(base64 <"$formula_path" | tr -d '\n')
 
-git -C "$tmp/tap" -c user.name="$tap_git_author_name" -c user.email="$tap_git_author_email" \
-  commit -m "peakypanes ${tag}" >/dev/null
+put_args=(
+  -H "Accept: application/vnd.github+json"
+  -f "message=peakypanes ${tag}"
+  -f "content=${content_b64}"
+  -f "branch=${tap_branch}"
+  -f "committer[name]=${tap_git_author_name}"
+  -f "committer[email]=${tap_git_author_email}"
+  -f "author[name]=${tap_git_author_name}"
+  -f "author[email]=${tap_git_author_email}"
+)
+if [[ -n $remote_sha ]]; then
+  put_args+=(-f "sha=${remote_sha}")
+fi
 
-git -C "$tmp/tap" -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header_value}" \
-  push --quiet origin "HEAD:${tap_branch}"
+if ! gh api --method PUT "repos/${tap_repo}/contents/${tap_path}" "${put_args[@]}" >/dev/null; then
+  die "failed to update ${tap_repo}@${tap_branch} (${tag}); token likely missing Contents write permission for the tap repo"
+fi
 
 echo "update-homebrew-tap: updated ${tap_repo}@${tap_branch} (${tag})"

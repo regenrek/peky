@@ -66,6 +66,8 @@ npx -y peakypanes
 ```bash
 brew tap regenrek/tap
 brew install regenrek/tap/peakypanes
+brew services start peakypanes
+peakypanes
 ```
 
 Using Go
