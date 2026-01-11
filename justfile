@@ -3,6 +3,9 @@ set shell := ["bash", "-cu"]
 init:
   scripts/reinit.sh --all
 
+build:
+  @bash -cu 'set -euo pipefail; go install ./cmd/peakypanes ./cmd/peky'
+
 dev:
   @bash -cu 'set -euo pipefail; gobin="${GOBIN:-$(go env GOPATH)/bin}"; peak="$gobin/peakypanes"; \
     uid="${UID:-$(id -u)}"; devroot="/tmp/peakypanes-dev-$uid"; \
