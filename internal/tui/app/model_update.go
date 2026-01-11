@@ -113,6 +113,9 @@ var updateHandlers = map[reflect.Type]updateHandler{
 	reflect.TypeOf(mouseSendPumpResultMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleMouseSendPumpResult(msg.(mouseSendPumpResultMsg))
 	},
+	reflect.TypeOf(mouseSendWheelFlushMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleMouseSendWheelFlush(msg.(mouseSendWheelFlushMsg))
+	},
 	reflect.TypeOf(resizeDragFlushMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleResizeDragFlush(msg.(resizeDragFlushMsg))
 	},

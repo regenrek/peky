@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -16,6 +17,9 @@ const (
 	// momentum collapses to a small number of RPCs.
 	mouseSendWheelBurstMax  = 256
 	mouseSendMotionDropHint = "Mouse events dropped (scroll too fast)"
+
+	mouseSendWheelFlushDelay    = 16 * time.Millisecond
+	mouseSendWheelIdleThreshold = 100 * time.Millisecond
 )
 
 type queuedMouseEvent struct {
@@ -30,6 +34,10 @@ type mouseSendPumpResultMsg struct {
 	err  error
 }
 
+type mouseSendWheelFlushMsg struct {
+	seq uint64
+}
+
 func (m *Model) enqueueMouseSend(paneID string, payload sessiond.MouseEventPayload) tea.Cmd {
 	if m == nil || m.client == nil {
 		return nil
@@ -42,6 +50,12 @@ func (m *Model) enqueueMouseSend(paneID string, payload sessiond.MouseEventPaylo
 	m.enqueueMouseEvent(paneID, payload)
 	if m.mouseSendInFlight {
 		return nil
+	}
+	if len(m.mouseSendQueue) == 0 {
+		return nil
+	}
+	if m.mouseSendQueue[0].payload.Wheel {
+		return m.maybeStartWheelSend()
 	}
 	return m.startMouseSendPump()
 }
@@ -163,6 +177,30 @@ func (m *Model) startMouseSendPump() tea.Cmd {
 	}
 }
 
+func (m *Model) maybeStartWheelSend() tea.Cmd {
+	if m == nil || m.client == nil {
+		return nil
+	}
+	now := time.Now()
+	idle := m.mouseSendWheelLastAt.IsZero() || now.Sub(m.mouseSendWheelLastAt) >= mouseSendWheelIdleThreshold
+	m.mouseSendWheelLastAt = now
+
+	if idle {
+		m.mouseSendWheelFlushScheduled = false
+		return m.startMouseSendPump()
+	}
+
+	if m.mouseSendWheelFlushScheduled {
+		return nil
+	}
+	m.mouseSendWheelFlushScheduled = true
+	m.mouseSendWheelFlushSeq++
+	seq := m.mouseSendWheelFlushSeq
+	return tea.Tick(mouseSendWheelFlushDelay, func(time.Time) tea.Msg {
+		return mouseSendWheelFlushMsg{seq: seq}
+	})
+}
+
 func (m *Model) handleMouseSendPumpResult(msg mouseSendPumpResultMsg) tea.Cmd {
 	if m == nil {
 		return nil
@@ -191,6 +229,20 @@ func (m *Model) handleMouseSendPumpResult(msg mouseSendPumpResultMsg) tea.Cmd {
 	if msg.err != nil {
 		m.mouseSendQueue = nil
 		m.setToast(ErrorMsg{Err: msg.err, Context: "send mouse"}.Error(), toastError)
+		return nil
+	}
+	return m.startMouseSendPump()
+}
+
+func (m *Model) handleMouseSendWheelFlush(msg mouseSendWheelFlushMsg) tea.Cmd {
+	if m == nil {
+		return nil
+	}
+	if msg.seq != m.mouseSendWheelFlushSeq {
+		return nil
+	}
+	m.mouseSendWheelFlushScheduled = false
+	if m.mouseSendInFlight {
 		return nil
 	}
 	return m.startMouseSendPump()

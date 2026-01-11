@@ -169,10 +169,15 @@ type Model struct {
 
 	terminalFocus bool
 	// terminalMouseDrag tracks an in-progress drag selection in terminal focus.
-	terminalMouseDrag bool
-	mouseSendQueue    []queuedMouseEvent
-	mouseSendInFlight bool
-	mouseSendSeq      uint64
+	terminalMouseDrag    bool
+	mouseSendQueue       []queuedMouseEvent
+	mouseSendInFlight    bool
+	mouseSendSeq         uint64
+	mouseSendWheelLastAt time.Time
+	// mouseSendWheelFlushScheduled delays wheel sends so fast scroll collapses
+	// into fewer RPCs (better responsiveness under trackpad momentum).
+	mouseSendWheelFlushScheduled bool
+	mouseSendWheelFlushSeq       uint64
 
 	offlineScroll         map[string]int
 	offlineScrollViewport map[string]int
