@@ -107,9 +107,12 @@ func (r *repairedTUIInput) Read(p []byte) (int, error) {
 		if r.readErr != nil {
 			if len(r.pending) > 0 {
 				// Avoid flushing broken mouse prefixes on shutdown/errors.
+				looksLikeRecentMouseFragment := looksLikeMousePrefix(r.pending) &&
+					!r.lastMouseSeqAt.IsZero() &&
+					time.Since(r.lastMouseSeqAt) < maxMouseFragmentAge
 				if !isIncompleteEscapeSequence(r.pending) &&
 					!isIncompleteSGRMousePrefix(r.pending) &&
-					!(looksLikeMousePrefix(r.pending) && !r.lastMouseSeqAt.IsZero() && time.Since(r.lastMouseSeqAt) < maxMouseFragmentAge) {
+					!looksLikeRecentMouseFragment {
 					r.out = append(r.out, r.pending...)
 				}
 				r.pending = nil
@@ -268,7 +271,9 @@ func (r *repairedTUIInput) processPending() {
 			end, needMore, ok, kind := scanSGRMouseFragment(b, i)
 			if needMore {
 				if len(b)-i > maxMouseSeqLen {
-					needMore = false
+					out = append(out, b[i])
+					i++
+					continue
 				} else {
 					break
 				}
