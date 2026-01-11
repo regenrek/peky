@@ -179,6 +179,12 @@ type Model struct {
 	mouseSendWheelFlushScheduled bool
 	mouseSendWheelFlushSeq       uint64
 
+	terminalScrollQueue            []queuedTerminalScroll
+	terminalScrollInFlight         bool
+	terminalScrollSeq              uint64
+	terminalScrollWheelFlushSeq    uint64
+	terminalScrollWheelFlushActive bool
+
 	offlineScroll         map[string]int
 	offlineScrollViewport map[string]int
 	offlineScrollActive   bool
@@ -188,6 +194,7 @@ type Model struct {
 
 	paneViewProfile   colorprofile.Profile
 	paneViews         map[paneViewKey]paneViewEntry
+	paneHasMouse      map[string]bool
 	paneMouseMotion   map[string]bool
 	paneInputDisabled map[string]struct{}
 

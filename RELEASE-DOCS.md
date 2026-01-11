@@ -49,6 +49,14 @@ git push origin main --tags
 - Tag push triggers the `release` workflow, which runs GoReleaser to create the GitHub release + upload assets, then updates the Homebrew tap formula.
 - Publishing the GitHub Release triggers the `npm Release` workflow, which builds npm packages from the GitHub release assets and publishes them using OIDC.
 
+Monitor runs (recommended):
+
+```bash
+gh run list -w release -L 3
+gh run list -w "npm Release" -L 3
+gh run view --log --web
+```
+
 5) Verify installs (recommended):
 
 ```bash

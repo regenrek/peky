@@ -116,6 +116,12 @@ var updateHandlers = map[reflect.Type]updateHandler{
 	reflect.TypeOf(mouseSendWheelFlushMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleMouseSendWheelFlush(msg.(mouseSendWheelFlushMsg))
 	},
+	reflect.TypeOf(terminalScrollPumpResultMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleTerminalScrollPumpResult(msg.(terminalScrollPumpResultMsg))
+	},
+	reflect.TypeOf(terminalScrollWheelFlushMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleTerminalScrollWheelFlush(msg.(terminalScrollWheelFlushMsg))
+	},
 	reflect.TypeOf(resizeDragFlushMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleResizeDragFlush(msg.(resizeDragFlushMsg))
 	},
@@ -591,6 +597,9 @@ func (m *Model) ensurePaneViewMaps() {
 	if m.paneViews == nil {
 		m.paneViews = make(map[paneViewKey]paneViewEntry)
 	}
+	if m.paneHasMouse == nil {
+		m.paneHasMouse = make(map[string]bool)
+	}
 	if m.paneMouseMotion == nil {
 		m.paneMouseMotion = make(map[string]bool)
 	}
@@ -614,6 +623,7 @@ func (m *Model) applyPaneView(view sessiond.PaneViewResponse) {
 		}
 	}
 	if view.PaneID != "" {
+		m.paneHasMouse[view.PaneID] = view.HasMouse
 		m.paneMouseMotion[view.PaneID] = view.AllowMotion
 	}
 	if perfDebugEnabled() && view.PaneID != "" && !view.Frame.Empty() {

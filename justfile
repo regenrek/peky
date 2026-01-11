@@ -106,6 +106,16 @@ dev-fresh-tracing: build
 dev-tmux-tracing: build
   @bash -cu 'set -euo pipefail; scripts/dev-tmux --tracing'
 
+mark-scroll-start:
+  @bash -cu 'set -euo pipefail; uid="${UID:-$(id -u)}"; log="/tmp/peakypanes-dev-$uid/peakypanes-dev.log"; \
+    python3 -c '\''import datetime; print("MARK scroll_start ts="+datetime.datetime.now().astimezone().isoformat(timespec="seconds"))'\'' \
+    | tee -a "$log" >/dev/null'
+
+mark-scroll-stop:
+  @bash -cu 'set -euo pipefail; uid="${UID:-$(id -u)}"; log="/tmp/peakypanes-dev-$uid/peakypanes-dev.log"; \
+    python3 -c '\''import datetime; print("MARK scroll_stop ts="+datetime.datetime.now().astimezone().isoformat(timespec="seconds"))'\'' \
+    | tee -a "$log" >/dev/null'
+
 dev-fresh-daemon-restart:
   @bash -cu 'set -euo pipefail; gobin="${GOBIN:-$(go env GOPATH)/bin}"; peky="$gobin/peky"; \
     uid="${UID:-$(id -u)}"; devroot="/tmp/peakypanes-dev-$uid"; \

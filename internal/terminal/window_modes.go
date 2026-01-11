@@ -137,9 +137,12 @@ func (w *Window) EnterScrollback() {
 		return
 	}
 	w.stateMu.Lock()
+	changed := !w.ScrollbackMode
 	w.ScrollbackMode = true
 	w.stateMu.Unlock()
-	w.markDirty()
+	if changed {
+		w.markDirty()
+	}
 }
 
 func (w *Window) ExitScrollback() {
@@ -147,12 +150,17 @@ func (w *Window) ExitScrollback() {
 		return
 	}
 	w.stateMu.Lock()
+	oldOffset := w.ScrollbackOffset
+	oldMode := w.ScrollbackMode
 	w.ScrollbackOffset = 0
 	if w.CopyMode == nil || !w.CopyMode.Active {
 		w.ScrollbackMode = false
 	}
+	changed := oldOffset != w.ScrollbackOffset || oldMode != w.ScrollbackMode
 	w.stateMu.Unlock()
-	w.markDirty()
+	if changed {
+		w.markDirty()
+	}
 }
 
 func (w *Window) ScrollUp(lines int) {
@@ -165,10 +173,16 @@ func (w *Window) ScrollUp(lines int) {
 	}
 
 	w.stateMu.Lock()
+	oldOffset := w.ScrollbackOffset
+	oldMode := w.ScrollbackMode
+	newOffset := clampInt(w.ScrollbackOffset+lines, 0, sbLen)
 	w.ScrollbackMode = true
-	w.ScrollbackOffset = clampInt(w.ScrollbackOffset+lines, 0, sbLen)
+	w.ScrollbackOffset = newOffset
+	changed := oldOffset != w.ScrollbackOffset || oldMode != w.ScrollbackMode
 	w.stateMu.Unlock()
-	w.markDirty()
+	if changed {
+		w.markDirty()
+	}
 }
 
 func (w *Window) ScrollDown(lines int) {
@@ -177,15 +191,23 @@ func (w *Window) ScrollDown(lines int) {
 	}
 
 	w.stateMu.Lock()
+	oldOffset := w.ScrollbackOffset
+	oldMode := w.ScrollbackMode
 	w.ScrollbackOffset -= lines
 	if w.ScrollbackOffset < 0 {
 		w.ScrollbackOffset = 0
 	}
+	if w.ScrollbackOffset > 0 {
+		w.ScrollbackMode = true
+	}
 	if w.ScrollbackOffset == 0 && (w.CopyMode == nil || !w.CopyMode.Active) {
 		w.ScrollbackMode = false // auto-exit
 	}
+	changed := oldOffset != w.ScrollbackOffset || oldMode != w.ScrollbackMode
 	w.stateMu.Unlock()
-	w.markDirty()
+	if changed {
+		w.markDirty()
+	}
 }
 
 func (w *Window) PageUp() {
@@ -210,10 +232,15 @@ func (w *Window) ScrollToTop() {
 	}
 	sbLen := w.ScrollbackLen()
 	w.stateMu.Lock()
+	oldOffset := w.ScrollbackOffset
+	oldMode := w.ScrollbackMode
 	w.ScrollbackMode = true
 	w.ScrollbackOffset = sbLen
+	changed := oldOffset != w.ScrollbackOffset || oldMode != w.ScrollbackMode
 	w.stateMu.Unlock()
-	w.markDirty()
+	if changed {
+		w.markDirty()
+	}
 }
 
 func (w *Window) ScrollToBottom() {

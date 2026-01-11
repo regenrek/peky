@@ -162,7 +162,61 @@ func (m *Model) forwardMouseEvent(hit mouse.PaneHit, msg tea.MouseMsg) tea.Cmd {
 	if !ok {
 		return nil
 	}
+	if payload.Wheel {
+		return m.forwardWheelEvent(paneID, payload, msg)
+	}
 	return m.enqueueMouseSend(paneID, payload)
+}
+
+func (m *Model) forwardWheelEvent(paneID string, payload sessiond.MouseEventPayload, msg tea.MouseMsg) tea.Cmd {
+	if m == nil {
+		return nil
+	}
+	action := terminalActionForWheel(msg.Button)
+	if action == sessiond.TerminalActionUnknown {
+		return nil
+	}
+	if shouldSendWheelAsMouse(m, paneID, payload.Route) {
+		return m.enqueueMouseSend(paneID, payload)
+	}
+	_, rows := m.paneSizeForFallback(paneID)
+	step := terminalScrollWheelStep(rows, msg.Shift, msg.Ctrl)
+	return m.enqueueTerminalScroll(paneID, action, step)
+}
+
+func terminalActionForWheel(button tea.MouseButton) sessiond.TerminalAction {
+	switch button {
+	case tea.MouseButtonWheelUp:
+		return sessiond.TerminalScrollUp
+	case tea.MouseButtonWheelDown:
+		return sessiond.TerminalScrollDown
+	default:
+		return sessiond.TerminalActionUnknown
+	}
+}
+
+func shouldSendWheelAsMouse(m *Model, paneID string, route sessiond.MouseRoute) bool {
+	switch route {
+	case sessiond.MouseRouteHostSelection:
+		return false
+	case sessiond.MouseRouteApp:
+		return true
+	default:
+		if m == nil || m.paneHasMouse == nil {
+			return false
+		}
+		return m.paneHasMouse[paneID]
+	}
+}
+
+func terminalScrollWheelStep(rows int, shift, ctrl bool) int {
+	if ctrl {
+		return maxInt(1, rows-1)
+	}
+	if shift {
+		return 1
+	}
+	return 3
 }
 
 func (m *Model) mouseForwardPayload(hit mouse.PaneHit, msg tea.MouseMsg) (string, sessiond.MouseEventPayload, bool) {
