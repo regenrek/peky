@@ -39,4 +39,3 @@ func TestRuneIndexAtQuickReplyXWideRunes(t *testing.T) {
 		})
 	}
 }
-
