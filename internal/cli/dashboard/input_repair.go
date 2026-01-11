@@ -14,6 +14,7 @@ const (
 	maxPrefixWait        = 150 * time.Millisecond
 	maxMouseFragmentAge  = 200 * time.Millisecond
 	singlePrefixWait     = 50 * time.Millisecond
+	mousePrefixWait      = 5 * time.Millisecond
 	maxOutputBufferBytes = 32 * 1024
 )
 
@@ -61,8 +62,14 @@ func (r *repairedTUIInput) Read(p []byte) (int, error) {
 				readyFn = inputReady
 			}
 			wait := maxPrefixWait
-			if len(r.pending) == 1 {
+			if len(r.pending) == 1 && r.pending[0] == escByte {
 				wait = singlePrefixWait
+			}
+			if looksLikeMousePrefix(r.pending) {
+				// Mouse bursts (and fragments) must be low-latency; long waits here
+				// feel like "parallax" scrolling because Bubble Tea receives wheel
+				// events late.
+				wait = mousePrefixWait
 			}
 			ready, err := readyFn(r.f.Fd(), wait)
 			if err != nil || !ready {
@@ -71,20 +78,20 @@ func (r *repairedTUIInput) Read(p []byte) (int, error) {
 				// If we time out while holding a likely-broken mouse prefix, drop it.
 				// This prevents junk like `[[`, `<64;..`, `5;70;19M` leaking into text
 				// inputs during heavy mouse traffic.
-					switch {
-					case len(pending) == 1 && pending[0] == escByte:
-						r.out = append(r.out, escByte)
-					case isIncompleteEscapeSequence(pending):
-						// Never flush partial ESC-prefixed sequences as text. If they reach
-						// r.out, safeReadLen() can split them into short reads (ESC then '['),
-						// and Bubble Tea will treat '[' as literal input.
-						r.pending = nil
-						continue
-					case isIncompleteSGRMousePrefix(pending):
-						// Drop and keep reading; never flush incomplete mouse prefixes as text.
-						r.pending = nil
-						continue
-					case !r.lastMouseSeqAt.IsZero() && time.Since(r.lastMouseSeqAt) < maxMouseFragmentAge && looksLikeMousePrefix(pending):
+				switch {
+				case len(pending) == 1 && pending[0] == escByte:
+					r.out = append(r.out, escByte)
+				case isIncompleteEscapeSequence(pending):
+					// Never flush partial ESC-prefixed sequences as text. If they reach
+					// r.out, safeReadLen() can split them into short reads (ESC then '['),
+					// and Bubble Tea will treat '[' as literal input.
+					r.pending = nil
+					continue
+				case isIncompleteSGRMousePrefix(pending):
+					// Drop and keep reading; never flush incomplete mouse prefixes as text.
+					r.pending = nil
+					continue
+				case !r.lastMouseSeqAt.IsZero() && time.Since(r.lastMouseSeqAt) < maxMouseFragmentAge && looksLikeMousePrefix(pending):
 					// Drop and keep reading; don't leak stray '[' during mouse bursts.
 					r.pending = nil
 					continue
@@ -97,16 +104,16 @@ func (r *repairedTUIInput) Read(p []byte) (int, error) {
 			}
 		}
 
-			if r.readErr != nil {
-				if len(r.pending) > 0 {
-					// Avoid flushing broken mouse prefixes on shutdown/errors.
-					if !isIncompleteEscapeSequence(r.pending) &&
-						!isIncompleteSGRMousePrefix(r.pending) &&
-						!(looksLikeMousePrefix(r.pending) && !r.lastMouseSeqAt.IsZero() && time.Since(r.lastMouseSeqAt) < maxMouseFragmentAge) {
-						r.out = append(r.out, r.pending...)
-					}
-					r.pending = nil
-					if len(r.out) > 0 {
+		if r.readErr != nil {
+			if len(r.pending) > 0 {
+				// Avoid flushing broken mouse prefixes on shutdown/errors.
+				if !isIncompleteEscapeSequence(r.pending) &&
+					!isIncompleteSGRMousePrefix(r.pending) &&
+					!(looksLikeMousePrefix(r.pending) && !r.lastMouseSeqAt.IsZero() && time.Since(r.lastMouseSeqAt) < maxMouseFragmentAge) {
+					r.out = append(r.out, r.pending...)
+				}
+				r.pending = nil
+				if len(r.out) > 0 {
 					break
 				}
 			}

@@ -328,6 +328,27 @@ func TestRepairedTUIInputDropsDanglingBracketDuringMouseBurst(t *testing.T) {
 	}
 }
 
+func TestRepairedTUIInputUsesShortWaitForMousePrefixes(t *testing.T) {
+	f := &fakeCancelFile{fd: 7, name: "fake", reads: [][]byte{{'['}}}
+	r := newRepairedTUIInput(f)
+
+	var gotWait time.Duration
+	r.readyFn = func(_ uintptr, wait time.Duration) (bool, error) {
+		gotWait = wait
+		return false, nil
+	}
+
+	buf := make([]byte, 256)
+	_, _ = r.Read(buf)
+
+	if gotWait != mousePrefixWait {
+		t.Fatalf("wait=%s want=%s", gotWait, mousePrefixWait)
+	}
+	if gotWait == singlePrefixWait {
+		t.Fatalf("wait=%s unexpectedly used singlePrefixWait", gotWait)
+	}
+}
+
 func TestScanEscapeSequenceHandlesESCBracketBracket(t *testing.T) {
 	b := []byte("\x1b[[1~")
 	end, ok := scanEscapeSequence(b, 0)
