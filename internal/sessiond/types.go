@@ -259,7 +259,10 @@ type MouseEventPayload struct {
 	Alt    bool
 	Ctrl   bool
 	Wheel  bool
-	Route  MouseRoute
+	// WheelCount is the number of wheel ticks represented by this payload.
+	// When Wheel is true, zero means 1.
+	WheelCount int
+	Route      MouseRoute
 }
 
 // SendMouseRequest forwards a mouse event.

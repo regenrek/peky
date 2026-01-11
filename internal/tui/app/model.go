@@ -170,6 +170,9 @@ type Model struct {
 	terminalFocus bool
 	// terminalMouseDrag tracks an in-progress drag selection in terminal focus.
 	terminalMouseDrag bool
+	mouseSendQueue    []queuedMouseEvent
+	mouseSendInFlight bool
+	mouseSendSeq      uint64
 
 	offlineScroll         map[string]int
 	offlineScrollViewport map[string]int

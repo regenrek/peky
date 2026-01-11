@@ -27,6 +27,8 @@ type fakeManager struct {
 	lastInput            []byte
 	inputs               [][]byte
 	lastMouse            uv.MouseEvent
+	mouseCalls           int
+	lastMouseRoute       terminal.MouseRoute
 	lastKilled           string
 	lastRename           [2]string
 	lastSwap             [3]string
@@ -116,7 +118,8 @@ func (m *fakeManager) SendInput(_ context.Context, paneID string, input []byte) 
 }
 func (m *fakeManager) SendMouse(paneID string, event uv.MouseEvent, route terminal.MouseRoute) error {
 	m.lastMouse = event
-	_ = route
+	m.mouseCalls++
+	m.lastMouseRoute = route
 	return nil
 }
 func (m *fakeManager) Window(paneID string) paneWindow {
@@ -493,6 +496,87 @@ func TestHandleSendInputAndMouseSuccess(t *testing.T) {
 	}
 	if manager.lastMouse == nil {
 		t.Fatalf("expected mouse forwarded")
+	}
+}
+
+func TestHandleSendMouseWheelCountSuccess(t *testing.T) {
+	manager := &fakeManager{windowID: "pane-1", window: &fakeTerminalWindow{}}
+	d := &Daemon{manager: manager}
+
+	payload, err := encodePayload(SendMouseRequest{
+		PaneID: "pane-1",
+		Event: MouseEventPayload{
+			X:          1,
+			Y:          2,
+			Button:     4, // wheel up
+			Wheel:      true,
+			WheelCount: 7,
+			Route:      MouseRouteAuto,
+		},
+	})
+	if err != nil {
+		t.Fatalf("encodePayload: %v", err)
+	}
+	if _, err := d.handleSendMouse(payload); err != nil {
+		t.Fatalf("handleSendMouse: %v", err)
+	}
+	if manager.mouseCalls != 7 {
+		t.Fatalf("mouseCalls=%d", manager.mouseCalls)
+	}
+	if _, ok := manager.lastMouse.(uv.MouseWheelEvent); !ok {
+		t.Fatalf("expected wheel event, got %T", manager.lastMouse)
+	}
+}
+
+func TestHandleSendMouseWheelCountDefaultsToOne(t *testing.T) {
+	manager := &fakeManager{windowID: "pane-1", window: &fakeTerminalWindow{}}
+	d := &Daemon{manager: manager}
+
+	payload, err := encodePayload(SendMouseRequest{
+		PaneID: "pane-1",
+		Event: MouseEventPayload{
+			X:          1,
+			Y:          2,
+			Button:     4,
+			Wheel:      true,
+			WheelCount: 0,
+			Route:      MouseRouteAuto,
+		},
+	})
+	if err != nil {
+		t.Fatalf("encodePayload: %v", err)
+	}
+	if _, err := d.handleSendMouse(payload); err != nil {
+		t.Fatalf("handleSendMouse: %v", err)
+	}
+	if manager.mouseCalls != 1 {
+		t.Fatalf("mouseCalls=%d", manager.mouseCalls)
+	}
+}
+
+func TestHandleSendMouseWheelCountClamped(t *testing.T) {
+	manager := &fakeManager{windowID: "pane-1", window: &fakeTerminalWindow{}}
+	d := &Daemon{manager: manager}
+
+	payload, err := encodePayload(SendMouseRequest{
+		PaneID: "pane-1",
+		Event: MouseEventPayload{
+			X:          1,
+			Y:          2,
+			Button:     4,
+			Wheel:      true,
+			WheelCount: 999999,
+			Route:      MouseRouteAuto,
+		},
+	})
+	if err != nil {
+		t.Fatalf("encodePayload: %v", err)
+	}
+	if _, err := d.handleSendMouse(payload); err != nil {
+		t.Fatalf("handleSendMouse: %v", err)
+	}
+	if manager.mouseCalls != sessiondMouseWheelCountMax {
+		t.Fatalf("mouseCalls=%d", manager.mouseCalls)
 	}
 }
 

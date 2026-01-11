@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -163,14 +162,7 @@ func (m *Model) forwardMouseEvent(hit mouse.PaneHit, msg tea.MouseMsg) tea.Cmd {
 	if !ok {
 		return nil
 	}
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), terminalActionTimeout)
-		defer cancel()
-		if err := m.client.SendMouse(ctx, paneID, payload); err != nil {
-			return ErrorMsg{Err: err, Context: "send mouse"}
-		}
-		return nil
-	}
+	return m.enqueueMouseSend(paneID, payload)
 }
 
 func (m *Model) mouseForwardPayload(hit mouse.PaneHit, msg tea.MouseMsg) (string, sessiond.MouseEventPayload, bool) {
@@ -277,6 +269,11 @@ func mousePayloadFromTea(msg tea.MouseMsg, x, y int) (sessiond.MouseEventPayload
 		Alt:    msg.Alt,
 		Ctrl:   msg.Ctrl,
 		Wheel:  isWheelButton(msg.Button),
+		// WheelCount is injected by the send queue when coalescing bursts.
+		WheelCount: 1,
+	}
+	if !payload.Wheel {
+		payload.WheelCount = 0
 	}
 	return payload, true
 }

@@ -456,15 +456,40 @@ func (d *Daemon) handleSendMouse(payload []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := manager.SendMouse(paneID, event, route); err != nil {
-		if d.restore != nil {
-			if _, ok := d.restore.Snapshot(paneID); ok {
-				return nil, nil
+	sendCount := 1
+	if _, isWheel := event.(uv.MouseWheelEvent); isWheel {
+		sendCount = clampWheelCount(mousePayloadWheelCount(req.Event))
+	}
+	for i := 0; i < sendCount; i++ {
+		if err := manager.SendMouse(paneID, event, route); err != nil {
+			if d.restore != nil {
+				if _, ok := d.restore.Snapshot(paneID); ok {
+					return nil, nil
+				}
 			}
+			return nil, err
 		}
-		return nil, err
 	}
 	return nil, nil
+}
+
+const sessiondMouseWheelCountMax = 4096
+
+func mousePayloadWheelCount(payload MouseEventPayload) int {
+	if payload.WheelCount <= 0 {
+		return 1
+	}
+	return payload.WheelCount
+}
+
+func clampWheelCount(count int) int {
+	if count < 1 {
+		return 1
+	}
+	if count > sessiondMouseWheelCountMax {
+		return sessiondMouseWheelCountMax
+	}
+	return count
 }
 
 func (d *Daemon) handleResizePane(payload []byte) ([]byte, error) {
