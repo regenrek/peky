@@ -91,8 +91,14 @@ fi
 tmux new-session -d -s "$session" -c "$root" -n dev
 tmux split-window -t "$session:dev" -h -c "$root"
 
-left_pane="$session:dev.0"
-right_pane="$session:dev.1"
+pane_map="$(tmux list-panes -t "$session:dev" -F '#{pane_index} #{pane_id}' | sort -n)"
+left_pane="$(printf '%s\n' "$pane_map" | awk 'NR==1{print $2}')"
+right_pane="$(printf '%s\n' "$pane_map" | awk 'NR==2{print $2}')"
+if [[ -z "$left_pane" || -z "$right_pane" ]]; then
+  echo "failed to resolve tmux panes" >&2
+  printf '%s\n' "$pane_map" >&2
+  exit 1
+fi
 
 daemon_cmd=$(
   cat <<EOF
@@ -126,4 +132,3 @@ if [[ -n "${TMUX:-}" ]]; then
   exec tmux switch-client -t "$session"
 fi
 exec tmux attach -t "$session"
-
