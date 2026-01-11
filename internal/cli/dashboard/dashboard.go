@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/muesli/cancelreader"
 
 	"github.com/regenrek/peakypanes/internal/cli/root"
 	"github.com/regenrek/peakypanes/internal/sessiond"
@@ -82,11 +83,30 @@ func runMenuWith(ctx root.CommandContext, autoStart *app.AutoStartSpec, deps men
 		model.SetAutoStart(*autoStart)
 	}
 
-	input, cleanup, err := openInput()
+	inputFile, cleanup, err := openInput()
 	if err != nil {
 		return fmt.Errorf("cannot initialize TUI input: %w", err)
 	}
 	defer cleanup()
+
+	var input cancelreader.File = inputFile
+	if shouldTraceTUIInput() {
+		traced, traceCleanup, err := newTracedTUIInput(input)
+		if err != nil {
+			return fmt.Errorf("cannot initialize TUI input trace: %w", err)
+		}
+		defer traceCleanup()
+		input = traced
+	}
+	input = newRepairedTUIInput(input)
+	if shouldTraceTUIInputRepaired() {
+		traced, traceCleanup, err := newTracedTUIInputRepaired(input)
+		if err != nil {
+			return fmt.Errorf("cannot initialize repaired TUI input trace: %w", err)
+		}
+		defer traceCleanup()
+		input = traced
+	}
 
 	motionFilter := app.NewMouseMotionFilter()
 	p := newProgram(
