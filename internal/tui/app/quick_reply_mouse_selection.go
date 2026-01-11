@@ -132,61 +132,86 @@ func (m *Model) handleQuickReplyMouse(msg tea.MouseMsg) (tea.Cmd, bool) {
 
 	switch msg.Action {
 	case tea.MouseActionPress:
-		if msg.Button != tea.MouseButtonLeft {
-			return nil, false
-		}
-		if m.terminalFocus {
-			m.setTerminalFocus(false)
-		}
-		if m.filterActive {
-			m.filterActive = false
-			m.filterInput.Blur()
-		}
-		m.quickReplyInput.Focus()
-
-		idx, ok := m.runeIndexAtQuickReplyX(msg.X)
-		if !ok {
-			return nil, true
-		}
-		m.quickReplyMouseSel.active = true
-		m.quickReplyMouseSel.start = idx
-		m.quickReplyMouseSel.end = idx
-		return nil, true
+		return m.handleQuickReplyMousePress(msg)
 
 	case tea.MouseActionMotion:
-		if !m.quickReplyMouseSel.active {
-			return nil, true
-		}
-		idx, ok := m.runeIndexAtQuickReplyX(msg.X)
-		if !ok {
-			return nil, true
-		}
-		m.quickReplyMouseSel.end = idx
-		return nil, true
+		return m.handleQuickReplyMouseMotion(msg)
 
 	case tea.MouseActionRelease:
-		if !m.quickReplyMouseSel.active {
-			return nil, true
-		}
-		value := m.quickReplyInput.Value()
-		runes := []rune(value)
-		start, end := normalizeRuneRange(m.quickReplyMouseSel.start, m.quickReplyMouseSel.end, len(runes))
-		m.quickReplyMouseSel.clear()
-		if start == end || len(runes) == 0 {
-			return nil, true
-		}
-		text := string(runes[start:end])
-		if strings.TrimSpace(text) == "" {
-			return nil, true
-		}
-		if err := writeClipboard(text); err != nil {
-			m.setToast("Copy failed", toastWarning)
-			return nil, true
-		}
-		m.setToast("Copied selection", toastSuccess)
-		return nil, true
+		return m.handleQuickReplyMouseRelease(msg)
 
 	default:
 		return nil, true
 	}
+}
+
+func (m *Model) handleQuickReplyMousePress(msg tea.MouseMsg) (tea.Cmd, bool) {
+	if m == nil {
+		return nil, false
+	}
+	if msg.Button != tea.MouseButtonLeft {
+		return nil, false
+	}
+
+	if m.terminalFocus {
+		m.setTerminalFocus(false)
+	}
+	if m.filterActive {
+		m.filterActive = false
+		m.filterInput.Blur()
+	}
+	m.quickReplyInput.Focus()
+
+	idx, ok := m.runeIndexAtQuickReplyX(msg.X)
+	if !ok {
+		return nil, true
+	}
+	m.quickReplyMouseSel.active = true
+	m.quickReplyMouseSel.start = idx
+	m.quickReplyMouseSel.end = idx
+	return nil, true
+}
+
+func (m *Model) handleQuickReplyMouseMotion(msg tea.MouseMsg) (tea.Cmd, bool) {
+	if m == nil {
+		return nil, false
+	}
+	if !m.quickReplyMouseSel.active {
+		return nil, true
+	}
+
+	idx, ok := m.runeIndexAtQuickReplyX(msg.X)
+	if !ok {
+		return nil, true
+	}
+	m.quickReplyMouseSel.end = idx
+	return nil, true
+}
+
+func (m *Model) handleQuickReplyMouseRelease(_ tea.MouseMsg) (tea.Cmd, bool) {
+	if m == nil {
+		return nil, false
+	}
+	if !m.quickReplyMouseSel.active {
+		return nil, true
+	}
+
+	value := m.quickReplyInput.Value()
+	runes := []rune(value)
+	start, end := normalizeRuneRange(m.quickReplyMouseSel.start, m.quickReplyMouseSel.end, len(runes))
+	m.quickReplyMouseSel.clear()
+	if start == end || len(runes) == 0 {
+		return nil, true
+	}
+
+	text := string(runes[start:end])
+	if strings.TrimSpace(text) == "" {
+		return nil, true
+	}
+	if err := writeClipboard(text); err != nil {
+		m.setToast("Copy failed", toastWarning)
+		return nil, true
+	}
+	m.setToast("Copied selection", toastSuccess)
+	return nil, true
 }

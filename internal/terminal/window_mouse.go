@@ -57,79 +57,58 @@ func (w *Window) handleMouseWheel(event uv.MouseWheelEvent, route MouseRoute) bo
 		return false
 	}
 
-	// Alt-screen: in host selection routing, prefer host scrollback to avoid
-	// injecting mouse sequences into the application when the user is not
-	// explicitly interacting with it.
 	if w.IsAltScreen() {
-		if route == MouseRouteHostSelection {
-			// If there is scrollback, scroll it; otherwise ignore the wheel.
-			sbLen := w.ScrollbackLen()
-			if sbLen <= 0 {
-				return false
-			}
-			step := w.mouseWheelStep(event.Mod)
-			switch event.Button {
-			case uv.MouseWheelUp:
-				w.ScrollUp(step)
-				return true
-			case uv.MouseWheelDown:
-				w.ScrollDown(step)
-				return true
-			default:
-				return false
-			}
-		}
-		// When routing to the app, keep existing behaviour: only forward if the
-		// application is actively requesting mouse reporting.
-		if !w.HasMouseMode() {
-			// Best-effort: if the app isn't requesting mouse reporting, allow
-			// wheel to scroll host scrollback when available.
-			sbLen := w.ScrollbackLen()
-			if sbLen <= 0 {
-				return false
-			}
-			step := w.mouseWheelStep(event.Mod)
-			switch event.Button {
-			case uv.MouseWheelUp:
-				w.ScrollUp(step)
-				return true
-			case uv.MouseWheelDown:
-				w.ScrollDown(step)
-				return true
-			default:
-				return false
-			}
-		}
-		return w.forwardMouseToTerm(event)
+		return w.handleAltScreenMouseWheel(event, route)
 	}
 
 	// Copy/scrollback views: wheel scrolls host viewport. This keeps selections
 	// anchored and avoids "selection grows while scrolling" behavior.
 	if w.CopyModeActive() || w.ScrollbackModeActive() || w.GetScrollbackOffset() > 0 {
-		sbLen := w.ScrollbackLen()
-		if sbLen <= 0 {
-			return true
-		}
-		step := w.mouseWheelStep(event.Mod)
-		switch event.Button {
-		case uv.MouseWheelUp:
-			w.ScrollUp(step)
-			return true
-		case uv.MouseWheelDown:
-			w.ScrollDown(step)
-			return true
-		default:
-			return false
-		}
+		return w.handleHostWheel(event, true)
 	}
 
-	sbLen := w.ScrollbackLen()
-	if sbLen <= 0 {
+	return w.handleHostWheel(event, false)
+}
+
+func (w *Window) handleAltScreenMouseWheel(event uv.MouseWheelEvent, route MouseRoute) bool {
+	if w == nil {
 		return false
 	}
 
+	// Alt-screen: in host selection routing, prefer host scrollback to avoid
+	// injecting mouse sequences into the application when the user is not
+	// explicitly interacting with it.
+	if route == MouseRouteHostSelection {
+		return w.handleHostWheel(event, false)
+	}
+
+	// When routing to the app, keep existing behaviour: only forward if the
+	// application is actively requesting mouse reporting.
+	if !w.HasMouseMode() {
+		// Best-effort: if the app isn't requesting mouse reporting, allow wheel to
+		// scroll host scrollback when available.
+		return w.handleHostWheel(event, false)
+	}
+	return w.forwardMouseToTerm(event)
+}
+
+func (w *Window) handleHostWheel(event uv.MouseWheelEvent, consumeWhenEmpty bool) bool {
+	if w == nil {
+		return false
+	}
+	sbLen := w.ScrollbackLen()
+	if sbLen <= 0 {
+		return consumeWhenEmpty
+	}
 	step := w.mouseWheelStep(event.Mod)
-	switch event.Button {
+	return w.applyWheelScroll(event.Button, step)
+}
+
+func (w *Window) applyWheelScroll(button uv.MouseButton, step int) bool {
+	if w == nil {
+		return false
+	}
+	switch button {
 	case uv.MouseWheelUp:
 		w.ScrollUp(step)
 		return true

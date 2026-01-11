@@ -94,49 +94,67 @@ func scanEscapeSequence(b []byte, start int) (end int, ok bool) {
 
 	switch b[start+1] {
 	case '[':
-		// Some terminals emit ESC[[... sequences (function keys). Treat that as a
-		// special CSI-like variant so we don't split and leak stray '['.
-		if start+2 < len(b) && b[start+2] == '[' {
-			for i := start + 3; i < len(b); i++ {
-				c := b[i]
-				if c >= 0x40 && c <= 0x7e {
-					return i + 1, true
-				}
-			}
-			return start, false
-		}
-		for i := start + 2; i < len(b); i++ {
-			c := b[i]
-			if c >= 0x40 && c <= 0x7e {
-				return i + 1, true
-			}
-		}
-		return start, false
+		return scanCSISequence(b, start)
 	case 'O':
-		if start+2 >= len(b) {
-			return start, false
-		}
-		return start + 3, true
+		return scanSS3Sequence(b, start)
 	case ']':
-		for i := start + 2; i < len(b); i++ {
-			if b[i] == 0x07 {
-				return i + 1, true
-			}
-			if b[i] == escByte && i+1 < len(b) && b[i+1] == '\\' {
-				return i + 2, true
-			}
-		}
-		return start, false
+		return scanOSCSequence(b, start)
 	case 'P', '_', '^', 'X':
-		for i := start + 2; i < len(b); i++ {
-			if b[i] == escByte && i+1 < len(b) && b[i+1] == '\\' {
-				return i + 2, true
-			}
-		}
-		return start, false
+		return scanStringTerminatedByST(b, start)
 	default:
 		return start + 2, true
 	}
+}
+
+func isFinalEscapeByte(c byte) bool {
+	return c >= 0x40 && c <= 0x7e
+}
+
+func scanCSISequence(b []byte, start int) (end int, ok bool) {
+	if start+2 >= len(b) {
+		return start, false
+	}
+
+	// Some terminals emit ESC[[... (function keys). Treat extra '[' as a CSI-like
+	// variant so we don't split and leak stray '['.
+	k := start + 2
+	for k < len(b) && b[k] == '[' {
+		k++
+	}
+	for i := k; i < len(b); i++ {
+		if isFinalEscapeByte(b[i]) {
+			return i + 1, true
+		}
+	}
+	return start, false
+}
+
+func scanSS3Sequence(b []byte, start int) (end int, ok bool) {
+	if start+2 >= len(b) {
+		return start, false
+	}
+	return start + 3, true
+}
+
+func scanOSCSequence(b []byte, start int) (end int, ok bool) {
+	for i := start + 2; i < len(b); i++ {
+		if b[i] == 0x07 {
+			return i + 1, true
+		}
+		if b[i] == escByte && i+1 < len(b) && b[i+1] == '\\' {
+			return i + 2, true
+		}
+	}
+	return start, false
+}
+
+func scanStringTerminatedByST(b []byte, start int) (end int, ok bool) {
+	for i := start + 2; i < len(b); i++ {
+		if b[i] == escByte && i+1 < len(b) && b[i+1] == '\\' {
+			return i + 2, true
+		}
+	}
+	return start, false
 }
 
 func scanSGRMouse(b []byte, start int) (end int, needMore bool, ok bool) {
@@ -217,101 +235,108 @@ func scanSGRMouseFragment(b []byte, start int) (end int, needMore bool, ok bool,
 	if start >= len(b) {
 		return start, true, false, sgrMouseFragUnknown
 	}
-	switch b[start] {
-	case '<', escByte:
+	if b[start] == '<' || b[start] == escByte {
 		return start, false, false, sgrMouseFragUnknown
 	}
-
 	if b[start] == ';' {
-		// Missing cb: ";cyM" or ";cx;cyM"
-		i := start + 1
-		var okNum bool
-		i, needMore, okNum = scanUint(b, i)
-		if needMore {
-			return start, true, false, sgrMouseFragUnknown
-		}
-		if !okNum {
-			return start, false, false, sgrMouseFragUnknown
-		}
-		if i >= len(b) {
-			return start, true, false, sgrMouseFragUnknown
-		}
-		if b[i] == 'M' {
-			return i + 1, false, true, sgrMouseFragSemiNumM
-		}
-		if b[i] != ';' {
-			return start, false, false, sgrMouseFragUnknown
-		}
-		i++
-		i, needMore, okNum = scanUint(b, i)
-		if needMore {
-			return start, true, false, sgrMouseFragUnknown
-		}
-		if !okNum {
-			return start, false, false, sgrMouseFragUnknown
-		}
-		if i >= len(b) {
-			return start, true, false, sgrMouseFragUnknown
-		}
-		if b[i] == 'M' {
-			return i + 1, false, true, sgrMouseFragSemiNumNumM
-		}
-		return start, false, false, sgrMouseFragUnknown
+		return scanSGRMouseFragmentSemicolon(b, start)
 	}
-
-	// "cyM", "cx;cyM", or "cb;cx;cyM"
 	if b[start] < '0' || b[start] > '9' {
 		return start, false, false, sgrMouseFragUnknown
 	}
-	i := start
-	var okNum bool
-	i, needMore, okNum = scanUint(b, i)
+	return scanSGRMouseFragmentDigits(b, start)
+}
+
+func scanSGRMouseFragmentSemicolon(b []byte, start int) (end int, needMore bool, ok bool, kind sgrMouseFragmentKind) {
+	i := start + 1
+	end, needMore, ok = scanUint(b, i)
 	if needMore {
 		return start, true, false, sgrMouseFragUnknown
 	}
-	if !okNum {
+	if !ok {
 		return start, false, false, sgrMouseFragUnknown
 	}
-	if i >= len(b) {
+	if end >= len(b) {
+		return start, true, false, sgrMouseFragUnknown
+	}
+	if b[end] == 'M' {
+		return end + 1, false, true, sgrMouseFragSemiNumM
+	}
+	if b[end] != ';' {
+		return start, false, false, sgrMouseFragUnknown
+	}
+
+	i = end + 1
+	end, needMore, ok = scanUint(b, i)
+	if needMore {
+		return start, true, false, sgrMouseFragUnknown
+	}
+	if !ok {
+		return start, false, false, sgrMouseFragUnknown
+	}
+	if end >= len(b) {
+		return start, true, false, sgrMouseFragUnknown
+	}
+	if b[end] == 'M' {
+		return end + 1, false, true, sgrMouseFragSemiNumNumM
+	}
+	return start, false, false, sgrMouseFragUnknown
+}
+
+func scanSGRMouseFragmentDigits(b []byte, start int) (end int, needMore bool, ok bool, kind sgrMouseFragmentKind) {
+	end, needMore, ok = scanUint(b, start)
+	if needMore {
+		return start, true, false, sgrMouseFragUnknown
+	}
+	if !ok {
+		return start, false, false, sgrMouseFragUnknown
+	}
+	if end >= len(b) {
 		// Digits alone are not a mouse fragment.
 		return start, false, false, sgrMouseFragUnknown
 	}
+	return scanSGRMouseFragmentDigitsTail(b, start, end)
+}
+
+func scanSGRMouseFragmentDigitsTail(b []byte, start int, i int) (end int, needMore bool, ok bool, kind sgrMouseFragmentKind) {
 	if b[i] == 'M' {
 		return i + 1, false, true, sgrMouseFragNumM
 	}
 	if b[i] != ';' {
 		return start, false, false, sgrMouseFragUnknown
 	}
+
 	i++
-	i, needMore, okNum = scanUint(b, i)
+	end, needMore, ok = scanUint(b, i)
 	if needMore {
 		return start, true, false, sgrMouseFragUnknown
 	}
-	if !okNum {
+	if !ok {
 		return start, false, false, sgrMouseFragUnknown
 	}
-	if i >= len(b) {
+	if end >= len(b) {
 		return start, true, false, sgrMouseFragUnknown
 	}
-	if b[i] == 'M' {
-		return i + 1, false, true, sgrMouseFragNumNumM
+	if b[end] == 'M' {
+		return end + 1, false, true, sgrMouseFragNumNumM
 	}
-	if b[i] != ';' {
+	if b[end] != ';' {
 		return start, false, false, sgrMouseFragUnknown
 	}
-	i++
-	i, needMore, okNum = scanUint(b, i)
+
+	i = end + 1
+	end, needMore, ok = scanUint(b, i)
 	if needMore {
 		return start, true, false, sgrMouseFragUnknown
 	}
-	if !okNum {
+	if !ok {
 		return start, false, false, sgrMouseFragUnknown
 	}
-	if i >= len(b) {
+	if end >= len(b) {
 		return start, true, false, sgrMouseFragUnknown
 	}
-	if b[i] == 'M' {
-		return i + 1, false, true, sgrMouseFragNumNumNumM
+	if b[end] == 'M' {
+		return end + 1, false, true, sgrMouseFragNumNumNumM
 	}
 	return start, false, false, sgrMouseFragUnknown
 }
