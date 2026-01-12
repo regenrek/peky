@@ -58,7 +58,7 @@ peky
 **Run once with npx**
 
 ```bash
-npx -y peakypanes
+npx -y -p peakypanes peky
 ```
 
 **Using Homebrew**
@@ -67,7 +67,7 @@ npx -y peakypanes
 brew tap regenrek/tap
 brew install regenrek/tap/peakypanes
 brew services start peakypanes
-peakypanes
+peky
 ```
 
 Using Go
@@ -78,7 +78,7 @@ go install github.com/regenrek/peakypanes/cmd/peky@latest
 
 ### Usage
 
-**Start peakypanes:**
+**Start:**
 ```bash
 peky start
 ```
@@ -93,7 +93,7 @@ peky init --local
 git add .peakypanes.yml  # Share with team
 ```
 
-The CLI is `peky` (alias: `peakypanes`).
+The CLI is `peky`.
 
 ## Documentation
 
@@ -153,7 +153,7 @@ See `RELEASE-DOCS.md` for the full release checklist (tests, tag, GoReleaser, np
 1. Run `peky init --local` in your project
 2. Customize `.peakypanes.yml` for your stack
 3. Commit to git
-4. Teammates install peakypanes and run `peky` (alias: `peakypanes`) - done!
+4. Teammates install peakypanes and run `peky` - done!
 
 ## License
 

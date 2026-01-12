@@ -66,13 +66,13 @@ jobs:
             tar -xzf "$archive" -C "$tmp"
 
             local bin
-            bin="$(find "$tmp" -type f -name peakypanes | LC_ALL=C sort | head -n 1)"
+            bin="$(find "$tmp" -type f -name peky | LC_ALL=C sort | head -n 1)"
             if [[ -z "$bin" ]]; then
-              echo "missing peakypanes binary in $archive" >&2
+              echo "missing peky binary in $archive" >&2
               exit 1
             fi
 
-            local out="dist/peakypanes_${os}_${arch}/peakypanes"
+            local out="dist/peakypanes_${os}_${arch}/peky"
             mkdir -p "$(dirname "$out")"
             cp "$bin" "$out"
             chmod +x "$out" >/dev/null 2>&1 || true

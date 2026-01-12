@@ -18,7 +18,7 @@ import (
 
 // Run starts the CLI and returns the process exit code.
 func Run(args []string, version string) int {
-	appName := identity.ResolveBinaryName(args)
+	appName := identity.CLIName
 	mode := logging.ModeFromArgs(args)
 	logCfg := logging.Config{}
 	if configPath, err := layout.DefaultConfigPath(); err == nil && configPath != "" {

@@ -2,7 +2,7 @@
 
 ## Basics
 
-The CLI command is `peky` (alias: `peakypanes`).
+The CLI command is `peky`.
 
 ```bash
 peky                     # Open dashboard (direct)

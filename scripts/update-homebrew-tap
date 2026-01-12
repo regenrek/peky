@@ -103,11 +103,10 @@ class Peakypanes < Formula
   def install
     ldflags = "-s -w -X main.version=${version}"
     system "go", "build", *std_go_args(ldflags: ldflags, output: bin/"peky"), "./cmd/peky"
-    system "go", "build", *std_go_args(ldflags: ldflags, output: bin/"peakypanes"), "./cmd/peakypanes"
   end
 
   service do
-    run [opt_bin/"peakypanes", "daemon"]
+    run [opt_bin/"peky", "daemon"]
     keep_alive true
     working_dir HOMEBREW_PREFIX
     log_path var/"log/peakypanes.log"
@@ -122,13 +121,12 @@ class Peakypanes < Formula
         brew services start peakypanes
 
       Then run:
-        peakypanes
+        peky
     EOS
   end
 
   test do
     system "#{bin}/peky", "--version"
-    system "#{bin}/peakypanes", "--version"
   end
 end
 EOF

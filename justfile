@@ -4,10 +4,10 @@ init:
   scripts/reinit.sh --all
 
 build:
-  @bash -cu 'set -euo pipefail; go install ./cmd/peakypanes ./cmd/peky'
+  @bash -cu 'set -euo pipefail; go install ./cmd/peky'
 
 dev:
-  @bash -cu 'set -euo pipefail; gobin="${GOBIN:-$(go env GOPATH)/bin}"; peak="$gobin/peakypanes"; \
+  @bash -cu 'set -euo pipefail; gobin="${GOBIN:-$(go env GOPATH)/bin}"; peky="$gobin/peky"; \
     uid="${UID:-$(id -u)}"; devroot="/tmp/peakypanes-dev-$uid"; \
     export PEAKYPANES_DATA_DIR="$devroot"; export PEAKYPANES_RUNTIME_DIR="$devroot"; export PEAKYPANES_CONFIG_DIR="$devroot"; \
     mkdir -p "$devroot"; chmod 700 "$devroot"; \
@@ -20,10 +20,10 @@ dev:
     PEAKYPANES_LOG_LEVEL=debug PEAKYPANES_LOG_FORMAT=text PEAKYPANES_LOG_SINK=file \
     PEAKYPANES_LOG_FILE="$PEAKYPANES_LOG_FILE" PEAKYPANES_LOG_ADD_SOURCE=1 \
     PEAKYPANES_LOG_INCLUDE_PAYLOADS=1 PEAKYPANES_PERF_TRACE_ALL=1 \
-    "$peak" start -y'
+    "$peky" start -y'
 
 watch:
-  @bash -cu 'set -euo pipefail; gobin="${GOBIN:-$(go env GOPATH)/bin}"; peak="$gobin/peakypanes"; \
+  @bash -cu 'set -euo pipefail; gobin="${GOBIN:-$(go env GOPATH)/bin}"; peky="$gobin/peky"; \
     uid="${UID:-$(id -u)}"; devroot="/tmp/peakypanes-dev-$uid"; \
     export PEAKYPANES_DATA_DIR="$devroot"; export PEAKYPANES_RUNTIME_DIR="$devroot"; export PEAKYPANES_CONFIG_DIR="$devroot"; \
     mkdir -p "$devroot"; chmod 700 "$devroot"; \
@@ -39,7 +39,7 @@ watch:
     scripts/dev-watch -- --'
 
 devfresh:
-  @bash -cu 'set -euo pipefail; gobin="${GOBIN:-$(go env GOPATH)/bin}"; peak="$gobin/peakypanes"; \
+  @bash -cu 'set -euo pipefail; gobin="${GOBIN:-$(go env GOPATH)/bin}"; peky="$gobin/peky"; \
     uid="${UID:-$(id -u)}"; devroot="/tmp/peakypanes-dev-$uid"; \
     export PEAKYPANES_DATA_DIR="$devroot"; export PEAKYPANES_RUNTIME_DIR="$devroot"; export PEAKYPANES_CONFIG_DIR="$devroot"; \
     mkdir -p "$devroot"; chmod 700 "$devroot"; \
@@ -52,10 +52,10 @@ devfresh:
     PEAKYPANES_FRESH_CONFIG=1 PEAKYPANES_LOG_LEVEL=debug PEAKYPANES_LOG_FORMAT=text \
     PEAKYPANES_LOG_SINK=file PEAKYPANES_LOG_FILE="$PEAKYPANES_LOG_FILE" \
     PEAKYPANES_LOG_ADD_SOURCE=1 PEAKYPANES_LOG_INCLUDE_PAYLOADS=1 \
-    PEAKYPANES_PERF_TRACE_ALL=1 "$peak" start -y'
+    PEAKYPANES_PERF_TRACE_ALL=1 "$peky" start -y'
 
 dev-fresh-all:
-  @bash -cu 'set -euo pipefail; gobin="${GOBIN:-$(go env GOPATH)/bin}"; peak="$gobin/peakypanes"; peky="$gobin/peky"; \
+  @bash -cu 'set -euo pipefail; gobin="${GOBIN:-$(go env GOPATH)/bin}"; peky="$gobin/peky"; \
     uid="${UID:-$(id -u)}"; devroot="/tmp/peakypanes-dev-$uid"; \
     export PEAKYPANES_DATA_DIR="$devroot"; export PEAKYPANES_RUNTIME_DIR="$devroot"; export PEAKYPANES_CONFIG_DIR="$devroot"; \
     if [[ -e "$PEAKYPANES_DATA_DIR" ]]; then trash "$PEAKYPANES_DATA_DIR"; fi; \
@@ -69,11 +69,11 @@ dev-fresh-all:
     PEAKYPANES_LOG_LEVEL=debug PEAKYPANES_LOG_FORMAT=text PEAKYPANES_LOG_SINK=file \
     PEAKYPANES_LOG_FILE="$PEAKYPANES_LOG_FILE" PEAKYPANES_LOG_ADD_SOURCE=1 \
     PEAKYPANES_LOG_INCLUDE_PAYLOADS=1 PEAKYPANES_PERF_TRACE_ALL=1 \
-    "$peak" daemon restart -y; \
+    "$peky" daemon restart -y; \
     PEAKYPANES_LOG_LEVEL=debug PEAKYPANES_LOG_FORMAT=text PEAKYPANES_LOG_SINK=file \
     PEAKYPANES_LOG_FILE="$PEAKYPANES_LOG_FILE" PEAKYPANES_LOG_ADD_SOURCE=1 \
     PEAKYPANES_LOG_INCLUDE_PAYLOADS=1 PEAKYPANES_PERF_TRACE_ALL=1 \
-    "$peak" start -y'
+    "$peky" start -y'
 
 dev-fresh-tracing: build
   @bash -cu 'set -euo pipefail; \
@@ -83,7 +83,7 @@ dev-fresh-tracing: build
     export PEAKYPANES_TUI_TRACE_INPUT_REPAIRED_FILE="/private/tmp/tui-input-repaired.log"; \
     : > "$PEAKYPANES_TUI_TRACE_INPUT_FILE"; \
     : > "$PEAKYPANES_TUI_TRACE_INPUT_REPAIRED_FILE"; \
-    gobin="${GOBIN:-$(go env GOPATH)/bin}"; peak="$gobin/peakypanes"; peky="$gobin/peky"; \
+    gobin="${GOBIN:-$(go env GOPATH)/bin}"; peky="$gobin/peky"; \
     uid="${UID:-$(id -u)}"; devroot="/tmp/peakypanes-dev-$uid"; \
     export PEAKYPANES_DATA_DIR="$devroot"; export PEAKYPANES_RUNTIME_DIR="$devroot"; export PEAKYPANES_CONFIG_DIR="$devroot"; \
     if [[ -e "$PEAKYPANES_DATA_DIR" ]]; then trash "$PEAKYPANES_DATA_DIR"; fi; \
@@ -97,11 +97,11 @@ dev-fresh-tracing: build
     PEAKYPANES_LOG_LEVEL=debug PEAKYPANES_LOG_FORMAT=text PEAKYPANES_LOG_SINK=file \
     PEAKYPANES_LOG_FILE="$PEAKYPANES_LOG_FILE" PEAKYPANES_LOG_ADD_SOURCE=1 \
     PEAKYPANES_LOG_INCLUDE_PAYLOADS=1 PEAKYPANES_PERF_TRACE_ALL=1 \
-    "$peak" daemon restart -y; \
+    "$peky" daemon restart -y; \
     PEAKYPANES_LOG_LEVEL=debug PEAKYPANES_LOG_FORMAT=text PEAKYPANES_LOG_SINK=file \
     PEAKYPANES_LOG_FILE="$PEAKYPANES_LOG_FILE" PEAKYPANES_LOG_ADD_SOURCE=1 \
     PEAKYPANES_LOG_INCLUDE_PAYLOADS=1 PEAKYPANES_PERF_TRACE_ALL=1 \
-    "$peak" start -y'
+    "$peky" start -y'
 
 dev-tmux-tracing: build
   @bash -cu 'set -euo pipefail; scripts/dev-tmux --tracing'
@@ -126,6 +126,6 @@ dev-fresh-daemon-restart:
     "$peky" daemon restart -y'
 
 prod:
-  @bash -cu 'set -euo pipefail; gobin="${GOBIN:-$(go env GOPATH)/bin}"; peak="$gobin/peakypanes"; \
+  @bash -cu 'set -euo pipefail; gobin="${GOBIN:-$(go env GOPATH)/bin}"; peky="$gobin/peky"; \
     scripts/reinit.sh --all; \
-    "$peak" start -y'
+    "$peky" start -y'

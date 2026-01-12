@@ -78,7 +78,7 @@ layout:
 YAML
 fi
 
-cmd=("npx" "-y" "peakypanes@${version}")
+cmd=("npx" "-y" "-p" "peakypanes@${version}" "peky")
 if [[ -n "$custom_cmd" ]]; then
   # shellcheck disable=SC2206
   cmd+=( $custom_cmd )
