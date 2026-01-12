@@ -11,6 +11,9 @@ import (
 // NewProjectPicker builds the list model for selecting projects.
 func NewProjectPicker() list.Model {
 	delegate := list.NewDefaultDelegate()
+	delegate.ShowDescription = true
+	delegate.SetHeight(projectPickerItemHeight)
+	delegate.SetSpacing(projectPickerItemSpacing)
 	delegate.Styles.SelectedTitle = delegate.Styles.SelectedTitle.
 		Foreground(theme.TextPrimary).
 		BorderLeftForeground(theme.AccentAlt)
@@ -25,6 +28,19 @@ func NewProjectPicker() list.Model {
 	l.SetFilteringEnabled(true)
 	l.SetStatusBarItemName("project", "projects")
 	return l
+}
+
+const (
+	projectPickerItemHeight  = 2
+	projectPickerItemSpacing = 1
+)
+
+func ProjectPickerRowMetrics() (itemHeight, rowHeight int) {
+	rowHeight = projectPickerItemHeight + projectPickerItemSpacing
+	if rowHeight < 1 {
+		rowHeight = 1
+	}
+	return projectPickerItemHeight, rowHeight
 }
 
 // NewLayoutPicker builds the list model for selecting layouts.

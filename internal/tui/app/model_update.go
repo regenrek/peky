@@ -54,11 +54,16 @@ func (m *Model) handleUpdateMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 }
 
 func (m *Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
-	if m.state != StateDashboard {
+	switch m.state {
+	case StateDashboard:
+		model, cmd := m.updateDashboardMouse(msg)
+		return model, cmd, true
+	case StateProjectPicker:
+		model, cmd := m.updateProjectPickerMouse(msg)
+		return model, cmd, true
+	default:
 		return nil, nil, false
 	}
-	model, cmd := m.updateDashboardMouse(msg)
-	return model, cmd, true
 }
 
 func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {

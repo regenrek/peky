@@ -5,12 +5,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/sessiond"
 	"github.com/regenrek/peakypanes/internal/tui/layoutgeom"
 	"github.com/regenrek/peakypanes/internal/tui/mouse"
+	"github.com/regenrek/peakypanes/internal/tui/picker"
+	"github.com/regenrek/peakypanes/internal/tui/theme"
 )
 
 func TestMouseSingleClickSelectsPane(t *testing.T) {
@@ -121,6 +124,64 @@ func TestMouseHeaderClickNewOpensProjectPicker(t *testing.T) {
 
 	if m.state != StateProjectPicker {
 		t.Fatalf("state=%v want %v", m.state, StateProjectPicker)
+	}
+}
+
+func TestProjectPickerMouseClickSelectsItem(t *testing.T) {
+	m := newTestModelLite()
+	m.state = StateProjectPicker
+	m.applyWindowSize(tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	items := []list.Item{
+		picker.ProjectItem{Name: "one", Path: "/tmp/one"},
+		picker.ProjectItem{Name: "two", Path: "/tmp/two"},
+		picker.ProjectItem{Name: "three", Path: "/tmp/three"},
+	}
+	_ = m.projectPicker.SetItems(items)
+	m.projectPicker.Select(0)
+
+	itemHeight, rowHeight := picker.ProjectPickerRowMetrics()
+	padLeft := theme.App.GetPaddingLeft()
+	padTop := theme.App.GetPaddingTop()
+	titleHeight := sectionHeight(1, m.projectPicker.Styles.TitleBar)
+	statusHeight := sectionHeight(1, m.projectPicker.Styles.StatusBar)
+
+	x := padLeft + 3
+	y := padTop + titleHeight + statusHeight + rowHeight*1
+	msg := tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft}
+
+	_, _ = m.updateProjectPickerMouse(msg)
+
+	if m.projectPicker.Index() != 1 {
+		t.Fatalf("index=%d want 1", m.projectPicker.Index())
+	}
+
+	// Clicking on the spacing line should not change selection.
+	msg = tea.MouseMsg{X: x, Y: y + itemHeight, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft}
+	_, _ = m.updateProjectPickerMouse(msg)
+	if m.projectPicker.Index() != 1 {
+		t.Fatalf("index=%d want 1 after spacing click", m.projectPicker.Index())
+	}
+}
+
+func TestProjectPickerMouseWheelMovesSelection(t *testing.T) {
+	m := newTestModelLite()
+	m.state = StateProjectPicker
+	m.applyWindowSize(tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	_ = m.projectPicker.SetItems([]list.Item{
+		picker.ProjectItem{Name: "one", Path: "/tmp/one"},
+		picker.ProjectItem{Name: "two", Path: "/tmp/two"},
+	})
+	m.projectPicker.Select(0)
+
+	_, _ = m.updateProjectPickerMouse(tea.MouseMsg{Action: tea.MouseActionPress, Button: tea.MouseButtonWheelDown})
+	if m.projectPicker.Index() != 1 {
+		t.Fatalf("index=%d want 1", m.projectPicker.Index())
+	}
+	_, _ = m.updateProjectPickerMouse(tea.MouseMsg{Action: tea.MouseActionPress, Button: tea.MouseButtonWheelUp})
+	if m.projectPicker.Index() != 0 {
+		t.Fatalf("index=%d want 0", m.projectPicker.Index())
 	}
 }
 
