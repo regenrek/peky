@@ -28,7 +28,7 @@ func withStubClient(t *testing.T, handler func(*http.Request) (*http.Response, e
 
 func TestDefaultPathsWithConfigDir(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("PEAKYPANES_CONFIG_DIR", dir)
+	t.Setenv("PEKY_CONFIG_DIR", dir)
 	authPath, err := DefaultAuthPath()
 	if err != nil {
 		t.Fatalf("DefaultAuthPath error: %v", err)
@@ -64,7 +64,7 @@ func TestProvidersList(t *testing.T) {
 
 func TestAuthManagerSetRemoveAPIKey(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("PEAKYPANES_CONFIG_DIR", dir)
+	t.Setenv("PEKY_CONFIG_DIR", dir)
 	manager, err := NewAuthManager()
 	if err != nil {
 		t.Fatalf("NewAuthManager error: %v", err)
@@ -209,7 +209,7 @@ func TestCallbackServers(t *testing.T) {
 
 func TestTouchMissingAuth(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("PEAKYPANES_CONFIG_DIR", dir)
+	t.Setenv("PEKY_CONFIG_DIR", dir)
 	manager, err := NewAuthManager()
 	if err != nil {
 		t.Fatalf("NewAuthManager error: %v", err)
@@ -221,7 +221,7 @@ func TestTouchMissingAuth(t *testing.T) {
 
 func TestAuthManagerUsesConfigDir(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("PEAKYPANES_CONFIG_DIR", dir)
+	t.Setenv("PEKY_CONFIG_DIR", dir)
 	manager, err := NewAuthManager()
 	if err != nil {
 		t.Fatalf("NewAuthManager error: %v", err)
@@ -237,7 +237,7 @@ func TestAuthManagerUsesConfigDir(t *testing.T) {
 
 func TestAuthManagerStatus(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("PEAKYPANES_CONFIG_DIR", dir)
+	t.Setenv("PEKY_CONFIG_DIR", dir)
 	manager, err := NewAuthManager()
 	if err != nil {
 		t.Fatalf("NewAuthManager error: %v", err)

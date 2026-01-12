@@ -1,12 +1,12 @@
 ---
 name: run-dev
-description: Launch the PeakyPanes dev workflow by running scripts/dev-run in the current repo. Use when the user says "run dev" or asks to open a fresh Ghostty dev session that go installs, restarts the daemon, and launches peakypanes.
+description: Launch the PeakyPanes dev workflow by running scripts/dev-run in the current repo. Use when the user says "run dev" or asks to open a fresh Ghostty dev session that go installs, restarts the daemon, and launches peky.
 ---
 
 # Run Dev
 
 ## Overview
-Run the repo's `scripts/dev-run` to open a fresh Ghostty window that installs the CLI, restarts the daemon, and launches PeakyPanes.
+Run the repo's `scripts/dev-run` to open a fresh Ghostty window that installs the CLI, restarts the daemon, and launches Peky.
 
 ## Workflow
 1) Ensure the current working directory is the PeakyPanes repo root (look for `scripts/dev-run`).

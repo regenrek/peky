@@ -10,7 +10,7 @@ import (
 
 func TestAgentStatePathAndRead(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("PEAKYPANES_AGENT_STATE_DIR", dir)
+	t.Setenv("PEKY_AGENT_STATE_DIR", dir)
 
 	path := agentStatePath("pane-1")
 	if path != filepath.Join(dir, "pane-1.json") {
@@ -36,7 +36,7 @@ func TestAgentStatePathAndRead(t *testing.T) {
 }
 
 func TestAgentStatePathEmpty(t *testing.T) {
-	t.Setenv("PEAKYPANES_AGENT_STATE_DIR", "")
+	t.Setenv("PEKY_AGENT_STATE_DIR", "")
 	if path := agentStatePath(""); path != "" {
 		t.Fatalf("expected empty path, got %q", path)
 	}
@@ -47,10 +47,10 @@ func TestAgentStatePathEmpty(t *testing.T) {
 
 func TestAgentStateDirFallback(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("PEAKYPANES_AGENT_STATE_DIR", "")
+	t.Setenv("PEKY_AGENT_STATE_DIR", "")
 	t.Setenv("XDG_RUNTIME_DIR", dir)
 	got := agentStateDir()
-	if got != filepath.Join(dir, "peakypanes", "agent-state") {
+	if got != filepath.Join(dir, "peky", "agent-state") {
 		t.Fatalf("agentStateDir() = %q", got)
 	}
 }
@@ -98,7 +98,7 @@ func TestAgentDetectionAllowed(t *testing.T) {
 
 func TestClassifyAgentState(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("PEAKYPANES_AGENT_STATE_DIR", dir)
+	t.Setenv("PEKY_AGENT_STATE_DIR", dir)
 
 	paneID := "pane-9"
 	now := time.Now()
@@ -130,7 +130,7 @@ func TestClassifyAgentState(t *testing.T) {
 
 func TestClassifyAgentStateIgnoresMismatches(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("PEAKYPANES_AGENT_STATE_DIR", dir)
+	t.Setenv("PEKY_AGENT_STATE_DIR", dir)
 
 	paneID := "pane-42"
 	state := agentState{State: "running", Tool: "codex", UpdatedAtUnixMS: time.Now().UnixMilli(), PaneID: "other-pane"}
@@ -150,7 +150,7 @@ func TestClassifyAgentStateIgnoresMismatches(t *testing.T) {
 
 func TestClassifyAgentStateDisabledOrUnknown(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("PEAKYPANES_AGENT_STATE_DIR", dir)
+	t.Setenv("PEKY_AGENT_STATE_DIR", dir)
 
 	paneID := "pane-100"
 	state := agentState{State: "running", Tool: "unknown", UpdatedAtUnixMS: time.Now().UnixMilli(), PaneID: paneID}

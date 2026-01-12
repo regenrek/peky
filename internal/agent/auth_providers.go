@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/regenrek/peakypanes/internal/identity"
 	"github.com/regenrek/peakypanes/internal/runenv"
 )
 
@@ -85,11 +86,11 @@ func DefaultAgentDir() (string, error) {
 	if dir := runenv.ConfigDir(); dir != "" {
 		return filepath.Join(dir, "agent"), nil
 	}
-	home, err := os.UserHomeDir()
+	cfgDir, err := os.UserConfigDir()
 	if err != nil {
-		return "", fmt.Errorf("user home: %w", err)
+		return "", fmt.Errorf("user config dir: %w", err)
 	}
-	return filepath.Join(home, ".config", "peakypanes", "agent"), nil
+	return filepath.Join(cfgDir, identity.AppSlug, "agent"), nil
 }
 
 func DefaultAuthPath() (string, error) {
@@ -104,11 +105,11 @@ func DefaultSkillsDir() (string, error) {
 	if dir := runenv.ConfigDir(); dir != "" {
 		return filepath.Join(dir, "skills"), nil
 	}
-	home, err := os.UserHomeDir()
+	cfgDir, err := os.UserConfigDir()
 	if err != nil {
-		return "", fmt.Errorf("user home: %w", err)
+		return "", fmt.Errorf("user config dir: %w", err)
 	}
-	return filepath.Join(home, ".config", "peakypanes", "skills"), nil
+	return filepath.Join(cfgDir, identity.AppSlug, "skills"), nil
 }
 
 func FindProviderInfo(input string) (ProviderInfo, bool) {

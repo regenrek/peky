@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	socketEnv = "PEAKYPANES_DAEMON_SOCKET"
-	pidEnv    = "PEAKYPANES_DAEMON_PID"
+	socketEnv = "PEKY_DAEMON_SOCKET"
+	pidEnv    = "PEKY_DAEMON_PID"
 )
 
 // DefaultSocketPath returns the default unix socket path.

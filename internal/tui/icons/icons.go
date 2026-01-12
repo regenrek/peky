@@ -77,7 +77,7 @@ var ASCII = IconSet{
 }
 
 func Active() IconSet {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv("PEAKYPANES_ICON_SET"))) {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("PEKY_ICON_SET"))) {
 	case "ascii":
 		return ASCII
 	default:
@@ -86,7 +86,7 @@ func Active() IconSet {
 }
 
 func ActiveSize() Size {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv("PEAKYPANES_ICON_SIZE"))) {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("PEKY_ICON_SIZE"))) {
 	case "small", "sm", "s":
 		return SizeSmall
 	case "large", "lg", "l":

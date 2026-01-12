@@ -18,7 +18,7 @@ import (
 const (
 	defaultParserDataSize = 64 * 1024
 	maxParserDataSize     = 4 * 1024 * 1024
-	parserDataSizeEnv     = "PEAKYPANES_VT_PARSER_DATA_SIZE"
+	parserDataSizeEnv     = "PEKY_VT_PARSER_DATA_SIZE"
 )
 
 var parserDataSize = resolveParserDataSize(os.Getenv(parserDataSizeEnv))

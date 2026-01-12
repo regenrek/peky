@@ -58,11 +58,11 @@ Examples:
   scripts/dev-watch -- --layout auto
   scripts/dev-watch --watch cmd,internal -- --layout auto
   scripts/dev-watch --debug-events
-  scripts/dev-watch --debug-events --daemon-log /tmp/peakypanes-dev-$UID/daemon.log
-  scripts/dev-watch --debug-events --debug-log /tmp/peakypanes-dev-$UID/ui.log
+  scripts/dev-watch --debug-events --daemon-log /tmp/peky-dev-$UID/daemon.log
+  scripts/dev-watch --debug-events --debug-log /tmp/peky-dev-$UID/ui.log
 
 Flags:
-  --debug-events    Enable debug event logs (PEAKYPANES_DEBUG_EVENTS=1)
+  --debug-events    Enable debug event logs (PEKY_DEBUG_EVENTS=1)
   --daemon-log PATH Override daemon log path used by auto-started daemon
   --debug-log PATH  Write debug event logs to a file
   -- args...        Defaults to "start -y" when omitted
@@ -71,9 +71,9 @@ USAGE
 fi
 
 if [[ -n "$debug_events" ]]; then
-  export PEAKYPANES_DEBUG_EVENTS=1
+  export PEKY_DEBUG_EVENTS=1
   uid="${UID:-$(id -u)}"
-  devroot="${PEAKYPANES_RUNTIME_DIR:-/tmp/peakypanes-dev-$uid}"
+  devroot="${PEKY_RUNTIME_DIR:-/tmp/peky-dev-$uid}"
   mkdir -p "$devroot"
   chmod 700 "$devroot" || true
   if [[ -z "$daemon_log" ]]; then
@@ -84,10 +84,10 @@ if [[ -n "$debug_events" ]]; then
   fi
 fi
 if [[ -n "$daemon_log" ]]; then
-  export PEAKYPANES_LOG_FILE="$daemon_log"
+  export PEKY_LOG_FILE="$daemon_log"
 fi
 if [[ -n "$debug_log" ]]; then
-  export PEAKYPANES_DEBUG_EVENTS_LOG="$debug_log"
+  export PEKY_DEBUG_EVENTS_LOG="$debug_log"
 fi
 
 go build -o "$bin" ./cmd/devwatch

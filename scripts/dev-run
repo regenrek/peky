@@ -56,11 +56,11 @@ Examples:
   scripts/dev-run
   scripts/dev-run start --layout auto
   scripts/dev-run --debug-events
-  scripts/dev-run --debug-events --daemon-log /tmp/peakypanes-dev-$UID/daemon.log
-  scripts/dev-run --debug-events --debug-log /tmp/peakypanes-dev-$UID/ui.log
+  scripts/dev-run --debug-events --daemon-log /tmp/peky-dev-$UID/daemon.log
+  scripts/dev-run --debug-events --debug-log /tmp/peky-dev-$UID/ui.log
 
 Flags:
-  --debug-events    Enable debug event logs (PEAKYPANES_DEBUG_EVENTS=1)
+  --debug-events    Enable debug event logs (PEKY_DEBUG_EVENTS=1)
   --daemon-log PATH Override daemon log file used by auto-started daemon
   --debug-log PATH  Write debug event logs to a file
 USAGE
@@ -85,11 +85,11 @@ if [[ -z "$gobin" ]]; then
 fi
 
 peak_bin="${gobin}/peky"
-log_file="${DEV_RUN_LOG:-/tmp/peakypanes-dev-run-inner.log}"
+log_file="${DEV_RUN_LOG:-/tmp/peky-dev-run-inner.log}"
 
 if [[ -n "$debug_events" ]]; then
   uid="${UID:-$(id -u)}"
-  devroot="${PEAKYPANES_RUNTIME_DIR:-/tmp/peakypanes-dev-$uid}"
+  devroot="${PEKY_RUNTIME_DIR:-/tmp/peky-dev-$uid}"
   mkdir -p "$devroot"
   chmod 700 "$devroot" || true
 
@@ -103,13 +103,13 @@ fi
 
 env_exports=""
 if [[ -n "$debug_events" ]]; then
-  env_exports+="export PEAKYPANES_DEBUG_EVENTS=1; "
+  env_exports+="export PEKY_DEBUG_EVENTS=1; "
 fi
 if [[ -n "$daemon_log" ]]; then
-  env_exports+="export PEAKYPANES_LOG_FILE=$(printf %q "$daemon_log"); "
+  env_exports+="export PEKY_LOG_FILE=$(printf %q "$daemon_log"); "
 fi
 if [[ -n "$debug_log" ]]; then
-  env_exports+="export PEAKYPANES_DEBUG_EVENTS_LOG=$(printf %q "$debug_log"); "
+  env_exports+="export PEKY_DEBUG_EVENTS_LOG=$(printf %q "$debug_log"); "
 fi
 
 args_escaped=()

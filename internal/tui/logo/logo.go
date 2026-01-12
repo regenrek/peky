@@ -1,4 +1,4 @@
-// Package logo renders the Peaky Panes wordmark in ASCII form.
+// Package logo renders the PEKY wordmark in ASCII form.
 package logo
 
 import (
@@ -9,18 +9,18 @@ import (
 )
 
 const (
-	compactLabel = "PEAKYPANES"
+	compactLabel = "PEKY"
 )
 
-const logoASCII = `██████  ███████  █████  ██   ██ ██    ██ ██████   █████  ███    ██ ███████ ███████
-██   ██ ██      ██   ██ ██  ██   ██  ██  ██   ██ ██   ██ ████   ██ ██      ██
-██████  █████   ███████ █████     ████   ██████  ███████ ██ ██  ██ █████   ███████
-██      ██      ██   ██ ██  ██     ██    ██      ██   ██ ██  ██ ██ ██           ██
-██      ███████ ██   ██ ██   ██    ██    ██      ██   ██ ██   ████ ███████ ███████`
+const logoASCII = `██████  ███████ ██   ██ ██    ██
+██   ██ ██      ██  ██   ██  ██
+██████  █████   █████     ████
+██      ██      ██  ██     ██
+██      ███████ ██   ██    ██`
 
 var logoLines = strings.Split(strings.TrimRight(logoASCII, "\n"), "\n")
 
-// Render returns the full Peaky Panes wordmark. Width truncates the output
+// Render returns the full wordmark. Width truncates the output
 // per line; set width <= 0 for no truncation.
 func Render(width int, compact bool) string {
 	if compact {

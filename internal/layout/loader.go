@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/regenrek/peakypanes/internal/identity"
 	"gopkg.in/yaml.v3"
 )
 
@@ -174,7 +175,7 @@ func isLayoutFileName(name string) bool {
 	return strings.HasSuffix(name, ".yml") || strings.HasSuffix(name, ".yaml")
 }
 
-// LoadProjectLayout loads the .peakypanes.yml from the project directory.
+// LoadProjectLayout loads the project config from the project directory.
 func (l *Loader) LoadProjectLayout() error {
 	if l.projectDir == "" {
 		return nil
@@ -264,7 +265,7 @@ func (l *Loader) ListLayouts() []LayoutInfo {
 			Name:        name,
 			Description: l.projectConfig.Layout.Description,
 			Source:      "project",
-			Path:        filepath.Join(l.projectDir, ".peakypanes.yml"),
+			Path:        filepath.Join(l.projectDir, identity.ProjectConfigFileYML),
 		})
 		seen[name] = true
 	}
@@ -313,16 +314,16 @@ func (l *Loader) ExportLayout(name string) (string, error) {
 	return layout.ToYAML()
 }
 
-// HasProjectConfig returns true if a .peakypanes.yml exists in the project dir.
+// HasProjectConfig returns true if a project config exists in the project dir.
 func (l *Loader) HasProjectConfig() bool {
 	if l.projectDir == "" {
 		return false
 	}
-	path := filepath.Join(l.projectDir, ".peakypanes.yml")
+	path := filepath.Join(l.projectDir, identity.ProjectConfigFileYML)
 	if _, err := os.Stat(path); err == nil {
 		return true
 	}
-	path = filepath.Join(l.projectDir, ".peakypanes.yaml")
+	path = filepath.Join(l.projectDir, identity.ProjectConfigFileYAML)
 	_, err := os.Stat(path)
 	return err == nil
 }

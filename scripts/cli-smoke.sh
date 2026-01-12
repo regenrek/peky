@@ -11,8 +11,8 @@ CONFIG_DIR="$RUN_ROOT/config"
 mkdir -p "$BIN_DIR"
 mkdir -p "$RUNTIME_DIR" "$CONFIG_DIR/layouts"
 
-export PEAKYPANES_RUNTIME_DIR="$RUNTIME_DIR"
-export PEAKYPANES_CONFIG_DIR="$CONFIG_DIR"
+export PEKY_RUNTIME_DIR="$RUNTIME_DIR"
+export PEKY_CONFIG_DIR="$CONFIG_DIR"
 
 echo "==> Building peky"
 go build -o "$BIN" ./cmd/peky

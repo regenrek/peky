@@ -7,11 +7,11 @@ from pathlib import Path
 
 
 def state_dir() -> Path:
-    root = os.environ.get("PEAKYPANES_AGENT_STATE_DIR")
+    root = os.environ.get("PEKY_AGENT_STATE_DIR")
     if root:
         return Path(root)
     runtime = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
-    return Path(runtime) / "peakypanes" / "agent-state"
+    return Path(runtime) / "peky" / "agent-state"
 
 
 def write_state(pane_id: str, state: str, tool: str, payload: dict) -> None:
@@ -70,7 +70,7 @@ def map_event_to_state(event: str, payload: dict) -> str:
 
 
 def main() -> int:
-    pane_id = os.environ.get("PEAKYPANES_PANE_ID", "").strip()
+    pane_id = os.environ.get("PEKY_PANE_ID", "").strip()
     if not pane_id:
         return 0
     try:

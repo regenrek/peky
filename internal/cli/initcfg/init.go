@@ -52,10 +52,10 @@ func runInit(ctx root.CommandContext) error {
 }
 
 func initLocal(appName, layoutName string, force bool, cwd string) error {
-	configPath := filepath.Join(cwd, ".peakypanes.yml")
+	configPath := filepath.Join(cwd, identity.ProjectConfigFileYML)
 	if !force {
 		if _, err := os.Stat(configPath); err == nil {
-			return fmt.Errorf(".peakypanes.yml already exists (use --force to overwrite)")
+			return fmt.Errorf("%s already exists (use --force to overwrite)", identity.ProjectConfigFileYML)
 		}
 	}
 
@@ -138,7 +138,7 @@ func initGlobal(appName, layoutName string, force bool) error {
 zellij:
   # config: ~/.config/zellij/config.kdl
   # layout_dir: ~/.config/zellij/layouts
-  # bridge_plugin: ~/.config/peakypanes/zellij/peakypanes-bridge.wasm
+  # bridge_plugin: ~/.config/peky/zellij/peky-bridge.wasm
 
 ghostty:
   config: ~/.config/ghostty/config
@@ -189,7 +189,7 @@ ghostty:
 
 # Load additional layouts from this directory
 layout_dirs:
-  - ~/.config/peakypanes/layouts
+  - ~/.config/peky/layouts
 
 # Define projects for quick access
 # projects:
@@ -245,7 +245,7 @@ tools:
 	fmt.Printf("   Layouts: %s\n\n", layoutsDir)
 	fmt.Printf("   Next steps:\n")
 	fmt.Printf("   • Run '%s layouts' to see available layouts\n", appName)
-	fmt.Printf("   • Run '%s init --local' in a project to create .peakypanes.yml\n", appName)
+	fmt.Printf("   • Run '%s init --local' in a project to create %s\n", appName, identity.ProjectConfigFileYML)
 	fmt.Printf("   • Run '%s start' in any directory to start a session\n", appName)
 	fmt.Printf("   • Run '%s' to open the dashboard\n", appName)
 	return nil

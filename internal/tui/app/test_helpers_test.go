@@ -143,7 +143,7 @@ func writeProjectLayout(t *testing.T, path, session string) {
 			content += "  " + line + "\n"
 		}
 	}
-	if err := os.WriteFile(filepath.Join(path, ".peakypanes.yml"), []byte(content), 0o644); err != nil {
-		t.Fatalf("write .peakypanes.yml: %v", err)
+	if err := os.WriteFile(filepath.Join(path, ".peky.yml"), []byte(content), 0o644); err != nil {
+		t.Fatalf("write .peky.yml: %v", err)
 	}
 }

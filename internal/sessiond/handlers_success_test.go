@@ -448,7 +448,7 @@ func TestHandleTerminalKeyCopyMode(t *testing.T) {
 func TestHandleStartSessionSuccess(t *testing.T) {
 	dir := t.TempDir()
 	config := []byte("session: demo\nlayout:\n  name: demo\n  panes:\n    - cmd: \"echo hi\"\n")
-	if err := os.WriteFile(filepath.Join(dir, ".peakypanes.yml"), config, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".peky.yml"), config, 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 

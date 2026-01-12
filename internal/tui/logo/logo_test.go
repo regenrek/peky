@@ -39,4 +39,7 @@ func TestSmallRender(t *testing.T) {
 	if strings.Contains(out, "\n") {
 		t.Fatalf("SmallRender() should be single-line")
 	}
+	if out != "PEKY" {
+		t.Fatalf("SmallRender() = %q, want %q", out, "PEKY")
+	}
 }

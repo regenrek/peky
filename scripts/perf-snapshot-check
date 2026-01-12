@@ -27,7 +27,7 @@ else
   exit 1
 fi
 
-runtime_dir="${PEAKYPANES_RUNTIME_DIR:-}"
+runtime_dir="${PEKY_RUNTIME_DIR:-}"
 if [[ -z "$runtime_dir" ]]; then
   socket_path="$(awk '/daemon listening on/ {print $NF}' "$daemon_log" | tail -n 1)"
   if [[ -z "$socket_path" ]]; then
@@ -41,7 +41,7 @@ if [[ -z "$runtime_dir" ]]; then
   fi
 fi
 
-export PEAKYPANES_RUNTIME_DIR="$runtime_dir"
+export PEKY_RUNTIME_DIR="$runtime_dir"
 
 tmp_go="$(mktemp "$ROOT/tmp-perf-snapshot-XXXX.go")"
 cleanup() {

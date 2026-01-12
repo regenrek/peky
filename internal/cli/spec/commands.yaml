@@ -131,7 +131,7 @@ commands:
       - name: local
         aliases: [l]
         type: bool
-        description: Write a local .peakypanes.yml.
+        description: Write a local .peky.yml.
       - name: layout
         type: string
         description: Default layout name.

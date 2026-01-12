@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/regenrek/peakypanes/internal/identity"
 	"github.com/regenrek/peakypanes/internal/runenv"
 )
 
@@ -22,13 +23,13 @@ func DataDir() (string, error) {
 		return ensureDataDir(override)
 	}
 	if local := strings.TrimSpace(os.Getenv("LOCALAPPDATA")); local != "" {
-		return ensureDataDir(filepath.Join(local, "peakypanes"))
+		return ensureDataDir(filepath.Join(local, identity.AppSlug))
 	}
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("resolve config dir: %w", err)
 	}
-	return ensureDataDir(filepath.Join(dir, "peakypanes"))
+	return ensureDataDir(filepath.Join(dir, identity.AppSlug))
 }
 
 func ensureDataDir(dir string) (string, error) {

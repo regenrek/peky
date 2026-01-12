@@ -234,7 +234,7 @@ func formatPekyOutput(stdout, stderr string, err error) string {
 
 func cliDeps(stdout, stderr *bytes.Buffer, workDir, version string) root.Dependencies {
 	if strings.TrimSpace(version) == "" {
-		version = identity.AppSlug
+		version = "dev"
 	}
 	return root.Dependencies{
 		Version: version,

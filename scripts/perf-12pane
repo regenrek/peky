@@ -22,12 +22,12 @@ GRID="${GRID_ROWS}x${GRID_COLS}"
 RATE_S="$(awk "BEGIN { printf \"%.3f\", ${RATE_MS}/1000 }")"
 ANSI_HEAVY="${ANSI_HEAVY:-0}"
 
-CMD='bash -lc '\''i=0; while true; do printf "%s %06d\n" "${PEAKYPANES_PANE_ID:-}" "$i"; i=$((i+1)); sleep '"${RATE_S}"'; done'\'''
+CMD='bash -lc '\''i=0; while true; do printf "%s %06d\n" "${PEKY_PANE_ID:-}" "$i"; i=$((i+1)); sleep '"${RATE_S}"'; done'\'''
 if [ "${ANSI_HEAVY}" = "1" ]; then
-  CMD='bash -lc '\''i=0; while true; do r=$((i%256)); g=$(((i*37)%256)); b=$(((i*91)%256)); printf "\033[38;2;%d;%d;%dm%s %06d\033[0m\n" "$r" "$g" "$b" "${PEAKYPANES_PANE_ID:-}" "$i"; i=$((i+1)); sleep '"${RATE_S}"'; done'\'''
+  CMD='bash -lc '\''i=0; while true; do r=$((i%256)); g=$(((i*37)%256)); b=$(((i*91)%256)); printf "\033[38;2;%d;%d;%dm%s %06d\033[0m\n" "$r" "$g" "$b" "${PEKY_PANE_ID:-}" "$i"; i=$((i+1)); sleep '"${RATE_S}"'; done'\'''
 fi
 
-CONFIG="$OUT/.peakypanes.yml"
+CONFIG="$OUT/.peky.yml"
 PERF_GRID="$GRID" PERF_CMD="$CMD" PERF_CONFIG="$CONFIG" python - <<'PY'
 import json
 import os

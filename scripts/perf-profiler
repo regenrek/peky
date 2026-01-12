@@ -25,7 +25,7 @@ Options:
   --trigger-timeout Timeout waiting for the first send (seconds or Go duration)
   --start-timeout   Timeout for StartSession RPC (seconds or Go duration)
   --gops            Enable gops agent (config lives under the run output)
-  --trace-all       Log all pane view request/response timings (PEAKYPANES_PERF_TRACE_ALL=1)
+  --trace-all       Log all pane view request/response timings (PEKY_PERF_TRACE_ALL=1)
   --paneviews-all   Render all panes live during profiling (dashboard.performance.render_policy=all)
   --no-tmux         Skip the tmux monitor dashboard (tail + htop)
   --no-ghostty      Run peky in the current terminal (no Ghostty)
@@ -304,7 +304,7 @@ pid_file="$runtime_dir/daemon.pid"
 mkdir -p "$run_dir" "$runtime_dir" "$config_dir/layouts"
 chmod 700 "$runtime_dir"
 
-cp "$layout_file" "$run_dir/.peakypanes.yml"
+cp "$layout_file" "$run_dir/.peky.yml"
 
 bin_path="$out_root/peky-profiler"
 (
@@ -312,57 +312,57 @@ bin_path="$out_root/peky-profiler"
   go build -tags profiler -o "$bin_path" ./cmd/peky
 )
 
-export PEAKYPANES_CPU_PROFILE="$out_root/cpu.pprof"
-export PEAKYPANES_MEM_PROFILE="$out_root/heap.pprof"
-export PEAKYPANES_CPU_PROFILE_SECS="$profile_secs"
-export PEAKYPANES_LOG_FILE="$out_root/daemon.log"
-export PEAKYPANES_LOG_LEVEL="debug"
-export PEAKYPANES_PROFILE_DONE="$out_root/DONE"
-export PEAKYPANES_PERF_DEBUG="1"
-export PEAKYPANES_RUNTIME_DIR="$runtime_dir"
-export PEAKYPANES_CONFIG_DIR="$config_dir"
-export PEAKYPANES_FRESH_CONFIG="1"
-export PEAKYPANES_DAEMON_PID="$pid_file"
+export PEKY_CPU_PROFILE="$out_root/cpu.pprof"
+export PEKY_MEM_PROFILE="$out_root/heap.pprof"
+export PEKY_CPU_PROFILE_SECS="$profile_secs"
+export PEKY_LOG_FILE="$out_root/daemon.log"
+export PEKY_LOG_LEVEL="debug"
+export PEKY_PROFILE_DONE="$out_root/DONE"
+export PEKY_PERF_DEBUG="1"
+export PEKY_RUNTIME_DIR="$runtime_dir"
+export PEKY_CONFIG_DIR="$config_dir"
+export PEKY_FRESH_CONFIG="1"
+export PEKY_DAEMON_PID="$pid_file"
 if [[ "$enable_block" == true ]]; then
-  export PEAKYPANES_BLOCK_PROFILE="$out_root/block.pprof"
+  export PEKY_BLOCK_PROFILE="$out_root/block.pprof"
   if [[ -n "$block_rate" ]]; then
-    export PEAKYPANES_BLOCK_RATE="$block_rate"
+    export PEKY_BLOCK_RATE="$block_rate"
   fi
 fi
 if [[ "$enable_mutex" == true ]]; then
-  export PEAKYPANES_MUTEX_PROFILE="$out_root/mutex.pprof"
+  export PEKY_MUTEX_PROFILE="$out_root/mutex.pprof"
   if [[ -n "$mutex_fraction" ]]; then
-    export PEAKYPANES_MUTEX_FRACTION="$mutex_fraction"
+    export PEKY_MUTEX_FRACTION="$mutex_fraction"
   fi
 fi
 if [[ -n "$start_delay" ]]; then
-  export PEAKYPANES_PROFILE_START_DELAY="$start_delay"
+  export PEKY_PROFILE_START_DELAY="$start_delay"
 fi
 if [[ -n "$start_on_send" ]]; then
-  export PEAKYPANES_PROFILE_START_ON_SEND="1"
+  export PEKY_PROFILE_START_ON_SEND="1"
 fi
 if [[ -n "$trigger_timeout" ]]; then
-  export PEAKYPANES_PROFILE_TRIGGER_TIMEOUT="$trigger_timeout"
+  export PEKY_PROFILE_TRIGGER_TIMEOUT="$trigger_timeout"
 fi
 if [[ -n "$fgprof_secs" ]]; then
-  export PEAKYPANES_FGPROF="$out_root/fgprof.pprof"
-  export PEAKYPANES_FGPROF_SECS="$fgprof_secs"
+  export PEKY_FGPROF="$out_root/fgprof.pprof"
+  export PEKY_FGPROF_SECS="$fgprof_secs"
 fi
 if [[ -n "$trace_secs" ]]; then
-  export PEAKYPANES_TRACE="$out_root/trace.out"
-  export PEAKYPANES_TRACE_SECS="$trace_secs"
+  export PEKY_TRACE="$out_root/trace.out"
+  export PEKY_TRACE_SECS="$trace_secs"
 fi
 if [[ -n "$trace_all" ]]; then
-  export PEAKYPANES_PERF_TRACE_ALL="1"
+  export PEKY_PERF_TRACE_ALL="1"
 fi
 if [[ -n "$start_timeout" ]]; then
-  export PEAKYPANES_START_TIMEOUT="$start_timeout"
+  export PEKY_START_TIMEOUT="$start_timeout"
 fi
 if [[ "$enable_gops" == true ]]; then
   gops_dir="$out_root/gops"
   mkdir -p "$gops_dir"
-  export PEAKYPANES_GOPS=1
-  export PEAKYPANES_GOPS_CONFIG_DIR="$gops_dir"
+  export PEKY_GOPS=1
+  export PEKY_GOPS_CONFIG_DIR="$gops_dir"
 fi
 
 report="$out_root/report.txt"
@@ -465,7 +465,7 @@ cat <<EOF > "$start_wrapper"
 set -euo pipefail
 
 attempt=0
-max="\${PEAKYPANES_START_RETRIES:-5}"
+max="\${PEKY_START_RETRIES:-5}"
 if [[ "\$max" -lt 1 ]]; then
   max=1
 fi
@@ -523,43 +523,43 @@ fi
 
 if [[ "$use_ghostty" == true ]]; then
   if [[ "$(uname -s)" == "Darwin" && -d "/Applications/Ghostty.app" ]]; then
-    env_exports=$(printf 'export PEAKYPANES_CPU_PROFILE=%q; export PEAKYPANES_MEM_PROFILE=%q; export PEAKYPANES_CPU_PROFILE_SECS=%q; export PEAKYPANES_LOG_FILE=%q; export PEAKYPANES_LOG_LEVEL=%q; export PEAKYPANES_PROFILE_DONE=%q; export PEAKYPANES_PERF_DEBUG=%q; ' "$PEAKYPANES_CPU_PROFILE" "$PEAKYPANES_MEM_PROFILE" "$PEAKYPANES_CPU_PROFILE_SECS" "$PEAKYPANES_LOG_FILE" "$PEAKYPANES_LOG_LEVEL" "$PEAKYPANES_PROFILE_DONE" "$PEAKYPANES_PERF_DEBUG")
+    env_exports=$(printf 'export PEKY_CPU_PROFILE=%q; export PEKY_MEM_PROFILE=%q; export PEKY_CPU_PROFILE_SECS=%q; export PEKY_LOG_FILE=%q; export PEKY_LOG_LEVEL=%q; export PEKY_PROFILE_DONE=%q; export PEKY_PERF_DEBUG=%q; ' "$PEKY_CPU_PROFILE" "$PEKY_MEM_PROFILE" "$PEKY_CPU_PROFILE_SECS" "$PEKY_LOG_FILE" "$PEKY_LOG_LEVEL" "$PEKY_PROFILE_DONE" "$PEKY_PERF_DEBUG")
     if [[ -n "$trace_all" ]]; then
-      env_exports+=$(printf 'export PEAKYPANES_PERF_TRACE_ALL=%q; ' "1")
+      env_exports+=$(printf 'export PEKY_PERF_TRACE_ALL=%q; ' "1")
     fi
-    env_exports+=$(printf 'export PEAKYPANES_RUNTIME_DIR=%q; export PEAKYPANES_CONFIG_DIR=%q; export PEAKYPANES_FRESH_CONFIG=%q; export PEAKYPANES_DAEMON_PID=%q; ' "$PEAKYPANES_RUNTIME_DIR" "$PEAKYPANES_CONFIG_DIR" "$PEAKYPANES_FRESH_CONFIG" "$PEAKYPANES_DAEMON_PID")
+    env_exports+=$(printf 'export PEKY_RUNTIME_DIR=%q; export PEKY_CONFIG_DIR=%q; export PEKY_FRESH_CONFIG=%q; export PEKY_DAEMON_PID=%q; ' "$PEKY_RUNTIME_DIR" "$PEKY_CONFIG_DIR" "$PEKY_FRESH_CONFIG" "$PEKY_DAEMON_PID")
     if [[ -n "$start_delay" ]]; then
-      env_exports+=$(printf 'export PEAKYPANES_PROFILE_START_DELAY=%q; ' "$start_delay")
+      env_exports+=$(printf 'export PEKY_PROFILE_START_DELAY=%q; ' "$start_delay")
     fi
     if [[ -n "$start_on_send" ]]; then
-      env_exports+=$(printf 'export PEAKYPANES_PROFILE_START_ON_SEND=%q; ' "1")
+      env_exports+=$(printf 'export PEKY_PROFILE_START_ON_SEND=%q; ' "1")
     fi
     if [[ -n "$trigger_timeout" ]]; then
-      env_exports+=$(printf 'export PEAKYPANES_PROFILE_TRIGGER_TIMEOUT=%q; ' "$trigger_timeout")
+      env_exports+=$(printf 'export PEKY_PROFILE_TRIGGER_TIMEOUT=%q; ' "$trigger_timeout")
     fi
     if [[ -n "$start_timeout" ]]; then
-      env_exports+=$(printf 'export PEAKYPANES_START_TIMEOUT=%q; ' "$start_timeout")
+      env_exports+=$(printf 'export PEKY_START_TIMEOUT=%q; ' "$start_timeout")
     fi
     if [[ -n "$fgprof_secs" ]]; then
-      env_exports+=$(printf 'export PEAKYPANES_FGPROF=%q; export PEAKYPANES_FGPROF_SECS=%q; ' "$PEAKYPANES_FGPROF" "$PEAKYPANES_FGPROF_SECS")
+      env_exports+=$(printf 'export PEKY_FGPROF=%q; export PEKY_FGPROF_SECS=%q; ' "$PEKY_FGPROF" "$PEKY_FGPROF_SECS")
     fi
     if [[ -n "$trace_secs" ]]; then
-      env_exports+=$(printf 'export PEAKYPANES_TRACE=%q; export PEAKYPANES_TRACE_SECS=%q; ' "$PEAKYPANES_TRACE" "$PEAKYPANES_TRACE_SECS")
+      env_exports+=$(printf 'export PEKY_TRACE=%q; export PEKY_TRACE_SECS=%q; ' "$PEKY_TRACE" "$PEKY_TRACE_SECS")
     fi
     if [[ "$enable_block" == true ]]; then
-      env_exports+=$(printf 'export PEAKYPANES_BLOCK_PROFILE=%q; ' "$PEAKYPANES_BLOCK_PROFILE")
+      env_exports+=$(printf 'export PEKY_BLOCK_PROFILE=%q; ' "$PEKY_BLOCK_PROFILE")
       if [[ -n "$block_rate" ]]; then
-        env_exports+=$(printf 'export PEAKYPANES_BLOCK_RATE=%q; ' "$PEAKYPANES_BLOCK_RATE")
+        env_exports+=$(printf 'export PEKY_BLOCK_RATE=%q; ' "$PEKY_BLOCK_RATE")
       fi
     fi
     if [[ "$enable_mutex" == true ]]; then
-      env_exports+=$(printf 'export PEAKYPANES_MUTEX_PROFILE=%q; ' "$PEAKYPANES_MUTEX_PROFILE")
+      env_exports+=$(printf 'export PEKY_MUTEX_PROFILE=%q; ' "$PEKY_MUTEX_PROFILE")
       if [[ -n "$mutex_fraction" ]]; then
-        env_exports+=$(printf 'export PEAKYPANES_MUTEX_FRACTION=%q; ' "$PEAKYPANES_MUTEX_FRACTION")
+        env_exports+=$(printf 'export PEKY_MUTEX_FRACTION=%q; ' "$PEKY_MUTEX_FRACTION")
       fi
     fi
     if [[ "$enable_gops" == true ]]; then
-      env_exports+=$(printf 'export PEAKYPANES_GOPS=%q; export PEAKYPANES_GOPS_CONFIG_DIR=%q; ' "$PEAKYPANES_GOPS" "$PEAKYPANES_GOPS_CONFIG_DIR")
+      env_exports+=$(printf 'export PEKY_GOPS=%q; export PEKY_GOPS_CONFIG_DIR=%q; ' "$PEKY_GOPS" "$PEKY_GOPS_CONFIG_DIR")
     fi
     cmd=$(printf 'set -euo pipefail; %s cd %q; %s' "$env_exports" "$ROOT" "$run_cmd")
     open -na Ghostty.app --args -e /bin/bash -lc "$cmd"

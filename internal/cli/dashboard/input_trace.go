@@ -16,10 +16,10 @@ import (
 	"github.com/muesli/cancelreader"
 )
 
-const tuiTraceInputEnv = "PEAKYPANES_TUI_TRACE_INPUT"
-const tuiTraceInputFileEnv = "PEAKYPANES_TUI_TRACE_INPUT_FILE"
-const tuiTraceInputRepairedEnv = "PEAKYPANES_TUI_TRACE_INPUT_REPAIRED"
-const tuiTraceInputRepairedFileEnv = "PEAKYPANES_TUI_TRACE_INPUT_REPAIRED_FILE"
+const tuiTraceInputEnv = "PEKY_TUI_TRACE_INPUT"
+const tuiTraceInputFileEnv = "PEKY_TUI_TRACE_INPUT_FILE"
+const tuiTraceInputRepairedEnv = "PEKY_TUI_TRACE_INPUT_REPAIRED"
+const tuiTraceInputRepairedFileEnv = "PEKY_TUI_TRACE_INPUT_REPAIRED_FILE"
 
 func shouldTraceTUIInput() bool {
 	raw := strings.ToLower(strings.TrimSpace(os.Getenv(tuiTraceInputEnv)))
@@ -230,20 +230,20 @@ func tuiInputTracePath() string {
 	if p := strings.TrimSpace(os.Getenv(tuiTraceInputFileEnv)); p != "" {
 		return p
 	}
-	if dir := strings.TrimSpace(os.Getenv("PEAKYPANES_DATA_DIR")); dir != "" {
+	if dir := strings.TrimSpace(os.Getenv("PEKY_DATA_DIR")); dir != "" {
 		return filepath.Join(dir, "tui-input-trace.log")
 	}
-	return fmt.Sprintf("/tmp/peakypanes-tui-input-trace-%d.log", os.Getpid())
+	return fmt.Sprintf("/tmp/peky-tui-input-trace-%d.log", os.Getpid())
 }
 
 func tuiInputTracePathRepaired() string {
 	if p := strings.TrimSpace(os.Getenv(tuiTraceInputRepairedFileEnv)); p != "" {
 		return p
 	}
-	if dir := strings.TrimSpace(os.Getenv("PEAKYPANES_DATA_DIR")); dir != "" {
+	if dir := strings.TrimSpace(os.Getenv("PEKY_DATA_DIR")); dir != "" {
 		return filepath.Join(dir, "tui-input-trace-repaired.log")
 	}
-	return fmt.Sprintf("/tmp/peakypanes-tui-input-trace-repaired-%d.log", os.Getpid())
+	return fmt.Sprintf("/tmp/peky-tui-input-trace-repaired-%d.log", os.Getpid())
 }
 
 func errString(err error) string {

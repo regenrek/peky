@@ -28,7 +28,7 @@ The dashboard normally renders only the visible panes. For stress tests that sho
 all panes like a full tmux grid, enable the dev-only flag below (requires perf debug).
 
 ```bash
-PEAKYPANES_PERF_PANEVIEWS_ALL=1 PEAKYPANES_PERF_DEBUG=1 ./scripts/perf-profiler --layout testdata/performance-tests/peakypanes-perf10.yml --secs 30 --fgprof 30 --trace 10 --gops --start-timeout 20s
+PEKY_PERF_PANEVIEWS_ALL=1 PEKY_PERF_DEBUG=1 ./scripts/perf-profiler --layout testdata/performance-tests/peakypanes-perf10.yml --secs 30 --fgprof 30 --trace 10 --gops --start-timeout 20s
 ```
 
 Each run writes outputs under `.bench/profiler-12/<timestamp>/` (already gitignored).
