@@ -26,8 +26,8 @@ const (
 
 	// Throttle preview rendering while scrollback wheel input is actively driving
 	// terminal updates. This keeps the Bubble Tea event loop responsive by capping
-	// pane view RPCs to ~30fps during momentum scroll bursts.
-	paneViewScrollThrottleDelay = 33 * time.Millisecond
+	// pane view RPCs to ~60fps during momentum scroll bursts.
+	paneViewScrollThrottleDelay = 16 * time.Millisecond
 )
 
 type paneViewKey struct {
