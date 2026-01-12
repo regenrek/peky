@@ -5,6 +5,8 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.0.28 - 2026-01-12
+
 ### Breaking
 - Runtime/state namespace renamed from `peakypanes` to `peky` (config, data, runtime dirs).
 - Project-local config renamed from `.peakypanes.yml` / `.peakypanes.yaml` to `.peky.yml` / `.peky.yaml`.
