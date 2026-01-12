@@ -60,8 +60,8 @@ gh run view --log --web
 5) Verify installs (recommended):
 
 ```bash
-brew install --build-from-source regenrek/tap/peakypanes
-brew test regenrek/tap/peakypanes
+brew install --build-from-source regenrek/tap/peky
+brew test regenrek/tap/peky
 ```
 
 6) Publish npm packages (GitHub Actions, Trusted Publishing):

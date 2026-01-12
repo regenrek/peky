@@ -7,7 +7,7 @@ Usage: scripts/update-homebrew-tap vX.Y.Z
 
 Updates the Homebrew tap formula in regenrek/homebrew-tap for the given tag by:
 - computing the sha256 of the source archive for that tag
-- writing Formula/peakypanes.rb
+- writing Formula/peky.rb (and removing Formula/peakypanes.rb)
 - committing via the GitHub Contents API
 
 Required environment variables:
@@ -89,11 +89,11 @@ trap cleanup EXIT
 
 export GH_TOKEN="$TAP_PUSH_TOKEN"
 
-formula_path="$tmp/peakypanes.rb"
+formula_path="$tmp/peky.rb"
 mkdir -p "$(dirname "$formula_path")"
 
 cat >"$formula_path" <<EOF
-class Peakypanes < Formula
+class Peky < Formula
   desc "Terminal dashboard with YAML-based layouts and native live previews"
   homepage "https://github.com/regenrek/peakypanes"
   url "$tarball_url"
@@ -109,8 +109,8 @@ class Peakypanes < Formula
     run [opt_bin/"peky", "daemon"]
     keep_alive true
     working_dir HOMEBREW_PREFIX
-    log_path var/"log/peakypanes.log"
-    error_log_path var/"log/peakypanes.log"
+    log_path var/"log/peky.log"
+    error_log_path var/"log/peky.log"
   end
 
   def caveats
@@ -118,7 +118,7 @@ class Peakypanes < Formula
       Peakypanes runs a background daemon for managing sessions.
 
       Start the daemon:
-        brew services start peakypanes
+        brew services start peky
 
       Then run:
         peky
@@ -136,7 +136,7 @@ if [[ $desc_line =~ \"\.$ ]]; then
   die "formula desc ends with a period"
 fi
 
-tap_path="Formula/peakypanes.rb"
+tap_path="Formula/peky.rb"
 remote_sha=""
 remote_content=""
 if remote_sha=$(gh api -H "Accept: application/vnd.github+json" "repos/${tap_repo}/contents/${tap_path}?ref=${tap_branch}" --jq '.sha' 2>/dev/null); then
@@ -156,7 +156,7 @@ content_b64=$(base64 <"$formula_path" | tr -d '\n')
 
 put_args=(
   -H "Accept: application/vnd.github+json"
-  -f "message=peakypanes ${tag}"
+  -f "message=peky ${tag}"
   -f "content=${content_b64}"
   -f "branch=${tap_branch}"
   -f "committer[name]=${tap_git_author_name}"
@@ -170,6 +170,23 @@ fi
 
 if ! gh api --method PUT "repos/${tap_repo}/contents/${tap_path}" "${put_args[@]}" >/dev/null; then
   die "failed to update ${tap_repo}@${tap_branch} (${tag}); token likely missing Contents write permission for the tap repo"
+fi
+
+old_tap_path="Formula/peakypanes.rb"
+if old_sha=$(gh api -H "Accept: application/vnd.github+json" "repos/${tap_repo}/contents/${old_tap_path}?ref=${tap_branch}" --jq '.sha' 2>/dev/null); then
+  delete_args=(
+    -H "Accept: application/vnd.github+json"
+    -f "message=remove peakypanes formula ${tag}"
+    -f "sha=${old_sha}"
+    -f "branch=${tap_branch}"
+    -f "committer[name]=${tap_git_author_name}"
+    -f "committer[email]=${tap_git_author_email}"
+    -f "author[name]=${tap_git_author_name}"
+    -f "author[email]=${tap_git_author_email}"
+  )
+  if ! gh api --method DELETE "repos/${tap_repo}/contents/${old_tap_path}" "${delete_args[@]}" >/dev/null; then
+    die "failed to delete legacy ${old_tap_path} in ${tap_repo}@${tap_branch} (${tag})"
+  fi
 fi
 
 echo "update-homebrew-tap: updated ${tap_repo}@${tap_branch} (${tag})"
