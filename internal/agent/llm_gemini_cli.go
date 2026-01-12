@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/regenrek/peakypanes/internal/identity"
 )
 
 type geminiCLIClient struct {
@@ -66,8 +68,8 @@ func (c *geminiCLIClient) Generate(ctx context.Context, req llmRequest) (llmResp
 	request := geminiCLIRequest{
 		Project:   creds.ProjectID,
 		Model:     c.cfg.Model,
-		UserAgent: "peakypanes",
-		RequestID: fmt.Sprintf("peky-%d", time.Now().UnixNano()),
+		UserAgent: identity.AppSlug,
+		RequestID: fmt.Sprintf("%s-%d", identity.AppSlug, time.Now().UnixNano()),
 	}
 	request.Request.Contents = googleContents(req.Messages)
 	if strings.TrimSpace(req.SystemPrompt) != "" {

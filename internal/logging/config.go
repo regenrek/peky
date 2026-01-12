@@ -23,16 +23,16 @@ const (
 )
 
 const (
-	EnvLogLevel           = "PEAKYPANES_LOG_LEVEL"
-	EnvLogFormat          = "PEAKYPANES_LOG_FORMAT"
-	EnvLogSink            = "PEAKYPANES_LOG_SINK"
-	EnvLogFile            = "PEAKYPANES_LOG_FILE"
-	EnvLogAddSource       = "PEAKYPANES_LOG_ADD_SOURCE"
-	EnvLogIncludePayloads = "PEAKYPANES_LOG_INCLUDE_PAYLOADS"
-	EnvLogMaxSizeMB       = "PEAKYPANES_LOG_MAX_SIZE_MB"
-	EnvLogMaxBackups      = "PEAKYPANES_LOG_MAX_BACKUPS"
-	EnvLogMaxAgeDays      = "PEAKYPANES_LOG_MAX_AGE_DAYS"
-	EnvLogCompress        = "PEAKYPANES_LOG_COMPRESS"
+	EnvLogLevel           = "PEKY_LOG_LEVEL"
+	EnvLogFormat          = "PEKY_LOG_FORMAT"
+	EnvLogSink            = "PEKY_LOG_SINK"
+	EnvLogFile            = "PEKY_LOG_FILE"
+	EnvLogAddSource       = "PEKY_LOG_ADD_SOURCE"
+	EnvLogIncludePayloads = "PEKY_LOG_INCLUDE_PAYLOADS"
+	EnvLogMaxSizeMB       = "PEKY_LOG_MAX_SIZE_MB"
+	EnvLogMaxBackups      = "PEKY_LOG_MAX_BACKUPS"
+	EnvLogMaxAgeDays      = "PEKY_LOG_MAX_AGE_DAYS"
+	EnvLogCompress        = "PEKY_LOG_COMPRESS"
 )
 
 type Config struct {

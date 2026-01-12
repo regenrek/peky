@@ -8,121 +8,121 @@ build:
 
 dev:
   @bash -cu 'set -euo pipefail; gobin="${GOBIN:-$(go env GOPATH)/bin}"; peky="$gobin/peky"; \
-    uid="${UID:-$(id -u)}"; devroot="/tmp/peakypanes-dev-$uid"; \
-    export PEAKYPANES_DATA_DIR="$devroot"; export PEAKYPANES_RUNTIME_DIR="$devroot"; export PEAKYPANES_CONFIG_DIR="$devroot"; \
+    uid="${UID:-$(id -u)}"; devroot="/tmp/peky-dev-$uid"; \
+    export PEKY_DATA_DIR="$devroot"; export PEKY_RUNTIME_DIR="$devroot"; export PEKY_CONFIG_DIR="$devroot"; \
     mkdir -p "$devroot"; chmod 700 "$devroot"; \
-    if [[ ! -f "$PEAKYPANES_CONFIG_DIR/config.yml" ]]; then : > "$PEAKYPANES_CONFIG_DIR/config.yml"; chmod 600 "$PEAKYPANES_CONFIG_DIR/config.yml"; fi; \
-    export PEAKYPANES_LOG_FILE="$devroot/peakypanes-dev.log"; \
-    PEAKYPANES_LOG_LEVEL=debug PEAKYPANES_LOG_FORMAT=text PEAKYPANES_LOG_SINK=file \
-    PEAKYPANES_LOG_FILE="$PEAKYPANES_LOG_FILE" PEAKYPANES_LOG_ADD_SOURCE=1 \
-    PEAKYPANES_LOG_INCLUDE_PAYLOADS=1 PEAKYPANES_PERF_TRACE_ALL=1 \
+    if [[ ! -f "$PEKY_CONFIG_DIR/config.yml" ]]; then : > "$PEKY_CONFIG_DIR/config.yml"; chmod 600 "$PEKY_CONFIG_DIR/config.yml"; fi; \
+    export PEKY_LOG_FILE="$devroot/peky-dev.log"; \
+    PEKY_LOG_LEVEL=debug PEKY_LOG_FORMAT=text PEKY_LOG_SINK=file \
+    PEKY_LOG_FILE="$PEKY_LOG_FILE" PEKY_LOG_ADD_SOURCE=1 \
+    PEKY_LOG_INCLUDE_PAYLOADS=1 PEKY_PERF_TRACE_ALL=1 \
     scripts/reinit.sh --keep-daemon; \
-    PEAKYPANES_LOG_LEVEL=debug PEAKYPANES_LOG_FORMAT=text PEAKYPANES_LOG_SINK=file \
-    PEAKYPANES_LOG_FILE="$PEAKYPANES_LOG_FILE" PEAKYPANES_LOG_ADD_SOURCE=1 \
-    PEAKYPANES_LOG_INCLUDE_PAYLOADS=1 PEAKYPANES_PERF_TRACE_ALL=1 \
+    PEKY_LOG_LEVEL=debug PEKY_LOG_FORMAT=text PEKY_LOG_SINK=file \
+    PEKY_LOG_FILE="$PEKY_LOG_FILE" PEKY_LOG_ADD_SOURCE=1 \
+    PEKY_LOG_INCLUDE_PAYLOADS=1 PEKY_PERF_TRACE_ALL=1 \
     "$peky" start -y'
 
 watch:
   @bash -cu 'set -euo pipefail; gobin="${GOBIN:-$(go env GOPATH)/bin}"; peky="$gobin/peky"; \
-    uid="${UID:-$(id -u)}"; devroot="/tmp/peakypanes-dev-$uid"; \
-    export PEAKYPANES_DATA_DIR="$devroot"; export PEAKYPANES_RUNTIME_DIR="$devroot"; export PEAKYPANES_CONFIG_DIR="$devroot"; \
+    uid="${UID:-$(id -u)}"; devroot="/tmp/peky-dev-$uid"; \
+    export PEKY_DATA_DIR="$devroot"; export PEKY_RUNTIME_DIR="$devroot"; export PEKY_CONFIG_DIR="$devroot"; \
     mkdir -p "$devroot"; chmod 700 "$devroot"; \
-    if [[ ! -f "$PEAKYPANES_CONFIG_DIR/config.yml" ]]; then : > "$PEAKYPANES_CONFIG_DIR/config.yml"; chmod 600 "$PEAKYPANES_CONFIG_DIR/config.yml"; fi; \
-    export PEAKYPANES_LOG_FILE="$devroot/peakypanes-dev.log"; \
-    PEAKYPANES_LOG_LEVEL=debug PEAKYPANES_LOG_FORMAT=text PEAKYPANES_LOG_SINK=file \
-    PEAKYPANES_LOG_FILE="$PEAKYPANES_LOG_FILE" PEAKYPANES_LOG_ADD_SOURCE=1 \
-    PEAKYPANES_LOG_INCLUDE_PAYLOADS=1 PEAKYPANES_PERF_TRACE_ALL=1 \
+    if [[ ! -f "$PEKY_CONFIG_DIR/config.yml" ]]; then : > "$PEKY_CONFIG_DIR/config.yml"; chmod 600 "$PEKY_CONFIG_DIR/config.yml"; fi; \
+    export PEKY_LOG_FILE="$devroot/peky-dev.log"; \
+    PEKY_LOG_LEVEL=debug PEKY_LOG_FORMAT=text PEKY_LOG_SINK=file \
+    PEKY_LOG_FILE="$PEKY_LOG_FILE" PEKY_LOG_ADD_SOURCE=1 \
+    PEKY_LOG_INCLUDE_PAYLOADS=1 PEKY_PERF_TRACE_ALL=1 \
     scripts/reinit.sh --keep-daemon; \
-    PEAKYPANES_LOG_LEVEL=debug PEAKYPANES_LOG_FORMAT=text PEAKYPANES_LOG_SINK=file \
-    PEAKYPANES_LOG_FILE="$PEAKYPANES_LOG_FILE" PEAKYPANES_LOG_ADD_SOURCE=1 \
-    PEAKYPANES_LOG_INCLUDE_PAYLOADS=1 PEAKYPANES_PERF_TRACE_ALL=1 \
+    PEKY_LOG_LEVEL=debug PEKY_LOG_FORMAT=text PEKY_LOG_SINK=file \
+    PEKY_LOG_FILE="$PEKY_LOG_FILE" PEKY_LOG_ADD_SOURCE=1 \
+    PEKY_LOG_INCLUDE_PAYLOADS=1 PEKY_PERF_TRACE_ALL=1 \
     scripts/dev-watch -- --'
 
 devfresh:
   @bash -cu 'set -euo pipefail; gobin="${GOBIN:-$(go env GOPATH)/bin}"; peky="$gobin/peky"; \
-    uid="${UID:-$(id -u)}"; devroot="/tmp/peakypanes-dev-$uid"; \
-    export PEAKYPANES_DATA_DIR="$devroot"; export PEAKYPANES_RUNTIME_DIR="$devroot"; export PEAKYPANES_CONFIG_DIR="$devroot"; \
+    uid="${UID:-$(id -u)}"; devroot="/tmp/peky-dev-$uid"; \
+    export PEKY_DATA_DIR="$devroot"; export PEKY_RUNTIME_DIR="$devroot"; export PEKY_CONFIG_DIR="$devroot"; \
     mkdir -p "$devroot"; chmod 700 "$devroot"; \
-    if [[ ! -f "$PEAKYPANES_CONFIG_DIR/config.yml" ]]; then : > "$PEAKYPANES_CONFIG_DIR/config.yml"; chmod 600 "$PEAKYPANES_CONFIG_DIR/config.yml"; fi; \
-    export PEAKYPANES_LOG_FILE="$devroot/peakypanes-dev.log"; \
-    PEAKYPANES_FRESH_CONFIG=1 PEAKYPANES_LOG_LEVEL=debug PEAKYPANES_LOG_FORMAT=text \
-    PEAKYPANES_LOG_SINK=file PEAKYPANES_LOG_FILE="$PEAKYPANES_LOG_FILE" \
-    PEAKYPANES_LOG_ADD_SOURCE=1 PEAKYPANES_LOG_INCLUDE_PAYLOADS=1 \
-    PEAKYPANES_PERF_TRACE_ALL=1 scripts/reinit.sh --all; \
-    PEAKYPANES_FRESH_CONFIG=1 PEAKYPANES_LOG_LEVEL=debug PEAKYPANES_LOG_FORMAT=text \
-    PEAKYPANES_LOG_SINK=file PEAKYPANES_LOG_FILE="$PEAKYPANES_LOG_FILE" \
-    PEAKYPANES_LOG_ADD_SOURCE=1 PEAKYPANES_LOG_INCLUDE_PAYLOADS=1 \
-    PEAKYPANES_PERF_TRACE_ALL=1 "$peky" start -y'
+    if [[ ! -f "$PEKY_CONFIG_DIR/config.yml" ]]; then : > "$PEKY_CONFIG_DIR/config.yml"; chmod 600 "$PEKY_CONFIG_DIR/config.yml"; fi; \
+    export PEKY_LOG_FILE="$devroot/peky-dev.log"; \
+    PEKY_FRESH_CONFIG=1 PEKY_LOG_LEVEL=debug PEKY_LOG_FORMAT=text \
+    PEKY_LOG_SINK=file PEKY_LOG_FILE="$PEKY_LOG_FILE" \
+    PEKY_LOG_ADD_SOURCE=1 PEKY_LOG_INCLUDE_PAYLOADS=1 \
+    PEKY_PERF_TRACE_ALL=1 scripts/reinit.sh --all; \
+    PEKY_FRESH_CONFIG=1 PEKY_LOG_LEVEL=debug PEKY_LOG_FORMAT=text \
+    PEKY_LOG_SINK=file PEKY_LOG_FILE="$PEKY_LOG_FILE" \
+    PEKY_LOG_ADD_SOURCE=1 PEKY_LOG_INCLUDE_PAYLOADS=1 \
+    PEKY_PERF_TRACE_ALL=1 "$peky" start -y'
 
 dev-fresh-all:
   @bash -cu 'set -euo pipefail; gobin="${GOBIN:-$(go env GOPATH)/bin}"; peky="$gobin/peky"; \
-    uid="${UID:-$(id -u)}"; devroot="/tmp/peakypanes-dev-$uid"; \
-    export PEAKYPANES_DATA_DIR="$devroot"; export PEAKYPANES_RUNTIME_DIR="$devroot"; export PEAKYPANES_CONFIG_DIR="$devroot"; \
-    if [[ -e "$PEAKYPANES_DATA_DIR" ]]; then trash "$PEAKYPANES_DATA_DIR"; fi; \
-    mkdir -p "$PEAKYPANES_DATA_DIR"; chmod 700 "$PEAKYPANES_DATA_DIR"; \
-    : > "$PEAKYPANES_CONFIG_DIR/config.yml"; \
-    export PEAKYPANES_LOG_FILE="$PEAKYPANES_DATA_DIR/peakypanes-dev.log"; \
-    PEAKYPANES_LOG_LEVEL=debug PEAKYPANES_LOG_FORMAT=text PEAKYPANES_LOG_SINK=file \
-    PEAKYPANES_LOG_FILE="$PEAKYPANES_LOG_FILE" PEAKYPANES_LOG_ADD_SOURCE=1 \
-    PEAKYPANES_LOG_INCLUDE_PAYLOADS=1 PEAKYPANES_PERF_TRACE_ALL=1 \
+    uid="${UID:-$(id -u)}"; devroot="/tmp/peky-dev-$uid"; \
+    export PEKY_DATA_DIR="$devroot"; export PEKY_RUNTIME_DIR="$devroot"; export PEKY_CONFIG_DIR="$devroot"; \
+    if [[ -e "$PEKY_DATA_DIR" ]]; then trash "$PEKY_DATA_DIR"; fi; \
+    mkdir -p "$PEKY_DATA_DIR"; chmod 700 "$PEKY_DATA_DIR"; \
+    : > "$PEKY_CONFIG_DIR/config.yml"; \
+    export PEKY_LOG_FILE="$PEKY_DATA_DIR/peky-dev.log"; \
+    PEKY_LOG_LEVEL=debug PEKY_LOG_FORMAT=text PEKY_LOG_SINK=file \
+    PEKY_LOG_FILE="$PEKY_LOG_FILE" PEKY_LOG_ADD_SOURCE=1 \
+    PEKY_LOG_INCLUDE_PAYLOADS=1 PEKY_PERF_TRACE_ALL=1 \
     scripts/reinit.sh --all --no-daemon-restart; \
-    PEAKYPANES_LOG_LEVEL=debug PEAKYPANES_LOG_FORMAT=text PEAKYPANES_LOG_SINK=file \
-    PEAKYPANES_LOG_FILE="$PEAKYPANES_LOG_FILE" PEAKYPANES_LOG_ADD_SOURCE=1 \
-    PEAKYPANES_LOG_INCLUDE_PAYLOADS=1 PEAKYPANES_PERF_TRACE_ALL=1 \
+    PEKY_LOG_LEVEL=debug PEKY_LOG_FORMAT=text PEKY_LOG_SINK=file \
+    PEKY_LOG_FILE="$PEKY_LOG_FILE" PEKY_LOG_ADD_SOURCE=1 \
+    PEKY_LOG_INCLUDE_PAYLOADS=1 PEKY_PERF_TRACE_ALL=1 \
     "$peky" daemon restart -y; \
-    PEAKYPANES_LOG_LEVEL=debug PEAKYPANES_LOG_FORMAT=text PEAKYPANES_LOG_SINK=file \
-    PEAKYPANES_LOG_FILE="$PEAKYPANES_LOG_FILE" PEAKYPANES_LOG_ADD_SOURCE=1 \
-    PEAKYPANES_LOG_INCLUDE_PAYLOADS=1 PEAKYPANES_PERF_TRACE_ALL=1 \
+    PEKY_LOG_LEVEL=debug PEKY_LOG_FORMAT=text PEKY_LOG_SINK=file \
+    PEKY_LOG_FILE="$PEKY_LOG_FILE" PEKY_LOG_ADD_SOURCE=1 \
+    PEKY_LOG_INCLUDE_PAYLOADS=1 PEKY_PERF_TRACE_ALL=1 \
     "$peky" start -y'
 
 dev-fresh-tracing: build
   @bash -cu 'set -euo pipefail; \
-    export PEAKYPANES_TUI_TRACE_INPUT=1; \
-    export PEAKYPANES_TUI_TRACE_INPUT_FILE="/private/tmp/tui-input-raw.log"; \
-    export PEAKYPANES_TUI_TRACE_INPUT_REPAIRED=1; \
-    export PEAKYPANES_TUI_TRACE_INPUT_REPAIRED_FILE="/private/tmp/tui-input-repaired.log"; \
-    : > "$PEAKYPANES_TUI_TRACE_INPUT_FILE"; \
-    : > "$PEAKYPANES_TUI_TRACE_INPUT_REPAIRED_FILE"; \
+    export PEKY_TUI_TRACE_INPUT=1; \
+    export PEKY_TUI_TRACE_INPUT_FILE="/private/tmp/tui-input-raw.log"; \
+    export PEKY_TUI_TRACE_INPUT_REPAIRED=1; \
+    export PEKY_TUI_TRACE_INPUT_REPAIRED_FILE="/private/tmp/tui-input-repaired.log"; \
+    : > "$PEKY_TUI_TRACE_INPUT_FILE"; \
+    : > "$PEKY_TUI_TRACE_INPUT_REPAIRED_FILE"; \
     gobin="${GOBIN:-$(go env GOPATH)/bin}"; peky="$gobin/peky"; \
-    uid="${UID:-$(id -u)}"; devroot="/tmp/peakypanes-dev-$uid"; \
-    export PEAKYPANES_DATA_DIR="$devroot"; export PEAKYPANES_RUNTIME_DIR="$devroot"; export PEAKYPANES_CONFIG_DIR="$devroot"; \
-    if [[ -e "$PEAKYPANES_DATA_DIR" ]]; then trash "$PEAKYPANES_DATA_DIR"; fi; \
-    mkdir -p "$PEAKYPANES_DATA_DIR"; chmod 700 "$PEAKYPANES_DATA_DIR"; \
-    : > "$PEAKYPANES_CONFIG_DIR/config.yml"; \
-    export PEAKYPANES_LOG_FILE="$PEAKYPANES_DATA_DIR/peakypanes-dev.log"; \
-    PEAKYPANES_LOG_LEVEL=debug PEAKYPANES_LOG_FORMAT=text PEAKYPANES_LOG_SINK=file \
-    PEAKYPANES_LOG_FILE="$PEAKYPANES_LOG_FILE" PEAKYPANES_LOG_ADD_SOURCE=1 \
-    PEAKYPANES_LOG_INCLUDE_PAYLOADS=1 PEAKYPANES_PERF_TRACE_ALL=1 \
+    uid="${UID:-$(id -u)}"; devroot="/tmp/peky-dev-$uid"; \
+    export PEKY_DATA_DIR="$devroot"; export PEKY_RUNTIME_DIR="$devroot"; export PEKY_CONFIG_DIR="$devroot"; \
+    if [[ -e "$PEKY_DATA_DIR" ]]; then trash "$PEKY_DATA_DIR"; fi; \
+    mkdir -p "$PEKY_DATA_DIR"; chmod 700 "$PEKY_DATA_DIR"; \
+    : > "$PEKY_CONFIG_DIR/config.yml"; \
+    export PEKY_LOG_FILE="$PEKY_DATA_DIR/peky-dev.log"; \
+    PEKY_LOG_LEVEL=debug PEKY_LOG_FORMAT=text PEKY_LOG_SINK=file \
+    PEKY_LOG_FILE="$PEKY_LOG_FILE" PEKY_LOG_ADD_SOURCE=1 \
+    PEKY_LOG_INCLUDE_PAYLOADS=1 PEKY_PERF_TRACE_ALL=1 \
     scripts/reinit.sh --all --no-daemon-restart; \
-    PEAKYPANES_LOG_LEVEL=debug PEAKYPANES_LOG_FORMAT=text PEAKYPANES_LOG_SINK=file \
-    PEAKYPANES_LOG_FILE="$PEAKYPANES_LOG_FILE" PEAKYPANES_LOG_ADD_SOURCE=1 \
-    PEAKYPANES_LOG_INCLUDE_PAYLOADS=1 PEAKYPANES_PERF_TRACE_ALL=1 \
+    PEKY_LOG_LEVEL=debug PEKY_LOG_FORMAT=text PEKY_LOG_SINK=file \
+    PEKY_LOG_FILE="$PEKY_LOG_FILE" PEKY_LOG_ADD_SOURCE=1 \
+    PEKY_LOG_INCLUDE_PAYLOADS=1 PEKY_PERF_TRACE_ALL=1 \
     "$peky" daemon restart -y; \
-    PEAKYPANES_LOG_LEVEL=debug PEAKYPANES_LOG_FORMAT=text PEAKYPANES_LOG_SINK=file \
-    PEAKYPANES_LOG_FILE="$PEAKYPANES_LOG_FILE" PEAKYPANES_LOG_ADD_SOURCE=1 \
-    PEAKYPANES_LOG_INCLUDE_PAYLOADS=1 PEAKYPANES_PERF_TRACE_ALL=1 \
+    PEKY_LOG_LEVEL=debug PEKY_LOG_FORMAT=text PEKY_LOG_SINK=file \
+    PEKY_LOG_FILE="$PEKY_LOG_FILE" PEKY_LOG_ADD_SOURCE=1 \
+    PEKY_LOG_INCLUDE_PAYLOADS=1 PEKY_PERF_TRACE_ALL=1 \
     "$peky" start -y'
 
 dev-tmux-tracing: build
   @bash -cu 'set -euo pipefail; scripts/dev-tmux --tracing'
 
 mark-scroll-start:
-  @bash -cu 'set -euo pipefail; uid="${UID:-$(id -u)}"; log="/tmp/peakypanes-dev-$uid/peakypanes-dev.log"; \
+  @bash -cu 'set -euo pipefail; uid="${UID:-$(id -u)}"; log="/tmp/peky-dev-$uid/peky-dev.log"; \
     python3 -c '\''import datetime; print("MARK scroll_start ts="+datetime.datetime.now().astimezone().isoformat(timespec="seconds"))'\'' \
     | tee -a "$log" >/dev/null'
 
 mark-scroll-stop:
-  @bash -cu 'set -euo pipefail; uid="${UID:-$(id -u)}"; log="/tmp/peakypanes-dev-$uid/peakypanes-dev.log"; \
+  @bash -cu 'set -euo pipefail; uid="${UID:-$(id -u)}"; log="/tmp/peky-dev-$uid/peky-dev.log"; \
     python3 -c '\''import datetime; print("MARK scroll_stop ts="+datetime.datetime.now().astimezone().isoformat(timespec="seconds"))'\'' \
     | tee -a "$log" >/dev/null'
 
 dev-fresh-daemon-restart:
   @bash -cu 'set -euo pipefail; gobin="${GOBIN:-$(go env GOPATH)/bin}"; peky="$gobin/peky"; \
-    uid="${UID:-$(id -u)}"; devroot="/tmp/peakypanes-dev-$uid"; \
-    export PEAKYPANES_DATA_DIR="$devroot"; export PEAKYPANES_RUNTIME_DIR="$devroot"; export PEAKYPANES_CONFIG_DIR="$devroot"; \
-    mkdir -p "$PEAKYPANES_DATA_DIR"; chmod 700 "$PEAKYPANES_DATA_DIR"; \
-    if [[ ! -f "$PEAKYPANES_CONFIG_DIR/config.yml" ]]; then : > "$PEAKYPANES_CONFIG_DIR/config.yml"; fi; \
-    export PEAKYPANES_LOG_FILE="$PEAKYPANES_DATA_DIR/peakypanes-dev.log"; \
+    uid="${UID:-$(id -u)}"; devroot="/tmp/peky-dev-$uid"; \
+    export PEKY_DATA_DIR="$devroot"; export PEKY_RUNTIME_DIR="$devroot"; export PEKY_CONFIG_DIR="$devroot"; \
+    mkdir -p "$PEKY_DATA_DIR"; chmod 700 "$PEKY_DATA_DIR"; \
+    if [[ ! -f "$PEKY_CONFIG_DIR/config.yml" ]]; then : > "$PEKY_CONFIG_DIR/config.yml"; fi; \
+    export PEKY_LOG_FILE="$PEKY_DATA_DIR/peky-dev.log"; \
     "$peky" daemon restart -y'
 
 prod:

@@ -230,7 +230,7 @@ func NewWindow(opts Options) (*Window, error) {
 	}
 	env = append(env,
 		"TERM_PROGRAM=PEAKYPANES",
-		"PEAKYPANES_PANE_ID="+opts.ID,
+		"PEKY_PANE_ID="+opts.ID,
 	)
 	cmd.Env = env
 
@@ -717,7 +717,7 @@ func detectShell() string {
 }
 
 func detectShellCommand() (string, []string) {
-	if raw := strings.TrimSpace(os.Getenv("PEAKYPANES_DEFAULT_SHELL_CMD")); raw != "" {
+	if raw := strings.TrimSpace(os.Getenv("PEKY_DEFAULT_SHELL_CMD")); raw != "" {
 		parts, err := shellquote.Split(raw)
 		if err == nil && len(parts) > 0 {
 			return parts[0], parts[1:]

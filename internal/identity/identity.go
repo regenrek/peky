@@ -6,8 +6,16 @@ import (
 
 const (
 	BrandName = "PeakyPanes"
-	AppSlug   = "peakypanes"
-	CLIName   = "peky"
+	// AppSlug is the canonical identifier for user-facing and on-disk state.
+	// It intentionally matches the only supported CLI binary name.
+	AppSlug = "peky"
+	CLIName = "peky"
+
+	ProjectConfigFileYML  = ".peky.yml"
+	ProjectConfigFileYAML = ".peky.yaml"
+
+	GlobalConfigFile = "config.yml"
+	GlobalLayoutsDir = "layouts"
 )
 
 var (

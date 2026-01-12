@@ -16,7 +16,7 @@ This guide covers everything you need to know about creating custom layouts in P
 
 ## Basic Structure
 
-A `.peakypanes.yml` file has this structure:
+A `.peky.yml` file has this structure:
 
 ```yaml
 # Optional: Custom session name (defaults to directory name)
@@ -331,8 +331,8 @@ layout:
 Layouts are loaded in this order (first match wins):
 
 1. `--layout` flag on command line
-2. `.peakypanes.yml` in project directory
-3. Matching project in `~/.config/peakypanes/config.yml`
+2. `.peky.yml` in project directory
+3. Matching project in `~/.config/peky/config.yml`
 4. Built-in `auto` layout (default)
 
 ---

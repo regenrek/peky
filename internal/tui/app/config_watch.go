@@ -24,10 +24,10 @@ func projectConfigStateForPath(projectPath string) projectConfigState {
 	if projectPath == "" {
 		return projectConfigState{}
 	}
-	if state, ok := statConfigFile(filepath.Join(projectPath, ".peakypanes.yml")); ok {
+	if state, ok := statConfigFile(filepath.Join(projectPath, ".peky.yml")); ok {
 		return state
 	}
-	if state, ok := statConfigFile(filepath.Join(projectPath, ".peakypanes.yaml")); ok {
+	if state, ok := statConfigFile(filepath.Join(projectPath, ".peky.yaml")); ok {
 		return state
 	}
 	return projectConfigState{}

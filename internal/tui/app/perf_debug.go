@@ -11,7 +11,7 @@ import (
 	"github.com/regenrek/peakypanes/internal/logging"
 )
 
-const perfTraceAllEnv = "PEAKYPANES_PERF_TRACE_ALL"
+const perfTraceAllEnv = "PEKY_PERF_TRACE_ALL"
 
 const (
 	perfLogInterval              = 2 * time.Second

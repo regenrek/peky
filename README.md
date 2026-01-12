@@ -34,7 +34,7 @@ window layouts and better-organized projects.
 - 🗂️ **Multi-project dashboard** - See every project/session in one TUI without switching windows
 - 📦 **Built-in layouts** - Works out of the box with sensible defaults
 - 🧩 **Exact grids** - Use `grid: 2x3` for consistent rows/columns
-- 📁 **Project-local config** - Commit `.peakypanes.yml` to git for team sharing
+- 📁 **Project-local config** - Commit `.peky.yml` to git for team sharing
 - 🏠 **Global config** - Define layouts once, use everywhere
 - 🔄 **Variable expansion** - Use `${EDITOR}`, `${PROJECT_PATH}`, etc.
 - 🎯 **Zero config** - Just run `peky` in any directory
@@ -89,8 +89,8 @@ peky start
 ```bash
 cd your-project
 peky init --local
-# Edit .peakypanes.yml
-git add .peakypanes.yml  # Share with team
+# Edit .peky.yml
+git add .peky.yml  # Share with team
 ```
 
 The CLI is `peky`.
@@ -108,7 +108,7 @@ The CLI is `peky`.
 
 ## Configuration (quick look)
 
-Project-local config lives in `.peakypanes.yml`, and global config lives in `~/.config/peakypanes/config.yml`.
+Project-local config lives in `.peky.yml`, and global config lives in `~/.config/peky/config.yml`.
 See the full schema, built-in layouts, and variable expansion in [docs/configuration.md](docs/configuration.md).
 
 ```yaml
@@ -151,7 +151,7 @@ See `RELEASE-DOCS.md` for the full release checklist (tests, tag, GoReleaser, np
 ## For Teams
 
 1. Run `peky init --local` in your project
-2. Customize `.peakypanes.yml` for your stack
+2. Customize `.peky.yml` for your stack
 3. Commit to git
 4. Teammates install peakypanes and run `peky` - done!
 

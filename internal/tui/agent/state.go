@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/regenrek/peakypanes/internal/identity"
 )
 
 const defaultAgentStateTTL = 30 * time.Second
@@ -51,7 +53,7 @@ type PaneState struct {
 }
 
 func agentStateDir() string {
-	if dir := strings.TrimSpace(os.Getenv("PEAKYPANES_AGENT_STATE_DIR")); dir != "" {
+	if dir := strings.TrimSpace(os.Getenv("PEKY_AGENT_STATE_DIR")); dir != "" {
 		return dir
 	}
 	runtimeDir := strings.TrimSpace(os.Getenv("XDG_RUNTIME_DIR"))
@@ -60,7 +62,7 @@ func agentStateDir() string {
 		// On macOS, os.TempDir() is often not /tmp, which breaks cross-process coordination.
 		runtimeDir = "/tmp"
 	}
-	return filepath.Join(runtimeDir, "peakypanes", "agent-state")
+	return filepath.Join(runtimeDir, identity.AppSlug, "agent-state")
 }
 
 func agentStatePath(paneID string) string {

@@ -11,7 +11,7 @@ import (
 func TestRuntimeDirPermissions(t *testing.T) {
 	base := t.TempDir()
 	dir := filepath.Join(base, "runtime")
-	t.Setenv("PEAKYPANES_RUNTIME_DIR", dir)
+	t.Setenv("PEKY_RUNTIME_DIR", dir)
 
 	got, err := RuntimeDir()
 	if err != nil {
@@ -58,7 +58,7 @@ func TestEnsureRuntimeDirTightensDefaultPerms(t *testing.T) {
 func TestDataDirPermissions(t *testing.T) {
 	base := t.TempDir()
 	dir := filepath.Join(base, "data")
-	t.Setenv("PEAKYPANES_DATA_DIR", dir)
+	t.Setenv("PEKY_DATA_DIR", dir)
 
 	got, err := DataDir()
 	if err != nil {

@@ -8,7 +8,7 @@ import (
 
 func TestProjectConfigStateForPath(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, ".peakypanes.yml")
+	path := filepath.Join(dir, ".peky.yml")
 	if err := os.WriteFile(path, []byte("ok"), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}

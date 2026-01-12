@@ -44,11 +44,11 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 gobin="${GOBIN:-$(go env GOPATH)/bin}"
 peky="$gobin/peky"
 uid="${UID:-$(id -u)}"
-devroot="/tmp/peakypanes-dev-$uid"
-log="$devroot/peakypanes-dev.log"
+devroot="/tmp/peky-dev-$uid"
+log="$devroot/peky-dev.log"
 
 if [[ -z "$session" ]]; then
-  session="peakypanes-dev-$uid"
+  session="peky-dev-$uid"
 fi
 
 cd "$root"
@@ -69,16 +69,16 @@ if [[ "$tracing" == "1" ]]; then
 fi
 
 common_env=(
-  "PEAKYPANES_DATA_DIR=$devroot"
-  "PEAKYPANES_RUNTIME_DIR=$devroot"
-  "PEAKYPANES_CONFIG_DIR=$devroot"
-  "PEAKYPANES_LOG_SINK=file"
-  "PEAKYPANES_LOG_FILE=$log"
-  "PEAKYPANES_LOG_LEVEL=debug"
-  "PEAKYPANES_LOG_FORMAT=text"
-  "PEAKYPANES_LOG_ADD_SOURCE=1"
-  "PEAKYPANES_LOG_INCLUDE_PAYLOADS=1"
-  "PEAKYPANES_PERF_TRACE_ALL=1"
+  "PEKY_DATA_DIR=$devroot"
+  "PEKY_RUNTIME_DIR=$devroot"
+  "PEKY_CONFIG_DIR=$devroot"
+  "PEKY_LOG_SINK=file"
+  "PEKY_LOG_FILE=$log"
+  "PEKY_LOG_LEVEL=debug"
+  "PEKY_LOG_FORMAT=text"
+  "PEKY_LOG_ADD_SOURCE=1"
+  "PEKY_LOG_INCLUDE_PAYLOADS=1"
+  "PEKY_PERF_TRACE_ALL=1"
 )
 
 if tmux has-session -t "$session" 2>/dev/null; then
@@ -118,10 +118,10 @@ EOF
 )
 if [[ "$tracing" == "1" ]]; then
   tui_cmd+=$'\n'
-  tui_cmd+=$'export PEAKYPANES_TUI_TRACE_INPUT=1\n'
-  tui_cmd+=$'export PEAKYPANES_TUI_TRACE_INPUT_FILE=/private/tmp/tui-input-raw.log\n'
-  tui_cmd+=$'export PEAKYPANES_TUI_TRACE_INPUT_REPAIRED=1\n'
-  tui_cmd+=$'export PEAKYPANES_TUI_TRACE_INPUT_REPAIRED_FILE=/private/tmp/tui-input-repaired.log\n'
+  tui_cmd+=$'export PEKY_TUI_TRACE_INPUT=1\n'
+  tui_cmd+=$'export PEKY_TUI_TRACE_INPUT_FILE=/private/tmp/tui-input-raw.log\n'
+  tui_cmd+=$'export PEKY_TUI_TRACE_INPUT_REPAIRED=1\n'
+  tui_cmd+=$'export PEKY_TUI_TRACE_INPUT_REPAIRED_FILE=/private/tmp/tui-input-repaired.log\n'
 fi
 tui_cmd+=$'\n'"$peky start -y"$'\n'
 

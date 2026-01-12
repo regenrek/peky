@@ -10,7 +10,7 @@ fresh install. By default it runs the dashboard in a temp project directory.
 
 Options:
   version        npm tag or version to run (default: latest)
-  --with-project create a .peakypanes.yml in the temp project
+  --with-project create a .peky.yml in the temp project
   --cmd          custom command after version (e.g. "start --layout auto")
 
 Examples:
@@ -66,7 +66,7 @@ TMP_PROJ="$(mktemp -d)"
 mkdir -p "$TMP_HOME/.config"
 
 if [[ $with_project == true ]]; then
-  cat > "$TMP_PROJ/.peakypanes.yml" <<'YAML'
+  cat > "$TMP_PROJ/.peky.yml" <<'YAML'
 session: demo
 layout:
   grid: 2x2
@@ -89,7 +89,7 @@ printf "  HOME=%s\n" "$TMP_HOME"
 printf "  XDG_CONFIG_HOME=%s\n" "$TMP_HOME/.config"
 printf "  PROJECT=%s\n" "$TMP_PROJ"
 if [[ $with_project == true ]]; then
-  printf "  project config: %s/.peakypanes.yml\n" "$TMP_PROJ"
+  printf "  project config: %s/.peky.yml\n" "$TMP_PROJ"
 fi
 printf "\nRunning: %s\n\n" "${cmd[*]}"
 

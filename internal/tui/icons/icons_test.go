@@ -20,26 +20,26 @@ func TestVariantsBySize(t *testing.T) {
 }
 
 func TestActiveIconSet(t *testing.T) {
-	t.Setenv("PEAKYPANES_ICON_SET", "ascii")
+	t.Setenv("PEKY_ICON_SET", "ascii")
 	if got := Active().Caret.Medium; got != ASCII.Caret.Medium {
 		t.Fatalf("Active() ascii = %q", got)
 	}
-	t.Setenv("PEAKYPANES_ICON_SET", "unicode")
+	t.Setenv("PEKY_ICON_SET", "unicode")
 	if got := Active().Caret.Medium; got != Unicode.Caret.Medium {
 		t.Fatalf("Active() unicode = %q", got)
 	}
 }
 
 func TestActiveSize(t *testing.T) {
-	t.Setenv("PEAKYPANES_ICON_SIZE", "sm")
+	t.Setenv("PEKY_ICON_SIZE", "sm")
 	if got := ActiveSize(); got != SizeSmall {
 		t.Fatalf("ActiveSize(sm) = %v", got)
 	}
-	t.Setenv("PEAKYPANES_ICON_SIZE", "lg")
+	t.Setenv("PEKY_ICON_SIZE", "lg")
 	if got := ActiveSize(); got != SizeLarge {
 		t.Fatalf("ActiveSize(lg) = %v", got)
 	}
-	t.Setenv("PEAKYPANES_ICON_SIZE", "medium")
+	t.Setenv("PEKY_ICON_SIZE", "medium")
 	if got := ActiveSize(); got != SizeMedium {
 		t.Fatalf("ActiveSize(default) = %v", got)
 	}

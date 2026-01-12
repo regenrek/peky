@@ -11,7 +11,7 @@ func TestSidebarHiddenOverrides(t *testing.T) {
 	m.tab = TabProject
 
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, ".peakypanes.yml"), []byte("dashboard:\n  sidebar:\n    hidden: true\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".peky.yml"), []byte("dashboard:\n  sidebar:\n    hidden: true\n"), 0o644); err != nil {
 		t.Fatalf("write project config: %v", err)
 	}
 

@@ -10,7 +10,7 @@ peky dashboard|ui        # Open dashboard (direct)
 peky open|start|o         # Start session and open dashboard
 peky <layout>             # Shorthand: start --layout <layout>
 peky init                 # Create global config
-peky init --local         # Create .peakypanes.yml in cwd
+peky init --local         # Create .peky.yml in cwd
 peky layouts              # List available layouts
 peky layouts export NAME  # Export layout YAML
 peky clone|c USER/REPO    # Clone and start session

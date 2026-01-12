@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	RuntimeDirEnv          = "PEAKYPANES_RUNTIME_DIR"
-	DataDirEnv             = "PEAKYPANES_DATA_DIR"
-	ConfigDirEnv           = "PEAKYPANES_CONFIG_DIR"
-	FreshConfigEnv         = "PEAKYPANES_FRESH_CONFIG"
-	StartSessionTimeoutEnv = "PEAKYPANES_START_TIMEOUT"
+	RuntimeDirEnv          = "PEKY_RUNTIME_DIR"
+	DataDirEnv             = "PEKY_DATA_DIR"
+	ConfigDirEnv           = "PEKY_CONFIG_DIR"
+	FreshConfigEnv         = "PEKY_FRESH_CONFIG"
+	StartSessionTimeoutEnv = "PEKY_START_TIMEOUT"
 )
 
 func enabledEnv(name string) bool {

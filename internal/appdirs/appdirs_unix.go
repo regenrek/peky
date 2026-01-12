@@ -11,6 +11,7 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/regenrek/peakypanes/internal/identity"
 	"github.com/regenrek/peakypanes/internal/runenv"
 	"log/slog"
 )
@@ -27,7 +28,7 @@ func RuntimeDir() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve config dir: %w", err)
 	}
-	dir = filepath.Join(dir, "peakypanes")
+	dir = filepath.Join(dir, identity.AppSlug)
 	return ensureRuntimeDir(dir, false)
 }
 
@@ -41,18 +42,18 @@ func DataDir() (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("resolve config dir: %w", err)
 		}
-		dir = filepath.Join(dir, "peakypanes")
+		dir = filepath.Join(dir, identity.AppSlug)
 		return ensureDataDir(dir, false)
 	}
 	if xdg := strings.TrimSpace(os.Getenv("XDG_DATA_HOME")); xdg != "" {
-		dir := filepath.Join(xdg, "peakypanes")
+		dir := filepath.Join(xdg, identity.AppSlug)
 		return ensureDataDir(dir, false)
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("resolve home dir: %w", err)
 	}
-	dir := filepath.Join(home, ".local", "share", "peakypanes")
+	dir := filepath.Join(home, ".local", "share", identity.AppSlug)
 	return ensureDataDir(dir, false)
 }
 

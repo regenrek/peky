@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/regenrek/peakypanes/internal/identity"
 	"github.com/regenrek/peakypanes/internal/runenv"
 )
 
@@ -51,7 +52,7 @@ func TestDefaultPathsRuntimeDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UserConfigDir: %v", err)
 	}
-	runtimeDir := filepath.Join(configDir, "peakypanes")
+	runtimeDir := filepath.Join(configDir, identity.AppSlug)
 	if _, err := os.Stat(runtimeDir); err != nil {
 		t.Fatalf("expected runtime dir created: %v", err)
 	}

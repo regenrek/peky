@@ -61,7 +61,7 @@ func TestLoaderConfigPresence(t *testing.T) {
 	if err := os.WriteFile(globalPath, []byte("layouts: {}\n"), 0o644); err != nil {
 		t.Fatalf("write global config: %v", err)
 	}
-	projectPath := filepath.Join(projectDir, ".peakypanes.yml")
+	projectPath := filepath.Join(projectDir, ".peky.yml")
 	if err := os.WriteFile(projectPath, []byte("session: demo\n"), 0o644); err != nil {
 		t.Fatalf("write project config: %v", err)
 	}
@@ -153,7 +153,7 @@ func writeGlobalConfig(t *testing.T, dir, contents string) string {
 
 func writeProjectConfig(t *testing.T, dir, contents string) {
 	t.Helper()
-	writeFile(t, filepath.Join(dir, ".peakypanes.yml"), contents, "write project config")
+	writeFile(t, filepath.Join(dir, ".peky.yml"), contents, "write project config")
 }
 
 func readLayoutFixture(t *testing.T, name string) string {
@@ -209,7 +209,7 @@ func assertProjectLayoutListed(t *testing.T, loader *Loader) {
 		if info.Source != "project" {
 			continue
 		}
-		if !strings.HasSuffix(info.Path, ".peakypanes.yml") {
+		if !strings.HasSuffix(info.Path, ".peky.yml") {
 			t.Fatalf("project layout path = %q", info.Path)
 		}
 		return

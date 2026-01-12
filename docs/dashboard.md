@@ -26,7 +26,7 @@ Quick reply details:
 
 ## Key bindings (also shown in the help view)
 
-Keymap overrides are available in the global config (~/.config/peakypanes/config.yml).
+Keymap overrides are available in the global config (~/.config/peky/config.yml).
 
 Project
 - ctrl+o open project picker (creates session detached; stay in dashboard)
@@ -143,7 +143,7 @@ quit_behavior controls what happens on quit when panes are still running:
 
 PeakyPanes can read per-pane JSON state files to show accurate running/idle/done status for Codex CLI and Claude Code TUI sessions. This is on by default and falls back to regex or idle detection if no state file is present. You can disable it via dashboard.agent_detection.
 
-State files are written under ${XDG_RUNTIME_DIR:-/tmp}/peakypanes/agent-state and keyed by PEAKYPANES_PANE_ID (override with PEAKYPANES_AGENT_STATE_DIR).
+State files are written under ${XDG_RUNTIME_DIR:-/tmp}/peky/agent-state and keyed by PEKY_PANE_ID (override with PEKY_AGENT_STATE_DIR).
 
 Codex CLI (TUI)
 

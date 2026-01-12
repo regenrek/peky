@@ -22,12 +22,12 @@ This ensures only the current user can connect.
 
 macOS / Linux
 
-- Use a per-user runtime path (for example `~/.config/peakypanes/sessiond/`).
+- Use a per-user runtime path (for example `~/.config/peky/sessiond/`).
 - Ensure `mkdir` uses `0700` and apply restrictive perms to the socket.
 
 Windows
 
-- Use a per-user named pipe (e.g. `\\.\pipe\peakypanes-<uid>`).
+- Use a per-user named pipe (e.g. `\\.\pipe\peky-<uid>`).
 - No admin rights should be required; rely on default ACLs for the current user.
 
 ## Optional system services

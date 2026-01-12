@@ -109,7 +109,7 @@ func TestPaneStatusClassification(t *testing.T) {
 
 func TestClassifyPaneFromAgentState(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("PEAKYPANES_AGENT_STATE_DIR", dir)
+	t.Setenv("PEKY_AGENT_STATE_DIR", dir)
 	state := map[string]any{
 		"state":              "running",
 		"tool":               "codex",

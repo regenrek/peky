@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/regenrek/peakypanes/internal/identity"
 	"github.com/regenrek/peakypanes/internal/runenv"
 )
 
@@ -156,7 +157,7 @@ func TestLoadAndSaveConfig(t *testing.T) {
 
 func TestLoadProjectLocalInlineLayout(t *testing.T) {
 	tmpDir := t.TempDir()
-	path := filepath.Join(tmpDir, ".peakypanes.yml")
+	path := filepath.Join(tmpDir, ".peky.yml")
 	if err := os.WriteFile(path, []byte("grid: 2x2\ncommands: [\"echo hi\"]\n"), 0o644); err != nil {
 		t.Fatalf("write project config: %v", err)
 	}
@@ -172,7 +173,7 @@ func TestLoadProjectLocalInlineLayout(t *testing.T) {
 
 func TestLoadProjectLocalYamlFallback(t *testing.T) {
 	tmpDir := t.TempDir()
-	path := filepath.Join(tmpDir, ".peakypanes.yaml")
+	path := filepath.Join(tmpDir, ".peky.yaml")
 	if err := os.WriteFile(path, []byte("session: demo\n"), 0o644); err != nil {
 		t.Fatalf("write project config: %v", err)
 	}
@@ -188,7 +189,7 @@ func TestLoadProjectLocalYamlFallback(t *testing.T) {
 
 func TestLoadProjectLocalDashboardSidebar(t *testing.T) {
 	tmpDir := t.TempDir()
-	path := filepath.Join(tmpDir, ".peakypanes.yml")
+	path := filepath.Join(tmpDir, ".peky.yml")
 	if err := os.WriteFile(path, []byte("dashboard:\n  sidebar:\n    hidden: true\n"), 0o644); err != nil {
 		t.Fatalf("write project config: %v", err)
 	}
@@ -228,7 +229,7 @@ func TestDefaultPaths(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DefaultConfigPath() error: %v", err)
 	}
-	if cfgPath != filepath.Join(tmpHome, ".config", "peakypanes", "config.yml") {
+	if cfgPath != filepath.Join(tmpHome, ".config", identity.AppSlug, identity.GlobalConfigFile) {
 		t.Fatalf("DefaultConfigPath() = %q", cfgPath)
 	}
 
@@ -236,7 +237,7 @@ func TestDefaultPaths(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DefaultLayoutsDir() error: %v", err)
 	}
-	if layoutsDir != filepath.Join(tmpHome, ".config", "peakypanes", "layouts") {
+	if layoutsDir != filepath.Join(tmpHome, ".config", identity.AppSlug, identity.GlobalLayoutsDir) {
 		t.Fatalf("DefaultLayoutsDir() = %q", layoutsDir)
 	}
 }

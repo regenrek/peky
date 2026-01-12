@@ -13,8 +13,8 @@ func TestInitLocalWritesConfig(t *testing.T) {
 	if err := initLocal("peky", "auto", true, dir); err != nil {
 		t.Fatalf("initLocal error: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, ".peakypanes.yml")); err != nil {
-		t.Fatalf("expected .peakypanes.yml: %v", err)
+	if _, err := os.Stat(filepath.Join(dir, ".peky.yml")); err != nil {
+		t.Fatalf("expected .peky.yml: %v", err)
 	}
 }
 

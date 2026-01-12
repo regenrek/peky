@@ -28,9 +28,9 @@ const (
 	maxPaneSpawnSpacingMS        = 1000
 	maxPaneSpawnWaitOutputMS     = 10000
 
-	paneSpawnThresholdEnv  = "PEAKYPANES_PANE_SPAWN_THRESHOLD"
-	paneSpawnSpacingEnv    = "PEAKYPANES_PANE_SPAWN_SPACING_MS"
-	paneSpawnWaitOutputEnv = "PEAKYPANES_PANE_SPAWN_WAIT_OUTPUT_MS"
+	paneSpawnThresholdEnv  = "PEKY_PANE_SPAWN_THRESHOLD"
+	paneSpawnSpacingEnv    = "PEKY_PANE_SPAWN_SPACING_MS"
+	paneSpawnWaitOutputEnv = "PEKY_PANE_SPAWN_WAIT_OUTPUT_MS"
 )
 
 type paneSpawnPaceConfig struct {

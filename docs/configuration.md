@@ -3,12 +3,12 @@
 See the layout builder guide for detailed layout syntax:
 - docs/layout-builder.md
 
-## Project-local configuration (.peakypanes.yml)
+## Project-local configuration (.peky.yml)
 
 Create this file in your project root for team-shared layouts:
 
 ```yaml
-# .peakypanes.yml
+# .peky.yml
 session: my-project
 
 layout:
@@ -70,7 +70,7 @@ layout:
 #     hidden: true
 ```
 
-## Global configuration (~/.config/peakypanes/config.yml)
+## Global configuration (~/.config/peky/config.yml)
 
 Use this for personal layouts and multi-project management:
 
@@ -138,10 +138,10 @@ layouts:
 # session_restore:
 #   enabled: true
 #   # base_dir defaults to OS-native data dir:
-#   #   macOS: ~/Library/Application Support/peakypanes/sessions
-#   #   Linux: ~/.local/share/peakypanes/sessions (or $XDG_DATA_HOME/peakypanes/sessions)
-#   #   Windows: %LocalAppData%\\peakypanes\\sessions
-#   # base_dir: "~/Library/Application Support/peakypanes/sessions"
+#   #   macOS: ~/Library/Application Support/peky/sessions
+#   #   Linux: ~/.local/share/peky/sessions (or $XDG_DATA_HOME/peky/sessions)
+#   #   Windows: %LocalAppData%\\peky\\sessions
+#   # base_dir: "~/Library/Application Support/peky/sessions"
 #   max_scrollback_lines: 0     # 0 = keep full in-memory scrollback
 #   max_scrollback_bytes: 0     # 0 = no extra limit beyond in-memory
 #   snapshot_interval_ms: 2000  # snapshot cadence
@@ -198,7 +198,7 @@ layout:
 ## Built-in layouts
 
 Core layouts:
-- auto (default) - auto-detects .peakypanes.yml or falls back to the 3-pane default
+- auto (default) - auto-detects .peky.yml or falls back to the 3-pane default
 - split-v - two vertical panes (left/right)
 - split-h - two horizontal panes (top/bottom)
 - 3x3 - 9-pane grid
@@ -209,12 +209,12 @@ Core layouts:
 peky layouts
 
 # Export a layout to customize
-peky layouts export 3x3 > .peakypanes.yml
+peky layouts export 3x3 > .peky.yml
 ```
 
 ## Layout detection order
 
 1. --layout flag (highest priority)
-2. .peakypanes.yml in current directory
-3. Project entry in ~/.config/peakypanes/config.yml
+2. .peky.yml in current directory
+3. Project entry in ~/.config/peky/config.yml
 4. Built-in auto layout (fallback)

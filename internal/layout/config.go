@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/regenrek/peakypanes/internal/identity"
 	"github.com/regenrek/peakypanes/internal/logging"
 	"github.com/regenrek/peakypanes/internal/runenv"
 	"gopkg.in/yaml.v3"
@@ -279,12 +280,12 @@ type Config struct {
 	QuickReply     QuickReplyConfig         `yaml:"quick_reply,omitempty"`
 }
 
-// ProjectDashboardConfig configures dashboard overrides in .peakypanes.yml.
+// ProjectDashboardConfig configures dashboard overrides in .peky.yml.
 type ProjectDashboardConfig struct {
 	Sidebar DashboardSidebarConfig `yaml:"sidebar,omitempty"`
 }
 
-// ProjectLocalConfig is the schema for .peakypanes.yml in project directories.
+// ProjectLocalConfig is the schema for .peky.yml in project directories.
 type ProjectLocalConfig struct {
 	Session   string                 `yaml:"session,omitempty"`
 	Layout    *LayoutConfig          `yaml:"layout,omitempty"`
@@ -319,14 +320,13 @@ func SaveConfig(path string, cfg *Config) error {
 	return nil
 }
 
-// LoadProjectLocal reads a .peakypanes.yml from a directory.
+// LoadProjectLocal reads a local project config from a directory.
 func LoadProjectLocal(dir string) (*ProjectLocalConfig, error) {
-	path := filepath.Join(dir, ".peakypanes.yml")
+	path := filepath.Join(dir, identity.ProjectConfigFileYML)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Try .peakypanes.yaml as fallback
-			path = filepath.Join(dir, ".peakypanes.yaml")
+			path = filepath.Join(dir, identity.ProjectConfigFileYAML)
 			data, err = os.ReadFile(path)
 			if err != nil {
 				return nil, err
@@ -488,7 +488,7 @@ func (l *LayoutConfig) ToYAML() (string, error) {
 // DefaultConfigPath returns the default global config path.
 func DefaultConfigPath() (string, error) {
 	if dir := runenv.ConfigDir(); dir != "" {
-		return filepath.Join(dir, "config.yml"), nil
+		return filepath.Join(dir, identity.GlobalConfigFile), nil
 	}
 	if runenv.FreshConfigEnabled() {
 		return "", nil
@@ -497,17 +497,17 @@ func DefaultConfigPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "peakypanes", "config.yml"), nil
+	return filepath.Join(home, ".config", identity.AppSlug, identity.GlobalConfigFile), nil
 }
 
 // DefaultLayoutsDir returns the default layouts directory.
 func DefaultLayoutsDir() (string, error) {
 	if dir := runenv.ConfigDir(); dir != "" {
-		return filepath.Join(dir, "layouts"), nil
+		return filepath.Join(dir, identity.GlobalLayoutsDir), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "peakypanes", "layouts"), nil
+	return filepath.Join(home, ".config", identity.AppSlug, identity.GlobalLayoutsDir), nil
 }

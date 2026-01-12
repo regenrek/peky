@@ -137,7 +137,7 @@ func TestWindowFromRequestErrors(t *testing.T) {
 func TestStartSessionProjectLayoutNoPanes(t *testing.T) {
 	dir := t.TempDir()
 	config := []byte("layout:\n  name: empty\n  panes: []\n")
-	if err := os.WriteFile(filepath.Join(dir, ".peakypanes.yml"), config, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".peky.yml"), config, 0o600); err != nil {
 		t.Fatalf("write project config: %v", err)
 	}
 

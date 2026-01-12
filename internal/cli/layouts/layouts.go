@@ -150,7 +150,7 @@ func runExport(ctx root.CommandContext) error {
 	if _, err := fmt.Fprintf(ctx.Out, "# Peaky Panes Layout: %s\n", name); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintln(ctx.Out, "# Save as .peakypanes.yml in your project root"); err != nil {
+	if _, err := fmt.Fprintf(ctx.Out, "# Save as %s in your project root\n", identity.ProjectConfigFileYML); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintln(ctx.Out, "# session: your-session-name  # uncomment to set session name"); err != nil {

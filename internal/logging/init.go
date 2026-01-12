@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/regenrek/peakypanes/internal/appdirs"
+	"github.com/regenrek/peakypanes/internal/identity"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -26,7 +27,7 @@ type initResult struct {
 
 func Init(ctx context.Context, cfg Config, opts InitOptions) (func() error, error) {
 	if opts.App == "" {
-		opts.App = "peakypanes"
+		opts.App = identity.AppSlug
 	}
 	if opts.Mode == 0 {
 		opts.Mode = ModeCLI

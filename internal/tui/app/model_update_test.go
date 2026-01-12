@@ -117,7 +117,7 @@ func TestPickersAndRenamePaths(t *testing.T) {
 func TestOpenProjectSelectsProjectAndSession(t *testing.T) {
 	m := newTestModel(t)
 	projectPath := t.TempDir()
-	if err := os.WriteFile(filepath.Join(projectPath, ".peakypanes.yml"), []byte("session: My Session\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectPath, ".peky.yml"), []byte("session: My Session\n"), 0o644); err != nil {
 		t.Fatalf("write project config: %v", err)
 	}
 	m.config = &layout.Config{Projects: []layout.ProjectConfig{{

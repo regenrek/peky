@@ -5,6 +5,11 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Breaking
+- Runtime/state namespace renamed from `peakypanes` to `peky` (config, data, runtime dirs).
+- Project-local config renamed from `.peakypanes.yml` / `.peakypanes.yaml` to `.peky.yml` / `.peky.yaml`.
+- Environment variables renamed from `PEAKYPANES_*` to `PEKY_*`.
+
 ## 0.0.27 - 2026-01-12
 
 ### Breaking
@@ -198,7 +203,7 @@ This format is based on Keep a Changelog.
 - Performance tooling: `scripts/perf-bench`, `scripts/perf-12pane`, and `scripts/perf-40pane`.
 - Snapshot integration coverage for dirty ANSI cache previews.
 - Pane view scheduler tests for starvation and timestamp preservation.
-- Daemon profiling hooks for CPU/heap captures via `PEAKYPANES_CPU_PROFILE` and `PEAKYPANES_MEM_PROFILE` (build tag `profiler`).
+- Daemon profiling hooks for CPU/heap captures via `PEKY_CPU_PROFILE` and `PEKY_MEM_PROFILE` (build tag `profiler`).
 - Quick reply slash commands that mirror command palette actions.
 - Quick reply broadcast support with `/all` and optional scope targets.
 - Quick reply history navigation with up/down cycling.
@@ -306,7 +311,7 @@ This format is based on Keep a Changelog.
 ## 0.0.3 - 2025-12-23
 
 ### Added
-- Sidebar icon system with size/ASCII fallbacks (`PEAKYPANES_ICON_SET`, `PEAKYPANES_ICON_SIZE`).
+- Sidebar icon system with size/ASCII fallbacks (`PEKY_ICON_SET`, `PEKY_ICON_SIZE`).
 - Command palette action for creating windows.
 - Dashboard keymap overrides via `dashboard.keymap` in the global config.
 
@@ -331,7 +336,7 @@ This format is based on Keep a Changelog.
 ### Added
 - Agent state detection for Codex CLI and Claude Code TUI (optional hook scripts + `dashboard.agent_detection` toggles).
 - CI workflow (gofmt check, go vet, go test + coverage, race, tmux integration tests on Linux).
-- Opt-in tmux integration test (`PEAKYPANES_INTEGRATION=1`) for session lifecycle coverage.
+- Opt-in integration tests (build tag `integration`) for session lifecycle coverage.
 - CLI/dashboard argument parsing tests plus small-terminal render coverage.
 
 ### Changed
