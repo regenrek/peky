@@ -65,8 +65,8 @@ func initLocal(appName, layoutName string, force bool, cwd string) error {
 	}
 
 	projectName := filepath.Base(cwd)
-	content := fmt.Sprintf(`# Peaky Panes - Project Layout Configuration
-# This file defines the Peaky Panes layout for this project.
+	content := fmt.Sprintf(`# peky - Project Layout Configuration
+# This file defines the peky layout for this project.
 # Teammates with %s installed will get this layout automatically.
 #
 # Variables: ${PROJECT_NAME}, ${PROJECT_PATH}, ${EDITOR}, or any env var
@@ -132,7 +132,7 @@ func initGlobal(appName, layoutName string, force bool) error {
 		}
 	}
 
-	configContent := `# Peaky Panes - Global Configuration
+	configContent := `# peky - Global Configuration
 # https://github.com/regenrek/peakypanes
 
 zellij:
@@ -166,7 +166,7 @@ ghostty:
 #     codex: true
 #     claude: true
 
-# Peky agent settings (used by /peky and Shift+Tab)
+# peky agent settings (used by /peky and Shift+Tab)
 # agent:
 #   provider: google
 #   model: gemini-3-flash
@@ -240,7 +240,7 @@ tools:
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
-	fmt.Printf("✨ Initialized Peaky Panes!\n\n")
+	fmt.Printf("✨ Initialized peky!\n\n")
 	fmt.Printf("   Config: %s\n", configPath)
 	fmt.Printf("   Layouts: %s\n\n", layoutsDir)
 	fmt.Printf("   Next steps:\n")

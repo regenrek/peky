@@ -201,7 +201,7 @@ type PaneTopbarConfig struct {
 	Enabled *bool `yaml:"enabled,omitempty"`
 }
 
-// DashboardConfig configures the Peaky Panes dashboard UI.
+// DashboardConfig configures the peky dashboard UI.
 type DashboardConfig struct {
 	RefreshMS          int                    `yaml:"refresh_ms,omitempty"`
 	PreviewLines       int                    `yaml:"preview_lines,omitempty"`
@@ -221,7 +221,7 @@ type DashboardConfig struct {
 	Performance        PerformanceConfig      `yaml:"performance,omitempty"`
 }
 
-// AgentConfig configures the Peky agent.
+// AgentConfig configures the peky agent.
 type AgentConfig struct {
 	Provider        string   `yaml:"provider,omitempty"`
 	Model           string   `yaml:"model,omitempty"`
@@ -264,7 +264,7 @@ type GhosttySection struct {
 	Config string `yaml:"config,omitempty"`
 }
 
-// Config is the root configuration structure for Peaky Panes.
+// Config is the root configuration structure for peky.
 type Config struct {
 	Zellij         ZellijSection            `yaml:"zellij,omitempty"`
 	Ghostty        GhosttySection           `yaml:"ghostty,omitempty"`

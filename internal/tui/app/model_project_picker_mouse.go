@@ -26,38 +26,27 @@ func (m *Model) updateProjectPickerMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) 
 		m.projectPicker.CursorDown()
 		return m, nil
 	case tea.MouseButtonLeft:
-		changed := m.selectProjectPickerIndexAt(msg.X, msg.Y)
-		if !changed {
+		index, ok := m.projectPickerIndexAt(msg.X, msg.Y)
+		if !ok {
 			return m, nil
 		}
-		return m, nil
+		m.projectPicker.Select(index)
+		return m.updateProjectPicker(tea.KeyMsg{Type: tea.KeyEnter})
 	default:
 		return m, nil
 	}
 }
 
-func (m *Model) selectProjectPickerIndexAt(x, y int) bool {
+func (m *Model) projectPickerIndexAt(x, y int) (int, bool) {
 	if m == nil {
-		return false
+		return 0, false
 	}
-
 	listX0, listY0, listX1, listY1, ok := m.projectPickerHitArea()
-	if !ok {
-		return false
+	if !ok || x < listX0 || x >= listX1 || y < listY0 || y >= listY1 {
+		return 0, false
 	}
-	if x < listX0 || x >= listX1 || y < listY0 || y >= listY1 {
-		return false
-	}
-
 	itemsY0 := m.projectPickerItemsTopY(listY0)
-	index, ok := m.projectPickerIndexAtY(y, itemsY0)
-	if !ok {
-		return false
-	}
-
-	before := m.projectPicker.Index()
-	m.projectPicker.Select(index)
-	return m.projectPicker.Index() != before
+	return m.projectPickerIndexAtY(y, itemsY0)
 }
 
 func (m *Model) projectPickerHitArea() (x0, y0, x1, y1 int, ok bool) {

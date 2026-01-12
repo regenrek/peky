@@ -103,7 +103,7 @@ Use this for personal layouts and multi-project management:
 #     #   force_after_ms: 150
 #     #   fallback_min_interval_ms: 100
 
-# Peky agent settings (used by /peky and Shift+Tab)
+# peky agent settings (used by /peky and Shift+Tab)
 # agent:
 #   provider: google
 #   model: gemini-3-flash

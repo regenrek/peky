@@ -1,12 +1,12 @@
 ---
 name: peky
-description: Use when operating PeakyPanes from the CLI or TUI, especially for AI agents who need reliable, low-error procedures. Covers how to target sessions/panes correctly, use scopes, avoid confirmation prompts, and keep CLI/TUI/daemon in sync.
+description: Use when operating peky from the CLI or TUI, especially for AI agents who need reliable, low-error procedures. Covers how to target sessions/panes correctly, use scopes, avoid confirmation prompts, and keep CLI/TUI/daemon in sync.
 ---
 
-# Peky
+# peky
 
 ## Overview
-Use this skill to operate PeakyPanes safely and predictably from the CLI, especially when automating or controlling panes via an AI agent.
+Use this skill to operate peky safely and predictably from the CLI, especially when automating or controlling panes via an AI agent.
 
 ## Quick Rules (read first)
 - **Do not guess flags.** Use `peky <command> --help` before running.

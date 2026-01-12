@@ -6,6 +6,7 @@ const path = require('path');
 const cp = require('child_process');
 
 const PROJECT = 'peakypanes';
+const DIST_PROJECT = 'peky';
 const BIN = 'peky';
 const REPO_HTTP = 'https://github.com/regenrek/peakypanes';
 const REPO_GIT = 'git+https://github.com/regenrek/peakypanes.git';
@@ -127,7 +128,7 @@ function detectVersion() {
 }
 
 function findBuildDir(goos, goarch) {
-  const prefix = PROJECT + '_' + goos + '_' + goarch;
+  const prefix = DIST_PROJECT + '_' + goos + '_' + goarch;
   const direct = path.join(DIST_DIR, prefix);
   if (fs.existsSync(direct) && fs.statSync(direct).isDirectory()) return direct;
 
@@ -299,7 +300,7 @@ function build() {
     const pkgName = platformPackageName(t.npmPlatform, t.npmArch);
     const binSrc = findBinary(t.goos, t.goarch);
     if (!binSrc) {
-      die('missing binary for ' + t.goos + '/' + t.goarch + '. Expected dist/' + PROJECT + '_' + t.goos + '_' + t.goarch + '/');
+      die('missing binary for ' + t.goos + '/' + t.goarch + '. Expected dist/' + DIST_PROJECT + '_' + t.goos + '_' + t.goarch + '/');
     }
 
     const pkgDir = path.join(PACKAGES_DIR, pkgName);
@@ -326,7 +327,7 @@ function build() {
     writeJSON(path.join(pkgDir, 'package.json'), {
       name: pkgName,
       version,
-      description: 'Peaky Panes binary for ' + t.npmPlatform + ' ' + t.npmArch + '.',
+      description: 'peky binary for ' + t.npmPlatform + ' ' + t.npmArch + '.',
       license: 'MIT',
       homepage: REPO_HTTP,
       repository: {

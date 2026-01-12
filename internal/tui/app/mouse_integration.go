@@ -55,7 +55,7 @@ func (m *Model) updateDashboardMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		RefreshPaneViewsCmd:   m.refreshPaneViewsCmd,
 		ForwardMouseEvent:     m.forwardMouseEvent,
 		FocusUnavailable: func() {
-			m.setToast("Terminal focus is only available for PeakyPanes-managed sessions", toastInfo)
+			m.setToast("Terminal focus is only available for peky-managed sessions", toastInfo)
 		},
 	})
 	return m, tea.Batch(cursorCmd, cmd)

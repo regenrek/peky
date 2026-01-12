@@ -224,7 +224,7 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 				{
 					ID:      "agent_auth",
 					Label:   "Agent: Auth",
-					Desc:    "Connect an AI provider for Peky",
+					Desc:    "Connect an AI provider for peky",
 					Aliases: []string{"auth", "login", "agent auth"},
 					Run: func(m *Model, _ commandArgs) tea.Cmd {
 						return m.prefillQuickReplyInput("/auth ")
@@ -233,7 +233,7 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 				{
 					ID:      "agent_model",
 					Label:   "Agent: Model",
-					Desc:    "Select the model used by Peky",
+					Desc:    "Select the model used by peky",
 					Aliases: []string{"model", "agent model"},
 					Run: func(m *Model, _ commandArgs) tea.Cmd {
 						return m.prefillQuickReplyInput("/model ")
@@ -294,7 +294,7 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 				{
 					ID:       "other_quit",
 					Label:    "Quit",
-					Desc:     "Exit PeakyPanes",
+					Desc:     "Exit peky",
 					Aliases:  []string{"quit"},
 					Shortcut: shortcutQuit,
 					Run: func(m *Model, _ commandArgs) tea.Cmd {

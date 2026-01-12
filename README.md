@@ -1,4 +1,4 @@
-# Peaky Panes
+# peky
 
 ```
 ████    █████    ███    █   █   █   █    ████      ███    █   █    █████    ████
@@ -14,7 +14,7 @@
 [![pkg.go.dev](https://pkg.go.dev/badge/github.com/regenrek/peakypanes.svg)](https://pkg.go.dev/github.com/regenrek/peakypanes)
 
 
-![Peaky Panes Preview](assets/preview-peakypanes-v2.jpg)
+![peky preview](assets/preview-peakypanes-v2.jpg)
 
 
 Run all your projects and AI agents in one dashboard instead of juggling terminal windows or tabs. Define layouts in YAML, share them with your team via git, and get consistent environments everywhere. Sessions are owned by a **native daemon** so they keep running after the UI exits.
@@ -24,7 +24,7 @@ Run all your projects and AI agents in one dashboard instead of juggling termina
 Running multiple agents on different projects at the same time takes real organization and 
 a different approach to how we do agentic coding.
 
-I built Peky to solve my own problems with juggling too many windows and wasting time on setup
+I built peky to solve my own problems with juggling too many windows and wasting time on setup
 and rebuilding the same environment every time. It lets you build your own reusable 
 window layouts and better-organized projects.
 
@@ -161,7 +161,7 @@ MIT
 
 ## Credits
 
-[@pi-mono](https://github.com/badlogic/pi-mono) - Peky Agent is inspired by PI / [Mario Zechner's](https://x.com/badlogicgames) work. 
+[@pi-mono](https://github.com/badlogic/pi-mono) - peky agent is inspired by PI / [Mario Zechner's](https://x.com/badlogicgames) work. 
 (Direct pi integration would've been ideal, but 60 MB of Node for agent + sidecar isn't worth it)
 [@charm](https://github.com/charmbracelet) - peaky is using bubbletea and lipgloss
 

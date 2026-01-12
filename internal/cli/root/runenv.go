@@ -48,7 +48,7 @@ func applyRunEnv(opts runEnvOptions, version string) (func(), error) {
 	}
 
 	if opts.temporaryRun {
-		root, err := os.MkdirTemp("", "peakypanes-run-")
+		root, err := os.MkdirTemp("", "peky-run-")
 		if err != nil {
 			cleanup()
 			return nil, fmt.Errorf("create temporary run dir: %w", err)

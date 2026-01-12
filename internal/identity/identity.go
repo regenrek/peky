@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	BrandName = "PeakyPanes"
+	BrandName = "peky"
 	// AppSlug is the canonical identifier for user-facing and on-disk state.
 	// It intentionally matches the only supported CLI binary name.
 	AppSlug = "peky"

@@ -1,6 +1,6 @@
 # Daemon permissions and user impact
 
-PeakyPanes runs a per-user daemon that owns sessions and PTYs. It is local-only and does not require admin/root permissions.
+peky runs a per-user daemon that owns sessions and PTYs. It is local-only and does not require admin/root permissions.
 
 ## User impact
 

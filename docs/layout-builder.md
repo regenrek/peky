@@ -1,6 +1,6 @@
 # Layout Builder Guide
 
-This guide covers everything you need to know about creating custom layouts in Peaky Panes, including pane arrangements and advanced configuration.
+This guide covers everything you need to know about creating custom layouts in peky, including pane arrangements and advanced configuration.
 
 ## Table of Contents
 

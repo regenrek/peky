@@ -141,13 +141,13 @@ quit_behavior controls what happens on quit when panes are still running:
 
 ## Agent status detection (Codex and Claude Code)
 
-PeakyPanes can read per-pane JSON state files to show accurate running/idle/done status for Codex CLI and Claude Code TUI sessions. This is on by default and falls back to regex or idle detection if no state file is present. You can disable it via dashboard.agent_detection.
+peky can read per-pane JSON state files to show accurate running/idle/done status for Codex CLI and Claude Code TUI sessions. This is on by default and falls back to regex or idle detection if no state file is present. You can disable it via dashboard.agent_detection.
 
 State files are written under ${XDG_RUNTIME_DIR:-/tmp}/peky/agent-state and keyed by PEKY_PANE_ID (override with PEKY_AGENT_STATE_DIR).
 
 Codex CLI (TUI)
 
-Add a notify command in your Codex config to call the PeakyPanes hook script (Codex passes one JSON arg):
+Add a notify command in your Codex config to call the peky hook script (Codex passes one JSON arg):
 
 ```toml
 # ~/.codex/config.toml
@@ -159,7 +159,7 @@ Note: Codex notify only fires on turn completion, so running state still relies 
 
 Claude Code (TUI)
 
-Configure hooks to run the PeakyPanes hook script (Claude passes JSON on stdin). Recommended events:
+Configure hooks to run the peky hook script (Claude passes JSON on stdin). Recommended events:
 SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest, Stop, SessionEnd.
 
 Example hook command (wire it to each event above in Claude Code):

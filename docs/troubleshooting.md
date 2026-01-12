@@ -36,13 +36,11 @@ Then delete state dirs.
 macOS:
 ```bash
 trash "$HOME/Library/Application Support/peky" "$HOME/.config/peky"
-trash "$HOME/Library/Application Support/peakypanes" "$HOME/.config/peakypanes"
 ```
 
 Linux:
 ```bash
 trash "$HOME/.local/share/peky" "$HOME/.config/peky"
-trash "$HOME/.local/share/peakypanes" "$HOME/.config/peakypanes"
 ```
 
 ## Daemon stuck or restart

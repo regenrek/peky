@@ -90,7 +90,7 @@ func (m *Model) handleTerminalFocusToggle(msg tea.KeyMsg) (tea.Cmd, bool) {
 		return nil, false
 	}
 	if !m.supportsTerminalFocus() {
-		m.setToast("Terminal focus is only available for PeakyPanes-managed sessions", toastInfo)
+		m.setToast("Terminal focus is only available for peky-managed sessions", toastInfo)
 		return nil, true
 	}
 	next := !m.terminalFocus

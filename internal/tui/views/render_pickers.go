@@ -249,14 +249,12 @@ func (m Model) viewHelp() string {
 	left.WriteString("  esc   Clear input\n")
 	left.WriteString("  up/down Input history\n")
 	left.WriteString("  /     Slash commands (↑/↓ select, tab complete)\n")
-	left.WriteString("  /peky Toggle agent mode\n")
-	left.WriteString("  shift+tab Toggle agent mode\n")
-	left.WriteString(fmt.Sprintf("  %s Toggle terminal focus (Peaky Panes sessions)\n", m.Keys.TerminalFocus))
+	left.WriteString(fmt.Sprintf("  %s Toggle terminal focus (peky sessions)\n", m.Keys.TerminalFocus))
 	if m.Keys.ResizeMode != "" {
 		left.WriteString(fmt.Sprintf("  %s Resize mode\n", m.Keys.ResizeMode))
 	}
-	left.WriteString(fmt.Sprintf("  %s Scrollback mode (Peaky Panes sessions)\n", m.Keys.Scrollback))
-	left.WriteString(fmt.Sprintf("  %s Copy mode (Peaky Panes sessions)\n", m.Keys.CopyMode))
+	left.WriteString(fmt.Sprintf("  %s Scrollback mode (peky sessions)\n", m.Keys.Scrollback))
+	left.WriteString(fmt.Sprintf("  %s Copy mode (peky sessions)\n", m.Keys.CopyMode))
 	left.WriteString("  mouse Wheel scrollback (shift=1, ctrl=page)\n")
 	left.WriteString("  mouse Drag select (terminal focus)\n")
 	left.WriteString("  type  Send input to focused pane\n")
@@ -287,7 +285,7 @@ func (m Model) viewHelp() string {
 	columns := lipgloss.JoinHorizontal(lipgloss.Top, colStyle.Render(left.String()), "  ", colStyle.Render(right.String()))
 
 	var content strings.Builder
-	content.WriteString(theme.HelpTitle.Render("Peaky Panes — Help"))
+	content.WriteString(theme.HelpTitle.Render("peky — Help"))
 	content.WriteString("\n")
 	content.WriteString(columns)
 

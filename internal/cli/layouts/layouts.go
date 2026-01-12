@@ -147,7 +147,7 @@ func runExport(ctx root.CommandContext) error {
 		meta = output.WithDuration(meta, start)
 		return output.WriteSuccess(ctx.Out, meta, output.LayoutExport{Name: name, Content: yaml})
 	}
-	if _, err := fmt.Fprintf(ctx.Out, "# Peaky Panes Layout: %s\n", name); err != nil {
+	if _, err := fmt.Fprintf(ctx.Out, "# peky layout: %s\n", name); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintf(ctx.Out, "# Save as %s in your project root\n", identity.ProjectConfigFileYML); err != nil {

@@ -1,4 +1,4 @@
-// Package theme provides centralized styling for Peaky Panes TUI components.
+// Package theme provides centralized styling for peky TUI components.
 // Following best practices: all styles are defined in one place for consistency.
 package theme
 
@@ -58,7 +58,7 @@ var App = lipgloss.NewStyle().Padding(1, 2)
 
 // ===== Title Styles =====
 
-// Title is the main title style (e.g., "Peaky Panes")
+// Title is the main title style (e.g., "peky")
 var Title = lipgloss.NewStyle().
 	Foreground(TextPrimary).
 	Background(Accent).

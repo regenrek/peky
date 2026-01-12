@@ -37,7 +37,7 @@ func (m Model) viewConfirmQuit() string {
 	body.WriteString(theme.DialogNote.Render("Quit now? Sessions stay running unless you stop the daemon."))
 	body.WriteString("\n")
 	body.WriteString(theme.DialogNote.Render("Press k to stop the daemon and kill all panes."))
-	return m.renderConfirmDialog("Quit PeakyPanes?", body.String(), []dialogChoice{
+	return m.renderConfirmDialog("Quit peky?", body.String(), []dialogChoice{
 		{Key: "y", Label: "quit (keep sessions)"},
 		{Key: "k", Label: "quit & stop daemon"},
 		{Key: "n", Label: "cancel"},

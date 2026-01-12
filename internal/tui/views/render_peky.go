@@ -9,7 +9,7 @@ import (
 func (m Model) viewPekyDialog() string {
 	title := strings.TrimSpace(m.PekyDialogTitle)
 	if title == "" {
-		title = "Peky"
+		title = "peky"
 	}
 	footer := strings.TrimSpace(m.PekyDialogFooter)
 	if footer == "" {

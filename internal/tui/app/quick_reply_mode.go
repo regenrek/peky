@@ -61,9 +61,9 @@ func (m *Model) handlePekyToggleCommand(text string) (bool, tea.Cmd) {
 	}
 	m.resetQuickReplyInputState()
 	if m.quickReplyMode == quickReplyModePeky {
-		return true, NewInfoCmd("Peky enabled")
+		return true, NewInfoCmd("peky enabled")
 	}
-	return true, NewInfoCmd("Peky disabled")
+	return true, NewInfoCmd("peky disabled")
 }
 
 func parsePekyToggleCommand(text string) (bool, *quickReplyMode) {

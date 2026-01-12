@@ -10,7 +10,7 @@ import (
 
 const defaultMaxSteps = 10
 
-var baseSystemPrompt = strings.TrimSpace(`You are Peky, the PeakyPanes agent.
+var baseSystemPrompt = strings.TrimSpace(`You are peky, the peky agent.
 Use the "peky" tool to run CLI commands; pass commands without the leading "peky".
 Always run "--help" to discover commands and flags.
 Examples: "pane add --count 3", "pane close --pane-id p-8", "session start --name work --panes 3".
@@ -70,7 +70,7 @@ func RunPrompt(
 func pekyToolSpec() ToolSpec {
 	return ToolSpec{
 		Name:        "peky",
-		Description: "Run a PeakyPanes CLI command. Provide the command without the leading 'peky'.",
+		Description: "Run a peky CLI command. Provide the command without the leading 'peky'.",
 		Schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
