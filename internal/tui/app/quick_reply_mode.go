@@ -10,6 +10,10 @@ func (m *Model) toggleQuickReplyMode() {
 	if m == nil {
 		return
 	}
+	if !agentFeaturesEnabled {
+		m.setQuickReplyMode(quickReplyModePane)
+		return
+	}
 	if m.quickReplyMode == quickReplyModePeky {
 		m.setQuickReplyMode(quickReplyModePane)
 		return
@@ -20,6 +24,9 @@ func (m *Model) toggleQuickReplyMode() {
 func (m *Model) setQuickReplyMode(mode quickReplyMode) {
 	if m == nil {
 		return
+	}
+	if !agentFeaturesEnabled && mode == quickReplyModePeky {
+		mode = quickReplyModePane
 	}
 	if m.quickReplyMode == mode {
 		return
@@ -53,6 +60,11 @@ func (m *Model) handlePekyToggleCommand(text string) (bool, tea.Cmd) {
 	handled, target := parsePekyToggleCommand(text)
 	if !handled {
 		return false, nil
+	}
+	if !agentFeaturesEnabled {
+		m.setQuickReplyMode(quickReplyModePane)
+		m.resetQuickReplyInputState()
+		return true, NewWarningCmd("Agent mode disabled")
 	}
 	if target == nil {
 		m.toggleQuickReplyMode()

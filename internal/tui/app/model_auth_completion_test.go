@@ -1,7 +1,6 @@
 package app
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/regenrek/peakypanes/internal/agent"
@@ -27,10 +26,10 @@ func TestAuthProviderCompletion(t *testing.T) {
 	m := newTestModelLite()
 	m.quickReplyMenuIndex = 0
 	m.quickReplyInput.SetValue("/auth ")
-	if ok := m.applyAuthProviderCompletion(); !ok {
-		t.Fatalf("expected completion")
+	if ok := m.applyAuthProviderCompletion(); ok {
+		t.Fatalf("expected no completion")
 	}
-	if !strings.HasPrefix(m.quickReplyInput.Value(), "/auth ") || !strings.HasSuffix(m.quickReplyInput.Value(), " ") {
+	if m.quickReplyInput.Value() != "/auth " {
 		t.Fatalf("value=%q", m.quickReplyInput.Value())
 	}
 }
@@ -44,10 +43,10 @@ func TestAuthMethodCompletion(t *testing.T) {
 	m := newTestModelLite()
 	m.quickReplyMenuIndex = 0
 	m.quickReplyInput.SetValue("/auth google ")
-	if ok := m.applyAuthMethodCompletion(); !ok {
-		t.Fatalf("expected completion")
+	if ok := m.applyAuthMethodCompletion(); ok {
+		t.Fatalf("expected no completion")
 	}
-	if m.quickReplyInput.Value() != "/auth google api-key " {
+	if m.quickReplyInput.Value() != "/auth google " {
 		t.Fatalf("value=%q", m.quickReplyInput.Value())
 	}
 }
@@ -62,10 +61,10 @@ func TestModelCompletion(t *testing.T) {
 	}
 	m.quickReplyMenuIndex = 0
 	m.quickReplyInput.SetValue("/model ")
-	if ok := m.applyModelCompletion(); !ok {
-		t.Fatalf("expected completion")
+	if ok := m.applyModelCompletion(); ok {
+		t.Fatalf("expected no completion")
 	}
-	if !strings.HasPrefix(m.quickReplyInput.Value(), "/model gpt-") {
+	if m.quickReplyInput.Value() != "/model " {
 		t.Fatalf("value=%q", m.quickReplyInput.Value())
 	}
 }

@@ -102,7 +102,7 @@ func TestQuickReplyPekyModeKeepsEmptyEnterInfo(t *testing.T) {
 	if cmd == nil {
 		t.Fatalf("expected cmd")
 	}
-	if _, ok := cmd().(InfoMsg); !ok {
-		t.Fatalf("expected InfoMsg")
+	if _, ok := cmd().(ErrorMsg); !ok {
+		t.Fatalf("expected ErrorMsg when client nil")
 	}
 }

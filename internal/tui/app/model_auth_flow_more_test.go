@@ -53,7 +53,7 @@ func TestAuthDialogSubmitOAuthMissingVerifier(t *testing.T) {
 	if cmd := m.handleAuthDialogSubmit(); cmd != nil {
 		t.Fatalf("expected nil cmd")
 	}
-	if !strings.Contains(m.toast.Text, "Run /auth") {
+	if !strings.Contains(m.toast.Text, "OAuth flow not initialized") {
 		t.Fatalf("toast=%q", m.toast.Text)
 	}
 	if m.toast.Level != toastWarning {

@@ -55,6 +55,9 @@ func (m *Model) sendPekyPrompt(text string) tea.Cmd {
 	if text == "" {
 		return NewInfoCmd("Enter a prompt")
 	}
+	if !agentFeaturesEnabled {
+		return NewWarningCmd("Agent mode disabled")
+	}
 	if m.pekyBusy {
 		return NewWarningCmd("peky is busy")
 	}
@@ -148,21 +151,21 @@ func pekySetupHint(provider agent.Provider) string {
 	provider = agent.Provider(strings.ToLower(strings.TrimSpace(string(provider))))
 	switch provider {
 	case agent.ProviderGoogle:
-		return "Use /auth to login (Gemini) or set GEMINI_API_KEY / GOOGLE_API_KEY."
+		return "Set GEMINI_API_KEY or GOOGLE_API_KEY."
 	case agent.ProviderAnthropic:
-		return "Use /auth to login (Anthropic) or set ANTHROPIC_API_KEY."
+		return "Set ANTHROPIC_API_KEY."
 	case agent.ProviderOpenAI:
-		return "Use /auth to login (OpenAI) or set OPENAI_API_KEY."
+		return "Set OPENAI_API_KEY."
 	case agent.ProviderOpenRouter:
-		return "Use /auth to login (OpenRouter) or set OPENROUTER_API_KEY."
+		return "Set OPENROUTER_API_KEY."
 	case agent.ProviderGitHubCopilot:
-		return "Use /auth to login with GitHub Copilot."
+		return "Authentication required for GitHub Copilot."
 	case agent.ProviderGoogleGeminiCLI:
-		return "Use /auth to login with Gemini CLI."
+		return "Authentication required for Gemini CLI."
 	case agent.ProviderGoogleAntigrav:
-		return "Use /auth to login with Antigravity."
+		return "Authentication required for Antigravity."
 	default:
-		return "Use /auth to login or set provider API keys in your environment."
+		return "Configure provider credentials in your environment."
 	}
 }
 
@@ -407,8 +410,8 @@ func (m *Model) handlePekyResult(msg pekyResultMsg) tea.Cmd {
 	}
 	if msg.Err != nil {
 		if errors.Is(msg.Err, agent.ErrAuthMissing) {
-			m.setToast("peky needs authentication. Use /auth to connect a provider.", toastWarning)
-			return m.prefillQuickReplyInput("/auth")
+			m.setToast("peky needs authentication. Agent auth is disabled.", toastWarning)
+			return nil
 		}
 		if errors.Is(msg.Err, context.Canceled) {
 			m.setToast("peky canceled", toastInfo)

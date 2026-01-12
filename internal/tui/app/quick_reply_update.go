@@ -8,6 +8,9 @@ import (
 )
 
 func (m *Model) updateQuickReply(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if !agentFeaturesEnabled && m.quickReplyMode == quickReplyModePeky {
+		m.setQuickReplyMode(quickReplyModePane)
+	}
 	if m.handleQuickReplyModeToggle(msg) {
 		return m, nil
 	}
@@ -108,6 +111,11 @@ func (m *Model) handleQuickReplyPassthrough(msg tea.KeyMsg) (bool, tea.Cmd) {
 func (m *Model) handleQuickReplyModeToggle(msg tea.KeyMsg) bool {
 	if msg.String() != "shift+tab" {
 		return false
+	}
+	if !agentFeaturesEnabled {
+		m.setQuickReplyMode(quickReplyModePane)
+		m.setToast("Agent mode disabled", toastWarning)
+		return true
 	}
 	m.toggleQuickReplyMode()
 	return true
