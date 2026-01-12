@@ -13,7 +13,6 @@ func Register(reg *root.Registry) {
 }
 
 func runVersion(ctx root.CommandContext) error {
-	appName := identity.NormalizeCLIName(ctx.Deps.AppName)
-	_, err := fmt.Fprintf(ctx.Out, "%s %s\n", appName, ctx.Deps.Version)
+	_, err := fmt.Fprintf(ctx.Out, "%s %s\n", identity.CLIName, ctx.Deps.Version)
 	return err
 }

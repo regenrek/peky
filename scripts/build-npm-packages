@@ -6,6 +6,7 @@ const path = require('path');
 const cp = require('child_process');
 
 const PROJECT = 'peakypanes';
+const BIN = 'peky';
 const REPO_HTTP = 'https://github.com/regenrek/peakypanes';
 const REPO_GIT = 'git+https://github.com/regenrek/peakypanes.git';
 
@@ -143,7 +144,7 @@ function findBuildDir(goos, goarch) {
 function findBinary(goos, goarch) {
   const dir = findBuildDir(goos, goarch);
   if (!dir) return '';
-  const exeName = goos === 'windows' ? PROJECT + '.exe' : PROJECT;
+  const exeName = goos === 'windows' ? BIN + '.exe' : BIN;
   const candidate = path.join(dir, exeName);
   return fs.existsSync(candidate) ? candidate : '';
 }
@@ -161,7 +162,7 @@ function renderLauncher() {
     "const fs = require('fs');",
     "const path = require('path');",
     "const { spawn } = require('child_process');",
-    "const cmdName = path.basename(process.argv[1] || '" + PROJECT + "');",
+    "const cmdName = path.basename(process.argv[1] || '" + BIN + "');",
     '',
     'function pkgFor(platform, arch) {',
     "  if (platform === 'darwin' && arch === 'x64') return '" + platformPackageName('darwin', 'x64') + "';",
@@ -192,7 +193,7 @@ function renderLauncher() {
     '  process.exit(1);',
     '}',
     '',
-    "const exe = platform === 'win32' ? '" + PROJECT + ".exe' : '" + PROJECT + "';",
+    "const exe = platform === 'win32' ? '" + BIN + ".exe' : '" + BIN + "';",
     "const binPath = path.join(pkgRoot, 'bin', exe);",
     '',
     'try {',
@@ -251,7 +252,7 @@ function build() {
   const metaDir = path.join(PACKAGES_DIR, PROJECT);
   mkdirp(path.join(metaDir, 'bin'));
 
-  const launcherPath = path.join(metaDir, 'bin', PROJECT + '.js');
+  const launcherPath = path.join(metaDir, 'bin', BIN + '.js');
   writeText(launcherPath, renderLauncher());
   chmodExec(launcherPath);
 
@@ -277,15 +278,14 @@ function build() {
       url: REPO_GIT
     },
     bin: {
-      peky: 'bin/' + PROJECT + '.js',
-      [PROJECT]: 'bin/' + PROJECT + '.js'
+      [BIN]: 'bin/' + BIN + '.js'
     },
     optionalDependencies: optionalDeps,
     engines: {
       node: '>=18'
     },
     files: [
-      'bin/' + PROJECT + '.js',
+      'bin/' + BIN + '.js',
       'README.md',
       'scripts/agent-state/'
     ],
@@ -306,7 +306,7 @@ function build() {
     const binDir = path.join(pkgDir, 'bin');
     mkdirp(binDir);
 
-    const exeName = t.goos === 'windows' ? PROJECT + '.exe' : PROJECT;
+    const exeName = t.goos === 'windows' ? BIN + '.exe' : BIN;
     const binDst = path.join(binDir, exeName);
     fs.copyFileSync(binSrc, binDst);
     if (t.goos !== 'windows') chmodExec(binDst);
@@ -317,7 +317,7 @@ function build() {
     writeText(path.join(pkgDir, 'README.md'), [
       '# ' + pkgName,
       '',
-      'This package contains the ' + PROJECT + ' binary for ' + t.npmPlatform + ' ' + t.npmArch + '.',
+      'This package contains the ' + BIN + ' binary for ' + t.npmPlatform + ' ' + t.npmArch + '.',
       '',
       'It is installed automatically via optionalDependencies from the main ' + PROJECT + ' package.',
       ''

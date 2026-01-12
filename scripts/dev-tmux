@@ -42,7 +42,7 @@ fi
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 gobin="${GOBIN:-$(go env GOPATH)/bin}"
-peak="$gobin/peakypanes"
+peky="$gobin/peky"
 uid="${UID:-$(id -u)}"
 devroot="/tmp/peakypanes-dev-$uid"
 log="$devroot/peakypanes-dev.log"
@@ -53,7 +53,7 @@ fi
 
 cd "$root"
 
-go install ./cmd/peakypanes ./cmd/peky >/dev/null
+go install ./cmd/peky >/dev/null
 
 if [[ -e "$devroot" ]]; then
   trash "$devroot"
@@ -104,7 +104,7 @@ daemon_cmd=$(
   cat <<EOF
 cd "$root"
 export ${common_env[*]}
-"$peak" daemon restart -y
+"$peky" daemon restart -y
 echo "[dev] tailing $log"
 tail -n 0 -F "$log"
 EOF
@@ -123,7 +123,7 @@ if [[ "$tracing" == "1" ]]; then
   tui_cmd+=$'export PEAKYPANES_TUI_TRACE_INPUT_REPAIRED=1\n'
   tui_cmd+=$'export PEAKYPANES_TUI_TRACE_INPUT_REPAIRED_FILE=/private/tmp/tui-input-repaired.log\n'
 fi
-tui_cmd+=$'\n'"$peak start -y"$'\n'
+tui_cmd+=$'\n'"$peky start -y"$'\n'
 
 tmux send-keys -t "$left_pane" "$daemon_cmd" C-m
 tmux send-keys -t "$right_pane" "$tui_cmd" C-m

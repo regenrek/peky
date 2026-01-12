@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 This format is based on Keep a Changelog.
 
+## Unreleased
+
+### Breaking
+- Removed the `peakypanes` binary/CLI alias. `peky` is now the only supported command and shipped binary.
+
 ## 0.0.25 - 2026-01-12
 
 ### Added

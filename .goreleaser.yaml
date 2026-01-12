@@ -7,9 +7,9 @@ before:
     - go mod tidy
 
 builds:
-  - id: peakypanes
-    main: ./cmd/peakypanes
-    binary: peakypanes
+  - id: peky
+    main: ./cmd/peky
+    binary: peky
     goos:
       - darwin
       - linux
@@ -27,7 +27,7 @@ builds:
 archives:
   - id: peakypanes
     ids:
-      - peakypanes
+      - peky
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     formats:
       - tar.gz

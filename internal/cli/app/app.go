@@ -12,7 +12,7 @@ func NewRunner(deps root.Dependencies) (*root.Runner, error) {
 	if err != nil {
 		return nil, err
 	}
-	specDoc.App.Name = identity.NormalizeCLIName(deps.AppName)
+	specDoc.App.Name = identity.CLIName
 	reg := root.NewRegistry()
 	registerAll(reg)
 	return root.NewRunner(specDoc, deps, reg)

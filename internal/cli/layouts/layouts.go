@@ -71,8 +71,7 @@ func writeLayoutsText(ctx root.CommandContext, layouts []layout.LayoutInfo) erro
 	if err := writeLayoutsTable(ctx, layouts); err != nil {
 		return err
 	}
-	appName := identity.NormalizeCLIName(ctx.Deps.AppName)
-	_, err := fmt.Fprintf(ctx.Out, "Use '%s layouts export <name>' to view layout YAML\n", appName)
+	_, err := fmt.Fprintf(ctx.Out, "Use '%s layouts export <name>' to view layout YAML\n", identity.CLIName)
 	return err
 }
 

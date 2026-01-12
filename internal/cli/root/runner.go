@@ -33,9 +33,8 @@ func (r *Runner) Run(ctx context.Context, args []string) error {
 		return fmt.Errorf("runner is not initialized")
 	}
 	if r.specDoc != nil && r.app != nil {
-		appName := identity.ResolveBinaryName(args)
-		r.specDoc.App.Name = appName
-		r.app.Name = appName
+		r.specDoc.App.Name = identity.CLIName
+		r.app.Name = identity.CLIName
 	}
 	args = applyShorthand(r.specDoc, args)
 	return r.app.Run(ctx, args)

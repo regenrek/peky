@@ -27,7 +27,7 @@ func runInit(ctx root.CommandContext) error {
 		layoutName = layout.DefaultLayoutName
 	}
 	force := ctx.Cmd.Bool("force")
-	appName := identity.NormalizeCLIName(ctx.Deps.AppName)
+	appName := identity.CLIName
 	var err error
 	if local {
 		cwd, resolveErr := root.ResolveWorkDir(ctx)

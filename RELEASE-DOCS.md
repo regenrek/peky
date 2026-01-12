@@ -89,7 +89,7 @@ The helper requires a clean working tree and push access to the repo.
 
 ```bash
 npm view peakypanes
-npx -y peakypanes
+npx -y -p peakypanes peky
 ```
 
 ## Notes
