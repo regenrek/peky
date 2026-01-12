@@ -21,9 +21,10 @@ import (
 )
 
 const (
-	defaultReadTimeout  = 2 * time.Minute
-	defaultWriteTimeout = 5 * time.Second
-	defaultOpTimeout    = 5 * time.Second
+	defaultReadTimeout    = 2 * time.Minute
+	defaultWriteTimeout   = 5 * time.Second
+	defaultOpTimeout      = 5 * time.Second
+	defaultPaneGitWorkers = 4
 )
 
 // DaemonConfig configures a session daemon instance.
@@ -208,6 +209,9 @@ func (d *Daemon) Start() error {
 	d.wg.Add(2)
 	go d.acceptLoop()
 	go d.eventLoop()
+	if d.paneGit != nil {
+		d.paneGit.Start(d.ctx, &d.wg, defaultPaneGitWorkers)
+	}
 
 	if d.restore != nil {
 		if err := d.restore.Load(d.ctx); err != nil {
