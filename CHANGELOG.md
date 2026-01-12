@@ -3,6 +3,36 @@
 All notable changes to this project will be documented in this file.
 This format is based on Keep a Changelog.
 
+## 0.0.25 - 2026-01-12
+
+### Added
+- Input repair + tracing for high-volume mouse SGR traffic (wheel bursts/momentum).
+- Pane topbar Git status (branch/dirty) with daemon-side caching to keep UI responsive.
+- PID→CWD cache helpers for cheaper CWD lookups during frequent refresh.
+- `scripts/commit` helper for deterministic commits (explicit-path staging only).
+- Dev `just mark-scroll-start|stop` markers for scroll diagnostics.
+
+### Changed
+- Wheel scrolling: use host scrollback actions when the pane is not in app mouse mode; only send mouse wheel SGR when the app enables mouse reporting.
+- Pane view scroll previews throttled to feel closer to 60fps under heavy wheel input.
+
+### Fixed
+- Scroll “parallax” / backlog: stop draining wheel input work seconds after the user stops scrolling.
+- No-op scroll-at-limit churn: avoid dirty/redraw work when scroll offset doesn’t change.
+
+## 0.0.24 - 2026-01-09
+
+### Added
+- Standalone `homebrew-tap` workflow for re-running tap updates on an existing tag.
+- Homebrew formula now includes a `brew services` definition and caveats.
+
+### Changed
+- Homebrew tap publish now updates the formula via GitHub Contents API (no git push).
+
+### Fixed
+- Avoid `peakypanes: failed to connect to daemon: context deadline exceeded` by starting daemon accept loop before restore load.
+- Dashboard connect timeout increased with a clearer foreground-daemon hint.
+
 ## 0.0.23 - 2026-01-08
 
 ### Added
@@ -18,19 +48,6 @@ This format is based on Keep a Changelog.
 - Border/guide rendering gaps and divider junction corruption under hover/drag.
 - Pane rendering during resize drag (cached frames render instead of blank).
 - CLI parsing for positional args under `urfave/cli/v3` (no more args mis-parsing).
-
-## 0.0.24 - 2026-01-09
-
-### Added
-- Standalone `homebrew-tap` workflow for re-running tap updates on an existing tag.
-- Homebrew formula now includes a `brew services` definition and caveats.
-
-### Changed
-- Homebrew tap publish now updates the formula via GitHub Contents API (no git push).
-
-### Fixed
-- Avoid `peakypanes: failed to connect to daemon: context deadline exceeded` by starting daemon accept loop before restore load.
-- Dashboard connect timeout increased with a clearer foreground-daemon hint.
 
 ## 0.0.22 - 2026-01-06
 
