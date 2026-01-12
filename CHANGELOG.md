@@ -5,6 +5,9 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Breaking
+- Homebrew formula renamed from `peakypanes` to `peky` (use `brew install regenrek/tap/peky` and `brew services start peky`).
+
 ## 0.0.26 - 2026-01-12
 
 ### Breaking
