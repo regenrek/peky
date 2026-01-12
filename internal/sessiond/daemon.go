@@ -82,7 +82,8 @@ type Daemon struct {
 	focusedSession string
 	focusedPane    string
 
-	relays *relayManager
+	relays  *relayManager
+	paneGit *paneGitCache
 
 	eventSeq atomic.Uint64
 
@@ -155,6 +156,7 @@ func NewDaemon(cfg DaemonConfig) (*Daemon, error) {
 		actionLogs:   make(map[string]*actionLog),
 		eventLog:     newEventLog(0),
 		relays:       newRelayManager(),
+		paneGit:      newPaneGitCache(),
 		started:      make(chan struct{}),
 	}
 	if cfg.HandleSignals {

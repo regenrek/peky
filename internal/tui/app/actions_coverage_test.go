@@ -82,6 +82,7 @@ func TestClosePaneSuccess(t *testing.T) {
 		Settings:  settings,
 		Version:   1,
 		Sessions:  []native.SessionSnapshot{snap},
+		PaneGit:   nil,
 	})
 	m.data = result.Data
 	m.selection = result.Resolved

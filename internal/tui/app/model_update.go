@@ -110,6 +110,18 @@ var updateHandlers = map[reflect.Type]updateHandler{
 	reflect.TypeOf(cursorShapeFlushMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleCursorShapeFlush(msg.(cursorShapeFlushMsg))
 	},
+	reflect.TypeOf(mouseSendPumpResultMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleMouseSendPumpResult(msg.(mouseSendPumpResultMsg))
+	},
+	reflect.TypeOf(mouseSendWheelFlushMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleMouseSendWheelFlush(msg.(mouseSendWheelFlushMsg))
+	},
+	reflect.TypeOf(terminalScrollPumpResultMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleTerminalScrollPumpResult(msg.(terminalScrollPumpResultMsg))
+	},
+	reflect.TypeOf(terminalScrollWheelFlushMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleTerminalScrollWheelFlush(msg.(terminalScrollWheelFlushMsg))
+	},
 	reflect.TypeOf(resizeDragFlushMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleResizeDragFlush(msg.(resizeDragFlushMsg))
 	},
@@ -118,6 +130,9 @@ var updateHandlers = map[reflect.Type]updateHandler{
 	},
 	reflect.TypeOf(pekySpinnerTickMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handlePekySpinnerTick()
+	},
+	reflect.TypeOf(paneTopbarSpinnerTickMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handlePaneTopbarSpinnerTick()
 	},
 	reflect.TypeOf(pekyPromptClearMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handlePekyPromptClear(msg.(pekyPromptClearMsg))
@@ -375,6 +390,7 @@ func (m *Model) applySnapshotState(msg dashboardSnapshotMsg) {
 	} else {
 		m.applySelection(resolveSelectionForTab(m.tab, m.data.Projects, m.selection))
 	}
+	m.updatePaneAgentUnread()
 	m.syncExpandedSessions()
 	if m.refreshSelectionForProjectConfig() {
 		m.setToast("Project config changed: selection refreshed", toastInfo)
@@ -385,6 +401,9 @@ func (m *Model) handleSnapshotPostApply() tea.Cmd {
 	cmds := make([]tea.Cmd, 0, 2)
 	if pumpCmd := m.snapshotPumpCmd(); pumpCmd != nil {
 		cmds = append(cmds, pumpCmd)
+	}
+	if spinnerCmd := m.maybeStartPaneTopbarSpinner(); spinnerCmd != nil {
+		cmds = append(cmds, spinnerCmd)
 	}
 	if refreshCmd := m.refreshPaneViewsCmd(); refreshCmd != nil {
 		cmds = append(cmds, refreshCmd)
@@ -578,6 +597,9 @@ func (m *Model) ensurePaneViewMaps() {
 	if m.paneViews == nil {
 		m.paneViews = make(map[paneViewKey]paneViewEntry)
 	}
+	if m.paneHasMouse == nil {
+		m.paneHasMouse = make(map[string]bool)
+	}
 	if m.paneMouseMotion == nil {
 		m.paneMouseMotion = make(map[string]bool)
 	}
@@ -601,6 +623,7 @@ func (m *Model) applyPaneView(view sessiond.PaneViewResponse) {
 		}
 	}
 	if view.PaneID != "" {
+		m.paneHasMouse[view.PaneID] = view.HasMouse
 		m.paneMouseMotion[view.PaneID] = view.AllowMotion
 	}
 	if perfDebugEnabled() && view.PaneID != "" && !view.Frame.Empty() {

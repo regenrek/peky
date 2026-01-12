@@ -67,6 +67,52 @@ func TestRenderPaneLayout(t *testing.T) {
 	}
 }
 
+func TestRenderPaneLayoutTopbarReservesRow(t *testing.T) {
+	panes := []Pane{
+		{
+			ID:          "p0",
+			Index:       "0",
+			Title:       "main",
+			Cwd:         "~/projects/myproject",
+			GitBranch:   "main",
+			GitDirty:    true,
+			AgentTool:   "codex",
+			AgentUnread: true,
+			Left:        0,
+			Top:         0,
+			Width:       layout.LayoutBaseSize,
+			Height:      layout.LayoutBaseSize,
+			Active:      true,
+			Status:      paneStatusRunning,
+		},
+	}
+	var gotNoTopbar int
+	_ = renderPaneLayout(panes, 20, 5, layoutPreviewContext{
+		paneView: func(id string, width, height int, showCursor bool) string {
+			gotNoTopbar = height
+			return "x"
+		},
+	})
+	var gotTopbar int
+	out := renderPaneLayout(panes, 20, 5, layoutPreviewContext{
+		paneTopbar:    true,
+		topbarSpinner: "-",
+		paneView: func(id string, width, height int, showCursor bool) string {
+			gotTopbar = height
+			return "x"
+		},
+	})
+	if gotNoTopbar == 0 || gotTopbar == 0 {
+		t.Fatalf("expected paneView to be called")
+	}
+	if gotNoTopbar-gotTopbar != 1 {
+		t.Fatalf("paneView height no_topbar=%d topbar=%d want diff 1", gotNoTopbar, gotTopbar)
+	}
+	if !strings.Contains(out, "main*") {
+		t.Fatalf("expected git branch in output: %q", out)
+	}
+}
+
 func TestRenderPaneLayoutShowsResizeHandleGlyph(t *testing.T) {
 	panes := []Pane{
 		{Index: "0", Title: "left", Left: 0, Top: 0, Width: 500, Height: layout.LayoutBaseSize, Active: true, Status: paneStatusRunning, ID: "p0"},

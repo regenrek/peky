@@ -105,6 +105,7 @@ type Model struct {
 	quickReplyMenuKind     quickReplyMenuKind
 	quickReplyMode         quickReplyMode
 	quickReplyFileCache    quickReplyFileCache
+	quickReplyMouseSel     quickReplyMouseSelection
 
 	mouse       mouse.Handler
 	contextMenu contextMenuState
@@ -168,7 +169,21 @@ type Model struct {
 
 	terminalFocus bool
 	// terminalMouseDrag tracks an in-progress drag selection in terminal focus.
-	terminalMouseDrag bool
+	terminalMouseDrag    bool
+	mouseSendQueue       []queuedMouseEvent
+	mouseSendInFlight    bool
+	mouseSendSeq         uint64
+	mouseSendWheelLastAt time.Time
+	// mouseSendWheelFlushScheduled delays wheel sends so fast scroll collapses
+	// into fewer RPCs (better responsiveness under trackpad momentum).
+	mouseSendWheelFlushScheduled bool
+	mouseSendWheelFlushSeq       uint64
+
+	terminalScrollQueue            []queuedTerminalScroll
+	terminalScrollInFlight         bool
+	terminalScrollSeq              uint64
+	terminalScrollWheelFlushSeq    uint64
+	terminalScrollWheelFlushActive bool
 
 	offlineScroll         map[string]int
 	offlineScrollViewport map[string]int
@@ -179,6 +194,7 @@ type Model struct {
 
 	paneViewProfile   colorprofile.Profile
 	paneViews         map[paneViewKey]paneViewEntry
+	paneHasMouse      map[string]bool
 	paneMouseMotion   map[string]bool
 	paneInputDisabled map[string]struct{}
 
@@ -197,6 +213,10 @@ type Model struct {
 	paneViewPumpBackoff    time.Duration
 	paneLastSize           map[string]paneSize
 	paneLastFallback       map[string]time.Time
+	paneAgentLast          map[string]paneAgentSeen
+	paneAgentUnread        map[string]bool
+	paneTopbarSpinnerIndex int
+	paneTopbarSpinnerOn    bool
 
 	paneUpdatePerf    map[string]*paneUpdatePerf
 	paneViewQueuedAt  map[string]time.Time

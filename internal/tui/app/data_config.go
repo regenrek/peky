@@ -129,6 +129,7 @@ func defaultDashboardConfig(cfg layout.DashboardConfig) (DashboardConfig, error)
 	idleSeconds := positiveIntOrDefault(cfg.IdleSeconds, defaultIdleSeconds)
 	previewCompact := boolOrDefault(cfg.PreviewCompact, true)
 	agentDetection := resolveAgentDetection(cfg.AgentDetection)
+	paneTopbarEnabled := boolOrDefault(cfg.PaneTopbar.Enabled, true)
 	sidebarHidden := boolOrDefault(cfg.Sidebar.Hidden, false)
 	attachBehavior, err := resolveAttachBehavior(cfg.AttachBehavior)
 	if err != nil {
@@ -166,6 +167,7 @@ func defaultDashboardConfig(cfg layout.DashboardConfig) (DashboardConfig, error)
 		Resize:             resizeSettings,
 		ProjectRoots:       projectRoots,
 		AgentDetection:     agentDetection,
+		PaneTopbar:         PaneTopbarSettings{Enabled: paneTopbarEnabled},
 		AttachBehavior:     attachBehavior,
 		PaneNavigationMode: paneNavigationMode,
 		QuitBehavior:       quitBehavior,

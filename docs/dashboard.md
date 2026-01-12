@@ -60,6 +60,8 @@ Terminal focus
 Mouse + snapping notes
 - Drag dividers to resize; corners resize both axes.
 - Right-click pane body for context menu.
+- Mouse wheel scrolls host scrollback when the pane isn't actively using mouse reporting.
+- Hold Shift while scrolling for fine scroll (1 line/step). Hold Ctrl for page scroll.
 - Snap is on by default; hold alt to disable snap while dragging.
 - Ghostty: set right-click to open the terminal context menu so the dashboard can intercept it.
 

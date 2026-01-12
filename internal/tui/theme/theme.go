@@ -291,6 +291,11 @@ var StatusBadgeIdle = lipgloss.NewStyle().
 	Background(Highlight).
 	Padding(0, 1)
 
+// PaneTopbar is the per-pane topbar strip rendered above terminal content.
+var PaneTopbar = lipgloss.NewStyle().
+	Foreground(TextSecondary).
+	Background(lipgloss.AdaptiveColor{Light: "#D1D5DB", Dark: "#181818"})
+
 // ===== Logo Style =====
 
 // LogoStyle for ASCII art logo

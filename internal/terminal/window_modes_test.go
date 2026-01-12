@@ -163,3 +163,54 @@ func TestCopyModeYankSelection(t *testing.T) {
 		t.Fatalf("expected yank to contain 'hello', got %q", text)
 	}
 }
+
+func TestScrollbackNoOpDoesNotMarkDirty(t *testing.T) {
+	emu := &fakeEmu{
+		cols: 4,
+		rows: 3,
+		sb: [][]uv.Cell{
+			mkCellsLine("S0", 4),
+			mkCellsLine("S1", 4),
+			mkCellsLine("S2", 4),
+			mkCellsLine("S3", 4),
+			mkCellsLine("S4", 4),
+		},
+		screen: [][]uv.Cell{
+			mkCellsLine("A0", 4),
+			mkCellsLine("A1", 4),
+			mkCellsLine("A2", 4),
+		},
+	}
+
+	w := &Window{
+		term:    emu,
+		cols:    4,
+		rows:    3,
+		updates: make(chan struct{}, 10),
+	}
+
+	seq0 := w.UpdateSeq()
+	w.ScrollToTop()
+	seq1 := w.UpdateSeq()
+	if seq1 <= seq0 {
+		t.Fatalf("seq after ScrollToTop=%d want > %d", seq1, seq0)
+	}
+
+	w.ScrollToTop()
+	seq2 := w.UpdateSeq()
+	if seq2 != seq1 {
+		t.Fatalf("seq after no-op ScrollToTop=%d want %d", seq2, seq1)
+	}
+
+	w.ScrollDown(999)
+	seq3 := w.UpdateSeq()
+	if seq3 <= seq2 {
+		t.Fatalf("seq after ScrollDown=%d want > %d", seq3, seq2)
+	}
+
+	w.ScrollDown(1)
+	seq4 := w.UpdateSeq()
+	if seq4 != seq3 {
+		t.Fatalf("seq after no-op ScrollDown=%d want %d", seq4, seq3)
+	}
+}

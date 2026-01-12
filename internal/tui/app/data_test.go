@@ -407,6 +407,7 @@ func TestBuildDashboardData(t *testing.T) {
 		Settings:  settings,
 		Version:   1,
 		Sessions:  []native.SessionSnapshot{snap},
+		PaneGit:   nil,
 	})
 	if result.Err != nil {
 		t.Fatalf("buildDashboardData() error: %v", result.Err)
@@ -450,6 +451,7 @@ func TestBuildDashboardDataHonorsHiddenProjects(t *testing.T) {
 		Settings:  settings,
 		Version:   1,
 		Sessions:  []native.SessionSnapshot{snap},
+		PaneGit:   nil,
 	})
 	if result.Err != nil {
 		t.Fatalf("buildDashboardData() error: %v", result.Err)

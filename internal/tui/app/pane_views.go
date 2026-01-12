@@ -23,6 +23,11 @@ const (
 	paneViewTimeout      = 2 * time.Second
 	paneViewFallbackCols = 80
 	paneViewFallbackRows = 24
+
+	// Throttle preview rendering while scrollback wheel input is actively driving
+	// terminal updates. This keeps the Bubble Tea event loop responsive by capping
+	// pane view RPCs to ~60fps during momentum scroll bursts.
+	paneViewScrollThrottleDelay = 16 * time.Millisecond
 )
 
 type paneViewKey struct {
@@ -281,7 +286,11 @@ func (m *Model) schedulePaneViewPump(reason string, delay time.Duration) tea.Cmd
 	if delay == 0 {
 		delay = perf.PumpBaseDelay
 	}
-	if delay > perf.PumpMaxDelay {
+	throttled := m.terminalScrollBusy() && delay < paneViewScrollThrottleDelay
+	if throttled {
+		delay = paneViewScrollThrottleDelay
+	}
+	if !throttled && delay > perf.PumpMaxDelay {
 		delay = perf.PumpMaxDelay
 	}
 	m.paneViewPumpScheduled = true

@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+tracing=0
+session=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --tracing)
+      tracing=1
+      shift
+      ;;
+    --session)
+      session="${2:-}"
+      shift 2
+      ;;
+    -h|--help)
+      cat <<'EOF'
+Usage: scripts/dev-tmux [--tracing] [--session <name>]
+
+Creates a tmux session with 2 panes:
+  - Left: restarts daemon + tails dev log
+  - Right: starts TUI (optionally with input tracing)
+EOF
+      exit 0
+      ;;
+    *)
+      echo "unknown arg: $1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+if ! command -v tmux >/dev/null 2>&1; then
+  echo "tmux not found" >&2
+  exit 1
+fi
+if ! command -v trash >/dev/null 2>&1; then
+  echo "trash not found (required by repo guardrails)" >&2
+  exit 1
+fi
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+gobin="${GOBIN:-$(go env GOPATH)/bin}"
+peak="$gobin/peakypanes"
+uid="${UID:-$(id -u)}"
+devroot="/tmp/peakypanes-dev-$uid"
+log="$devroot/peakypanes-dev.log"
+
+if [[ -z "$session" ]]; then
+  session="peakypanes-dev-$uid"
+fi
+
+cd "$root"
+
+go install ./cmd/peakypanes ./cmd/peky >/dev/null
+
+if [[ -e "$devroot" ]]; then
+  trash "$devroot"
+fi
+mkdir -p "$devroot"
+chmod 700 "$devroot"
+: > "$devroot/config.yml"
+: > "$log"
+
+if [[ "$tracing" == "1" ]]; then
+  : > /private/tmp/tui-input-raw.log
+  : > /private/tmp/tui-input-repaired.log
+fi
+
+common_env=(
+  "PEAKYPANES_DATA_DIR=$devroot"
+  "PEAKYPANES_RUNTIME_DIR=$devroot"
+  "PEAKYPANES_CONFIG_DIR=$devroot"
+  "PEAKYPANES_LOG_SINK=file"
+  "PEAKYPANES_LOG_FILE=$log"
+  "PEAKYPANES_LOG_LEVEL=debug"
+  "PEAKYPANES_LOG_FORMAT=text"
+  "PEAKYPANES_LOG_ADD_SOURCE=1"
+  "PEAKYPANES_LOG_INCLUDE_PAYLOADS=1"
+  "PEAKYPANES_PERF_TRACE_ALL=1"
+)
+
+if tmux has-session -t "$session" 2>/dev/null; then
+  if [[ -n "${TMUX:-}" ]]; then
+    exec tmux switch-client -t "$session"
+  fi
+  exec tmux attach -t "$session"
+fi
+
+tmux new-session -d -s "$session" -c "$root" -n dev
+tmux split-window -t "$session:dev" -h -c "$root"
+
+pane_map="$(tmux list-panes -t "$session:dev" -F '#{pane_index} #{pane_id}' | sort -n)"
+left_pane="$(printf '%s\n' "$pane_map" | awk 'NR==1{print $2}')"
+right_pane="$(printf '%s\n' "$pane_map" | awk 'NR==2{print $2}')"
+if [[ -z "$left_pane" || -z "$right_pane" ]]; then
+  echo "failed to resolve tmux panes" >&2
+  printf '%s\n' "$pane_map" >&2
+  exit 1
+fi
+
+daemon_cmd=$(
+  cat <<EOF
+cd "$root"
+export ${common_env[*]}
+"$peak" daemon restart -y
+echo "[dev] tailing $log"
+tail -n 0 -F "$log"
+EOF
+)
+
+tui_cmd=$(
+  cat <<EOF
+cd "$root"
+export ${common_env[*]}
+EOF
+)
+if [[ "$tracing" == "1" ]]; then
+  tui_cmd+=$'\n'
+  tui_cmd+=$'export PEAKYPANES_TUI_TRACE_INPUT=1\n'
+  tui_cmd+=$'export PEAKYPANES_TUI_TRACE_INPUT_FILE=/private/tmp/tui-input-raw.log\n'
+  tui_cmd+=$'export PEAKYPANES_TUI_TRACE_INPUT_REPAIRED=1\n'
+  tui_cmd+=$'export PEAKYPANES_TUI_TRACE_INPUT_REPAIRED_FILE=/private/tmp/tui-input-repaired.log\n'
+fi
+tui_cmd+=$'\n'"$peak start -y"$'\n'
+
+tmux send-keys -t "$left_pane" "$daemon_cmd" C-m
+tmux send-keys -t "$right_pane" "$tui_cmd" C-m
+
+if [[ -n "${TMUX:-}" ]]; then
+  exec tmux switch-client -t "$session"
+fi
+exec tmux attach -t "$session"

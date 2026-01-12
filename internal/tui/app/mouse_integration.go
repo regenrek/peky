@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -29,9 +28,12 @@ func (m *Model) updateDashboardMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if cmd, handled := m.handleServerStatusClick(msg); handled {
 		return m, tea.Batch(cursorCmd, cmd)
 	}
-	if _, handled := m.handleQuickReplyClick(msg); handled {
+	if cmd, handled := m.handleQuickReplyMouse(msg); handled {
 		m.updateTerminalMouseDrag(msg)
-		return m, cursorCmd
+		return m, tea.Batch(cursorCmd, cmd)
+	}
+	if cmd, handled := m.handlePaneTopbarClick(msg); handled {
+		return m, tea.Batch(cursorCmd, cmd)
 	}
 	m.updateTerminalMouseDrag(msg)
 	if cmd, handled := m.handleOfflineScrollWheel(msg); handled {
@@ -78,28 +80,6 @@ func (m *Model) handleServerStatusClick(msg tea.MouseMsg) (tea.Cmd, bool) {
 	default:
 		return nil, false
 	}
-	return nil, true
-}
-
-func (m *Model) handleQuickReplyClick(msg tea.MouseMsg) (tea.Cmd, bool) {
-	if m == nil {
-		return nil, false
-	}
-	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
-		return nil, false
-	}
-	rect, ok := m.quickReplyRect()
-	if !ok || !rect.Contains(msg.X, msg.Y) {
-		return nil, false
-	}
-	if m.terminalFocus {
-		m.setTerminalFocus(false)
-	}
-	if m.filterActive {
-		m.filterActive = false
-		m.filterInput.Blur()
-	}
-	m.quickReplyInput.Focus()
 	return nil, true
 }
 
@@ -182,14 +162,61 @@ func (m *Model) forwardMouseEvent(hit mouse.PaneHit, msg tea.MouseMsg) tea.Cmd {
 	if !ok {
 		return nil
 	}
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), terminalActionTimeout)
-		defer cancel()
-		if err := m.client.SendMouse(ctx, paneID, payload); err != nil {
-			return ErrorMsg{Err: err, Context: "send mouse"}
-		}
+	if payload.Wheel {
+		return m.forwardWheelEvent(paneID, payload, msg)
+	}
+	return m.enqueueMouseSend(paneID, payload)
+}
+
+func (m *Model) forwardWheelEvent(paneID string, payload sessiond.MouseEventPayload, msg tea.MouseMsg) tea.Cmd {
+	if m == nil {
 		return nil
 	}
+	action := terminalActionForWheel(msg.Button)
+	if action == sessiond.TerminalActionUnknown {
+		return nil
+	}
+	if shouldSendWheelAsMouse(m, paneID, payload.Route) {
+		return m.enqueueMouseSend(paneID, payload)
+	}
+	_, rows := m.paneSizeForFallback(paneID)
+	step := terminalScrollWheelStep(rows, msg.Shift, msg.Ctrl)
+	return m.enqueueTerminalScroll(paneID, action, step)
+}
+
+func terminalActionForWheel(button tea.MouseButton) sessiond.TerminalAction {
+	switch button {
+	case tea.MouseButtonWheelUp:
+		return sessiond.TerminalScrollUp
+	case tea.MouseButtonWheelDown:
+		return sessiond.TerminalScrollDown
+	default:
+		return sessiond.TerminalActionUnknown
+	}
+}
+
+func shouldSendWheelAsMouse(m *Model, paneID string, route sessiond.MouseRoute) bool {
+	switch route {
+	case sessiond.MouseRouteHostSelection:
+		return false
+	case sessiond.MouseRouteApp:
+		return true
+	default:
+		if m == nil || m.paneHasMouse == nil {
+			return false
+		}
+		return m.paneHasMouse[paneID]
+	}
+}
+
+func terminalScrollWheelStep(rows int, shift, ctrl bool) int {
+	if ctrl {
+		return maxInt(1, rows-1)
+	}
+	if shift {
+		return 1
+	}
+	return 3
 }
 
 func (m *Model) mouseForwardPayload(hit mouse.PaneHit, msg tea.MouseMsg) (string, sessiond.MouseEventPayload, bool) {
@@ -296,6 +323,11 @@ func mousePayloadFromTea(msg tea.MouseMsg, x, y int) (sessiond.MouseEventPayload
 		Alt:    msg.Alt,
 		Ctrl:   msg.Ctrl,
 		Wheel:  isWheelButton(msg.Button),
+		// WheelCount is injected by the send queue when coalescing bursts.
+		WheelCount: 1,
+	}
+	if !payload.Wheel {
+		payload.WheelCount = 0
 	}
 	return payload, true
 }

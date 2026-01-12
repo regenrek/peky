@@ -1,0 +1,197 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+# Disable glob expansion to handle brackets in file paths.
+set -f
+
+usage() {
+  printf 'Usage: %s [--clear-staged] [--allow-detached] [--force-lock] "message" "path" ["path" ...]\n' "$(basename "$0")" >&2
+  exit 2
+}
+
+clear_staged=false
+allow_detached=false
+force_lock=false
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --clear-staged)
+      clear_staged=true
+      shift
+      ;;
+    --allow-detached)
+      allow_detached=true
+      shift
+      ;;
+    --force-lock)
+      force_lock=true
+      shift
+      ;;
+    --help | -h)
+      usage
+      ;;
+    --*)
+      printf 'Error: unknown flag: %s\n' "$1" >&2
+      usage
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+if [ "$#" -lt 2 ]; then
+  usage
+fi
+
+commit_message=$1
+shift
+
+if [[ "$commit_message" != *[![:space:]]* ]]; then
+  printf 'Error: commit message must not be empty\n' >&2
+  exit 1
+fi
+
+if [ -e "$commit_message" ]; then
+  printf 'Error: first argument looks like a file path ("%s"); provide the commit message first\n' "$commit_message" >&2
+  exit 1
+fi
+
+if [ "$#" -eq 0 ]; then
+  usage
+fi
+
+files=("$@")
+
+for file in "${files[@]}"; do
+  if [ "$file" = "." ]; then
+    printf 'Error: "." is not allowed; list specific paths instead\n' >&2
+    exit 1
+  fi
+done
+
+if ! git_root=$(git rev-parse --show-toplevel 2>/dev/null); then
+  printf 'Error: not inside a git repository\n' >&2
+  exit 1
+fi
+
+git_dir=$(git -C "$git_root" rev-parse --git-dir)
+
+if [ -f "$git_dir/MERGE_HEAD" ] || [ -f "$git_dir/CHERRY_PICK_HEAD" ] || [ -d "$git_dir/rebase-apply" ] || [ -d "$git_dir/rebase-merge" ]; then
+  printf 'Error: merge/rebase/cherry-pick in progress; resolve first\n' >&2
+  exit 1
+fi
+
+current_branch=$(git -C "$git_root" branch --show-current)
+if [ -z "$current_branch" ] && [ "$allow_detached" = false ]; then
+  printf 'Error: detached HEAD; use --allow-detached or create a branch\n' >&2
+  exit 1
+fi
+
+start_dir=$(pwd)
+mapfile -t abs_files < <(
+  python3 - "$start_dir" "${files[@]}" <<'PY'
+import os
+import sys
+
+start = sys.argv[1]
+for p in sys.argv[2:]:
+    if os.path.isabs(p):
+        abs_p = os.path.abspath(p)
+    else:
+        abs_p = os.path.abspath(os.path.join(start, p))
+    print(abs_p)
+PY
+)
+
+normalized_files=()
+for abs in "${abs_files[@]}"; do
+  case "$abs" in
+    "$git_root"/*)
+      normalized_files+=("${abs#"$git_root"/}")
+      ;;
+    *)
+      printf 'Error: path outside repo: %s\n' "$abs" >&2
+      exit 1
+      ;;
+  esac
+done
+
+files=("${normalized_files[@]}")
+
+if ! git -C "$git_root" diff --staged --quiet; then
+  if [ "$clear_staged" = true ]; then
+    git -C "$git_root" restore --staged :/
+  else
+    printf 'Error: staged changes present; re-run with --clear-staged to proceed\n' >&2
+    exit 1
+  fi
+fi
+
+for file in "${files[@]}"; do
+  if [ ! -e "$git_root/$file" ]; then
+    if ! git -C "$git_root" ls-files --error-unmatch -- "$file" >/dev/null 2>&1; then
+      if ! git -C "$git_root" cat-file -e "HEAD:$file" >/dev/null 2>&1; then
+        printf 'Error: file not found: %s\n' "$file" >&2
+        exit 1
+      fi
+    fi
+  fi
+done
+
+last_commit_error=''
+
+run_git_commit() {
+  local stderr_log
+  stderr_log=$(mktemp)
+
+  if ! git -C "$git_root" add -A -- "${files[@]}" 2>"$stderr_log"; then
+    last_commit_error=$(cat "$stderr_log" 2>/dev/null || true)
+    rm -f "$stderr_log"
+    return 1
+  fi
+
+  if git -C "$git_root" diff --staged --quiet; then
+    printf 'Error: no staged changes detected for: %s\n' "${files[*]}" >&2
+    rm -f "$stderr_log"
+    return 1
+  fi
+
+  if git -C "$git_root" commit -m "$commit_message" 2>"$stderr_log"; then
+    rm -f "$stderr_log"
+    last_commit_error=''
+    return 0
+  fi
+
+  last_commit_error=$(cat "$stderr_log" 2>/dev/null || true)
+  rm -f "$stderr_log"
+  return 1
+}
+
+committed=false
+if run_git_commit; then
+  committed=true
+elif [ "$force_lock" = true ]; then
+  lock_path=$(
+    printf '%s\n' "$last_commit_error" |
+      awk -F"'" '/Unable to create .*\.git\/index\.lock/ { print $2; exit }'
+  )
+
+  if [ -n "$lock_path" ] && [ -e "$lock_path" ]; then
+    if ! command -v trash >/dev/null 2>&1; then
+      printf "Error: --force-lock requires \`trash\` (install and retry)\n" >&2
+      exit 1
+    fi
+    trash -F -- "$lock_path"
+    printf 'Trashed stale git lock: %s\n' "$lock_path" >&2
+    if run_git_commit; then
+      committed=true
+    fi
+  fi
+fi
+
+if [ "$committed" = false ]; then
+  exit 1
+fi
+
+printf 'Committed "%s" with %d file(s)\n' "$commit_message" "${#files[@]}"

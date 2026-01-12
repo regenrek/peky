@@ -33,10 +33,50 @@ func (m *Model) updateQuickReply(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.handleQuickReplyEscape(msg) {
 		return m, nil
 	}
+	if isSGRMouseKeyJunk(msg) {
+		return m, nil
+	}
 	var cmd tea.Cmd
 	m.quickReplyInput, cmd = m.quickReplyInput.Update(msg)
 	m.updateQuickReplyMenuSelection()
 	return m, cmd
+}
+
+func isSGRMouseKeyJunk(msg tea.KeyMsg) bool {
+	if msg.Type != tea.KeyRunes {
+		return false
+	}
+	s := msg.String()
+	if strings.HasPrefix(s, "[<") {
+		s = strings.TrimPrefix(s, "[<")
+	} else if strings.HasPrefix(s, "<") {
+		s = strings.TrimPrefix(s, "<")
+	} else {
+		return false
+	}
+	if len(s) == 0 {
+		return false
+	}
+	last := s[len(s)-1]
+	if last != 'M' && last != 'm' {
+		return false
+	}
+	body := s[:len(s)-1]
+	parts := strings.Split(body, ";")
+	if len(parts) != 3 {
+		return false
+	}
+	for _, p := range parts {
+		if p == "" {
+			return false
+		}
+		for _, r := range p {
+			if r < '0' || r > '9' {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (m *Model) handleQuickReplyPassthrough(msg tea.KeyMsg) (bool, tea.Cmd) {

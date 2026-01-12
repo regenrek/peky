@@ -278,7 +278,7 @@ func NewWindow(opts Options) (*Window, error) {
 	w.ptyCreatedAt.Store(ptyCreatedAt.UnixNano())
 	w.processStartedAt.Store(processStartedAt.UnixNano())
 	w.title.Store(opts.Title)
-	w.cwd.Store("")
+	w.cwd.Store(strings.TrimSpace(opts.Dir))
 	w.cursorVisible.Store(true)
 	w.lastUpdate.Store(time.Now().UnixNano())
 	term.SetCallbacks(vt.Callbacks{
@@ -450,6 +450,12 @@ func (w *Window) PID() int {
 func (w *Window) Cwd() string {
 	if w == nil {
 		return ""
+	}
+	if pid := w.PID(); pid > 0 {
+		if cwd, ok := cachedPIDCwd(pid); ok && strings.TrimSpace(cwd) != "" {
+			w.cwd.Store(cwd)
+			return cwd
+		}
 	}
 	if v := w.cwd.Load(); v != nil {
 		if s, ok := v.(string); ok {

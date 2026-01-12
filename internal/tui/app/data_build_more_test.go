@@ -39,7 +39,7 @@ func TestDashboardGroupIndexMerge(t *testing.T) {
 			Height: 5,
 		}},
 	}}
-	idx.mergeNativeSessions(nativeSessions, settings)
+	idx.mergeNativeSessions(nativeSessions, nil, settings)
 	if len(idx.groups[0].Sessions) != 1 || idx.groups[0].Sessions[0].Status != StatusRunning {
 		t.Fatalf("expected merged running session, got %#v", idx.groups[0].Sessions)
 	}
@@ -64,6 +64,7 @@ func TestBuildDashboardDataOrdersProjects(t *testing.T) {
 		Config:   cfg,
 		Settings: settings,
 		Sessions: sessions,
+		PaneGit:  nil,
 	})
 	got := make([]string, 0, len(result.Data.Projects))
 	for _, project := range result.Data.Projects {

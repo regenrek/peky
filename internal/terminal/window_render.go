@@ -333,8 +333,6 @@ func buildViewRenderState(w *Window, term vtEmulator, snapshot viewSnapshot) vie
 	cm := snapshot.cm
 
 	if term.IsAltScreen() {
-		offset = 0
-		sbMode = false
 		if cm == nil || !cm.Active || !w.mouseSel.fromMouse {
 			cm = nil
 		}

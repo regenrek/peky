@@ -187,6 +187,46 @@ func TestWaitForDaemonCanceled(t *testing.T) {
 	}
 }
 
+func TestWaitForDaemonHonorsContextDeadline(t *testing.T) {
+	start := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
+	defer cancel()
+	err := waitForDaemon(ctx, "/tmp/missing.sock", "v1")
+	elapsed := time.Since(start)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected context.DeadlineExceeded, got %v", err)
+	}
+	if elapsed < 40*time.Millisecond {
+		t.Fatalf("expected wait to honor ctx deadline, elapsed=%s", elapsed)
+	}
+}
+
+func TestWaitForDaemonHonorsContextDeadlineOverFallbackTimeout(t *testing.T) {
+	start := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
+	defer cancel()
+	err := waitForDaemonWithTimeout(ctx, "/tmp/missing.sock", "v1", 5*time.Millisecond)
+	elapsed := time.Since(start)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected context.DeadlineExceeded, got %v", err)
+	}
+	if elapsed < 40*time.Millisecond {
+		t.Fatalf("expected wait to honor ctx deadline, elapsed=%s", elapsed)
+	}
+}
+
+func TestWaitForDaemonUsesFallbackTimeoutWhenContextHasNoDeadline(t *testing.T) {
+	start := time.Now()
+	err := waitForDaemonWithTimeout(context.Background(), "/tmp/missing.sock", "v1", 20*time.Millisecond)
+	elapsed := time.Since(start)
+	if err == nil || !strings.Contains(err.Error(), "daemon did not start") {
+		t.Fatalf("expected daemon did not start, got %v", err)
+	}
+	if elapsed > 200*time.Millisecond {
+		t.Fatalf("expected fallback timeout to trigger quickly, elapsed=%s", elapsed)
+	}
+}
+
 func TestRunStop(t *testing.T) {
 	dir := t.TempDir()
 	socketPath := filepath.Join(dir, "sessiond.sock")

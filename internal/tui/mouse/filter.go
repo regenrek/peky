@@ -33,6 +33,7 @@ type PaneHit struct {
 	PaneID    string
 	Selection Selection
 	Outer     Rect
+	Topbar    Rect
 	Content   Rect
 }
 

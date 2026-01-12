@@ -3,6 +3,9 @@ set shell := ["bash", "-cu"]
 init:
   scripts/reinit.sh --all
 
+build:
+  @bash -cu 'set -euo pipefail; go install ./cmd/peakypanes ./cmd/peky'
+
 dev:
   @bash -cu 'set -euo pipefail; gobin="${GOBIN:-$(go env GOPATH)/bin}"; peak="$gobin/peakypanes"; \
     uid="${UID:-$(id -u)}"; devroot="/tmp/peakypanes-dev-$uid"; \
@@ -66,11 +69,52 @@ dev-fresh-all:
     PEAKYPANES_LOG_LEVEL=debug PEAKYPANES_LOG_FORMAT=text PEAKYPANES_LOG_SINK=file \
     PEAKYPANES_LOG_FILE="$PEAKYPANES_LOG_FILE" PEAKYPANES_LOG_ADD_SOURCE=1 \
     PEAKYPANES_LOG_INCLUDE_PAYLOADS=1 PEAKYPANES_PERF_TRACE_ALL=1 \
-    "$peky" daemon start -y; \
+    "$peak" daemon restart -y; \
     PEAKYPANES_LOG_LEVEL=debug PEAKYPANES_LOG_FORMAT=text PEAKYPANES_LOG_SINK=file \
     PEAKYPANES_LOG_FILE="$PEAKYPANES_LOG_FILE" PEAKYPANES_LOG_ADD_SOURCE=1 \
     PEAKYPANES_LOG_INCLUDE_PAYLOADS=1 PEAKYPANES_PERF_TRACE_ALL=1 \
     "$peak" start -y'
+
+dev-fresh-tracing: build
+  @bash -cu 'set -euo pipefail; \
+    export PEAKYPANES_TUI_TRACE_INPUT=1; \
+    export PEAKYPANES_TUI_TRACE_INPUT_FILE="/private/tmp/tui-input-raw.log"; \
+    export PEAKYPANES_TUI_TRACE_INPUT_REPAIRED=1; \
+    export PEAKYPANES_TUI_TRACE_INPUT_REPAIRED_FILE="/private/tmp/tui-input-repaired.log"; \
+    : > "$PEAKYPANES_TUI_TRACE_INPUT_FILE"; \
+    : > "$PEAKYPANES_TUI_TRACE_INPUT_REPAIRED_FILE"; \
+    gobin="${GOBIN:-$(go env GOPATH)/bin}"; peak="$gobin/peakypanes"; peky="$gobin/peky"; \
+    uid="${UID:-$(id -u)}"; devroot="/tmp/peakypanes-dev-$uid"; \
+    export PEAKYPANES_DATA_DIR="$devroot"; export PEAKYPANES_RUNTIME_DIR="$devroot"; export PEAKYPANES_CONFIG_DIR="$devroot"; \
+    if [[ -e "$PEAKYPANES_DATA_DIR" ]]; then trash "$PEAKYPANES_DATA_DIR"; fi; \
+    mkdir -p "$PEAKYPANES_DATA_DIR"; chmod 700 "$PEAKYPANES_DATA_DIR"; \
+    : > "$PEAKYPANES_CONFIG_DIR/config.yml"; \
+    export PEAKYPANES_LOG_FILE="$PEAKYPANES_DATA_DIR/peakypanes-dev.log"; \
+    PEAKYPANES_LOG_LEVEL=debug PEAKYPANES_LOG_FORMAT=text PEAKYPANES_LOG_SINK=file \
+    PEAKYPANES_LOG_FILE="$PEAKYPANES_LOG_FILE" PEAKYPANES_LOG_ADD_SOURCE=1 \
+    PEAKYPANES_LOG_INCLUDE_PAYLOADS=1 PEAKYPANES_PERF_TRACE_ALL=1 \
+    scripts/reinit.sh --all --no-daemon-restart; \
+    PEAKYPANES_LOG_LEVEL=debug PEAKYPANES_LOG_FORMAT=text PEAKYPANES_LOG_SINK=file \
+    PEAKYPANES_LOG_FILE="$PEAKYPANES_LOG_FILE" PEAKYPANES_LOG_ADD_SOURCE=1 \
+    PEAKYPANES_LOG_INCLUDE_PAYLOADS=1 PEAKYPANES_PERF_TRACE_ALL=1 \
+    "$peak" daemon restart -y; \
+    PEAKYPANES_LOG_LEVEL=debug PEAKYPANES_LOG_FORMAT=text PEAKYPANES_LOG_SINK=file \
+    PEAKYPANES_LOG_FILE="$PEAKYPANES_LOG_FILE" PEAKYPANES_LOG_ADD_SOURCE=1 \
+    PEAKYPANES_LOG_INCLUDE_PAYLOADS=1 PEAKYPANES_PERF_TRACE_ALL=1 \
+    "$peak" start -y'
+
+dev-tmux-tracing: build
+  @bash -cu 'set -euo pipefail; scripts/dev-tmux --tracing'
+
+mark-scroll-start:
+  @bash -cu 'set -euo pipefail; uid="${UID:-$(id -u)}"; log="/tmp/peakypanes-dev-$uid/peakypanes-dev.log"; \
+    python3 -c '\''import datetime; print("MARK scroll_start ts="+datetime.datetime.now().astimezone().isoformat(timespec="seconds"))'\'' \
+    | tee -a "$log" >/dev/null'
+
+mark-scroll-stop:
+  @bash -cu 'set -euo pipefail; uid="${UID:-$(id -u)}"; log="/tmp/peakypanes-dev-$uid/peakypanes-dev.log"; \
+    python3 -c '\''import datetime; print("MARK scroll_stop ts="+datetime.datetime.now().astimezone().isoformat(timespec="seconds"))'\'' \
+    | tee -a "$log" >/dev/null'
 
 dev-fresh-daemon-restart:
   @bash -cu 'set -euo pipefail; gobin="${GOBIN:-$(go env GOPATH)/bin}"; peky="$gobin/peky"; \
