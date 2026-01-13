@@ -5,6 +5,14 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Changed
+- GoReleaser archives now use `peky_...` naming.
+- Human-facing UI/docs branding standardized to `peky`.
+
+### Fixed
+- Project picker: mouse click now opens the selected project.
+- npm `scripts/agent-state/*` now uses `PEKY_*` env vars and writes under `XDG_RUNTIME_DIR/peky/agent-state`.
+
 ## 0.0.28 - 2026-01-12
 
 ### Breaking

@@ -20,6 +20,14 @@ func defaultDefinitions() []Definition {
 		Submit:      []byte{'\r'},
 		SubmitDelay: 30 * time.Millisecond,
 	}
+	piProfile := Profile{
+		Submit:      []byte{'\r'},
+		SubmitDelay: 30 * time.Millisecond,
+	}
+	opencodeProfile := Profile{
+		Submit:      []byte{'\r'},
+		SubmitDelay: 30 * time.Millisecond,
+	}
 	return []Definition{
 		{
 			Name:         "codex",
@@ -34,6 +42,17 @@ func defaultDefinitions() []Definition {
 			CommandNames: []string{"claude", "claude-code"},
 			TitleRegex:   []*regexp.Regexp{regexp.MustCompile(`(?i)\bclaude\b`)},
 			Profile:      claudeProfile,
+		},
+		{
+			Name:         "pi",
+			CommandNames: []string{"pi"},
+			Profile:      piProfile,
+		},
+		{
+			Name:         "opencode",
+			CommandNames: []string{"opencode"},
+			TitleRegex:   []*regexp.Regexp{regexp.MustCompile(`(?i)\bopencode\b`)},
+			Profile:      opencodeProfile,
 		},
 		{
 			Name:         "lazygit",

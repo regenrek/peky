@@ -1,6 +1,6 @@
 version: 2
 
-project_name: peakypanes
+project_name: peky
 
 before:
   hooks:
@@ -25,7 +25,7 @@ builds:
       - -s -w -X main.version={{ .Version }}
 
 archives:
-  - id: peakypanes
+  - id: peky
     ids:
       - peky
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"

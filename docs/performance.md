@@ -1,6 +1,6 @@
 # Performance
 
-This repo includes a set of reproducible performance/stress tools for PeakyPanes.
+This repo includes a set of reproducible performance/stress tools for peky.
 
 ## Goals (multipane-first)
 

@@ -1,5 +1,5 @@
 // Package terminal provides a minimal PTY + VT (virtual terminal) wrapper
-// for PeakyPanes native session manager.
+// for peky native session manager.
 package terminal
 
 import (
@@ -698,7 +698,7 @@ func (w *Window) notifyToast(message string) {
 	w.toastFn(message)
 }
 
-// detectShell is a conservative default. In PeakyPanes, panes often run a command;
+// detectShell is a conservative default. In peky, panes often run a command;
 // for interactive shells, this is used when Options.Command is empty.
 func detectShell() string {
 	if shell := os.Getenv("SHELL"); strings.TrimSpace(shell) != "" {

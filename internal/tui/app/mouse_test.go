@@ -2,6 +2,8 @@ package app
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -132,10 +134,20 @@ func TestProjectPickerMouseClickSelectsItem(t *testing.T) {
 	m.state = StateProjectPicker
 	m.applyWindowSize(tea.WindowSizeMsg{Width: 120, Height: 40})
 
+	root := t.TempDir()
+	dir1 := filepath.Join(root, "one")
+	dir2 := filepath.Join(root, "two")
+	dir3 := filepath.Join(root, "three")
+	for _, dir := range []string{dir1, dir2, dir3} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+	}
+
 	items := []list.Item{
-		picker.ProjectItem{Name: "one", Path: "/tmp/one"},
-		picker.ProjectItem{Name: "two", Path: "/tmp/two"},
-		picker.ProjectItem{Name: "three", Path: "/tmp/three"},
+		picker.ProjectItem{Name: "one", Path: dir1},
+		picker.ProjectItem{Name: "two", Path: dir2},
+		picker.ProjectItem{Name: "three", Path: dir3},
 	}
 	_ = m.projectPicker.SetItems(items)
 	m.projectPicker.Select(0)
@@ -148,19 +160,22 @@ func TestProjectPickerMouseClickSelectsItem(t *testing.T) {
 
 	x := padLeft + 3
 	y := padTop + titleHeight + statusHeight + rowHeight*1
-	msg := tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft}
-
-	_, _ = m.updateProjectPickerMouse(msg)
-
-	if m.projectPicker.Index() != 1 {
-		t.Fatalf("index=%d want 1", m.projectPicker.Index())
+	// Clicking on the spacing line should do nothing.
+	_, _ = m.updateProjectPickerMouse(tea.MouseMsg{X: x, Y: y + itemHeight, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	if m.state != StateProjectPicker {
+		t.Fatalf("state=%v want %v after spacing click", m.state, StateProjectPicker)
+	}
+	if m.projectPicker.Index() != 0 {
+		t.Fatalf("index=%d want 0 after spacing click", m.projectPicker.Index())
 	}
 
-	// Clicking on the spacing line should not change selection.
-	msg = tea.MouseMsg{X: x, Y: y + itemHeight, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft}
-	_, _ = m.updateProjectPickerMouse(msg)
-	if m.projectPicker.Index() != 1 {
-		t.Fatalf("index=%d want 1 after spacing click", m.projectPicker.Index())
+	_, _ = m.updateProjectPickerMouse(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+
+	if m.state != StateDashboard {
+		t.Fatalf("state=%v want %v after click open", m.state, StateDashboard)
+	}
+	if m.selection.ProjectID != projectKey(dir2, "two") {
+		t.Fatalf("projectID=%q want %q", m.selection.ProjectID, projectKey(dir2, "two"))
 	}
 }
 

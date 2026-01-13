@@ -22,7 +22,7 @@ func TestViewDashboardContentRenders(t *testing.T) {
 	m := Model{
 		Width:                    80,
 		Height:                   24,
-		HeaderLine:               "Peaky Panes",
+		HeaderLine:               "peky",
 		EmptyStateMessage:        "empty",
 		QuickReplyInput:          input,
 		DashboardColumns:         []DashboardColumn{{ProjectID: "proj", ProjectName: "Proj", ProjectPath: "", Panes: []DashboardPane{{ProjectID: "proj", ProjectName: "Proj", SessionName: "sess", Pane: Pane{Index: "0"}}}}},
@@ -48,7 +48,7 @@ func TestViewDashboardContentRenders(t *testing.T) {
 	}
 
 	out := m.viewDashboardContent()
-	if !strings.Contains(out, "Peaky Panes") {
+	if !strings.Contains(out, "peky") {
 		t.Fatalf("viewDashboardContent() missing header")
 	}
 	if !strings.Contains(out, "hello") {
@@ -170,7 +170,7 @@ func TestViewStates(t *testing.T) {
 	base := Model{
 		Width:                    80,
 		Height:                   24,
-		HeaderLine:               "Peaky Panes",
+		HeaderLine:               "peky",
 		EmptyStateMessage:        "empty",
 		DashboardColumns:         []DashboardColumn{{ProjectID: "proj", ProjectName: "Proj", ProjectPath: "", Panes: []DashboardPane{{ProjectID: "proj", ProjectName: "Proj", SessionName: "sess", Pane: Pane{Index: "0"}}}}},
 		DashboardSelectedProject: "proj",
@@ -185,7 +185,7 @@ func TestViewStates(t *testing.T) {
 		CommandPalette:           list.New(nil, list.NewDefaultDelegate(), 10, 4),
 		ProjectRootInput:         textinput.New(),
 		Rename:                   Rename{Input: textinput.New()},
-		PekyDialogTitle:          "Peky",
+		PekyDialogTitle:          "peky",
 		PekyDialogFooter:         "esc close",
 		PekyDialogViewport:       viewport.New(10, 4),
 	}
@@ -222,7 +222,7 @@ func TestFooterRendersServerStatus(t *testing.T) {
 		Width:             80,
 		Height:            24,
 		ActiveView:        viewDashboard,
-		HeaderLine:        "Peaky Panes",
+		HeaderLine:        "peky",
 		EmptyStateMessage: "empty",
 		Projects:          []Project{{Name: "Proj"}},
 		DashboardColumns: []DashboardColumn{{
@@ -301,7 +301,7 @@ func TestRenderPadsToScreenSize(t *testing.T) {
 		Width:             60,
 		Height:            16,
 		ActiveView:        viewDashboard,
-		HeaderLine:        "Peaky Panes",
+		HeaderLine:        "peky",
 		EmptyStateMessage: "empty",
 		Projects:          []Project{{Name: "Proj"}},
 		DashboardColumns: []DashboardColumn{{

@@ -101,9 +101,13 @@ func TestStartVtToPtyDoesNotDependOnTermMu(t *testing.T) {
 	}
 	defer w.termMu.Unlock()
 
-	emu.readCh <- []byte("b")
+	cpr := []byte("\x1b[12;34R")
+	emu.readCh <- cpr
 	select {
-	case <-w.writeCh:
+	case req := <-w.writeCh:
+		if string(req.data) != string(cpr) {
+			t.Fatalf("forwarded payload = %q", string(req.data))
+		}
 	case <-time.After(200 * time.Millisecond):
 		t.Fatal("vt->pty blocked when termMu is held")
 	}

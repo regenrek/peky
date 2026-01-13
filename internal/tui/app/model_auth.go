@@ -108,7 +108,7 @@ func (m *Model) handleAuthDialogSubmit() tea.Cmd {
 			return nil
 		}
 		if m.authFlow.Verifier == "" {
-			m.setToast("Run /auth anthropic oauth first", toastWarning)
+			m.setToast("OAuth flow not initialized; start login again", toastWarning)
 			return nil
 		}
 		m.closeAuthDialog()
@@ -119,7 +119,7 @@ func (m *Model) handleAuthDialogSubmit() tea.Cmd {
 			return nil
 		}
 		if m.authFlow.Verifier == "" {
-			m.setToast("Run /auth <provider> oauth first", toastWarning)
+			m.setToast("OAuth flow not initialized; start login again", toastWarning)
 			return nil
 		}
 		m.closeAuthDialog()
@@ -182,6 +182,9 @@ func parseOAuthPaste(input string) (string, string) {
 }
 
 func (m *Model) authMenuState() quickReplyMenu {
+	if !agentFeaturesEnabled {
+		return quickReplyMenu{}
+	}
 	cmd, ok := parseSlashCommandInput(m.quickReplyInput.Value())
 	if !ok || cmd.Command != "auth" {
 		return quickReplyMenu{}
@@ -214,6 +217,9 @@ func (m *Model) authMenuState() quickReplyMenu {
 }
 
 func (m *Model) modelMenuState() quickReplyMenu {
+	if !agentFeaturesEnabled {
+		return quickReplyMenu{}
+	}
 	cmd, ok := parseSlashCommandInput(m.quickReplyInput.Value())
 	if !ok || cmd.Command != "model" {
 		return quickReplyMenu{}
@@ -412,6 +418,13 @@ func (m *Model) handleAuthSlashCommand(input string) quickReplyCommandOutcome {
 	if !ok || cmd.Command != "auth" {
 		return quickReplyCommandOutcome{}
 	}
+	if !agentFeaturesEnabled {
+		return quickReplyCommandOutcome{
+			Cmd:        NewWarningCmd("Auth disabled"),
+			Handled:    true,
+			ClearInput: true,
+		}
+	}
 	if len(cmd.Args) == 0 {
 		return quickReplyCommandOutcome{
 			Cmd:     m.prefillQuickReplyInput("/auth "),
@@ -529,7 +542,7 @@ func (m *Model) handleAnthropicOAuth(setProvider tea.Cmd, args []string) quickRe
 	}
 	if strings.TrimSpace(m.authFlow.Verifier) == "" {
 		return quickReplyCommandOutcome{
-			Cmd:     NewWarningCmd("Run /auth anthropic oauth first"),
+			Cmd:     NewWarningCmd("OAuth flow not initialized; start login again"),
 			Handled: true,
 		}
 	}
@@ -544,6 +557,13 @@ func (m *Model) handleModelSlashCommand(input string) quickReplyCommandOutcome {
 	cmd, ok := parseSlashCommandInput(input)
 	if !ok || cmd.Command != "model" {
 		return quickReplyCommandOutcome{}
+	}
+	if !agentFeaturesEnabled {
+		return quickReplyCommandOutcome{
+			Cmd:        NewWarningCmd("Model selection disabled"),
+			Handled:    true,
+			ClearInput: true,
+		}
 	}
 	if len(cmd.Args) == 0 {
 		return quickReplyCommandOutcome{

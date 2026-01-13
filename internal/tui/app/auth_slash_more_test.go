@@ -17,7 +17,7 @@ func TestHandleAuthSlashCommandUnknownProviderHandled(t *testing.T) {
 	}
 	msg := out.Cmd()
 	warn, ok := msg.(WarningMsg)
-	if !ok || !strings.Contains(warn.Message, "Unknown provider") {
+	if !ok || !strings.Contains(warn.Message, "Auth disabled") {
 		t.Fatalf("msg=%#v", msg)
 	}
 }
@@ -37,7 +37,7 @@ func TestHandleAuthSlashCommandProviderOnlyPrefillsAPIKey(t *testing.T) {
 	if !out.Handled {
 		t.Fatalf("expected handled")
 	}
-	if !strings.HasPrefix(m.quickReplyInput.Value(), "/auth openai api-key ") {
+	if m.quickReplyInput.Value() != "/auth openai " {
 		t.Fatalf("value=%q", m.quickReplyInput.Value())
 	}
 }

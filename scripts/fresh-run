@@ -5,7 +5,7 @@ usage() {
   cat <<'USAGE'
 Usage: scripts/fresh-run [version] [--with-project] [--cmd <args...>]
 
-Runs PeakyPanes from npm in a clean HOME/XDG_CONFIG_HOME so it behaves like a
+Runs peky from npm in a clean HOME/XDG_CONFIG_HOME so it behaves like a
 fresh install. By default it runs the dashboard in a temp project directory.
 
 Options:

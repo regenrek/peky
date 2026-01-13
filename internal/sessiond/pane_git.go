@@ -10,13 +10,22 @@ import (
 	"time"
 )
 
-const paneGitCacheTTL = 2 * time.Second
+const (
+	paneGitCacheTTL         = 2 * time.Second
+	paneGitRequestQueueSize = 1024
+)
 
 type paneGitCache struct {
-	mu     sync.Mutex
-	byCwd  map[string]paneGitCacheEntry
+	mu       sync.Mutex
+	byCwd    map[string]paneGitCacheEntry
+	inFlight map[string]struct{}
+
 	ttl    time.Duration
 	maxLen int
+
+	probe     func(context.Context, string) (PaneGitMeta, bool)
+	requests  chan string
+	startOnce sync.Once
 }
 
 type paneGitCacheEntry struct {
@@ -26,10 +35,50 @@ type paneGitCacheEntry struct {
 
 func newPaneGitCache() *paneGitCache {
 	return &paneGitCache{
-		byCwd:  make(map[string]paneGitCacheEntry),
-		ttl:    paneGitCacheTTL,
-		maxLen: 4096,
+		byCwd:    make(map[string]paneGitCacheEntry),
+		inFlight: make(map[string]struct{}),
+		ttl:      paneGitCacheTTL,
+		maxLen:   4096,
+		probe:    probePaneGitMeta,
 	}
+}
+
+func (c *paneGitCache) Start(ctx context.Context, wg *sync.WaitGroup, workers int) {
+	if c == nil {
+		return
+	}
+	if ctx == nil {
+		return
+	}
+	if workers <= 0 {
+		workers = 1
+	}
+	c.startOnce.Do(func() {
+		c.mu.Lock()
+		if c.probe == nil {
+			c.probe = probePaneGitMeta
+		}
+		if c.byCwd == nil {
+			c.byCwd = make(map[string]paneGitCacheEntry)
+		}
+		if c.inFlight == nil {
+			c.inFlight = make(map[string]struct{})
+		}
+		c.requests = make(chan string, paneGitRequestQueueSize)
+		c.mu.Unlock()
+
+		for i := 0; i < workers; i++ {
+			if wg != nil {
+				wg.Add(1)
+			}
+			go func() {
+				if wg != nil {
+					defer wg.Done()
+				}
+				c.worker(ctx)
+			}()
+		}
+	})
 }
 
 func (c *paneGitCache) Meta(ctx context.Context, cwd string) (PaneGitMeta, bool) {
@@ -48,9 +97,21 @@ func (c *paneGitCache) Meta(ctx context.Context, cwd string) (PaneGitMeta, bool)
 		c.mu.Unlock()
 		return entry.meta, entry.meta.Root != ""
 	}
+	if c.requests != nil {
+		entry.expires = now.Add(c.ttl)
+		if len(c.byCwd) > c.maxLen {
+			c.pruneLocked(now)
+		}
+		c.byCwd[cwd] = entry
+		c.enqueueProbeLocked(cwd)
+		meta := entry.meta
+		c.mu.Unlock()
+		return meta, meta.Root != ""
+	}
+	probe := c.probe
 	c.mu.Unlock()
 
-	meta, ok := probePaneGitMeta(ctx, cwd)
+	meta, ok := probe(ctx, cwd)
 	if ok {
 		meta.UpdatedAt = now
 	}
@@ -79,6 +140,69 @@ func (c *paneGitCache) pruneLocked(now time.Time) {
 			return
 		}
 	}
+}
+
+func (c *paneGitCache) enqueueProbeLocked(cwd string) {
+	if c == nil || c.requests == nil {
+		return
+	}
+	if c.inFlight == nil {
+		c.inFlight = make(map[string]struct{})
+	}
+	if _, ok := c.inFlight[cwd]; ok {
+		return
+	}
+	c.inFlight[cwd] = struct{}{}
+	select {
+	case c.requests <- cwd:
+	default:
+		delete(c.inFlight, cwd)
+	}
+}
+
+func (c *paneGitCache) worker(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case cwd := <-c.requests:
+			c.runProbe(ctx, cwd)
+		}
+	}
+}
+
+func (c *paneGitCache) runProbe(ctx context.Context, cwd string) {
+	if c == nil {
+		return
+	}
+	cwd = strings.TrimSpace(cwd)
+	if cwd == "" {
+		c.mu.Lock()
+		if c.inFlight != nil {
+			delete(c.inFlight, cwd)
+		}
+		c.mu.Unlock()
+		return
+	}
+	probe := c.probe
+	if probe == nil {
+		probe = probePaneGitMeta
+	}
+	meta, ok := probe(ctx, cwd)
+	now := time.Now()
+	if ok {
+		meta.UpdatedAt = now
+	}
+
+	c.mu.Lock()
+	if c.inFlight != nil {
+		delete(c.inFlight, cwd)
+	}
+	if len(c.byCwd) > c.maxLen {
+		c.pruneLocked(now)
+	}
+	c.byCwd[cwd] = paneGitCacheEntry{meta: meta, expires: now.Add(c.ttl)}
+	c.mu.Unlock()
 }
 
 func probePaneGitMeta(parent context.Context, cwd string) (PaneGitMeta, bool) {

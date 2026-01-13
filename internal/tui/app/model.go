@@ -58,7 +58,7 @@ type dashboardKeyMap struct {
 	copyMode        key.Binding
 }
 
-// Model implements tea.Model for peakypanes TUI.
+// Model implements tea.Model for peky TUI.
 type Model struct {
 	client               *sessiond.Client
 	paneViewClient       *sessiond.Client
@@ -241,7 +241,7 @@ type Model struct {
 	pekyPromptLineID    int64
 }
 
-// NewModel creates a new peakypanes TUI model.
+// NewModel creates a new peky TUI model.
 func NewModel(client *sessiond.Client) (*Model, error) {
 	configPath, err := layout.DefaultConfigPath()
 	if err != nil {

@@ -219,29 +219,6 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 			},
 		},
 		{
-			Name: "agent",
-			Commands: []commandSpec{
-				{
-					ID:      "agent_auth",
-					Label:   "Agent: Auth",
-					Desc:    "Connect an AI provider for Peky",
-					Aliases: []string{"auth", "login", "agent auth"},
-					Run: func(m *Model, _ commandArgs) tea.Cmd {
-						return m.prefillQuickReplyInput("/auth ")
-					},
-				},
-				{
-					ID:      "agent_model",
-					Label:   "Agent: Model",
-					Desc:    "Select the model used by Peky",
-					Aliases: []string{"model", "agent model"},
-					Run: func(m *Model, _ commandArgs) tea.Cmd {
-						return m.prefillQuickReplyInput("/model ")
-					},
-				},
-			},
-		},
-		{
 			Name: "broadcast",
 			Commands: []commandSpec{
 				{
@@ -294,7 +271,7 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 				{
 					ID:       "other_quit",
 					Label:    "Quit",
-					Desc:     "Exit PeakyPanes",
+					Desc:     "Exit peky",
 					Aliases:  []string{"quit"},
 					Shortcut: shortcutQuit,
 					Run: func(m *Model, _ commandArgs) tea.Cmd {
@@ -303,6 +280,32 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 				},
 			},
 		},
+	}
+
+	if agentFeaturesEnabled {
+		groups = append(groups, commandGroup{
+			Name: "agent",
+			Commands: []commandSpec{
+				{
+					ID:      "agent_auth",
+					Label:   "Agent: Auth",
+					Desc:    "Connect an AI provider for peky",
+					Aliases: []string{"auth", "login", "agent auth"},
+					Run: func(m *Model, _ commandArgs) tea.Cmd {
+						return m.prefillQuickReplyInput("/auth ")
+					},
+				},
+				{
+					ID:      "agent_model",
+					Label:   "Agent: Model",
+					Desc:    "Select the model used by peky",
+					Aliases: []string{"model", "agent model"},
+					Run: func(m *Model, _ commandArgs) tea.Cmd {
+						return m.prefillQuickReplyInput("/model ")
+					},
+				},
+			},
+		})
 	}
 
 	registry := commandRegistry{Groups: groups}

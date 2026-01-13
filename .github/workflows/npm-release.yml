@@ -57,7 +57,7 @@ jobs:
           fetch_one() {
             local os="$1"
             local arch="$2"
-            local archive="peakypanes_${version}_${os}_${arch}.tar.gz"
+            local archive="peky_${version}_${os}_${arch}.tar.gz"
 
             gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$archive"
 
@@ -72,7 +72,7 @@ jobs:
               exit 1
             fi
 
-            local out="dist/peakypanes_${os}_${arch}/peky"
+            local out="dist/peky_${os}_${arch}/peky"
             mkdir -p "$(dirname "$out")"
             cp "$bin" "$out"
             chmod +x "$out" >/dev/null 2>&1 || true

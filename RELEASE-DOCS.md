@@ -1,6 +1,6 @@
 # Release Process
 
-This document is the single source of truth for releasing Peaky Panes.
+This document is the single source of truth for releasing peky.
 
 ## Preconditions
 
