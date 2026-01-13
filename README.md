@@ -49,13 +49,14 @@ window layouts and better-organized projects.
 
 ### Install
 
-**Using npm (recommended)**
+**Using npm**
 
 ```bash
 npm i -g peky
 peky
 ```
 
+**Using homebrew**
 ```bash
 brew tap regenrek/tap
 brew install regenrek/tap/peky
