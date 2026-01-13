@@ -1,5 +1,5 @@
 <div align="center">
-# peky
+<h1>peky</h1>
 
 **All your terminal AI agents, just one app.**
 
