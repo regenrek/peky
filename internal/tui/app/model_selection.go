@@ -136,6 +136,7 @@ func (m *Model) applySelection(sel selectionState) {
 	}
 	nextPaneID := m.selectedPaneID()
 	if prevPaneID != nextPaneID {
+		m.dropQuickReplyStreamBuffer("Stream dropped: pane changed")
 		m.clearOfflineScroll()
 		m.clearPaneAgentUnread(nextPaneID)
 	}

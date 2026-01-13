@@ -1,0 +1,71 @@
+# Stream Quick Reply to Terminal (Plan)
+
+Goal: optional mode. When quick reply focused, typing feels like typing into selected pane. Quick reply still shows input, but the same keystrokes are sent to the pane.
+
+Config (gated)
+- `quick_reply.stream_to_pane: true|false` (default false)
+
+Safety rules (non-negotiable)
+- Never stream when input is a slash command (`/…` after trimming leading whitespace).
+- Never stream when terminal focus is on.
+- Never stream when pane is offline/dead/input-disabled/unselected.
+- Never block UI on send failures; best-effort only.
+- Avoid “wrong pane”: if selection changes, drop any buffered bytes (V1).
+
+## V1 (ship)
+
+Scope
+- Stream safe subset only:
+  - text runes + space
+  - backspace + delete (only when quick reply has content)
+  - enter: flush buffered bytes, then send `\r`, then clear quick reply input + record history
+- Disable quick reply menus while streaming:
+  - slash suggestions (`/`)
+  - `@` file picker
+  - up/down history navigation + menu selection UI
+
+Implementation outline
+1) Config plumbing
+   - Add `QuickReplyConfig.StreamToPane` in `internal/layout/config.go`.
+   - Document config in `docs/configuration.md`.
+
+2) Model state
+   - Add stream buffer + debounce state to the TUI model:
+     - buffer bytes
+     - target pane id
+     - generation token to cancel scheduled flushes
+     - last toast time (rate limit)
+
+3) Buffered sender (performance)
+   - Append bytes per eligible key.
+   - Flush on short timer (~15ms) to batch into a single `SendInput`.
+   - Flush immediately on enter.
+   - Cap buffer size; on overflow flush early.
+
+4) Pane switch handling
+   - On any selection change:
+     - increment generation token (cancels pending flush)
+     - drop buffer
+     - (optional) single toast “stream dropped: pane changed” (rate limited)
+
+5) Tests
+   - Streaming batches multiple keystrokes into ≤1 RPC within a flush window.
+   - Slash command start (`/`) never streams.
+   - Enter streams newline and clears quick reply without double-send.
+   - Pane switch cancels pending flush and drops buffered bytes.
+   - Offline/dead panes do not stream and do not spam toasts.
+
+## V2 (more complex; defer)
+
+Cursor-sync editing (left/right/home/end, mid-line edits)
+- Requires a real “text buffer + cursor” model and a diff->terminal-escape encoder.
+- Must stay consistent with shell/TUI cursor position; otherwise edits happen in wrong place.
+
+Menu mirroring (keep menus while streaming)
+- If menu completion changes quick reply text, terminal must receive the corresponding edit delta.
+- Requires the same diff engine as cursor-sync editing.
+
+Smarter pane switch policy
+- Option: flush buffered bytes to old pane on key-driven selection changes only, drop on mouse changes.
+- Needs deterministic ordering + more integration tests.
+

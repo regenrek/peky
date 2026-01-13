@@ -106,6 +106,11 @@ type Model struct {
 	quickReplyMode         quickReplyMode
 	quickReplyFileCache    quickReplyFileCache
 	quickReplyMouseSel     quickReplyMouseSelection
+	quickReplyStreamBuf    []byte
+	quickReplyStreamPaneID string
+	quickReplyStreamGen    uint64
+	quickReplyStreamFlush  bool
+	quickReplyStreamToast  time.Time
 
 	mouse       mouse.Handler
 	contextMenu contextMenuState

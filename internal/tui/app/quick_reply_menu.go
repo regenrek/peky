@@ -28,6 +28,9 @@ func (m *Model) quickReplyMenuState() quickReplyMenu {
 	if m == nil || m.state != StateDashboard || m.filterActive || m.terminalFocus {
 		return quickReplyMenu{}
 	}
+	if m.quickReplyStreamEnabled() {
+		return quickReplyMenu{}
+	}
 	if menu := m.authMenuState(); menu.kind != quickReplyMenuNone {
 		return menu
 	}

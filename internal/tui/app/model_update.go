@@ -175,6 +175,9 @@ var updateHandlers = map[reflect.Type]updateHandler{
 	reflect.TypeOf(quickReplySendMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleQuickReplySend(msg.(quickReplySendMsg))
 	},
+	reflect.TypeOf(quickReplyStreamFlushMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleQuickReplyStreamFlush(msg.(quickReplyStreamFlushMsg))
+	},
 	reflect.TypeOf(pekyResultMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handlePekyResult(msg.(pekyResultMsg))
 	},

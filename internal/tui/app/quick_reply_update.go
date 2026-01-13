@@ -11,38 +11,39 @@ func (m *Model) updateQuickReply(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if !agentFeaturesEnabled && m.quickReplyMode == quickReplyModePeky {
 		m.setQuickReplyMode(quickReplyModePane)
 	}
+	streamCmd := m.maybeQueueQuickReplyStream(msg)
 	if m.handleQuickReplyModeToggle(msg) {
-		return m, nil
+		return m, streamCmd
 	}
 	if m.applyQuickReplyCompletionOnTab(msg) {
-		return m, nil
+		return m, streamCmd
 	}
 	if handled, cmd := m.handleQuickReplyPassthrough(msg); handled {
-		return m, cmd
+		return m, tea.Batch(streamCmd, cmd)
 	}
 	if handled, cmd := m.handleQuickReplyPaneNav(msg); handled {
-		return m, cmd
+		return m, tea.Batch(streamCmd, cmd)
 	}
 	if m.handleQuickReplyMenuNav(msg) {
-		return m, nil
+		return m, streamCmd
 	}
 	m.maybeExitQuickReplyHistory(msg)
 	if m.handleQuickReplyHistoryNav(msg) {
-		return m, nil
+		return m, streamCmd
 	}
 	if handled, cmd := m.handleQuickReplySubmit(msg); handled {
-		return m, cmd
+		return m, tea.Batch(streamCmd, cmd)
 	}
 	if m.handleQuickReplyEscape(msg) {
-		return m, nil
+		return m, streamCmd
 	}
 	if isSGRMouseKeyJunk(msg) {
-		return m, nil
+		return m, streamCmd
 	}
 	var cmd tea.Cmd
 	m.quickReplyInput, cmd = m.quickReplyInput.Update(msg)
 	m.updateQuickReplyMenuSelection()
-	return m, cmd
+	return m, tea.Batch(streamCmd, cmd)
 }
 
 func isSGRMouseKeyJunk(msg tea.KeyMsg) bool {
@@ -154,6 +155,9 @@ func (m *Model) maybeExitQuickReplyHistory(msg tea.KeyMsg) {
 }
 
 func (m *Model) handleQuickReplyHistoryNav(msg tea.KeyMsg) bool {
+	if m.quickReplyStreamEnabled() {
+		return false
+	}
 	switch msg.String() {
 	case "up":
 		if m.moveQuickReplyHistory(-1) {
@@ -185,6 +189,13 @@ func (m *Model) handleQuickReplySubmit(msg tea.KeyMsg) (bool, tea.Cmd) {
 			return true, NewInfoCmd("Enter a prompt")
 		}
 		return true, nil
+	}
+	if m.quickReplyMode == quickReplyModePane && m.quickReplyStreamEnabled() && !strings.HasPrefix(strings.TrimLeft(text, " \t"), "/") {
+		paneID := m.selectedPaneID()
+		m.rememberQuickReply(text)
+		m.resetQuickReplyInputState()
+		m.resetQuickReplyHistory()
+		return true, m.flushQuickReplyStreamWithEnter(paneID)
 	}
 	if m.quickReplyMode == quickReplyModePeky {
 		if outcome := m.handleAgentSlashCommand(text); outcome.Handled {

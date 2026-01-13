@@ -7,6 +7,7 @@ func (m *Model) setState(state ViewState) {
 	if state == StateDashboard && !m.filterActive && !m.terminalFocus {
 		m.quickReplyInput.Focus()
 	} else {
+		m.dropQuickReplyStreamBuffer("")
 		m.quickReplyInput.Blur()
 	}
 }
@@ -17,6 +18,7 @@ func (m *Model) setTerminalFocus(enabled bool) {
 	}
 	m.terminalFocus = enabled
 	if enabled {
+		m.dropQuickReplyStreamBuffer("")
 		if m.contextMenu.open {
 			m.closeContextMenu()
 		}

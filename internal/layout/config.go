@@ -238,7 +238,8 @@ type QuickReplyFilesConfig struct {
 
 // QuickReplyConfig configures quick reply behavior.
 type QuickReplyConfig struct {
-	Files QuickReplyFilesConfig `yaml:"files,omitempty"`
+	Files        QuickReplyFilesConfig `yaml:"files,omitempty"`
+	StreamToPane bool                  `yaml:"stream_to_pane,omitempty"`
 }
 
 // SessionRestoreConfig configures on-disk session restore behavior.
