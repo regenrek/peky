@@ -1,8 +1,9 @@
 <div align="center">
-
 # peky
 
-**Multi-project orchestration in a single TUI for AI agents and dev environments.**
+**All your terminal AI agents, just one app.**
+
+Peky puts all your AI Agents like Claude Code, Codex CLI, pi, opencode e.g. into a single app to keep things organized.
 
 [![npm](https://img.shields.io/npm/v/peakypanes?logo=npm)](https://www.npmjs.com/package/peakypanes)
 [![homebrew](https://img.shields.io/badge/homebrew-regenrek%2Ftap%2Fpeky-2e933c?logo=homebrew)](https://github.com/regenrek/homebrew-tap)
