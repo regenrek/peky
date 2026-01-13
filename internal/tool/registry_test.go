@@ -31,6 +31,19 @@ func TestDefaultRegistryDetectsCodex(t *testing.T) {
 	}
 }
 
+func TestDefaultRegistryDetectsPiAndOpencode(t *testing.T) {
+	reg := defaultRegistry(t)
+	if got := reg.DetectFromCommand("pi"); got != "pi" {
+		t.Fatalf("DetectFromCommand(pi) = %q", got)
+	}
+	if got := reg.DetectFromCommand("opencode"); got != "opencode" {
+		t.Fatalf("DetectFromCommand(opencode) = %q", got)
+	}
+	if got := reg.DetectFromTitle("Build GLM-4.7 OpenCode Zen"); got != "opencode" {
+		t.Fatalf("DetectFromTitle(OpenCode) = %q", got)
+	}
+}
+
 func TestDefaultRegistryNotEmpty(t *testing.T) {
 	reg := defaultRegistry(t)
 	if reg == nil || len(reg.defs) == 0 {
@@ -56,6 +69,16 @@ func TestRegistryProfileCodex(t *testing.T) {
 	}
 	if len(profile.Submit) == 0 {
 		t.Fatalf("codex submit bytes missing")
+	}
+}
+
+func TestRegistryProfilePiAndOpencode(t *testing.T) {
+	reg := defaultRegistry(t)
+	if got := string(reg.Profile("pi").Submit); got != "\r" {
+		t.Fatalf("pi submit = %q", got)
+	}
+	if got := string(reg.Profile("opencode").Submit); got != "\r" {
+		t.Fatalf("opencode submit = %q", got)
 	}
 }
 
