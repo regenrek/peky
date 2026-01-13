@@ -15,9 +15,6 @@ Peky puts all your AI Agents like Claude Code, Codex CLI, pi, opencode e.g. into
 
 </div>
 
-
-Run all your projects and AI agents in one dashboard instead of juggling terminal windows or tabs. Define layouts in YAML, share them with your team via git, and get consistent environments everywhere. Sessions are owned by a **native daemon** so they keep running after the UI exits.
-
 ## Why?
 
 Running multiple agents on different projects at the same time takes real organization and 
@@ -93,6 +90,8 @@ git add .peky.yml  # Share with team
 - [Release process](RELEASE-DOCS.md)
 
 ## Configuration (quick look)
+
+Define layouts in YAML, share them with your team via git, and get consistent environments everywhere. Sessions are owned by a **native daemon** so they keep running after the UI exits.
 
 Project-local config lives in `.peky.yml`, and global config lives in `~/.config/peky/config.yml`.
 See the full schema, built-in layouts, and variable expansion in [docs/configuration.md](docs/configuration.md).
