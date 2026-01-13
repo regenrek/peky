@@ -43,7 +43,7 @@ window layouts and better-organized projects.
 
 <br />
 <br />
-![peky preview](assets/peky_tutorial.png)
+<img src="assets/peky_tutorial.png" alt="peky tutorial" style="max-width: 100%; height: auto;" />
 
 ## Quick Start
 
