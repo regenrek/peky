@@ -85,15 +85,20 @@ func (m *Model) maybeQueueQuickReplyStream(msg tea.KeyMsg) tea.Cmd {
 	if strings.HasPrefix(trimLeft, "/") {
 		return nil
 	}
+	keyStr := msg.String()
 	if msg.Type == tea.KeyRunes {
 		if trimLeft == "" && string(msg.Runes) == "/" {
 			return nil
 		}
-	} else if msg.String() == "backspace" || msg.String() == "delete" {
+	} else if keyStr == "backspace" || keyStr == "delete" {
 		if value == "" {
 			return nil
 		}
-	} else if msg.String() == "enter" {
+	} else if keyStr == "tab" || keyStr == "left" || keyStr == "right" || keyStr == "home" || keyStr == "end" {
+		// Intentionally stream cursor/navigation keys to keep "native" line editing feel.
+		// Note: shell history keys (up/down) are excluded in V1 because the quick reply input can't mirror
+		// the resulting line changes without a real terminal line model.
+	} else if keyStr == "enter" {
 		return nil
 	} else {
 		return nil

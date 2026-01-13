@@ -17,7 +17,9 @@ Safety rules (non-negotiable)
 Scope
 - Stream safe subset only:
   - text runes + space
+  - tab
   - backspace + delete (only when quick reply has content)
+  - left/right/home/end (best-effort; mirrors keypresses, not terminal state)
   - enter: flush buffered bytes, then send `\r`, then clear quick reply input + record history
 - Disable quick reply menus while streaming:
   - slash suggestions (`/`)
@@ -57,15 +59,14 @@ Implementation outline
 
 ## V2 (more complex; defer)
 
-Cursor-sync editing (left/right/home/end, mid-line edits)
-- Requires a real “text buffer + cursor” model and a diff->terminal-escape encoder.
-- Must stay consistent with shell/TUI cursor position; otherwise edits happen in wrong place.
+Terminal-driven line mirroring (up/down history, prompt edits, multiline)
+- Requires a real terminal line model (PTY/readback) to keep quick reply input in sync with what the shell is showing.
+- Without this, history keys change the terminal line but the quick reply input can't reflect it, which is confusing.
 
 Menu mirroring (keep menus while streaming)
 - If menu completion changes quick reply text, terminal must receive the corresponding edit delta.
-- Requires the same diff engine as cursor-sync editing.
+- Requires the same terminal line model as terminal-driven mirroring.
 
 Smarter pane switch policy
 - Option: flush buffered bytes to old pane on key-driven selection changes only, drop on mouse changes.
 - Needs deterministic ordering + more integration tests.
-

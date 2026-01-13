@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -106,5 +107,49 @@ func TestQuickReplyStreamPaneSwitchDropsBufferedBytes(t *testing.T) {
 	cmd := m.handleQuickReplyStreamFlush(quickReplyStreamFlushMsg{Gen: gen, PaneID: "p1"})
 	if cmd != nil {
 		t.Fatalf("expected old flush ignored")
+	}
+}
+
+func TestQuickReplyStreamNormalizesSpaceKey(t *testing.T) {
+	m := newTestModelLite()
+	m.config = &layout.Config{QuickReply: layout.QuickReplyConfig{StreamToPane: true}}
+	m.quickReplyMode = quickReplyModePane
+	m.quickReplyInput.SetValue("")
+	m.quickReplyInput.Focus()
+
+	_, _ = m.updateQuickReply(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h")})
+	_, _ = m.updateQuickReply(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("i")})
+	_, _ = m.updateQuickReply(tea.KeyMsg{Type: tea.KeySpace})
+	_, _ = m.updateQuickReply(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+
+	if got := m.quickReplyInput.Value(); got != "hi x" {
+		t.Fatalf("expected input %q, got %q", "hi x", got)
+	}
+	if got := string(m.quickReplyStreamBuf); got != "hi x" {
+		t.Fatalf("expected stream buf %q, got %q", "hi x", got)
+	}
+}
+
+func TestQuickReplyStreamStreamsCursorKeys(t *testing.T) {
+	m := newTestModelLite()
+	m.config = &layout.Config{QuickReply: layout.QuickReplyConfig{StreamToPane: true}}
+	m.quickReplyMode = quickReplyModePane
+	m.quickReplyInput.SetValue("")
+	m.quickReplyInput.Focus()
+
+	_, _ = m.updateQuickReply(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+	_, _ = m.updateQuickReply(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("b")})
+	_, _ = m.updateQuickReply(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+	_, _ = m.updateQuickReply(tea.KeyMsg{Type: tea.KeyLeft})
+	_, _ = m.updateQuickReply(tea.KeyMsg{Type: tea.KeyLeft})
+	_, _ = m.updateQuickReply(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("X")})
+
+	if got := m.quickReplyInput.Value(); got != "aXbc" {
+		t.Fatalf("expected input %q, got %q", "aXbc", got)
+	}
+	want := append([]byte("abc"), []byte("\x1b[D\x1b[D")...)
+	want = append(want, 'X')
+	if !bytes.Equal(m.quickReplyStreamBuf, want) {
+		t.Fatalf("unexpected stream buf %q, want %q", string(m.quickReplyStreamBuf), string(want))
 	}
 }

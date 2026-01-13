@@ -182,6 +182,7 @@ ghostty:
 
 # Quick reply settings (for @file picker)
 # quick_reply:
+#   stream_to_pane: false
 #   files:
 #     show_hidden: false
 #     max_depth: 4

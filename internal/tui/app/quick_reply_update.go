@@ -8,6 +8,9 @@ import (
 )
 
 func (m *Model) updateQuickReply(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.Type == tea.KeySpace {
+		msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}
+	}
 	if !agentFeaturesEnabled && m.quickReplyMode == quickReplyModePeky {
 		m.setQuickReplyMode(quickReplyModePane)
 	}
@@ -85,6 +88,9 @@ func isSGRMouseKeyJunk(msg tea.KeyMsg) bool {
 
 func (m *Model) handleQuickReplyPassthrough(msg tea.KeyMsg) (bool, tea.Cmd) {
 	if m == nil || m.terminalFocus || m.quickReplyMode != quickReplyModePane {
+		return false, nil
+	}
+	if m.quickReplyStreamEnabled() {
 		return false, nil
 	}
 	if m.quickReplyHistoryActive() {
@@ -187,6 +193,9 @@ func (m *Model) handleQuickReplySubmit(msg tea.KeyMsg) (bool, tea.Cmd) {
 	if text == "" {
 		if m.quickReplyMode == quickReplyModePeky {
 			return true, NewInfoCmd("Enter a prompt")
+		}
+		if m.quickReplyMode == quickReplyModePane && m.quickReplyStreamEnabled() {
+			return true, m.flushQuickReplyStreamWithEnter(m.selectedPaneID())
 		}
 		return true, nil
 	}
