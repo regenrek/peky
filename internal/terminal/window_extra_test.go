@@ -14,31 +14,6 @@ import (
 	"github.com/regenrek/peakypanes/internal/termrender"
 )
 
-func TestLooksLikeCPR(t *testing.T) {
-	if !looksLikeCPR([]byte("\x1b[1;2R")) {
-		t.Fatalf("expected CPR detection")
-	}
-	if looksLikeCPR([]byte("\x1b[12R")) {
-		t.Fatalf("expected CPR detection to fail without semicolon")
-	}
-	if looksLikeCPR([]byte("not-cpr")) {
-		t.Fatalf("expected CPR detection to fail for random data")
-	}
-}
-
-func TestTranslateCPR(t *testing.T) {
-	emu := &fakeEmu{cursor: uv.Pos(3, 4)}
-	w := &Window{term: emu}
-	out := w.translateCPR(emu, []byte("\x1b[10;20R"))
-	if string(out) != "\x1b[5;4R" {
-		t.Fatalf("translateCPR = %q", string(out))
-	}
-	raw := []byte("hello")
-	if string(w.translateCPR(emu, raw)) != string(raw) {
-		t.Fatalf("expected non-CPR to pass through")
-	}
-}
-
 func TestEnqueueWrite(t *testing.T) {
 	w := &Window{writeCh: make(chan writeRequest, 1)}
 	if err := w.enqueueWrite(context.Background(), []byte("hi"), false); err != nil {

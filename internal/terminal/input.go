@@ -3,7 +3,6 @@ package terminal
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -84,26 +83,6 @@ func (w *Window) startIO(ctx context.Context) {
 	w.startVtToPty(ctx)
 }
 
-// looksLikeCPR checks for ESC[{row};{col}R
-func looksLikeCPR(data []byte) bool {
-	if len(data) < 6 {
-		return false
-	}
-	if data[0] != 0x1b || data[1] != '[' {
-		return false
-	}
-	if data[len(data)-1] != 'R' {
-		return false
-	}
-	// Must contain ';'
-	for _, b := range data {
-		if b == ';' {
-			return true
-		}
-	}
-	return false
-}
-
 func (w *Window) startPtyToVt(ctx context.Context) {
 	// PTY -> VT (screen updates)
 	w.wg.Add(1)
@@ -152,8 +131,7 @@ func (w *Window) startVtToPty(ctx context.Context) {
 
 			n, err := term.Read(buf)
 			if n > 0 {
-				data := w.translateCPR(term, buf[:n])
-				_ = w.enqueueWriteBestEffort(data, false)
+				_ = w.enqueueWriteBestEffort(buf[:n], false)
 			}
 			if err != nil {
 				// Best-effort: treat read errors as exit.
@@ -265,16 +243,6 @@ func (w *Window) handleTerminalWrite(data []byte) {
 		w.onScrollbackGrew(newSB - oldSB)
 	}
 	w.markDirty()
-}
-
-func (w *Window) translateCPR(term vtEmulator, data []byte) []byte {
-	if !looksLikeCPR(data) {
-		return data
-	}
-	w.termMu.Lock()
-	pos := term.CursorPosition()
-	w.termMu.Unlock()
-	return []byte(fmt.Sprintf("\x1b[%d;%dR", pos.Y+1, pos.X+1))
 }
 
 func (w *Window) enqueueWrite(ctx context.Context, data []byte, markDirty bool) error {
