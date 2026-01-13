@@ -6,12 +6,22 @@ This format is based on Keep a Changelog.
 ## Unreleased
 
 ### Changed
+
+### Fixed
+
+## 0.0.29 - 2026-01-13
+
+### Changed
 - GoReleaser archives now use `peky_...` naming.
 - Human-facing UI/docs branding standardized to `peky`.
 
 ### Fixed
+- Terminal: avoid deadlocks under heavy terminal query traffic (e.g. opencode TUI).
+- Quick reply: `pi` and `opencode` use Enter for submit.
+- Pane git status: best-effort (no longer fails send/view flows).
 - Project picker: mouse click now opens the selected project.
 - npm `scripts/agent-state/*` now uses `PEKY_*` env vars and writes under `XDG_RUNTIME_DIR/peky/agent-state`.
+- TUI: hide/disable agent mode auth/model flows when agent features are unavailable.
 
 ## 0.0.28 - 2026-01-12
 
