@@ -1,10 +1,6 @@
-# peky
+<div align="center">
 
-```
-████    █████    ███    █   █   █   █    ████      ███    █   █    █████    ████
-█████   ████    █████   ████     ███     █████    █████   ███ █    ████    ████ 
-█       █████   █   █   █  ██     █      █        █   █   █  ██    █████   █████
-```
+# peky
 
 **Multi-project orchestration in a single TUI for AI agents and dev environments.**
 
@@ -12,9 +8,11 @@
 [![homebrew](https://img.shields.io/badge/homebrew-regenrek%2Ftap%2Fpeky-2e933c?logo=homebrew)](https://github.com/regenrek/homebrew-tap)
 [![DeepWiki](https://img.shields.io/badge/DeepWiki-regenrek%2Fpeakypanes-blue.svg?logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACwAAAAyCAYAAAAnWDnqAAAAAXNSR0IArs4c6QAAA05JREFUaEPtmUtyEzEQhtWTQyQLHNak2AB7ZnyXZMEjXMGeK/AIi+QuHrMnbChYY7MIh8g01fJoopFb0uhhEqqcbWTp06/uv1saEDv4O3n3dV60RfP947Mm9/SQc0ICFQgzfc4CYZoTPAswgSJCCUJUnAAoRHOAUOcATwbmVLWdGoH//PB8mnKqScAhsD0kYP3j/Yt5LPQe2KvcXmGvRHcDnpxfL2zOYJ1mFwrryWTz0advv1Ut4CJgf5uhDuDj5eUcAUoahrdY/56ebRWeraTjMt/00Sh3UDtjgHtQNHwcRGOC98BJEAEymycmYcWwOprTgcB6VZ5JK5TAJ+fXGLBm3FDAmn6oPPjR4rKCAoJCal2eAiQp2x0vxTPB3ALO2CRkwmDy5WohzBDwSEFKRwPbknEggCPB/imwrycgxX2NzoMCHhPkDwqYMr9tRcP5qNrMZHkVnOjRMWwLCcr8ohBVb1OMjxLwGCvjTikrsBOiA6fNyCrm8V1rP93iVPpwaE+gO0SsWmPiXB+jikdf6SizrT5qKasx5j8ABbHpFTx+vFXp9EnYQmLx02h1QTTrl6eDqxLnGjporxl3NL3agEvXdT0WmEost648sQOYAeJS9Q7bfUVoMGnjo4AZdUMQku50McDcMWcBPvr0SzbTAFDfvJqwLzgxwATnCgnp4wDl6Aa+Ax283gghmj+vj7feE2KBBRMW3FzOpLOADl0Isb5587h/U4gGvkt5v60Z1VLG8BhYjbzRwyQZemwAd6cCR5/XFWLYZRIMpX39AR0tjaGGiGzLVyhse5C9RKC6ai42ppWPKiBagOvaYk8lO7DajerabOZP46Lby5wKjw1HCRx7p9sVMOWGzb/vA1hwiWc6jm3MvQDTogQkiqIhJV0nBQBTU+3okKCFDy9WwferkHjtxib7t3xIUQtHxnIwtx4mpg26/HfwVNVDb4oI9RHmx5WGelRVlrtiw43zboCLaxv46AZeB3IlTkwouebTr1y2NjSpHz68WNFjHvupy3q8TFn3Hos2IAk4Ju5dCo8B3wP7VPr/FGaKiG+T+v+TQqIrOqMTL1VdWV1DdmcbO8KXBz6esmYWYKPwDL5b5FA1a0hwapHiom0r/cKaoqr+27/XcrS5UwSMbQAAAABJRU5ErkJggg==)](https://deepwiki.com/regenrek/peakypanes)
 [![pkg.go.dev](https://pkg.go.dev/badge/github.com/regenrek/peakypanes.svg)](https://pkg.go.dev/github.com/regenrek/peakypanes)
+<br />
+<br />
+<img src="assets/peky_splash.png" alt="peky preview" style="max-width: 600px;">
 
-
-![peky preview](assets/preview-peakypanes-v2.jpg)
+</div>
 
 
 Run all your projects and AI agents in one dashboard instead of juggling terminal windows or tabs. Define layouts in YAML, share them with your team via git, and get consistent environments everywhere. Sessions are owned by a **native daemon** so they keep running after the UI exits.
@@ -32,17 +30,19 @@ window layouts and better-organized projects.
 
 - 🧠 **AI agent orchestration** - Run Codex/Claude/agents side by side with quick replies, slash commands, and broadcast
 - 🗂️ **Multi-project dashboard** - See every project/session in one TUI without switching windows
-- 📦 **Built-in layouts** - Works out of the box with sensible defaults
-- 🧩 **Exact grids** - Use `grid: 2x3` for consistent rows/columns
-- 📁 **Project-local config** - Commit `.peky.yml` to git for team sharing
-- 🏠 **Global config** - Define layouts once, use everywhere
-- 🔄 **Variable expansion** - Use `${EDITOR}`, `${PROJECT_PATH}`, etc.
+- 🖱️ **Mouse support** - Create, Select, resize and drag panes.
 - 🎯 **Zero config** - Just run `peky` in any directory
-- 🧠 **Native live previews** - Full TUI support (vim/htop) with live panes
 - 🧭 **Persistent native daemon** - Sessions keep running after the UI exits
 - 📜 **Scrollback + copy mode** - Navigate output and yank from native panes
 - ⌘ **Command palette** - Quick actions, including renaming sessions/panes
-- 🖱️ **Mouse support** - Click to select panes, double-click to focus a pane
+- 🧠 **Native live previews** - Full TUI support (vim/htop) with live panes
+- 📁 **Project-local config** - Commit `.peky.yml` to git for team sharing
+- 🧠 **Quick Reply Bar** - Send quick follow ups with built in slash and @ commands to any pane
+- 🤖 **Peky Agent (Experimental)** - Use peky agent to talk to your panes "Add 3 panes", "Run command 'ls' in all panes"
+
+<br />
+<br />
+![peky preview](assets/peky_tutorial.png)
 
 ## Quick Start
 
@@ -51,29 +51,15 @@ window layouts and better-organized projects.
 **Using npm (recommended)**
 
 ```bash
-npm i -g peakypanes
+npm i -g peky
 peky
 ```
-
-**Run once with npx**
-
-```bash
-npx -y -p peakypanes peky
-```
-
-**Using Homebrew**
 
 ```bash
 brew tap regenrek/tap
 brew install regenrek/tap/peky
 brew services start peky
 peky
-```
-
-Using Go
-
-```bash
-go install github.com/regenrek/peakypanes/cmd/peky@latest
 ```
 
 ### Usage
@@ -92,8 +78,6 @@ peky init --local
 # Edit .peky.yml
 git add .peky.yml  # Share with team
 ```
-
-The CLI is `peky`.
 
 ## Documentation
 
@@ -163,7 +147,7 @@ MIT
 
 [@pi-mono](https://github.com/badlogic/pi-mono) - peky agent is inspired by PI / [Mario Zechner's](https://x.com/badlogicgames) work. 
 (Direct pi integration would've been ideal, but 60 MB of Node for agent + sidecar isn't worth it)
-[@charm](https://github.com/charmbracelet) - peaky is using bubbletea and lipgloss
+[@charm](https://github.com/charmbracelet) - peaky is using bubbletea and lipgloss framework by charm
 
 ## Links
 
@@ -176,5 +160,5 @@ MIT
 
 ## See my other projects:
 
-* [codefetch](https://github.com/regenrek/codefetch) - Turn code into Markdown for LLMs with one simple terminal command
+* [my other projects](https://github.com/regenrek) - Find other tools on my gh profile
 * [instructa](https://github.com/orgs/instructa/repositories) - Instructa Projects
