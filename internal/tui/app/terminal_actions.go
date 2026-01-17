@@ -98,51 +98,6 @@ func (m *Model) sendPaneInputCmd(payload []byte, contextLabel string) tea.Cmd {
 	}
 }
 
-func (m *Model) sendPaneInputToIDCmd(paneID string, payload []byte, contextLabel string) tea.Cmd {
-	if m == nil || m.client == nil {
-		return NewErrorCmd(errors.New("session client unavailable"), contextLabel)
-	}
-	paneID = strings.TrimSpace(paneID)
-	if paneID == "" {
-		return NewWarningCmd("No pane selected")
-	}
-	if m.isPaneInputDisabled(paneID) {
-		return nil
-	}
-	pane := m.paneByID(paneID)
-	if pane == nil {
-		return func() tea.Msg { return newPaneClosedMsg(paneID, nil) }
-	}
-	if pane.Dead {
-		return func() tea.Msg { return newPaneClosedMsg(paneID, nil) }
-	}
-	if pane.Disconnected {
-		return NewWarningCmd("Pane is offline (snapshot only)")
-	}
-	return func() tea.Msg {
-		if m.isPaneInputDisabled(paneID) {
-			return nil
-		}
-		if pane := m.paneByID(paneID); pane != nil {
-			if pane.Disconnected {
-				return WarningMsg{Message: "Pane is offline (snapshot only)"}
-			}
-			if pane.Dead {
-				return newPaneClosedMsg(paneID, nil)
-			}
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), terminalActionTimeout)
-		defer cancel()
-		if err := m.client.SendInput(ctx, paneID, payload); err != nil {
-			if isPaneClosedError(err) {
-				return newPaneClosedMsg(paneID, err)
-			}
-			return ErrorMsg{Err: err, Context: contextLabel}
-		}
-		return nil
-	}
-}
-
 func isTerminalControlKey(key string) bool {
 	if termkeys.IsCopyShortcutKey(key) {
 		return true
