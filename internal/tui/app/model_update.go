@@ -36,48 +36,70 @@ func (m *Model) appendFocusResult(model tea.Model, cmd tea.Cmd) (tea.Model, tea.
 }
 
 func (m *Model) handleUpdateMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
-	if keyMsg, ok := msg.(tea.KeyMsg); ok {
-		if keyMsg.String() == "esc" && m.pekyBusy {
-			m.cancelPekyRun()
-		}
-	}
-	if keyMsg, ok := msg.(tuiinput.KeyMsg); ok {
-		if keyMsg.Tea().String() == "esc" && m.pekyBusy {
-			m.cancelPekyRun()
-		}
-		if m.keys != nil {
-			switch {
-			case matchesBinding(keyMsg, m.keys.help):
-				m.setState(StateHelp)
-				return m, nil, true
-			case matchesBinding(keyMsg, m.keys.quit):
-				return m, m.requestQuit(), true
-			case matchesBinding(keyMsg, m.keys.commandPalette):
-				return m, m.openCommandPalette(), true
-			case matchesBinding(keyMsg, m.keys.refresh):
-				m.setToast("Refreshing...", toastInfo)
-				return m, m.requestRefreshCmd(), true
-			case matchesBinding(keyMsg, m.keys.editConfig):
-				return m, m.editConfig(), true
-			}
-		}
-		if m.state == StateDashboard {
-			model, cmd := m.updateDashboardInput(keyMsg)
+	m.maybeCancelPeky(msg)
+
+	switch typed := msg.(type) {
+	case tuiinput.KeyMsg:
+		return m.handleInputKeyMsg(typed)
+	case tea.MouseMsg:
+		return m.handleMouseMsg(typed)
+	case tea.KeyMsg:
+		return m.handleKeyMsg(typed)
+	default:
+		if handler, ok := updateHandlers[reflect.TypeOf(msg)]; ok {
+			model, cmd := handler(m, msg)
 			return model, cmd, true
 		}
-		return m.handleKeyMsg(keyMsg.Tea())
+		return nil, nil, false
 	}
-	if handler, ok := updateHandlers[reflect.TypeOf(msg)]; ok {
-		model, cmd := handler(m, msg)
+}
+
+func (m *Model) maybeCancelPeky(msg tea.Msg) {
+	if m == nil || !m.pekyBusy {
+		return
+	}
+	switch typed := msg.(type) {
+	case tea.KeyMsg:
+		if typed.String() == "esc" {
+			m.cancelPekyRun()
+		}
+	case tuiinput.KeyMsg:
+		if typed.Tea().String() == "esc" {
+			m.cancelPekyRun()
+		}
+	}
+}
+
+func (m *Model) handleInputKeyMsg(keyMsg tuiinput.KeyMsg) (tea.Model, tea.Cmd, bool) {
+	if m.keys != nil {
+		if cmd, handled := m.handleGlobalInputKeyBindings(keyMsg); handled {
+			return m, cmd, true
+		}
+	}
+	if m.state == StateDashboard {
+		model, cmd := m.updateDashboardInput(keyMsg)
 		return model, cmd, true
 	}
-	if mouseMsg, ok := msg.(tea.MouseMsg); ok {
-		return m.handleMouseMsg(mouseMsg)
+	return m.handleKeyMsg(keyMsg.Tea())
+}
+
+func (m *Model) handleGlobalInputKeyBindings(msg tuiinput.KeyMsg) (tea.Cmd, bool) {
+	switch {
+	case matchesBinding(msg, m.keys.help):
+		m.setState(StateHelp)
+		return nil, true
+	case matchesBinding(msg, m.keys.quit):
+		return m.requestQuit(), true
+	case matchesBinding(msg, m.keys.commandPalette):
+		return m.openCommandPalette(), true
+	case matchesBinding(msg, m.keys.refresh):
+		m.setToast("Refreshing...", toastInfo)
+		return m.requestRefreshCmd(), true
+	case matchesBinding(msg, m.keys.editConfig):
+		return m.editConfig(), true
+	default:
+		return nil, false
 	}
-	if keyMsg, ok := msg.(tea.KeyMsg); ok {
-		return m.handleKeyMsg(keyMsg)
-	}
-	return nil, nil, false
 }
 
 func (m *Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {

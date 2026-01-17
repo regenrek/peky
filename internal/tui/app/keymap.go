@@ -276,68 +276,87 @@ func normalizeKeyString(raw string) (string, error) {
 	if baseRaw == "" {
 		return "", fmt.Errorf("invalid key %q (missing base key)", raw)
 	}
-	baseLower := strings.ToLower(baseRaw)
-	if baseLower == " " || baseLower == "space" {
-		baseLower = "space"
-		baseRaw = "space"
+	mods, err := parseKeyMods(parts[:len(parts)-1], raw)
+	if err != nil {
+		return "", err
 	}
+	base, err := normalizeKeyBase(baseRaw, &mods, raw)
+	if err != nil {
+		return "", err
+	}
+	return joinKeyMods(base, mods), nil
+}
 
-	var (
-		modCtrl  bool
-		modAlt   bool
-		modShift bool
-		modMeta  bool
-	)
-	for _, modRaw := range parts[:len(parts)-1] {
+type keyMods struct {
+	ctrl  bool
+	alt   bool
+	shift bool
+	meta  bool
+}
+
+func parseKeyMods(parts []string, raw string) (keyMods, error) {
+	var mods keyMods
+	for _, modRaw := range parts {
 		mod := strings.ToLower(strings.TrimSpace(modRaw))
 		if mod == "" {
 			continue
 		}
 		switch mod {
 		case "ctrl", "control":
-			modCtrl = true
+			mods.ctrl = true
 		case "alt", "option":
-			modAlt = true
+			mods.alt = true
 		case "shift":
-			modShift = true
+			mods.shift = true
 		case "meta", "cmd", "command", "super":
-			modMeta = true
+			mods.meta = true
 		default:
-			return "", invalidKeyError(raw)
+			return keyMods{}, invalidKeyError(raw)
 		}
 	}
+	return mods, nil
+}
 
+func normalizeKeyBase(baseRaw string, mods *keyMods, raw string) (string, error) {
+	baseLower := strings.ToLower(strings.TrimSpace(baseRaw))
+	if baseLower == " " || baseLower == "space" {
+		return "space", nil
+	}
 	if isSingleRune(baseRaw) {
 		r, _ := utf8.DecodeRuneInString(baseRaw)
 		if r >= 'A' && r <= 'Z' {
-			modShift = true
-			baseRaw = strings.ToLower(baseRaw)
+			if mods != nil {
+				mods.shift = true
+			}
+			return strings.ToLower(baseRaw), nil
 		}
-	} else if isSupportedKeyName(baseLower) {
-		baseRaw = baseLower
-	} else {
-		return "", invalidKeyError(raw)
+		return baseRaw, nil
 	}
+	if isSupportedKeyName(baseLower) {
+		return baseLower, nil
+	}
+	return "", invalidKeyError(raw)
+}
 
-	var out []string
-	if modCtrl {
+func joinKeyMods(base string, mods keyMods) string {
+	out := make([]string, 0, 5)
+	if mods.ctrl {
 		out = append(out, "ctrl")
 	}
-	if modAlt {
+	if mods.alt {
 		out = append(out, "alt")
 	}
-	if modShift {
+	if mods.shift {
 		out = append(out, "shift")
 	}
-	if modMeta {
+	if mods.meta {
 		out = append(out, "meta")
 	}
-	out = append(out, baseRaw)
-
+	out = append(out, base)
 	if len(out) == 1 {
-		return out[0], nil
+		return out[0]
 	}
-	return strings.Join(out, "+"), nil
+	return strings.Join(out, "+")
 }
 
 func isSingleRune(value string) bool {

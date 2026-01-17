@@ -41,52 +41,17 @@ func toTeaKey(k uv.Key) tea.Key {
 	ctrl := k.Mod.Contains(uv.ModCtrl)
 	shift := k.Mod.Contains(uv.ModShift)
 
-	if ctrl {
-		if t, ok := ctrlKeyType(k.Code); ok {
-			return tea.Key{Type: t, Alt: alt}
-		}
+	if t, ok := toTeaKeyCtrl(k.Code, ctrl); ok {
+		return tea.Key{Type: t, Alt: alt}
 	}
-
-	switch k.Code {
-	case uv.KeySpace:
-		return tea.Key{Type: tea.KeySpace, Alt: alt}
-	case uv.KeyEnter:
-		return tea.Key{Type: tea.KeyEnter, Alt: alt}
-	case uv.KeyTab:
-		if shift {
-			return tea.Key{Type: tea.KeyShiftTab, Alt: alt}
-		}
-		return tea.Key{Type: tea.KeyTab, Alt: alt}
-	case uv.KeyBackspace:
-		return tea.Key{Type: tea.KeyBackspace, Alt: alt}
-	case uv.KeyEscape:
-		return tea.Key{Type: tea.KeyEsc, Alt: alt}
-	case uv.KeyUp:
-		return tea.Key{Type: navKeyType(tea.KeyUp, tea.KeyShiftUp, tea.KeyCtrlUp, tea.KeyCtrlShiftUp, shift, ctrl), Alt: alt}
-	case uv.KeyDown:
-		return tea.Key{Type: navKeyType(tea.KeyDown, tea.KeyShiftDown, tea.KeyCtrlDown, tea.KeyCtrlShiftDown, shift, ctrl), Alt: alt}
-	case uv.KeyLeft:
-		return tea.Key{Type: navKeyType(tea.KeyLeft, tea.KeyShiftLeft, tea.KeyCtrlLeft, tea.KeyCtrlShiftLeft, shift, ctrl), Alt: alt}
-	case uv.KeyRight:
-		return tea.Key{Type: navKeyType(tea.KeyRight, tea.KeyShiftRight, tea.KeyCtrlRight, tea.KeyCtrlShiftRight, shift, ctrl), Alt: alt}
-	case uv.KeyHome:
-		return tea.Key{Type: navKeyType(tea.KeyHome, tea.KeyShiftHome, tea.KeyCtrlHome, tea.KeyCtrlShiftHome, shift, ctrl), Alt: alt}
-	case uv.KeyEnd:
-		return tea.Key{Type: navKeyType(tea.KeyEnd, tea.KeyShiftEnd, tea.KeyCtrlEnd, tea.KeyCtrlShiftEnd, shift, ctrl), Alt: alt}
-	case uv.KeyPgUp:
-		if ctrl {
-			return tea.Key{Type: tea.KeyCtrlPgUp, Alt: alt}
-		}
-		return tea.Key{Type: tea.KeyPgUp, Alt: alt}
-	case uv.KeyPgDown:
-		if ctrl {
-			return tea.Key{Type: tea.KeyCtrlPgDown, Alt: alt}
-		}
-		return tea.Key{Type: tea.KeyPgDown, Alt: alt}
-	case uv.KeyDelete:
-		return tea.Key{Type: tea.KeyDelete, Alt: alt}
-	case uv.KeyInsert:
-		return tea.Key{Type: tea.KeyInsert, Alt: alt}
+	if out, ok := toTeaKeySpecial(k.Code, alt, shift); ok {
+		return out
+	}
+	if out, ok := toTeaKeyNav(k.Code, alt, shift, ctrl); ok {
+		return out
+	}
+	if out, ok := toTeaKeyPg(k.Code, alt, ctrl); ok {
+		return out
 	}
 
 	if k.Text != "" {
@@ -96,6 +61,73 @@ func toTeaKey(k uv.Key) tea.Key {
 		return tea.Key{Type: tea.KeyRunes, Runes: []rune{k.Code}, Alt: alt}
 	}
 	return tea.Key{}
+}
+
+func toTeaKeyCtrl(code rune, ctrl bool) (tea.KeyType, bool) {
+	if !ctrl {
+		return 0, false
+	}
+	return ctrlKeyType(code)
+}
+
+func toTeaKeySpecial(code rune, alt bool, shift bool) (tea.Key, bool) {
+	switch code {
+	case uv.KeySpace:
+		return tea.Key{Type: tea.KeySpace, Alt: alt}, true
+	case uv.KeyEnter:
+		return tea.Key{Type: tea.KeyEnter, Alt: alt}, true
+	case uv.KeyTab:
+		if shift {
+			return tea.Key{Type: tea.KeyShiftTab, Alt: alt}, true
+		}
+		return tea.Key{Type: tea.KeyTab, Alt: alt}, true
+	case uv.KeyBackspace:
+		return tea.Key{Type: tea.KeyBackspace, Alt: alt}, true
+	case uv.KeyEscape:
+		return tea.Key{Type: tea.KeyEsc, Alt: alt}, true
+	case uv.KeyDelete:
+		return tea.Key{Type: tea.KeyDelete, Alt: alt}, true
+	case uv.KeyInsert:
+		return tea.Key{Type: tea.KeyInsert, Alt: alt}, true
+	default:
+		return tea.Key{}, false
+	}
+}
+
+func toTeaKeyNav(code rune, alt bool, shift bool, ctrl bool) (tea.Key, bool) {
+	switch code {
+	case uv.KeyUp:
+		return tea.Key{Type: navKeyType(tea.KeyUp, tea.KeyShiftUp, tea.KeyCtrlUp, tea.KeyCtrlShiftUp, shift, ctrl), Alt: alt}, true
+	case uv.KeyDown:
+		return tea.Key{Type: navKeyType(tea.KeyDown, tea.KeyShiftDown, tea.KeyCtrlDown, tea.KeyCtrlShiftDown, shift, ctrl), Alt: alt}, true
+	case uv.KeyLeft:
+		return tea.Key{Type: navKeyType(tea.KeyLeft, tea.KeyShiftLeft, tea.KeyCtrlLeft, tea.KeyCtrlShiftLeft, shift, ctrl), Alt: alt}, true
+	case uv.KeyRight:
+		return tea.Key{Type: navKeyType(tea.KeyRight, tea.KeyShiftRight, tea.KeyCtrlRight, tea.KeyCtrlShiftRight, shift, ctrl), Alt: alt}, true
+	case uv.KeyHome:
+		return tea.Key{Type: navKeyType(tea.KeyHome, tea.KeyShiftHome, tea.KeyCtrlHome, tea.KeyCtrlShiftHome, shift, ctrl), Alt: alt}, true
+	case uv.KeyEnd:
+		return tea.Key{Type: navKeyType(tea.KeyEnd, tea.KeyShiftEnd, tea.KeyCtrlEnd, tea.KeyCtrlShiftEnd, shift, ctrl), Alt: alt}, true
+	default:
+		return tea.Key{}, false
+	}
+}
+
+func toTeaKeyPg(code rune, alt bool, ctrl bool) (tea.Key, bool) {
+	switch code {
+	case uv.KeyPgUp:
+		if ctrl {
+			return tea.Key{Type: tea.KeyCtrlPgUp, Alt: alt}, true
+		}
+		return tea.Key{Type: tea.KeyPgUp, Alt: alt}, true
+	case uv.KeyPgDown:
+		if ctrl {
+			return tea.Key{Type: tea.KeyCtrlPgDown, Alt: alt}, true
+		}
+		return tea.Key{Type: tea.KeyPgDown, Alt: alt}, true
+	default:
+		return tea.Key{}, false
+	}
 }
 
 func navKeyType(base, shiftT, ctrlT, ctrlShiftT tea.KeyType, shift, ctrl bool) tea.KeyType {
