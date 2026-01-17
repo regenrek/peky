@@ -112,13 +112,13 @@ func TestKeyBindings(t *testing.T) {
 		msg     tuiinput.KeyMsg
 		binding key.Binding
 	}{
-		{name: "projectLeft", msg: tuiinput.KeyMsg{Key: uv.Key{Code: uv.KeyLeft, Mod: uv.ModCtrl | uv.ModShift}}, binding: km.projectLeft},
-		{name: "projectRight", msg: tuiinput.KeyMsg{Key: uv.Key{Code: uv.KeyRight, Mod: uv.ModCtrl | uv.ModShift}}, binding: km.projectRight},
+		{name: "projectLeft", msg: tuiinput.KeyMsg{Key: uv.Key{Code: 'a', Mod: uv.ModCtrl | uv.ModShift}}, binding: km.projectLeft},
+		{name: "projectRight", msg: tuiinput.KeyMsg{Key: uv.Key{Code: 'd', Mod: uv.ModCtrl | uv.ModShift}}, binding: km.projectRight},
 		{name: "sessionUp", msg: tuiinput.KeyMsg{Key: uv.Key{Code: 'w', Mod: uv.ModCtrl | uv.ModShift}}, binding: km.sessionUp},
 		{name: "sessionDown", msg: tuiinput.KeyMsg{Key: uv.Key{Code: 's', Mod: uv.ModCtrl | uv.ModShift}}, binding: km.sessionDown},
 		{name: "attach", msg: tuiinput.KeyMsg{Key: uv.Key{Code: uv.KeyEnter}}, binding: km.attach},
-		{name: "paneNext", msg: tuiinput.KeyMsg{Key: uv.Key{Code: 'd', Mod: uv.ModCtrl | uv.ModShift}}, binding: km.paneNext},
-		{name: "panePrev", msg: tuiinput.KeyMsg{Key: uv.Key{Code: 'a', Mod: uv.ModCtrl | uv.ModShift}}, binding: km.panePrev},
+		{name: "paneNext", msg: tuiinput.KeyMsg{Key: uv.Key{Code: uv.KeyRight, Mod: uv.ModCtrl | uv.ModShift}}, binding: km.paneNext},
+		{name: "panePrev", msg: tuiinput.KeyMsg{Key: uv.Key{Code: uv.KeyLeft, Mod: uv.ModCtrl | uv.ModShift}}, binding: km.panePrev},
 		{name: "toggleLastPane", msg: tuiinput.KeyMsg{Key: uv.Key{Code: uv.KeySpace, Mod: uv.ModCtrl | uv.ModShift}}, binding: km.toggleLastPane},
 		{name: "togglePanes", msg: tuiinput.KeyMsg{Key: uv.Key{Code: ']', Mod: uv.ModCtrl | uv.ModShift}}, binding: km.togglePanes},
 		{name: "toggleSidebar", msg: tuiinput.KeyMsg{Key: uv.Key{Code: 'b', Mod: uv.ModCtrl | uv.ModShift}}, binding: km.toggleSidebar},

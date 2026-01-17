@@ -25,14 +25,14 @@ func buildDashboardKeyMap(cfg layout.DashboardKeymapConfig) (*dashboardKeyMap, e
 		{
 			name:     "project_left",
 			desc:     "project",
-			defaults: []string{"ctrl+shift+left"},
+			defaults: []string{"ctrl+shift+a"},
 			override: cfg.ProjectLeft,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.projectLeft = b },
 		},
 		{
 			name:     "project_right",
 			desc:     "project",
-			defaults: []string{"ctrl+shift+right"},
+			defaults: []string{"ctrl+shift+d"},
 			override: cfg.ProjectRight,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.projectRight = b },
 		},
@@ -67,14 +67,14 @@ func buildDashboardKeyMap(cfg layout.DashboardKeymapConfig) (*dashboardKeyMap, e
 		{
 			name:     "pane_next",
 			desc:     "pane",
-			defaults: []string{"ctrl+shift+d"},
+			defaults: []string{"ctrl+shift+right"},
 			override: cfg.PaneNext,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.paneNext = b },
 		},
 		{
 			name:     "pane_prev",
 			desc:     "pane",
-			defaults: []string{"ctrl+shift+a"},
+			defaults: []string{"ctrl+shift+left"},
 			override: cfg.PanePrev,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.panePrev = b },
 		},
@@ -376,7 +376,27 @@ func prettyKeyLabel(key string) string {
 	case "space":
 		return "space"
 	default:
-		return key
+		parts := strings.Split(key, "+")
+		if len(parts) == 0 {
+			return key
+		}
+		base := strings.ToLower(strings.TrimSpace(parts[len(parts)-1]))
+		switch base {
+		case "up":
+			parts[len(parts)-1] = "↑"
+			return strings.Join(parts, "+")
+		case "down":
+			parts[len(parts)-1] = "↓"
+			return strings.Join(parts, "+")
+		case "left":
+			parts[len(parts)-1] = "←"
+			return strings.Join(parts, "+")
+		case "right":
+			parts[len(parts)-1] = "→"
+			return strings.Join(parts, "+")
+		default:
+			return key
+		}
 	}
 }
 

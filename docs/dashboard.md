@@ -20,10 +20,10 @@ Hard RAW:
 
 ## Navigation overview (always visible)
 
-- ctrl+shift+left / ctrl+shift+right project
+- ctrl+shift+a / ctrl+shift+d project
 - ctrl+shift+w / ctrl+shift+s session/panes
 - ctrl+shift+up / ctrl+shift+down session only
-- ctrl+shift+a / ctrl+shift+d pane
+- ctrl+shift+← / ctrl+shift+→ pane
 - ctrl+shift+space last pane
 - ctrl+shift+g help
 
@@ -95,14 +95,14 @@ dashboard:
   pane_navigation_mode: spatial  # spatial | memory
   quit_behavior: prompt  # prompt | keep | stop
   keymap:
-    project_left: ["ctrl+shift+left"]
-    project_right: ["ctrl+shift+right"]
+    project_left: ["ctrl+shift+a"]
+    project_right: ["ctrl+shift+d"]
     session_up: ["ctrl+shift+w"]
     session_down: ["ctrl+shift+s"]
     session_only_up: ["ctrl+shift+up"]
     session_only_down: ["ctrl+shift+down"]
-    pane_next: ["ctrl+shift+d"]
-    pane_prev: ["ctrl+shift+a"]
+    pane_next: ["ctrl+shift+right"]
+    pane_prev: ["ctrl+shift+left"]
     toggle_last_pane: ["ctrl+shift+space"]
     focus_action: ["ctrl+shift+/"]
     hard_raw: ["ctrl+shift+k"]

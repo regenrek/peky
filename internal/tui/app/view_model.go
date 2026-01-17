@@ -234,7 +234,7 @@ func buildKeyHints(keys *dashboardKeyMap) views.KeyHints {
 		ProjectKeys:     joinKeyLabels(keys.projectLeft, keys.projectRight),
 		SessionKeys:     joinKeyLabels(keys.sessionUp, keys.sessionDown),
 		SessionOnlyKeys: joinKeyLabels(keys.sessionOnlyUp, keys.sessionOnlyDown),
-		PaneKeys:        joinKeyLabels(keys.paneNext, keys.panePrev),
+		PaneKeys:        joinKeyLabels(keys.panePrev, keys.paneNext),
 		ToggleLastPane:  keyLabel(keys.toggleLastPane),
 		FocusAction:     keyLabel(keys.focusAction),
 		OpenProject:     keyLabel(keys.openProject),

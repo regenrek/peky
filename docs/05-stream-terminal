@@ -33,10 +33,10 @@ Change defaults (Mac)
 - Config remains override-able.
 
 Reserved set (V1)
-- Project nav: `Ctrl+Shift+Left/Right`
+- Project nav: `Ctrl+Shift+A/D`
 - Session nav (incl panes): `Ctrl+Shift+W/S`
 - Session-only nav: `Ctrl+Shift+Up/Down`
-- Pane nav: `Ctrl+Shift+A/D`
+- Pane nav: `Ctrl+Shift+Left/Right`
 - Pane quick toggle: `Ctrl+Shift+Space` (toggle to last pane)
 - Focus action line: `Ctrl+Shift+/`
 - Hard RAW toggle: `Ctrl+Shift+K`
