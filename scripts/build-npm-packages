@@ -5,11 +5,11 @@ const fs = require('fs');
 const path = require('path');
 const cp = require('child_process');
 
-const PROJECT = 'peakypanes';
+const PROJECT = 'peky';
 const DIST_PROJECT = 'peky';
 const BIN = 'peky';
-const REPO_HTTP = 'https://github.com/regenrek/peakypanes';
-const REPO_GIT = 'git+https://github.com/regenrek/peakypanes.git';
+const REPO_HTTP = 'https://github.com/regenrek/peky';
+const REPO_GIT = 'git+https://github.com/regenrek/peky.git';
 
 const ROOT = path.resolve(__dirname, '..');
 const DIST_DIR = path.join(ROOT, 'dist');

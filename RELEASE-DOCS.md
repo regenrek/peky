@@ -74,11 +74,11 @@ brew test regenrek/tap/peky
 ### npm Trusted Publishing setup (one-time)
 
 Packages (published for every release):
-- `peakypanes`
-- `peakypanes-darwin-amd64`
-- `peakypanes-darwin-arm64`
-- `peakypanes-linux-amd64`
-- `peakypanes-linux-arm64`
+- `peky`
+- `peky-darwin-x64`
+- `peky-darwin-arm64`
+- `peky-linux-x64`
+- `peky-linux-arm64`
 
 For each package on npmjs.com:
 1) Open package settings → Trusted Publishing
@@ -109,8 +109,8 @@ The helper requires a clean working tree and push access to the repo.
 ## Post-Release Verification
 
 ```bash
-npm view peakypanes
-npx -y -p peakypanes peky
+npm view peky
+npx -y -p peky peky
 ```
 
 ## Notes
@@ -118,4 +118,16 @@ npx -y -p peakypanes peky
 - The `release` workflow builds binaries into `dist/` and creates the GitHub release.
 - The `release` workflow updates the Homebrew tap formula (`regenrek/homebrew-tap`) via `scripts/update-homebrew-tap`.
 - `npm run build:npm-packages` copies those binaries into `packages/` and writes the npm metadata (used by the `npm Release` workflow).
-- The meta package (`packages/peakypanes`) must be published last so it can resolve optional dependencies.
+- The meta package (`packages/peky`) must be published last so it can resolve optional dependencies.
+
+## Deprecate legacy npm package (one-time or when switching)
+
+After the first peky npm release, deprecate the old package names:
+
+```bash
+npm deprecate peakypanes "Use npm i -g peky"
+npm deprecate peakypanes-darwin-x64 "Use npm i -g peky"
+npm deprecate peakypanes-darwin-arm64 "Use npm i -g peky"
+npm deprecate peakypanes-linux-x64 "Use npm i -g peky"
+npm deprecate peakypanes-linux-arm64 "Use npm i -g peky"
+```

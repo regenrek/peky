@@ -154,10 +154,10 @@ Add a notify command in your Codex config to call the peky hook script (Codex pa
 
 ```toml
 # ~/.codex/config.toml
-notify = ["python3", "/absolute/path/to/peakypanes/scripts/agent-state/codex-notify.py"]
+notify = ["python3", "/absolute/path/to/peky/scripts/agent-state/codex-notify.py"]
 ```
 
-Tip: with npm i -g peakypanes, the scripts live under $(npm root -g)/peakypanes/scripts/agent-state/.
+Tip: with npm i -g peky, the scripts live under $(npm root -g)/peky/scripts/agent-state/.
 Note: Codex notify only fires on turn completion, so running state still relies on regex or idle detection between turns.
 
 Claude Code (TUI)
@@ -168,5 +168,5 @@ SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest, Stop, SessionEnd.
 Example hook command (wire it to each event above in Claude Code):
 
 ```bash
-python3 /absolute/path/to/peakypanes/scripts/agent-state/claude-hook.py
+python3 /absolute/path/to/peky/scripts/agent-state/claude-hook.py
 ```
