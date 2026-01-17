@@ -24,7 +24,6 @@ jobs:
       id-token: write
     env:
       TAG: ${{ inputs.tag || github.event.workflow_run.head_branch }}
-      NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/npmrc
       NODE_AUTH_TOKEN: ""
       NPM_TOKEN: ""
     steps:
@@ -44,7 +43,10 @@ jobs:
         run: |
           set -euo pipefail
 
-          cat >"${NPM_CONFIG_USERCONFIG}" <<'EOF'
+          npmrc="${RUNNER_TEMP}/npmrc"
+          echo "NPM_CONFIG_USERCONFIG=$npmrc" >>"$GITHUB_ENV"
+
+          cat >"$npmrc" <<'EOF'
           registry=https://registry.npmjs.org/
           always-auth=false
           EOF
@@ -62,7 +64,7 @@ jobs:
             exit 1
           fi
 
-          if grep -q "_authToken" "${NPM_CONFIG_USERCONFIG}"; then
+          if grep -q "_authToken" "$npmrc"; then
             echo "refusing to publish with _authToken in npm config; expected OIDC-only" >&2
             exit 1
           fi
