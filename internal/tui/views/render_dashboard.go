@@ -131,7 +131,6 @@ func (m Model) viewDashboardGrid(width, height int) string {
 		selectionSession: m.SelectionSession,
 		selectionPane:    m.SelectionPane,
 		previewLines:     m.DashboardPreviewLines,
-		terminalFocus:    m.TerminalFocus,
 		renderer:         m.renderDashboardPaneTileLive,
 	}
 	return renderDashboardColumnsWithRenderer(columns, width, height, m.DashboardSelectedProject, ctx)
@@ -345,9 +344,8 @@ func (m Model) viewPreview(width, height int) string {
 	}
 	gridWidth := width
 	grid := renderPaneLayout(panes, gridWidth, gridHeight, layoutPreviewContext{
-		freezeContent: m.FreezePreviewContent && m.Resize.Dragging,
 		targetPane:    m.SelectionPane,
-		terminalFocus: m.TerminalFocus,
+		paneCursor:    m.PaneCursor,
 		guides:        m.Resize.Guides,
 		paneView:      m.PaneView,
 		paneTopbar:    m.PaneTopbarEnabled,
@@ -362,44 +360,25 @@ func (m Model) viewFooter(width int) string {
 	projectKeys := m.Keys.ProjectKeys
 	sessionKeys := m.Keys.SessionKeys
 	paneKeys := m.Keys.PaneKeys
-	sessionLabel := "session/pane"
-	paneLabel := "pane"
-	if m.Tab == tabDashboard {
-		sessionLabel = "pane"
-		paneLabel = "project"
-	}
-	modeHint := ""
-	modeHintRendered := ""
-	if m.SupportsTerminalFocus {
-		label := "terminal"
-		if m.TerminalFocus {
-			label = "terminal on"
-		}
-		modeHint = fmt.Sprintf(" · %s %s", strings.ToLower(m.Keys.TerminalFocus), label)
-		if m.TerminalFocus {
-			modeHintRendered = theme.TerminalFocusHint.Render(modeHint)
-		} else {
-			modeHintRendered = theme.ListDimmed.Render(modeHint)
-		}
-	}
 	base := fmt.Sprintf(
-		"%s ←/→ project · %s ↑/↓ %s · %s %s · %s commands · %s help · %s quit",
+		"%s project · %s session/pane · %s pane · %s last · %s action · %s commands · %s raw · %s help · %s quit",
 		projectKeys,
 		sessionKeys,
-		sessionLabel,
 		paneKeys,
-		paneLabel,
+		m.Keys.ToggleLastPane,
+		m.Keys.FocusAction,
 		m.Keys.CommandPalette,
+		m.Keys.HardRaw,
 		m.Keys.Help,
 		m.Keys.Quit,
 	)
-	base = theme.ListDimmed.Render(base) + modeHintRendered
+	base = theme.ListDimmed.Render(base)
 	toast := m.Toast
 	if toast == "" {
-		return fitLineSuffix(base, m.viewServerStatus(), width)
+		return fitLineSuffix(base, m.viewFooterStatus(), width)
 	}
 	line := fmt.Sprintf("%s  %s", base, toast)
-	return fitLineSuffix(line, m.viewServerStatus(), width)
+	return fitLineSuffix(line, m.viewFooterStatus(), width)
 }
 
 func (m Model) viewServerStatus() string {
@@ -428,6 +407,26 @@ func (m Model) viewServerStatus() string {
 		}
 		return theme.ListDimmed.Render(strings.Repeat(" ", pad)) + word
 	}
+}
+
+func (m Model) viewFooterStatus() string {
+	return fmt.Sprintf("%s %s", m.viewInputBadge(), m.viewServerStatus())
+}
+
+func (m Model) viewInputBadge() string {
+	const slot = 5
+	word := "SOFT"
+	style := theme.StatusMessage
+	if m.HardRaw {
+		word = "RAW"
+		style = theme.StatusWarning
+	}
+	badge := style.Render(word)
+	pad := slot - lipgloss.Width(badge)
+	if pad < 0 {
+		pad = 0
+	}
+	return theme.ListDimmed.Render(strings.Repeat(" ", pad)) + badge
 }
 
 func (m Model) overlayResizeOverlay(base string, width, height, headerHeight, headerGap, bodyHeight int) string {

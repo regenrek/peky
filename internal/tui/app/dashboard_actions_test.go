@@ -18,19 +18,19 @@ func TestDashboardActionsAndNav(t *testing.T) {
 		t.Fatalf("expected filter to exit on enter")
 	}
 
-	m.terminalFocus = false
+	m.hardRaw = false
 	m.updateDashboard(keyRune('t'))
-	if !m.terminalFocus {
-		t.Fatalf("expected terminal focus enabled")
+	if !m.hardRaw {
+		t.Fatalf("expected hard raw enabled")
 	}
 
 	m.updateDashboard(tea.KeyMsg{Type: tea.KeyEsc})
-	if !m.terminalFocus {
-		t.Fatalf("expected terminal focus to remain enabled")
+	if !m.hardRaw {
+		t.Fatalf("expected hard raw to remain enabled")
 	}
 	m.updateDashboard(keyRune('t'))
-	if m.terminalFocus {
-		t.Fatalf("expected terminal focus disabled via toggle")
+	if m.hardRaw {
+		t.Fatalf("expected hard raw disabled via toggle")
 	}
 
 	m.tab = TabProject

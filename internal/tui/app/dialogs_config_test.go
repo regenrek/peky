@@ -144,7 +144,7 @@ func TestQuickReplyFlow(t *testing.T) {
 	}
 
 	m.quickReplyInput.SetValue("")
-	m.updateQuickReply(tea.KeyMsg{Type: tea.KeyEnter})
+	m.updateQuickReplyInput(keyMsgFromTea(tea.KeyMsg{Type: tea.KeyEnter}))
 
 	m.quickReplyInput.SetValue("hi")
 	sendCmd := m.sendQuickReply()

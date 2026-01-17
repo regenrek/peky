@@ -153,9 +153,7 @@ func (m *Model) handleQuickReplyMousePress(msg tea.MouseMsg) (tea.Cmd, bool) {
 		return nil, false
 	}
 
-	if m.terminalFocus {
-		m.setTerminalFocus(false)
-	}
+	cmd := m.setHardRaw(false)
 	if m.filterActive {
 		m.filterActive = false
 		m.filterInput.Blur()
@@ -164,12 +162,12 @@ func (m *Model) handleQuickReplyMousePress(msg tea.MouseMsg) (tea.Cmd, bool) {
 
 	idx, ok := m.runeIndexAtQuickReplyX(msg.X)
 	if !ok {
-		return nil, true
+		return cmd, true
 	}
 	m.quickReplyMouseSel.active = true
 	m.quickReplyMouseSel.start = idx
 	m.quickReplyMouseSel.end = idx
-	return nil, true
+	return cmd, true
 }
 
 func (m *Model) handleQuickReplyMouseMotion(msg tea.MouseMsg) (tea.Cmd, bool) {

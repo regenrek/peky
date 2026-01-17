@@ -1,5 +1,7 @@
 package app
 
+import "strings"
+
 func (m *Model) isPaneInputDisabled(paneID string) bool {
 	if m == nil || paneID == "" || m.paneInputDisabled == nil {
 		return false
@@ -58,4 +60,26 @@ func (m *Model) paneByID(paneID string) *PaneItem {
 		}
 	}
 	return nil
+}
+
+func (m *Model) selectionForPaneID(paneID string) (selectionState, bool) {
+	if m == nil || strings.TrimSpace(paneID) == "" {
+		return selectionState{}, false
+	}
+	for projIdx := range m.data.Projects {
+		project := &m.data.Projects[projIdx]
+		for sessIdx := range project.Sessions {
+			session := &project.Sessions[sessIdx]
+			for paneIdx := range session.Panes {
+				if session.Panes[paneIdx].ID == paneID {
+					return selectionState{
+						ProjectID: project.ID,
+						Session:   session.Name,
+						Pane:      session.Panes[paneIdx].Index,
+					}, true
+				}
+			}
+		}
+	}
+	return selectionState{}, false
 }

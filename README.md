@@ -35,8 +35,8 @@ window layouts and better-organized projects.
 - ⌘ **Command palette** - Quick actions, including renaming sessions/panes
 - 🧠 **Native live previews** - Full TUI support (vim/htop) with live panes
 - 📁 **Project-local config** - Commit `.peky.yml` to git for team sharing
-- 🧠 **Quick Reply Bar** - Send quick follow ups with built in slash and @ commands to any pane
-- 🤖 **Peky Agent (Experimental)** - Use peky agent to talk to your panes "Add 3 panes", "Run command 'ls' in all panes"
+- 🧠 **Action line** - Dashboard control plane for slash commands, file picker, and broadcasts
+- 🤖 **Peky Agent (Experimental)** - Temporarily disabled while stabilizing
 
 <br />
 <br />
@@ -110,9 +110,9 @@ layout:
 
 ## Dashboard
 
-The dashboard shows projects, sessions, live previews, and a quick-reply bar for slash commands and broadcasts.
-When the quick reply input is empty, common terminal keys (Enter/Esc/arrows/tab) are forwarded to the selected pane for interactive prompts.
-See [docs/dashboard.md](docs/dashboard.md) for keybindings, slash command behavior, and dashboard configuration.
+The dashboard shows projects, sessions, live previews, and an always-visible action line.
+Default typing goes to the selected pane; click the action line for `/` slash commands, `@` file picker, and structured actions. Use `ctrl+k` to toggle `RAW` (pure terminal).
+See [docs/dashboard.md](docs/dashboard.md) for keybindings, input routing, and dashboard configuration.
 
 ## CLI
 

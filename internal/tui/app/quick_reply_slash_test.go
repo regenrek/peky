@@ -8,9 +8,10 @@ import (
 
 func TestQuickReplySlashKillPane(t *testing.T) {
 	m := newTestModelLite()
+	m.quickReplyInput.Focus()
 	m.quickReplyInput.SetValue("/kill")
 
-	m.updateQuickReply(tea.KeyMsg{Type: tea.KeyEnter})
+	m.updateQuickReplyInput(keyMsgFromTea(tea.KeyMsg{Type: tea.KeyEnter}))
 	if got := m.quickReplyInput.Value(); got != "/kill " {
 		t.Fatalf("expected slash completion on enter, got %q", got)
 	}
@@ -18,7 +19,7 @@ func TestQuickReplySlashKillPane(t *testing.T) {
 		t.Fatalf("expected dashboard state after completion, got %v", m.state)
 	}
 
-	m.updateQuickReply(tea.KeyMsg{Type: tea.KeyEnter})
+	m.updateQuickReplyInput(keyMsgFromTea(tea.KeyMsg{Type: tea.KeyEnter}))
 	if m.state != StateConfirmClosePane {
 		t.Fatalf("expected confirm close pane state after second enter, got %v", m.state)
 	}
@@ -26,9 +27,10 @@ func TestQuickReplySlashKillPane(t *testing.T) {
 
 func TestQuickReplySlashUnknownKeepsInput(t *testing.T) {
 	m := newTestModelLite()
+	m.quickReplyInput.Focus()
 	m.quickReplyInput.SetValue("/nope")
 
-	_, cmd := m.updateQuickReply(tea.KeyMsg{Type: tea.KeyEnter})
+	_, cmd := m.updateQuickReplyInput(keyMsgFromTea(tea.KeyMsg{Type: tea.KeyEnter}))
 	if cmd == nil {
 		t.Fatalf("expected warning cmd")
 	}
@@ -42,9 +44,10 @@ func TestQuickReplySlashUnknownKeepsInput(t *testing.T) {
 
 func TestQuickReplySlashFilterSetsValue(t *testing.T) {
 	m := newTestModelLite()
+	m.quickReplyInput.Focus()
 	m.quickReplyInput.SetValue("/filter alpha")
 
-	_, cmd := m.updateQuickReply(tea.KeyMsg{Type: tea.KeyEnter})
+	_, cmd := m.updateQuickReplyInput(keyMsgFromTea(tea.KeyMsg{Type: tea.KeyEnter}))
 	if cmd != nil {
 		_ = cmd()
 	}
@@ -61,9 +64,10 @@ func TestQuickReplySlashFilterSetsValue(t *testing.T) {
 
 func TestQuickReplyBroadcastParsesAll(t *testing.T) {
 	m := newTestModelLite()
+	m.quickReplyInput.Focus()
 	m.quickReplyInput.SetValue("/all reset")
 
-	_, cmd := m.updateQuickReply(tea.KeyMsg{Type: tea.KeyEnter})
+	_, cmd := m.updateQuickReplyInput(keyMsgFromTea(tea.KeyMsg{Type: tea.KeyEnter}))
 	if cmd == nil {
 		t.Fatalf("expected broadcast cmd")
 	}
@@ -89,7 +93,7 @@ func TestQuickReplySlashSuggestionsOnSlash(t *testing.T) {
 	m.quickReplyInput.SetValue("")
 	m.quickReplyInput.Focus()
 
-	m.updateQuickReply(keyRune('/'))
+	m.updateQuickReplyInput(keyMsgFromTea(keyRune('/')))
 	if got := m.quickReplyInput.Value(); got != "/" {
 		t.Fatalf("expected input '/', got %q", got)
 	}

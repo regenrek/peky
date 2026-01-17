@@ -25,10 +25,7 @@ type quickReplyFileCache struct {
 }
 
 func (m *Model) quickReplyMenuState() quickReplyMenu {
-	if m == nil || m.state != StateDashboard || m.filterActive || m.terminalFocus {
-		return quickReplyMenu{}
-	}
-	if m.quickReplyStreamEnabled() {
+	if m == nil || m.state != StateDashboard || m.filterActive || m.hardRaw || !m.quickReplyInput.Focused() {
 		return quickReplyMenu{}
 	}
 	if menu := m.authMenuState(); menu.kind != quickReplyMenuNone {

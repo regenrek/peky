@@ -11,6 +11,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/colorprofile"
+	"github.com/charmbracelet/lipgloss"
+	xansi "github.com/charmbracelet/x/ansi"
 
 	"github.com/regenrek/peakypanes/internal/logging"
 	"github.com/regenrek/peakypanes/internal/sessiond"
@@ -171,55 +173,12 @@ func (m *Model) combinePaneViewRefresh(cmd tea.Cmd, refreshCmd tea.Cmd) tea.Cmd 
 }
 
 func (m *Model) paneHitFor(paneID string) (mouse.PaneHit, bool) {
-
 	for _, hit := range m.paneHits() {
 		if hit.PaneID == paneID {
 			return hit, true
 		}
 	}
 	return mouse.PaneHit{}, false
-}
-
-func (m *Model) paneViewRequests() []sessiond.PaneViewRequest {
-	if !m.paneViewDataReady() {
-		m.logPaneViewSkipGlobal("snapshot_empty", m.dashboardColumnsDebug())
-		return nil
-	}
-	if m.resize.drag.active && m.settings.Resize.FreezeContentDuringDrag && m.state == StateDashboard && m.tab == TabProject {
-		m.logPaneViewSkipGlobal("resize_drag_freeze", m.paneViewSkipContext())
-		return nil
-	}
-	hits := m.paneHits()
-	if len(hits) == 0 {
-		m.logPaneViewSkipGlobal("no_hits", m.paneViewSkipContext())
-		return nil
-	}
-	reqs := make([]sessiond.PaneViewRequest, 0, len(hits))
-	seen := make(map[paneViewKey]struct{})
-	perf := m.paneViewPerf()
-	for _, hit := range hits {
-		req := m.paneViewRequestForHit(hit)
-		if req == nil {
-			continue
-		}
-		key := paneViewKey{
-			PaneID: req.PaneID,
-			Cols:   req.Cols,
-			Rows:   req.Rows,
-		}
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-
-		minInterval := paneViewMinIntervalFor(*req, perf)
-		if !m.allowPaneViewRequest(key, minInterval, false) {
-			continue
-		}
-
-		reqs = append(reqs, *req)
-	}
-	return reqs
 }
 
 func (m *Model) recordPaneSize(paneID string, cols, rows int) {
@@ -320,6 +279,9 @@ func (m *Model) handlePaneViewPump(msg paneViewPumpMsg) tea.Cmd {
 	m.paneViewPumpScheduled = false
 	if len(m.paneViewQueuedIDs) == 0 {
 		m.paneViewPumpBackoff = 0
+		return nil
+	}
+	if m.resize.drag.active && m.settings.Resize.FreezeContentDuringDrag && m.state == StateDashboard && m.tab == TabProject {
 		return nil
 	}
 	if m.shouldDelayPaneViewPump() {
@@ -874,13 +836,27 @@ func (m *Model) paneViewRenderSettings(paneID string) (bool, sessiond.PaneViewPr
 	if pane := m.paneByID(paneID); pane != nil && pane.Disconnected {
 		return false, priority
 	}
-	if isSelected && m.supportsTerminalFocus() {
-		showCursor = m.terminalFocus
-		if showCursor {
-			priority = sessiond.PaneViewPriorityFocused
-		}
+	if isSelected && m.shouldShowPaneCursor() {
+		showCursor = true
+		priority = sessiond.PaneViewPriorityFocused
 	}
 	return showCursor, priority
+}
+
+func (m *Model) shouldShowPaneCursor() bool {
+	if m == nil {
+		return false
+	}
+	if m.state != StateDashboard {
+		return false
+	}
+	if m.filterActive {
+		return false
+	}
+	if m.quickReplyInput.Focused() {
+		return false
+	}
+	return true
 }
 
 func (m *Model) selectedPaneID() string {
@@ -1287,6 +1263,9 @@ func (m *Model) paneViewWithFallback(paneID string, cols, rows int, showCursor b
 	if out := m.paneView(paneID, cols, rows, showCursor); out != "" {
 		return out
 	}
+	if m.resize.drag.active && m.settings.Resize.FreezeContentDuringDrag && m.state == StateDashboard && m.tab == TabProject {
+		return m.paneViewFrozen(paneID, cols, rows, showCursor)
+	}
 	entry, ok := m.bestPaneViewEntry(paneID, cols, rows)
 	if !ok {
 		return ""
@@ -1301,11 +1280,39 @@ func (m *Model) paneViewWithFallback(paneID string, cols, rows int, showCursor b
 	})
 }
 
+func (m *Model) paneViewFrozen(paneID string, cols, rows int, showCursor bool) string {
+	key, entry, ok := m.bestPaneViewEntryWithKey(paneID, cols, rows)
+	if !ok {
+		return ""
+	}
+	if entry.rendered != nil {
+		if cached, ok := entry.rendered[showCursor]; ok {
+			return padLinesANSI(cached, cols, rows)
+		}
+	}
+	if entry.rendered == nil {
+		entry.rendered = make(map[bool]string, 2)
+	}
+	rendered := termrender.Render(entry.frame, termrender.Options{
+		Profile:    m.paneViewProfile,
+		ShowCursor: showCursor,
+	})
+	entry.rendered[showCursor] = rendered
+	m.paneViews[key] = entry
+	return padLinesANSI(rendered, cols, rows)
+}
+
 func (m *Model) bestPaneViewEntry(paneID string, cols, rows int) (paneViewEntry, bool) {
+	_, entry, ok := m.bestPaneViewEntryWithKey(paneID, cols, rows)
+	return entry, ok
+}
+
+func (m *Model) bestPaneViewEntryWithKey(paneID string, cols, rows int) (paneViewKey, paneViewEntry, bool) {
 	if m == nil || m.paneViews == nil || paneID == "" {
-		return paneViewEntry{}, false
+		return paneViewKey{}, paneViewEntry{}, false
 	}
 	bestScore := 0
+	var bestKey paneViewKey
 	var best paneViewEntry
 	found := false
 	for key, entry := range m.paneViews {
@@ -1319,10 +1326,11 @@ func (m *Model) bestPaneViewEntry(paneID string, cols, rows int) (paneViewEntry,
 		if !found || score < bestScore {
 			bestScore = score
 			best = entry
+			bestKey = key
 			found = true
 		}
 	}
-	return best, found
+	return bestKey, best, found
 }
 
 func resizePaneViewFrame(frame termframe.Frame, cols, rows int) termframe.Frame {
@@ -1353,6 +1361,35 @@ func resizePaneViewFrame(frame termframe.Frame, cols, rows int) termframe.Frame 
 			out.Cursor = frame.Cursor
 			out.Cursor.Visible = true
 		}
+	}
+	return out
+}
+
+func padLinesANSI(text string, width, height int) string {
+	if width <= 0 || height <= 0 {
+		return ""
+	}
+	lines := strings.Split(text, "\n")
+	if len(lines) > height {
+		lines = lines[:height]
+	}
+	for i := range lines {
+		lines[i] = padRightANSI(lines[i], width)
+	}
+	for len(lines) < height {
+		lines = append(lines, strings.Repeat(" ", width))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func padRightANSI(text string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	out := xansi.Truncate(text, width, "")
+	pad := width - lipgloss.Width(out)
+	if pad > 0 {
+		out += strings.Repeat(" ", pad)
 	}
 	return out
 }

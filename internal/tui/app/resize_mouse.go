@@ -250,10 +250,9 @@ func (m *Model) finishResizeDrag() tea.Cmd {
 	m.resize.drag = resizeDragState{}
 	m.resize.preview = resizePreviewState{}
 	m.resize.invalidateCache()
-	if cmd == nil {
-		return m.requestRefreshCmd()
-	}
-	return tea.Batch(cmd, m.requestRefreshCmd())
+	refreshViews := m.refreshPaneViewsCmd()
+	refreshSnapshot := m.requestRefreshCmd()
+	return tea.Batch(cmd, refreshViews, refreshSnapshot)
 }
 
 func (m *Model) cancelResizeDrag() tea.Cmd {
@@ -272,10 +271,9 @@ func (m *Model) cancelResizeDrag() tea.Cmd {
 	m.resize.drag = resizeDragState{}
 	m.resize.preview = resizePreviewState{}
 	m.resize.invalidateCache()
-	if cmd == nil {
-		return m.requestRefreshCmd()
-	}
-	return tea.Batch(cmd, m.requestRefreshCmd())
+	refreshViews := m.refreshPaneViewsCmd()
+	refreshSnapshot := m.requestRefreshCmd()
+	return tea.Batch(cmd, refreshViews, refreshSnapshot)
 }
 
 func (m *Model) applyResizePreview(delta, altDelta int, snapEnabled bool) (int, int, bool) {

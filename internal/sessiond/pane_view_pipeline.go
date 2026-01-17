@@ -27,6 +27,9 @@ func paneViewEffectiveSeq(win paneViewWindow) uint64 {
 	if win == nil {
 		return 0
 	}
+	// Prefer the cached frame's seq. When the cache is dirty FrameCacheSeq returns
+	// 0, so fall back to UpdateSeq to keep the protocol monotonic and avoid
+	// request storms.
 	if seq := win.FrameCacheSeq(); seq != 0 {
 		return seq
 	}
@@ -462,7 +465,18 @@ func (d *Daemon) paneViewResponse(ctx context.Context, client *clientConn, paneI
 		return PaneViewResponse{}, err
 	}
 
+	cacheSeq := win.FrameCacheSeq()
+	unstable := cacheSeq == 0
+	if unstable && req.Priority != PaneViewPriorityBackground {
+		info.renderReq.DirectRender = true
+	}
+
 	currentSeq, knownSeq := paneViewSeqs(win, req)
+	if unstable {
+		// Only allow not-modified/caching when the frame cache is stable. When it's
+		// dirty, UpdateSeq may advance without a stable cached frame yet.
+		knownSeq = 0
+	}
 	if resp, ok := paneViewNotModified(win, paneID, info, currentSeq, knownSeq); ok {
 		return resp, nil
 	}
@@ -500,7 +514,7 @@ func (d *Daemon) paneViewResponse(ctx context.Context, client *clientConn, paneI
 	}
 	d.logPaneViewFirst(win, paneID, info.cols, info.rows, frame)
 
-	// Refresh seq after render. If output happened concurrently, the next request will pick it up.
+	// Refresh seq after render. If the cache is still dirty, fall back to UpdateSeq.
 	currentSeq = paneViewEffectiveSeq(win)
 
 	resp := PaneViewResponse{
@@ -513,7 +527,7 @@ func (d *Daemon) paneViewResponse(ctx context.Context, client *clientConn, paneI
 		HasMouse:    win.HasMouseMode(),
 		AllowMotion: win.AllowsMouseMotion(),
 	}
-	if client != nil {
+	if client != nil && win.FrameCacheSeq() != 0 {
 		client.paneViewCachePut(info.key, resp)
 	}
 	return resp, nil
@@ -573,6 +587,9 @@ func paneViewCachedHit(
 	currentSeq uint64,
 ) (PaneViewResponse, bool) {
 	if client == nil {
+		return PaneViewResponse{}, false
+	}
+	if currentSeq == 0 {
 		return PaneViewResponse{}, false
 	}
 	entry, ok := client.paneViewCacheGetEntry(info.key)

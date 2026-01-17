@@ -50,15 +50,14 @@ func (m *Model) applySessionFilter(value string) tea.Cmd {
 	m.filterInput.SetValue(filter)
 	m.filterInput.CursorEnd()
 	m.filterInput.Blur()
-	m.quickReplyInput.Focus()
+	m.quickReplyInput.Blur()
 	return nil
 }
 
 func (m *Model) prepareQuickReplyInput() tea.Cmd {
 	var cmd tea.Cmd
-	if m.terminalFocus {
-		m.setTerminalFocus(false)
-		cmd = m.refreshPaneViewsCmd()
+	if m.hardRaw {
+		cmd = m.setHardRaw(false)
 	}
 	if m.filterActive {
 		m.filterActive = false

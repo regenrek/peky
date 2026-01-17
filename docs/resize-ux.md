@@ -1,9 +1,9 @@
 # TUI Resize + Context Menu UX Spec
 
 Scope
-- Resize handles always active in the project layout canvas, regardless of terminal focus.
-- Terminal focus (Ctrl+K) forwards keys to the pane; context menu remains UI-only.
-- Quick reply passthrough: when the input is empty, terminal-like navigation keys are forwarded to the selected pane for interactive prompts.
+- Resize handles always active in the project layout canvas (both `SOFT` and `RAW`).
+- `ctrl+shift+k` toggles `RAW` (pure terminal keyboard); mouse resize + selection still work.
+- Action line is a separate control surface and only captures keys when focused (no “passthrough” mode).
 - Ghostty-first; use standard mouse/cursor protocols (OSC 22 cursor shapes).
 
 Definitions
@@ -32,7 +32,7 @@ Drag Semantics
 - Click outside while dragging cancels (treated as Esc).
 
 Keyboard Resize Mode
-- Toggle resize mode: `ctrl+r` (global in dashboard), exits with `esc`.
+- Toggle resize mode: `ctrl+shift+r` (default; configurable), exits with `esc`.
 - When active: overlay cheat sheet + active edge highlight.
 - Keys:
   - Arrow keys: nudge active edge by 10 units (grid step).

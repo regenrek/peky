@@ -131,12 +131,11 @@ func (m *Model) applySelection(sel selectionState) {
 	prev := m.selection
 	m.selection = sel
 	m.rememberSelection(sel)
-	if m.terminalFocus && !m.supportsTerminalFocus() {
-		m.setTerminalFocus(false)
-	}
 	nextPaneID := m.selectedPaneID()
 	if prevPaneID != nextPaneID {
-		m.dropQuickReplyStreamBuffer("Stream dropped: pane changed")
+		if prevPaneID != "" {
+			m.lastPaneToggleID = prevPaneID
+		}
 		m.clearOfflineScroll()
 		m.clearPaneAgentUnread(nextPaneID)
 	}
@@ -556,6 +555,26 @@ func (m *Model) cyclePane(delta int) tea.Cmd {
 	}
 	m.selectionVersion++
 	return nil
+}
+
+func (m *Model) toggleLastPane() {
+	if m == nil {
+		return
+	}
+	targetID := strings.TrimSpace(m.lastPaneToggleID)
+	if targetID == "" {
+		return
+	}
+	currentID := strings.TrimSpace(m.selectedPaneID())
+	if currentID == "" || currentID == targetID {
+		return
+	}
+	sel, ok := m.selectionForPaneID(targetID)
+	if !ok {
+		return
+	}
+	m.applySelection(sel)
+	m.selectionVersion++
 }
 
 func (m *Model) selectedProject() *ProjectGroup {

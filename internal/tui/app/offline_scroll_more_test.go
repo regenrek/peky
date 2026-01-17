@@ -14,7 +14,7 @@ func TestOfflineScrollToggleAndPaneView(t *testing.T) {
 	pane.Disconnected = true
 	pane.Preview = []string{"L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "L9"}
 
-	if _, handled := m.handleOfflineScrollInput(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}}); !handled {
+	if _, handled := m.handleOfflineScrollInput(keyMsgFromTea(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})); !handled {
 		t.Fatalf("expected handled toggle")
 	}
 	if !m.offlineScrollActiveFor(pane.ID) {
@@ -29,13 +29,13 @@ func TestOfflineScrollToggleAndPaneView(t *testing.T) {
 		t.Fatalf("view=%q", view)
 	}
 
-	if _, handled := m.handleOfflineScrollInput(tea.KeyMsg{Type: tea.KeyUp}); !handled {
+	if _, handled := m.handleOfflineScrollInput(keyMsgFromTea(tea.KeyMsg{Type: tea.KeyUp})); !handled {
 		t.Fatalf("expected handled up")
 	}
 	if got := m.offlineScrollOffset(pane.ID); got != 1 {
 		t.Fatalf("offset=%d want=1", got)
 	}
-	if _, handled := m.handleOfflineScrollInput(tea.KeyMsg{Type: tea.KeyPgUp}); !handled {
+	if _, handled := m.handleOfflineScrollInput(keyMsgFromTea(tea.KeyMsg{Type: tea.KeyPgUp})); !handled {
 		t.Fatalf("expected handled pgup")
 	}
 	if got := m.offlineScrollOffset(pane.ID); got != 4 {
@@ -48,7 +48,7 @@ func TestOfflineScrollToggleAndPaneView(t *testing.T) {
 		t.Fatalf("view=%q", view)
 	}
 
-	if _, handled := m.handleOfflineScrollInput(tea.KeyMsg{Type: tea.KeyEsc}); !handled {
+	if _, handled := m.handleOfflineScrollInput(keyMsgFromTea(tea.KeyMsg{Type: tea.KeyEsc})); !handled {
 		t.Fatalf("expected handled esc")
 	}
 	if m.offlineScrollActiveFor(pane.ID) {

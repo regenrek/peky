@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/regenrek/peakypanes/internal/sessiond"
+	"github.com/regenrek/peakypanes/internal/termframe"
 	"github.com/regenrek/peakypanes/internal/tui/mouse"
 )
 
@@ -65,6 +66,25 @@ func TestHandlePaneViewPumpDelaysWhenInFlight(t *testing.T) {
 	_ = cmd
 }
 
+func TestHandlePaneViewPumpFreezesDuringResizeDrag(t *testing.T) {
+	m := newTestModelLite()
+	m.state = StateDashboard
+	m.tab = TabProject
+	m.settings.Resize.FreezeContentDuringDrag = true
+	m.resize.drag.active = true
+	m.paneViewQueuedIDs = map[string]struct{}{"p1": {}}
+
+	if cmd := m.handlePaneViewPump(paneViewPumpMsg{Reason: "test"}); cmd != nil {
+		t.Fatalf("expected nil cmd")
+	}
+	if m.paneViewPumpScheduled {
+		t.Fatalf("expected pump not scheduled")
+	}
+	if len(m.paneViewQueuedIDs) == 0 {
+		t.Fatalf("expected queue preserved")
+	}
+}
+
 func TestPaneViewPumpMaxReqsUsesRemainingBatches(t *testing.T) {
 	m := newTestModelLite()
 	m.settings.Performance.PaneViews.MaxInFlightBatches = 3
@@ -105,6 +125,31 @@ func TestCombinePaneViewRefreshPrefersNonNil(t *testing.T) {
 	cmd := m.combinePaneViewRefresh(cmdA, cmdB)
 	if cmd == nil {
 		t.Fatalf("expected batch cmd")
+	}
+}
+
+func TestPaneViewWithFallbackFreezesToCachedRenderDuringResizeDrag(t *testing.T) {
+	m := newTestModelLite()
+	m.state = StateDashboard
+	m.tab = TabProject
+	m.settings.Resize.FreezeContentDuringDrag = true
+	m.resize.drag.active = true
+
+	paneID := "p1"
+	cached := "abc\nxyz"
+	m.paneViews = map[paneViewKey]paneViewEntry{
+		{PaneID: paneID, Cols: 10, Rows: 3}: {
+			frame: termframe.Frame{Cols: 10, Rows: 3, Cells: make([]termframe.Cell, 30)},
+			rendered: map[bool]string{
+				false: cached,
+			},
+		},
+	}
+
+	got := m.paneViewWithFallback(paneID, 5, 3, false)
+	want := padLinesANSI(cached, 5, 3)
+	if got != want {
+		t.Fatalf("got=%q want=%q", got, want)
 	}
 }
 

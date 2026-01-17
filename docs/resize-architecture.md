@@ -9,19 +9,18 @@
 5) Pane view requests (per visible pane) send cols/rows to sessiond; daemon calls `Window.Resize` before rendering.
 6) PTY + VT resize happen inside `terminal.Window.Resize`, then frame render responds to the updated size.
 
-## Mouse/Mode Inventory (UI vs Terminal focus)
+## Mouse/Mode Inventory (SOFT vs RAW)
 
-UI mode (terminal focus off):
-- Mouse routing: `updateDashboardMouse` → resize hover/drag → context menu → quick reply → scroll wheel → selection.
+SOFT:
+- Mouse routing: `updateDashboardMouse` → resize hover/drag → context menu → action line (focused only) → scroll wheel → selection.
 - Drag resize: left press on edge/corner starts drag, motion updates preview (mouse_throttle_ms), release commits, outside click cancels.
 - Right-click (Button3): opens context menu on pane body.
 - Cursor shapes: OSC 22 col/row/diag-resize on hover, pointer/text elsewhere.
-- Quick reply passthrough: when the input is empty, Enter/Esc/arrows/tab are forwarded to the selected pane for interactive prompts.
+- Keyboard: default-to-pane; UI intercept is only the dashboard keymap (Ctrl+Shift chords by default).
 
-Terminal mode (Ctrl+K):
-- Mouse/keys pass through via `SendMouse` and key forwarding.
+RAW (ctrl+shift+k):
+- Keyboard goes to the selected pane (except `ctrl+shift+k`, which toggles RAW).
 - Resize hit-zones stay UI-owned (mouse drag still works).
-- Context menu disabled while terminal focus is active.
 
 ## Legacy/duplication audit
 

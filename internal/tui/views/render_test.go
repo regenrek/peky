@@ -64,7 +64,6 @@ func TestViewQuickReplyRenders(t *testing.T) {
 	input.SetValue("hi")
 	m := Model{
 		QuickReplyInput: input,
-		Keys:            KeyHints{TerminalFocus: "ctrl+t"},
 	}
 	out := m.viewQuickReply(18)
 	if strings.TrimSpace(out) == "" {

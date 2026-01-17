@@ -88,3 +88,35 @@ func TestPaneViewDirectUsesDirectFrame(t *testing.T) {
 		t.Fatalf("expected direct render to skip cached render, got %#v", win.calls)
 	}
 }
+
+func TestPaneViewDirtyFrameIsUnstableUntilCacheSettles(t *testing.T) {
+	frame := termframe.Frame{Cols: 2, Rows: 1, Cells: []termframe.Cell{{Content: "A", Width: 1}, {Content: "B", Width: 1}}}
+	win := &fakeTerminalWindow{viewFrame: frame, updateSeq: 7, frameCacheDirty: true}
+	manager := &fakeManager{windowID: "pane-1", window: win}
+	d := &Daemon{manager: manager}
+	client := &clientConn{paneViewCache: make(map[paneViewCacheKey]cachedPaneView)}
+
+	req := PaneViewRequest{PaneID: "pane-1", Cols: 80, Rows: 24, KnownSeq: 7}
+	resp, err := d.paneViewResponse(context.Background(), client, "pane-1", req)
+	if err != nil {
+		t.Fatalf("paneViewResponse error: %v", err)
+	}
+	if resp.UpdateSeq != 7 || resp.Frame.Empty() {
+		t.Fatalf("expected unstable response with frame, got %#v", resp)
+	}
+	if win.calls["viewFrameDirect"] != 1 {
+		t.Fatalf("expected direct render while cache dirty, got %#v", win.calls)
+	}
+	if _, ok := client.paneViewCache[paneViewCacheKeyFor("pane-1", 80, 24)]; ok {
+		t.Fatalf("expected unstable frame to skip cache put")
+	}
+
+	win.frameCacheDirty = false
+	resp2, err := d.paneViewResponse(context.Background(), client, "pane-1", PaneViewRequest{PaneID: "pane-1", Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatalf("paneViewResponse after settle error: %v", err)
+	}
+	if resp2.UpdateSeq != 7 || resp2.Frame.Empty() {
+		t.Fatalf("expected stable response, got %#v", resp2)
+	}
+}

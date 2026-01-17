@@ -60,12 +60,12 @@ func TestDashboardActionKeys(t *testing.T) {
 		t.Fatalf("expected filter active")
 	}
 
-	// terminal focus input path
+	// hard raw toggle keeps routing to pane
 	m.client = &sessiond.Client{}
 	m.setState(StateDashboard)
-	m.setTerminalFocus(true)
+	m.setHardRaw(true)
 	m.updateDashboard(tea.KeyMsg{Type: tea.KeyEsc})
-	if !m.terminalFocus {
-		t.Fatalf("expected terminal focus to remain enabled")
+	if !m.hardRaw {
+		t.Fatalf("expected hard raw to remain enabled")
 	}
 }

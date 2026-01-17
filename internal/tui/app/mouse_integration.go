@@ -40,23 +40,16 @@ func (m *Model) updateDashboardMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cursorCmd, cmd)
 	}
 	cmd := m.mouse.UpdateDashboard(msg, mouse.DashboardCallbacks{
-		HitHeader:             m.hitTestHeader,
-		HitPane:               m.hitTestPane,
-		HitIsSelected:         m.hitIsSelected,
-		ApplySelection:        m.applySelectionFromHit,
-		SelectDashboardTab:    m.selectDashboardTab,
-		SelectProjectTab:      m.selectProjectTab,
-		OpenProjectPicker:     m.openProjectPicker,
-		SetTerminalFocus:      m.setTerminalFocus,
-		TerminalFocus:         func() bool { return m.terminalFocus },
-		SupportsTerminalFocus: m.supportsTerminalFocus,
-		SelectionCmd:          m.selectionCmd,
-		SelectionRefreshCmd:   m.selectionRefreshCmd,
-		RefreshPaneViewsCmd:   m.refreshPaneViewsCmd,
-		ForwardMouseEvent:     m.forwardMouseEvent,
-		FocusUnavailable: func() {
-			m.setToast("Terminal focus is only available for peky-managed sessions", toastInfo)
-		},
+		HitHeader:           m.hitTestHeader,
+		HitPane:             m.hitTestPane,
+		ApplySelection:      m.applySelectionFromHit,
+		SelectDashboardTab:  m.selectDashboardTab,
+		SelectProjectTab:    m.selectProjectTab,
+		OpenProjectPicker:   m.openProjectPicker,
+		SelectionCmd:        m.selectionCmd,
+		SelectionRefreshCmd: m.selectionRefreshCmd,
+		RefreshPaneViewsCmd: m.refreshPaneViewsCmd,
+		ForwardMouseEvent:   m.forwardMouseEvent,
 	})
 	return m, tea.Batch(cursorCmd, cmd)
 }
@@ -90,10 +83,10 @@ func (m *Model) allowMouseMotion() bool {
 	if m.state != StateDashboard {
 		return false
 	}
-	if !m.terminalFocus {
+	if !m.hardRaw {
 		return true
 	}
-	if !m.supportsTerminalFocus() {
+	if m.client == nil {
 		return false
 	}
 	pane := m.selectedPane()
@@ -129,6 +122,10 @@ func (m *Model) applySelectionFromHit(sel mouse.Selection) bool {
 		return false
 	}
 	m.applySelection(appSelection)
+	m.quickReplyMouseSel.clear()
+	m.resetQuickReplyHistory()
+	m.resetQuickReplyMenu()
+	m.quickReplyInput.Blur()
 	m.selectionVersion++
 	return true
 }
@@ -140,22 +137,8 @@ func (m *Model) selectionCmd() tea.Cmd {
 	return m.selectionRefreshCmd()
 }
 
-func (m *Model) hitIsSelected(hit mouse.PaneHit) bool {
-	pane := m.selectedPane()
-	if pane == nil {
-		return false
-	}
-	if strings.TrimSpace(pane.ID) != "" {
-		return pane.ID == hit.PaneID
-	}
-	return m.selection == selectionFromMouse(hit.Selection)
-}
-
 func (m *Model) forwardMouseEvent(hit mouse.PaneHit, msg tea.MouseMsg) tea.Cmd {
 	if m == nil || m.client == nil {
-		return nil
-	}
-	if !m.supportsTerminalFocus() {
 		return nil
 	}
 	paneID, payload, ok := m.mouseForwardPayload(hit, msg)
@@ -256,7 +239,7 @@ func (m *Model) mouseForwardTarget(hit mouse.PaneHit, msg tea.MouseMsg) (string,
 }
 
 func (m *Model) mouseRouteForForward() sessiond.MouseRoute {
-	if m.terminalFocus {
+	if m.hardRaw {
 		return sessiond.MouseRouteAuto
 	}
 	return sessiond.MouseRouteHostSelection
@@ -283,16 +266,12 @@ func (m *Model) updateTerminalMouseDrag(msg tea.MouseMsg) {
 	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
 		return
 	}
-	if m.state != StateDashboard || !m.supportsTerminalFocus() {
+	if m.state != StateDashboard || m.client == nil {
 		m.terminalMouseDrag = false
 		return
 	}
 	hit, ok := m.hitTestPane(msg.X, msg.Y)
 	if !ok || !hit.Content.Contains(msg.X, msg.Y) {
-		m.terminalMouseDrag = false
-		return
-	}
-	if m.terminalFocus && !m.hitIsSelected(hit) {
 		m.terminalMouseDrag = false
 		return
 	}

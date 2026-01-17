@@ -37,8 +37,8 @@ type Model struct {
 	QuickReplySelectionEnd    int
 	QuickReplySuggestions     []QuickReplySuggestion
 	QuickReplySelected        int
-	TerminalFocus             bool
-	SupportsTerminalFocus     bool
+	HardRaw                   bool
+	PaneCursor                bool
 	ProjectPicker             list.Model
 	LayoutPicker              list.Model
 	PaneSwapPicker            list.Model
@@ -62,7 +62,6 @@ type Model struct {
 	Keys                      KeyHints
 	Toast                     string
 	PreviewCompact            bool
-	FreezePreviewContent      bool
 	DashboardPreviewLines     int
 	PaneTopbarEnabled         bool
 	PaneTopbarSpinner         string
@@ -173,13 +172,15 @@ type KeyHints struct {
 	SessionKeys     string
 	SessionOnlyKeys string
 	PaneKeys        string
+	ToggleLastPane  string
+	FocusAction     string
 	OpenProject     string
 	CloseProject    string
 	NewSession      string
 	KillSession     string
 	TogglePanes     string
 	ToggleSidebar   string
-	TerminalFocus   string
+	HardRaw         string
 	ResizeMode      string
 	Scrollback      string
 	CopyMode        string

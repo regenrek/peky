@@ -4,19 +4,23 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/muesli/cancelreader"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/term"
 
 	"github.com/regenrek/peakypanes/internal/cli/root"
 	"github.com/regenrek/peakypanes/internal/sessiond"
 	"github.com/regenrek/peakypanes/internal/tui/app"
+	tuiinput "github.com/regenrek/peakypanes/internal/tui/input"
 )
 
 type programRunner interface {
 	Run() (tea.Model, error)
+	Send(tea.Msg)
 }
 
 type menuDeps struct {
@@ -64,43 +68,6 @@ func resolveMenuDeps(deps menuDeps) resolvedMenuDeps {
 	return rd
 }
 
-func buildTUIInput(openInput func() (*os.File, func(), error)) (cancelreader.File, func(), error) {
-	inputFile, cleanup, err := openInput()
-	if err != nil {
-		return nil, func() {}, err
-	}
-	cleanupFns := []func(){cleanup}
-	closeAll := func() {
-		for i := len(cleanupFns) - 1; i >= 0; i-- {
-			cleanupFns[i]()
-		}
-	}
-
-	var input cancelreader.File = inputFile
-	if shouldTraceTUIInput() {
-		traced, traceCleanup, err := newTracedTUIInput(input)
-		if err != nil {
-			closeAll()
-			return nil, func() {}, err
-		}
-		cleanupFns = append(cleanupFns, traceCleanup)
-		input = traced
-	}
-
-	input = newRepairedTUIInput(input)
-	if shouldTraceTUIInputRepaired() {
-		traced, traceCleanup, err := newTracedTUIInputRepaired(input)
-		if err != nil {
-			closeAll()
-			return nil, func() {}, err
-		}
-		cleanupFns = append(cleanupFns, traceCleanup)
-		input = traced
-	}
-
-	return input, closeAll, nil
-}
-
 func runMenuWith(ctx root.CommandContext, autoStart *app.AutoStartSpec, deps menuDeps) error {
 	rd := resolveMenuDeps(deps)
 
@@ -129,20 +96,39 @@ func runMenuWith(ctx root.CommandContext, autoStart *app.AutoStartSpec, deps men
 		model.SetAutoStart(*autoStart)
 	}
 
-	input, cleanup, err := buildTUIInput(rd.openInput)
+	ttyIn, ttyCleanup, err := rd.openInput()
 	if err != nil {
 		return fmt.Errorf("cannot initialize TUI input: %w", err)
 	}
-	defer cleanup()
+	defer ttyCleanup()
+
+	prevState, err := term.MakeRaw(ttyIn.Fd())
+	if err != nil {
+		return fmt.Errorf("cannot enter raw mode: %w", err)
+	}
+	defer func() { _ = term.Restore(ttyIn.Fd(), prevState) }()
+
+	ttyOut := os.Stdout
+	if term.IsTerminal(ttyOut.Fd()) {
+		_, _ = io.WriteString(ttyOut, ansi.PushKittyKeyboard(ansi.KittyAllFlags))
+		defer func() { _, _ = io.WriteString(ttyOut, ansi.PopKittyKeyboard(1)) }()
+	}
 
 	motionFilter := app.NewMouseMotionFilter()
 	p := rd.newProgram(
 		model,
 		tea.WithAltScreen(),
-		tea.WithInput(input),
+		tea.WithInput(nil),
 		tea.WithMouseAllMotion(),
 		tea.WithFilter(motionFilter.Filter),
 	)
+
+	stream, err := tuiinput.Start(ctx.Context, p, ttyIn, os.Getenv("TERM"))
+	if err != nil {
+		return fmt.Errorf("cannot start input stream: %w", err)
+	}
+	defer stream.Stop()
+
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("TUI error: %w", err)
 	}

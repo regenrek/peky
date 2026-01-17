@@ -6,68 +6,65 @@ The dashboard shows:
 - Projects on top (tabs)
 - Sessions on the left (with pane counts and expandable panes)
 - Live pane layout canvas on the right (native panes are fully interactive)
-- Input bar (always visible) and target pane highlight for follow-ups
+- Action line (always visible) and target pane highlight for follow-ups
 
-Quick reply details:
-- The input is always active; type and press enter to send to the highlighted pane.
-- When the input is empty, terminal-like keys are passed through to the selected pane (interactive prompts):
-  - enter, esc, arrows, tab, home/end, pgup/pgdown, ctrl+l
-- Use esc with non-empty input to clear.
-- Type / to see slash commands and press tab to autocomplete.
-- Toggle terminal focus to send raw keystrokes into the pane.
+Action line details:
+- Default typing goes to the selected pane (`SOFT`).
+- Click the action line to focus it (for `/` slash commands, `@` file picker, and structured actions).
+- `enter` submits the action line (pane mode). `esc` clears the action line input.
+- Focus shortcut: `ctrl+shift+/` (default; configurable via `dashboard.keymap.focus_action`).
+
+Hard RAW:
+- `ctrl+shift+k` toggles `RAW` (pure terminal).
+- In `RAW`, the UI does not intercept keys (except `ctrl+shift+k` itself). Mouse resize and selection still work.
 
 ## Navigation overview (always visible)
 
-- ctrl+q/ctrl+e project
-- ctrl+w/ctrl+s session/panes
-- alt+w/alt+s session only
-- ctrl+a/ctrl+d pane
-- ctrl+g help
+- ctrl+shift+left / ctrl+shift+right project
+- ctrl+shift+w / ctrl+shift+s session/panes
+- ctrl+shift+up / ctrl+shift+down session only
+- ctrl+shift+a / ctrl+shift+d pane
+- ctrl+shift+space last pane
+- ctrl+shift+g help
 
 ## Key bindings (also shown in the help view)
 
 Keymap overrides are available in the global config (~/.config/peky/config.yml).
 
 Project
-- ctrl+o open project picker (creates session detached; stay in dashboard)
-- ctrl+b toggle sidebar (show/hide sessions list)
-- alt+c close project (hides from tabs; sessions keep running; press k in the dialog to kill)
+- ctrl+shift+o open project picker (creates session detached; stay in dashboard)
+- ctrl+shift+b toggle sidebar (show/hide sessions list)
+- ctrl+shift+c close project (hides from tabs; sessions keep running; press k in the dialog to kill)
 
 Session
-- ctrl+n new session (pick layout)
-- ctrl+x close session
-- rename session via command palette (ctrl+p)
+- ctrl+shift+n new session (pick layout)
+- ctrl+shift+x close session
+- rename session via command palette (ctrl+shift+p)
 
 Window
 Pane list
-- ctrl+u toggle pane list
+- ctrl+shift+] toggle pane list
 
 Pane
-- rename pane via command palette (ctrl+p)
-- ctrl+y peek selected pane in new terminal
-- ctrl+k toggle terminal focus (native only; configurable via dashboard.keymap.terminal_focus)
-- ctrl+r resize mode (keyboard only; arrows resize, tab cycles edges, s toggle snap, 0 reset sizes, z zoom, esc exit; hold alt to disable snap)
-- mouse: single-click selects a pane; double-click toggles terminal focus (native only); esc exits focus
-- mouse: drag dividers to resize; right-click pane for context menu (terminal focus off)
+- ctrl+shift+k toggle hard raw (`SOFT`/`RAW`)
+- ctrl+shift+r resize mode (keyboard only; arrows resize, tab cycles edges, s toggle snap, 0 reset sizes, z zoom, esc exit; hold option/alt to disable snap)
+- mouse: click selects a pane; drag dividers to resize; right-click pane for context menu
 - f7 scrollback mode (native only; configurable via dashboard.keymap.scrollback)
 - f8 copy mode (native only; configurable via dashboard.keymap.copy_mode)
-
-Terminal focus
-- Terminal focus (ctrl+k) forwards keys to the pane.
-- Resize dividers + cursor shapes still work in terminal focus.
-- Context menu requires terminal focus off.
 
 Mouse + snapping notes
 - Drag dividers to resize; corners resize both axes.
 - Right-click pane body for context menu.
 - Mouse wheel scrolls host scrollback when the pane isn't actively using mouse reporting.
 - Hold Shift while scrolling for fine scroll (1 line/step). Hold Ctrl for page scroll.
-- Snap is on by default; hold alt to disable snap while dragging.
+- Snap is on by default; hold alt/option to disable snap while dragging.
 - Ghostty: set right-click to open the terminal context menu so the dashboard can intercept it.
+- Keyboard: peky enables the Kitty keyboard protocol (CSI-u) on startup for reliable Ctrl+Shift chords and full key fidelity (Ghostty/kitty/wezterm recommended).
 
 Other
-- ctrl+p command palette
-- f5 refresh, ctrl+, edit config, ctrl+f filter, ctrl+c quit
+- ctrl+shift+p command palette
+- f5 refresh, ctrl+shift+, edit config, ctrl+shift+f filter, ctrl+shift+q quit
+- Note: `ctrl+c` is sent to the selected pane (so terminal apps work normally).
 
 ## Daemon status (footer)
 
@@ -98,25 +95,31 @@ dashboard:
   pane_navigation_mode: spatial  # spatial | memory
   quit_behavior: prompt  # prompt | keep | stop
   keymap:
-    project_left: ["ctrl+q"]
-    project_right: ["ctrl+e"]
-    session_up: ["ctrl+w"]
-    session_down: ["ctrl+s"]
-    session_only_up: ["alt+w"]
-    session_only_down: ["alt+s"]
-    pane_next: ["ctrl+d"]
-    pane_prev: ["ctrl+a"]
-    terminal_focus: ["ctrl+k"]
-    resize_mode: ["ctrl+r"]
+    project_left: ["ctrl+shift+left"]
+    project_right: ["ctrl+shift+right"]
+    session_up: ["ctrl+shift+w"]
+    session_down: ["ctrl+shift+s"]
+    session_only_up: ["ctrl+shift+up"]
+    session_only_down: ["ctrl+shift+down"]
+    pane_next: ["ctrl+shift+d"]
+    pane_prev: ["ctrl+shift+a"]
+    toggle_last_pane: ["ctrl+shift+space"]
+    focus_action: ["ctrl+shift+/"]
+    hard_raw: ["ctrl+shift+k"]
+    resize_mode: ["ctrl+shift+r"]
     scrollback: ["f7"]
     copy_mode: ["f8"]
-    toggle_panes: ["ctrl+u"]
-    toggle_sidebar: ["ctrl+b"]
-    close_project: ["alt+c"]
-    command_palette: ["ctrl+p"]
-    edit_config: ["ctrl+," ]
-    help: ["ctrl+g"]
-    quit: ["ctrl+c"]
+    toggle_panes: ["ctrl+shift+]"]
+    toggle_sidebar: ["ctrl+shift+b"]
+    close_project: ["ctrl+shift+c"]
+    command_palette: ["ctrl+shift+p"]
+    edit_config: ["ctrl+shift+,"]
+    help: ["ctrl+shift+g"]
+    quit: ["ctrl+shift+q"]
+    filter: ["ctrl+shift+f"]
+    open_project: ["ctrl+shift+o"]
+    new_session: ["ctrl+shift+n"]
+    kill: ["ctrl+shift+x"]
   status_regex:
     success: "(?i)done|finished|success|completed"
     error: "(?i)error|failed|panic"

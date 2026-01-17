@@ -116,3 +116,55 @@ func TestViewFrameHidesCursorInScrollback(t *testing.T) {
 		t.Fatalf("expected cursor hidden in scrollback")
 	}
 }
+
+func TestRefreshFrameCacheSignalsWhenSettled(t *testing.T) {
+	emu := &fakeEmu{
+		cols:   2,
+		rows:   1,
+		screen: [][]uv.Cell{mkCellsLine("OK", 2)},
+	}
+	w := &Window{
+		term:    emu,
+		cols:    2,
+		rows:    1,
+		updates: make(chan struct{}, 1),
+	}
+	w.TouchFrameDemand(0)
+
+	w.cacheMu.Lock()
+	w.cacheDirty = true
+	w.cacheMu.Unlock()
+	w.updateSeq.Store(10)
+
+	w.refreshFrameCache()
+
+	select {
+	case <-w.updates:
+	default:
+		t.Fatalf("expected updates signal when cache settles")
+	}
+}
+
+func TestRefreshFrameCacheDoesNotSignalWhenAlreadyClean(t *testing.T) {
+	emu := &fakeEmu{
+		cols:   2,
+		rows:   1,
+		screen: [][]uv.Cell{mkCellsLine("OK", 2)},
+	}
+	w := &Window{
+		term:    emu,
+		cols:    2,
+		rows:    1,
+		updates: make(chan struct{}, 1),
+	}
+	w.TouchFrameDemand(0)
+	w.updateSeq.Store(10)
+
+	w.refreshFrameCache()
+
+	select {
+	case <-w.updates:
+		t.Fatalf("unexpected updates signal for clean cache")
+	default:
+	}
+}

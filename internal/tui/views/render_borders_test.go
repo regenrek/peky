@@ -24,7 +24,7 @@ func TestPadLinesKeepsRightBorderForDashboardPaneTiles(t *testing.T) {
 		},
 	}
 
-	tile := renderDashboardPaneTile(pane, width, height, 2, false, false, paneIconContext{})
+	tile := renderDashboardPaneTile(pane, width, height, 2, false, paneIconContext{})
 	out := padLines(tile, width, height)
 
 	tileStripped := ansi.Strip(tile)

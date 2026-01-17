@@ -244,20 +244,17 @@ func (m Model) viewHelp() string {
 	left.WriteString(fmt.Sprintf("  %s New session (pick layout)\n", m.Keys.NewSession))
 	left.WriteString(fmt.Sprintf("  %s Close session\n", m.Keys.KillSession))
 	left.WriteString("\nPane\n")
-	left.WriteString("  type  Send to panes (terminal focus off)\n")
-	left.WriteString("  enter Send input\n")
-	left.WriteString("  esc   Clear input\n")
-	left.WriteString("  up/down Input history\n")
-	left.WriteString("  /     Slash commands (↑/↓ select, tab complete)\n")
-	left.WriteString(fmt.Sprintf("  %s Toggle terminal focus (peky sessions)\n", m.Keys.TerminalFocus))
+	left.WriteString("  type  Send input to selected pane (default)\n")
+	left.WriteString(fmt.Sprintf("  %s Toggle last pane\n", m.Keys.ToggleLastPane))
+	left.WriteString(fmt.Sprintf("  %s Focus action line\n", m.Keys.FocusAction))
+	left.WriteString(fmt.Sprintf("  %s Toggle HARD RAW\n", m.Keys.HardRaw))
 	if m.Keys.ResizeMode != "" {
 		left.WriteString(fmt.Sprintf("  %s Resize mode\n", m.Keys.ResizeMode))
 	}
 	left.WriteString(fmt.Sprintf("  %s Scrollback mode (peky sessions)\n", m.Keys.Scrollback))
 	left.WriteString(fmt.Sprintf("  %s Copy mode (peky sessions)\n", m.Keys.CopyMode))
 	left.WriteString("  mouse Wheel scrollback (shift=1, ctrl=page)\n")
-	left.WriteString("  mouse Drag select (terminal focus)\n")
-	left.WriteString("  type  Send input to focused pane\n")
+	left.WriteString("  mouse Drag select (HARD RAW)\n")
 
 	var right strings.Builder
 	right.WriteString("Pane List\n")

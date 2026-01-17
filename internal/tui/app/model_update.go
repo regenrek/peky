@@ -9,6 +9,7 @@ import (
 
 	"github.com/regenrek/peakypanes/internal/logging"
 	"github.com/regenrek/peakypanes/internal/sessiond"
+	tuiinput "github.com/regenrek/peakypanes/internal/tui/input"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -39,6 +40,32 @@ func (m *Model) handleUpdateMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		if keyMsg.String() == "esc" && m.pekyBusy {
 			m.cancelPekyRun()
 		}
+	}
+	if keyMsg, ok := msg.(tuiinput.KeyMsg); ok {
+		if keyMsg.Tea().String() == "esc" && m.pekyBusy {
+			m.cancelPekyRun()
+		}
+		if m.keys != nil {
+			switch {
+			case matchesBinding(keyMsg, m.keys.help):
+				m.setState(StateHelp)
+				return m, nil, true
+			case matchesBinding(keyMsg, m.keys.quit):
+				return m, m.requestQuit(), true
+			case matchesBinding(keyMsg, m.keys.commandPalette):
+				return m, m.openCommandPalette(), true
+			case matchesBinding(keyMsg, m.keys.refresh):
+				m.setToast("Refreshing...", toastInfo)
+				return m, m.requestRefreshCmd(), true
+			case matchesBinding(keyMsg, m.keys.editConfig):
+				return m, m.editConfig(), true
+			}
+		}
+		if m.state == StateDashboard {
+			model, cmd := m.updateDashboardInput(keyMsg)
+			return model, cmd, true
+		}
+		return m.handleKeyMsg(keyMsg.Tea())
 	}
 	if handler, ok := updateHandlers[reflect.TypeOf(msg)]; ok {
 		model, cmd := handler(m, msg)
@@ -174,9 +201,6 @@ var updateHandlers = map[reflect.Type]updateHandler{
 	},
 	reflect.TypeOf(quickReplySendMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleQuickReplySend(msg.(quickReplySendMsg))
-	},
-	reflect.TypeOf(quickReplyStreamFlushMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
-		return m, m.handleQuickReplyStreamFlush(msg.(quickReplyStreamFlushMsg))
 	},
 	reflect.TypeOf(pekyResultMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handlePekyResult(msg.(pekyResultMsg))

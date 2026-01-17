@@ -39,7 +39,7 @@ func (m *Model) handleContextMenuMouse(msg tea.MouseMsg) (tea.Cmd, bool) {
 	if m == nil || m.state != StateDashboard || m.tab != TabProject {
 		return nil, false
 	}
-	if m.terminalFocus {
+	if m.hardRaw {
 		return nil, false
 	}
 	if m.contextMenu.open {

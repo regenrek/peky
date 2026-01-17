@@ -55,7 +55,7 @@ func slashInputForSuggestions(input string) slashInputContext {
 }
 
 func (m *Model) slashSuggestions() []quickReplySuggestion {
-	if m == nil || m.state != StateDashboard || m.filterActive || m.terminalFocus {
+	if m == nil || m.state != StateDashboard || m.filterActive || m.hardRaw || !m.quickReplyInput.Focused() {
 		return nil
 	}
 	ctx := slashInputForSuggestions(m.quickReplyInput.Value())

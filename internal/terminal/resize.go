@@ -1,9 +1,13 @@
 package terminal
 
 import (
+	"context"
 	"errors"
+	"log/slog"
+	"time"
 
 	"github.com/regenrek/peakypanes/internal/limits"
+	"github.com/regenrek/peakypanes/internal/logging"
 )
 
 // Resize resizes both the VT and PTY (PTY resize is best-effort).
@@ -34,7 +38,21 @@ func (w *Window) Resize(cols, rows int) error {
 	pty := w.pty
 	w.ptyMu.Unlock()
 	if pty != nil {
-		_ = pty.Resize(cols, rows)
+		if err := pty.Resize(cols, rows); err != nil {
+			logging.LogEvery(
+				context.Background(),
+				"terminal.pty.resize",
+				2*time.Second,
+				slog.LevelDebug,
+				"terminal: pty resize failed",
+				slog.Any("err", err),
+				slog.Int("cols", cols),
+				slog.Int("rows", rows),
+			)
+		} else {
+			setPTYSlaveWinsizeBestEffort(pty, cols, rows)
+			signalWINCHForPTY(w.PID(), pty)
+		}
 	}
 
 	w.clampViewState()

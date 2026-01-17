@@ -180,9 +180,8 @@ ghostty:
 #     - daemon
 #     - daemon.*
 
-# Quick reply settings (for @file picker)
+# Action line settings (quick reply; for @file picker)
 # quick_reply:
-#   stream_to_pane: false
 #   files:
 #     show_hidden: false
 #     max_depth: 4

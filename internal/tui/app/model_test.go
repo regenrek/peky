@@ -4,8 +4,10 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
+	uv "github.com/charmbracelet/ultraviolet"
+
 	"github.com/regenrek/peakypanes/internal/layout"
+	tuiinput "github.com/regenrek/peakypanes/internal/tui/input"
 	"github.com/regenrek/peakypanes/internal/userpath"
 )
 
@@ -107,26 +109,27 @@ func TestKeyBindings(t *testing.T) {
 
 	cases := []struct {
 		name    string
-		msg     tea.KeyMsg
+		msg     tuiinput.KeyMsg
 		binding key.Binding
 	}{
-		{name: "projectLeft", msg: tea.KeyMsg{Type: tea.KeyCtrlQ}, binding: km.projectLeft},
-		{name: "projectRight", msg: tea.KeyMsg{Type: tea.KeyCtrlE}, binding: km.projectRight},
-		{name: "sessionUp", msg: tea.KeyMsg{Type: tea.KeyCtrlW}, binding: km.sessionUp},
-		{name: "sessionDown", msg: tea.KeyMsg{Type: tea.KeyCtrlS}, binding: km.sessionDown},
-		{name: "attach", msg: tea.KeyMsg{Type: tea.KeyEnter}, binding: km.attach},
-		{name: "paneNext", msg: tea.KeyMsg{Type: tea.KeyCtrlD}, binding: km.paneNext},
-		{name: "panePrev", msg: tea.KeyMsg{Type: tea.KeyCtrlA}, binding: km.panePrev},
-		{name: "togglePanes", msg: tea.KeyMsg{Type: tea.KeyCtrlU}, binding: km.togglePanes},
-		{name: "toggleSidebar", msg: tea.KeyMsg{Type: tea.KeyCtrlB}, binding: km.toggleSidebar},
-		{name: "closeProject", msg: tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}, Alt: true}, binding: km.closeProject},
-		{name: "help", msg: tea.KeyMsg{Type: tea.KeyCtrlG}, binding: km.help},
-		{name: "quit", msg: tea.KeyMsg{Type: tea.KeyCtrlC}, binding: km.quit},
-		{name: "resizeMode", msg: tea.KeyMsg{Type: tea.KeyCtrlR}, binding: km.resizeMode},
-		{name: "refresh", msg: tea.KeyMsg{Type: tea.KeyF5}, binding: km.refresh},
+		{name: "projectLeft", msg: tuiinput.KeyMsg{Key: uv.Key{Code: uv.KeyLeft, Mod: uv.ModCtrl | uv.ModShift}}, binding: km.projectLeft},
+		{name: "projectRight", msg: tuiinput.KeyMsg{Key: uv.Key{Code: uv.KeyRight, Mod: uv.ModCtrl | uv.ModShift}}, binding: km.projectRight},
+		{name: "sessionUp", msg: tuiinput.KeyMsg{Key: uv.Key{Code: 'w', Mod: uv.ModCtrl | uv.ModShift}}, binding: km.sessionUp},
+		{name: "sessionDown", msg: tuiinput.KeyMsg{Key: uv.Key{Code: 's', Mod: uv.ModCtrl | uv.ModShift}}, binding: km.sessionDown},
+		{name: "attach", msg: tuiinput.KeyMsg{Key: uv.Key{Code: uv.KeyEnter}}, binding: km.attach},
+		{name: "paneNext", msg: tuiinput.KeyMsg{Key: uv.Key{Code: 'd', Mod: uv.ModCtrl | uv.ModShift}}, binding: km.paneNext},
+		{name: "panePrev", msg: tuiinput.KeyMsg{Key: uv.Key{Code: 'a', Mod: uv.ModCtrl | uv.ModShift}}, binding: km.panePrev},
+		{name: "toggleLastPane", msg: tuiinput.KeyMsg{Key: uv.Key{Code: uv.KeySpace, Mod: uv.ModCtrl | uv.ModShift}}, binding: km.toggleLastPane},
+		{name: "togglePanes", msg: tuiinput.KeyMsg{Key: uv.Key{Code: ']', Mod: uv.ModCtrl | uv.ModShift}}, binding: km.togglePanes},
+		{name: "toggleSidebar", msg: tuiinput.KeyMsg{Key: uv.Key{Code: 'b', Mod: uv.ModCtrl | uv.ModShift}}, binding: km.toggleSidebar},
+		{name: "closeProject", msg: tuiinput.KeyMsg{Key: uv.Key{Code: 'c', Mod: uv.ModCtrl | uv.ModShift}}, binding: km.closeProject},
+		{name: "help", msg: tuiinput.KeyMsg{Key: uv.Key{Code: 'g', Mod: uv.ModCtrl | uv.ModShift}}, binding: km.help},
+		{name: "quit", msg: tuiinput.KeyMsg{Key: uv.Key{Code: 'q', Mod: uv.ModCtrl | uv.ModShift}}, binding: km.quit},
+		{name: "resizeMode", msg: tuiinput.KeyMsg{Key: uv.Key{Code: 'r', Mod: uv.ModCtrl | uv.ModShift}}, binding: km.resizeMode},
+		{name: "refresh", msg: tuiinput.KeyMsg{Key: uv.Key{Code: uv.KeyF5}}, binding: km.refresh},
 	}
 	for _, c := range cases {
-		if !key.Matches(c.msg, c.binding) {
+		if !matchesBinding(c.msg, c.binding) {
 			t.Errorf("%s binding did not match %#v", c.name, c.msg)
 		}
 	}

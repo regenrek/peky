@@ -22,9 +22,6 @@ func TestMouseHelpersAndForwarding(t *testing.T) {
 		},
 		Content: mouse.Rect{X: 0, Y: 0, W: 10, H: 5},
 	}
-	if !m.hitIsSelected(hit) {
-		t.Fatalf("expected hit to be selected")
-	}
 
 	changed := m.applySelectionFromHit(mouse.Selection{ProjectID: projectKey("/beta", "Beta"), Session: "beta-1", Pane: "1"})
 	if !changed || m.selection.ProjectID != projectKey("/beta", "Beta") {
@@ -32,7 +29,7 @@ func TestMouseHelpersAndForwarding(t *testing.T) {
 	}
 
 	m.client = &sessiond.Client{}
-	m.terminalFocus = true
+	m.hardRaw = true
 	m.paneMouseMotion["p4"] = true
 	if !m.allowMouseMotion() {
 		t.Fatalf("expected mouse motion allowed")
@@ -56,12 +53,11 @@ func TestPaneViewHelpers(t *testing.T) {
 	hit := mouse.PaneHit{PaneID: "p1", Content: mouse.Rect{X: 0, Y: 0, W: 12, H: 6}}
 
 	req := m.paneViewRequestForHit(hit)
-	if req == nil || req.Priority != sessiond.PaneViewPriorityNormal {
-		t.Fatalf("expected normal pane view request")
+	if req == nil || req.Priority != sessiond.PaneViewPriorityFocused {
+		t.Fatalf("expected focused pane view request")
 	}
 
 	m.client = &sessiond.Client{}
-	m.terminalFocus = true
 	req = m.paneViewRequestForHit(hit)
 	if req == nil || req.Priority != sessiond.PaneViewPriorityFocused {
 		t.Fatalf("expected focused pane view request")

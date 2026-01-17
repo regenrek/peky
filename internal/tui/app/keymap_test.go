@@ -55,10 +55,10 @@ func TestBuildDashboardKeyMapDuplicateKey(t *testing.T) {
 }
 
 func TestNormalizeKeyStringAndLabels(t *testing.T) {
-	if got, _ := normalizeKeyString("space"); got != " " {
+	if got, _ := normalizeKeyString("space"); got != "space" {
 		t.Fatalf("expected space normalization, got %q", got)
 	}
-	if got, _ := normalizeKeyString("alt+space"); got != "alt+ " {
+	if got, _ := normalizeKeyString("alt+space"); got != "alt+space" {
 		t.Fatalf("expected alt space normalization, got %q", got)
 	}
 	if _, err := normalizeKeyString(""); err == nil {

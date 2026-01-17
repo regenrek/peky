@@ -345,12 +345,15 @@ func (m *Model) openQuickReply() tea.Cmd {
 		m.setToast("No pane selected", toastWarning)
 		return nil
 	}
-	m.setTerminalFocus(false)
+	cmd := m.setHardRaw(false)
 	m.quickReplyInput.SetValue("")
 	m.quickReplyInput.Focus()
 	m.resetQuickReplyHistory()
 	m.resetQuickReplyMenu()
-	return m.refreshPaneViewsCmd()
+	if cmd == nil {
+		return m.refreshPaneViewsCmd()
+	}
+	return tea.Batch(cmd, m.refreshPaneViewsCmd())
 }
 
 func (m *Model) sendQuickReply() tea.Cmd {

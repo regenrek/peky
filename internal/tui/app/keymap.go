@@ -25,58 +25,72 @@ func buildDashboardKeyMap(cfg layout.DashboardKeymapConfig) (*dashboardKeyMap, e
 		{
 			name:     "project_left",
 			desc:     "project",
-			defaults: []string{"ctrl+q"},
+			defaults: []string{"ctrl+shift+left"},
 			override: cfg.ProjectLeft,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.projectLeft = b },
 		},
 		{
 			name:     "project_right",
 			desc:     "project",
-			defaults: []string{"ctrl+e"},
+			defaults: []string{"ctrl+shift+right"},
 			override: cfg.ProjectRight,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.projectRight = b },
 		},
 		{
 			name:     "session_up",
 			desc:     "session",
-			defaults: []string{"ctrl+w"},
+			defaults: []string{"ctrl+shift+w"},
 			override: cfg.SessionUp,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.sessionUp = b },
 		},
 		{
 			name:     "session_down",
 			desc:     "session",
-			defaults: []string{"ctrl+s"},
+			defaults: []string{"ctrl+shift+s"},
 			override: cfg.SessionDown,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.sessionDown = b },
 		},
 		{
 			name:     "session_only_up",
 			desc:     "session (skip panes)",
-			defaults: []string{"alt+w"},
+			defaults: []string{"ctrl+shift+up"},
 			override: cfg.SessionOnlyUp,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.sessionOnlyUp = b },
 		},
 		{
 			name:     "session_only_down",
 			desc:     "session (skip panes)",
-			defaults: []string{"alt+s"},
+			defaults: []string{"ctrl+shift+down"},
 			override: cfg.SessionOnlyDown,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.sessionOnlyDown = b },
 		},
 		{
 			name:     "pane_next",
 			desc:     "pane",
-			defaults: []string{"ctrl+d"},
+			defaults: []string{"ctrl+shift+d"},
 			override: cfg.PaneNext,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.paneNext = b },
 		},
 		{
 			name:     "pane_prev",
 			desc:     "pane",
-			defaults: []string{"ctrl+a"},
+			defaults: []string{"ctrl+shift+a"},
 			override: cfg.PanePrev,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.panePrev = b },
+		},
+		{
+			name:     "toggle_last_pane",
+			desc:     "last pane",
+			defaults: []string{"ctrl+shift+space"},
+			override: cfg.ToggleLastPane,
+			assign:   func(m *dashboardKeyMap, b key.Binding) { m.toggleLastPane = b },
+		},
+		{
+			name:     "focus_action",
+			desc:     "action",
+			defaults: []string{"ctrl+shift+/"},
+			override: cfg.FocusAction,
+			assign:   func(m *dashboardKeyMap, b key.Binding) { m.focusAction = b },
 		},
 		{
 			name:     "attach",
@@ -88,49 +102,49 @@ func buildDashboardKeyMap(cfg layout.DashboardKeymapConfig) (*dashboardKeyMap, e
 		{
 			name:     "new_session",
 			desc:     "new session",
-			defaults: []string{"ctrl+n"},
+			defaults: []string{"ctrl+shift+n"},
 			override: cfg.NewSession,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.newSession = b },
 		},
 		{
-			name:     "terminal_focus",
-			desc:     "terminal focus",
-			defaults: []string{"ctrl+k"},
-			override: cfg.TerminalFocus,
-			assign:   func(m *dashboardKeyMap, b key.Binding) { m.terminalFocus = b },
+			name:     "hard_raw",
+			desc:     "raw",
+			defaults: []string{"ctrl+shift+k"},
+			override: cfg.HardRaw,
+			assign:   func(m *dashboardKeyMap, b key.Binding) { m.hardRaw = b },
 		},
 		{
 			name:     "resize_mode",
 			desc:     "resize mode",
-			defaults: []string{"ctrl+r"},
+			defaults: []string{"ctrl+shift+r"},
 			override: cfg.ResizeMode,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.resizeMode = b },
 		},
 		{
 			name:     "toggle_panes",
 			desc:     "panes",
-			defaults: []string{"ctrl+u"},
+			defaults: []string{"ctrl+shift+]"},
 			override: cfg.TogglePanes,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.togglePanes = b },
 		},
 		{
 			name:     "toggle_sidebar",
 			desc:     "sidebar",
-			defaults: []string{"ctrl+b"},
+			defaults: []string{"ctrl+shift+b"},
 			override: cfg.ToggleSidebar,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.toggleSidebar = b },
 		},
 		{
 			name:     "open_project",
 			desc:     "open project",
-			defaults: []string{"ctrl+o"},
+			defaults: []string{"ctrl+shift+o"},
 			override: cfg.OpenProject,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.openProject = b },
 		},
 		{
 			name:     "command_palette",
 			desc:     "commands",
-			defaults: []string{"ctrl+p"},
+			defaults: []string{"ctrl+shift+p"},
 			override: cfg.CommandPalette,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.commandPalette = b },
 		},
@@ -144,42 +158,42 @@ func buildDashboardKeyMap(cfg layout.DashboardKeymapConfig) (*dashboardKeyMap, e
 		{
 			name:     "edit_config",
 			desc:     "edit config",
-			defaults: []string{"ctrl+,"},
+			defaults: []string{"ctrl+shift+,"},
 			override: cfg.EditConfig,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.editConfig = b },
 		},
 		{
 			name:     "kill",
 			desc:     "close session",
-			defaults: []string{"ctrl+x"},
+			defaults: []string{"ctrl+shift+x"},
 			override: cfg.Kill,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.kill = b },
 		},
 		{
 			name:     "close_project",
 			desc:     "close project",
-			defaults: []string{"alt+c"},
+			defaults: []string{"ctrl+shift+c"},
 			override: cfg.CloseProject,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.closeProject = b },
 		},
 		{
 			name:     "help",
 			desc:     "help",
-			defaults: []string{"ctrl+g"},
+			defaults: []string{"ctrl+shift+g"},
 			override: cfg.Help,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.help = b },
 		},
 		{
 			name:     "quit",
 			desc:     "quit",
-			defaults: []string{"ctrl+c"},
+			defaults: []string{"ctrl+shift+q"},
 			override: cfg.Quit,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.quit = b },
 		},
 		{
 			name:     "filter",
 			desc:     "filter",
-			defaults: []string{"ctrl+f"},
+			defaults: []string{"ctrl+shift+f"},
 			override: cfg.Filter,
 			assign:   func(m *dashboardKeyMap, b key.Binding) { m.filter = b },
 		},
@@ -252,35 +266,78 @@ func normalizeKeyString(raw string) (string, error) {
 	if value == "" {
 		return "", fmt.Errorf("invalid key %q (empty)", raw)
 	}
-	if strings.EqualFold(value, "space") {
-		return " ", nil
-	}
-	lower := strings.ToLower(value)
-	if strings.HasPrefix(lower, "alt+") {
-		base := strings.TrimSpace(value[4:])
-		if base == "" {
-			return "", fmt.Errorf("invalid key %q (missing base key)", raw)
-		}
-		if strings.EqualFold(base, "space") {
-			base = " "
-		}
-		if isSingleRune(base) {
-			return "alt+" + base, nil
-		}
-		baseLower := strings.ToLower(base)
-		if isSupportedKeyName(baseLower) {
-			return "alt+" + baseLower, nil
-		}
+
+	parts := strings.Split(value, "+")
+	if len(parts) == 0 {
 		return "", invalidKeyError(raw)
 	}
 
-	if isSingleRune(value) {
-		return value, nil
+	baseRaw := strings.TrimSpace(parts[len(parts)-1])
+	if baseRaw == "" {
+		return "", fmt.Errorf("invalid key %q (missing base key)", raw)
 	}
-	if isSupportedKeyName(lower) {
-		return lower, nil
+	baseLower := strings.ToLower(baseRaw)
+	if baseLower == " " || baseLower == "space" {
+		baseLower = "space"
+		baseRaw = "space"
 	}
-	return "", invalidKeyError(raw)
+
+	var (
+		modCtrl  bool
+		modAlt   bool
+		modShift bool
+		modMeta  bool
+	)
+	for _, modRaw := range parts[:len(parts)-1] {
+		mod := strings.ToLower(strings.TrimSpace(modRaw))
+		if mod == "" {
+			continue
+		}
+		switch mod {
+		case "ctrl", "control":
+			modCtrl = true
+		case "alt", "option":
+			modAlt = true
+		case "shift":
+			modShift = true
+		case "meta", "cmd", "command", "super":
+			modMeta = true
+		default:
+			return "", invalidKeyError(raw)
+		}
+	}
+
+	if isSingleRune(baseRaw) {
+		r, _ := utf8.DecodeRuneInString(baseRaw)
+		if r >= 'A' && r <= 'Z' {
+			modShift = true
+			baseRaw = strings.ToLower(baseRaw)
+		}
+	} else if isSupportedKeyName(baseLower) {
+		baseRaw = baseLower
+	} else {
+		return "", invalidKeyError(raw)
+	}
+
+	var out []string
+	if modCtrl {
+		out = append(out, "ctrl")
+	}
+	if modAlt {
+		out = append(out, "alt")
+	}
+	if modShift {
+		out = append(out, "shift")
+	}
+	if modMeta {
+		out = append(out, "meta")
+	}
+	out = append(out, baseRaw)
+
+	if len(out) == 1 {
+		return out[0], nil
+	}
+	return strings.Join(out, "+"), nil
 }
 
 func isSingleRune(value string) bool {
@@ -296,7 +353,7 @@ func isSingleRune(value string) bool {
 
 func invalidKeyError(raw string) error {
 	return fmt.Errorf(
-		"invalid key %q (use a single character like \"k\", or named keys like \"tab\", \"shift+tab\", \"enter\", \"esc\", \"up\", \"ctrl+a\", \"alt+k\")",
+		"invalid key %q (use a single character like \"k\", combos like \"ctrl+shift+w\", or named keys like \"tab\", \"enter\", \"esc\", \"up\", \"space\")",
 		raw,
 	)
 }
@@ -316,7 +373,7 @@ func prettyKeyLabel(key string) string {
 	switch key {
 	case "shift+tab":
 		return "⇧tab"
-	case " ":
+	case "space":
 		return "space"
 	default:
 		return key
@@ -334,6 +391,7 @@ var supportedSpecialKeys = func() map[string]struct{} {
 		"shift+tab":        {},
 		"enter":            {},
 		"esc":              {},
+		"space":            {},
 		"backspace":        {},
 		"delete":           {},
 		"insert":           {},

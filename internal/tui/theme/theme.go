@@ -131,10 +131,6 @@ var DialogChoiceKey = lipgloss.NewStyle().
 var DialogChoiceSep = lipgloss.NewStyle().
 	Foreground(DialogLabelColor)
 
-// TerminalFocusHint highlights terminal focus status in the footer.
-var TerminalFocusHint = lipgloss.NewStyle().
-	Foreground(AccentFocus)
-
 // ===== List Delegate Styles =====
 
 // ListSelectedTitle for selected items in lists

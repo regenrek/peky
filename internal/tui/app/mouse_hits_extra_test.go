@@ -53,10 +53,6 @@ func TestPaneViewRequestsAndLookup(t *testing.T) {
 	m.tab = TabProject
 	m.selection = selectionState{ProjectID: projectKey("/alpha", "Alpha"), Session: "alpha-1", Pane: "1"}
 
-	reqs := m.paneViewRequests()
-	if len(reqs) == 0 {
-		t.Fatalf("expected pane view requests")
-	}
 	hit, ok := m.paneHitFor("p1")
 	if !ok {
 		t.Fatalf("expected pane hit for p1")
@@ -74,17 +70,5 @@ func TestPaneViewRequestsAndLookup(t *testing.T) {
 	m.paneViews[key] = paneViewEntry{rendered: map[bool]string{false: "view"}}
 	if got := m.paneView("p1", req.Cols, req.Rows, false); got != "view" {
 		t.Fatalf("expected pane view lookup, got %q", got)
-	}
-}
-
-func TestPaneViewRequestsGuardSnapshotEmpty(t *testing.T) {
-	m := newTestModelLite()
-	m.state = StateDashboard
-	m.tab = TabDashboard
-	m.data.Projects = nil
-
-	reqs := m.paneViewRequests()
-	if len(reqs) != 0 {
-		t.Fatalf("expected no pane view requests when snapshot data is empty")
 	}
 }

@@ -118,12 +118,8 @@ Use this for personal layouts and multi-project management:
 #     - daemon.*
 #     - pane.send
 
-# Quick reply settings (for @file picker)
+# Action line settings (quick reply; for @file picker)
 # quick_reply:
-#   # If true, keystrokes typed into the quick reply input are streamed to the
-#   # selected pane (safe subset: text, backspace/delete; enter sends newline).
-#   # Slash commands ("/...") are never streamed.
-#   stream_to_pane: false
 #   files:
 #     show_hidden: false
 #     max_depth: 4
