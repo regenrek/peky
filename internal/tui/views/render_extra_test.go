@@ -242,17 +242,20 @@ func TestFooterRendersServerStatus(t *testing.T) {
 		QuickReplyInput:          textinput.New(),
 	}
 
-	out := Render(m)
-	lines := strings.Split(out, "\n")
-	footer := ""
-	for i := len(lines) - 1; i >= 0; i-- {
-		if strings.Contains(lines[i], "quit") {
-			footer = lines[i]
-			break
+	footerLine := func(out string) string {
+		lines := strings.Split(out, "\n")
+		for i := len(lines) - 1; i >= 0; i-- {
+			if strings.TrimSpace(ansi.Strip(lines[i])) != "" {
+				return lines[i]
+			}
 		}
+		return ""
 	}
+
+	out := Render(m)
+	footer := footerLine(out)
 	if footer == "" {
-		t.Fatalf("expected footer line containing quit")
+		t.Fatalf("expected footer line")
 	}
 	plain := strings.TrimRight(ansi.Strip(footer), " ")
 	if !strings.HasSuffix(plain, "up") {
@@ -261,16 +264,9 @@ func TestFooterRendersServerStatus(t *testing.T) {
 
 	m.ServerStatus = "down"
 	out = Render(m)
-	lines = strings.Split(out, "\n")
-	footer = ""
-	for i := len(lines) - 1; i >= 0; i-- {
-		if strings.Contains(lines[i], "quit") {
-			footer = lines[i]
-			break
-		}
-	}
+	footer = footerLine(out)
 	if footer == "" {
-		t.Fatalf("expected footer line containing quit")
+		t.Fatalf("expected footer line")
 	}
 	plain = strings.TrimRight(ansi.Strip(footer), " ")
 	if !strings.HasSuffix(plain, "down") {
@@ -279,16 +275,9 @@ func TestFooterRendersServerStatus(t *testing.T) {
 
 	m.ServerStatus = "restored"
 	out = Render(m)
-	lines = strings.Split(out, "\n")
-	footer = ""
-	for i := len(lines) - 1; i >= 0; i-- {
-		if strings.Contains(lines[i], "quit") {
-			footer = lines[i]
-			break
-		}
-	}
+	footer = footerLine(out)
 	if footer == "" {
-		t.Fatalf("expected footer line containing quit")
+		t.Fatalf("expected footer line")
 	}
 	plain = strings.TrimRight(ansi.Strip(footer), " ")
 	if !strings.HasSuffix(plain, "restored") {

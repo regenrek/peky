@@ -9,22 +9,24 @@ import (
 )
 
 type fakeTerminalWindow struct {
-	altScreen      bool
-	copyMode       bool
-	copySelecting  bool
-	mouseSelection bool
-	scrollback     bool
-	scrollOffset   int
-	yankText       string
-	viewFrame      termframe.Frame
-	hasMouse       bool
-	allowMotion    bool
-	updateSeq      uint64
-	resizeCols     int
-	resizeRows     int
-	calls          map[string]int
-	lastCopyMoveX  int
-	lastCopyMoveY  int
+	altScreen       bool
+	copyMode        bool
+	copySelecting   bool
+	mouseSelection  bool
+	scrollback      bool
+	scrollOffset    int
+	yankText        string
+	viewFrame       termframe.Frame
+	hasMouse        bool
+	allowMotion     bool
+	updateSeq       uint64
+	frameCacheSeq   uint64
+	frameCacheDirty bool
+	resizeCols      int
+	resizeRows      int
+	calls           map[string]int
+	lastCopyMoveX   int
+	lastCopyMoveY   int
 }
 
 func (f *fakeTerminalWindow) record(name string) {
@@ -36,6 +38,12 @@ func (f *fakeTerminalWindow) record(name string) {
 
 func (f *fakeTerminalWindow) UpdateSeq() uint64 { return f.updateSeq }
 func (f *fakeTerminalWindow) FrameCacheSeq() uint64 {
+	if f.frameCacheDirty {
+		return 0
+	}
+	if f.frameCacheSeq != 0 {
+		return f.frameCacheSeq
+	}
 	return f.updateSeq
 }
 

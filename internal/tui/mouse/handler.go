@@ -1,44 +1,30 @@
 package mouse
 
-import (
-	"time"
-
-	tea "github.com/charmbracelet/bubbletea"
-)
-
-const doubleClickThreshold = 350 * time.Millisecond
+import tea "github.com/charmbracelet/bubbletea"
 
 // Handler tracks mouse click state and applies dashboard mouse logic.
 type Handler struct {
-	lastClickAt     time.Time
-	lastClickPaneID string
-	lastClickButton tea.MouseButton
-	dragActive      bool
-	dragHit         PaneHit
+	dragActive bool
+	dragHit    PaneHit
 }
 
 // DashboardCallbacks wires mouse handling into the app model.
 type DashboardCallbacks struct {
-	HitHeader             func(x, y int) (HeaderHit, bool)
-	HitPane               func(x, y int) (PaneHit, bool)
-	HitIsSelected         func(hit PaneHit) bool
-	ApplySelection        func(selection Selection) bool
-	SelectDashboardTab    func() bool
-	SelectProjectTab      func(projectID string) bool
-	OpenProjectPicker     func()
-	SetTerminalFocus      func(focus bool)
-	TerminalFocus         func() bool
-	SupportsTerminalFocus func() bool
-	SelectionCmd          func() tea.Cmd
-	SelectionRefreshCmd   func() tea.Cmd
-	RefreshPaneViewsCmd   func() tea.Cmd
-	ForwardMouseEvent     func(hit PaneHit, msg tea.MouseMsg) tea.Cmd
-	FocusUnavailable      func()
+	HitHeader           func(x, y int) (HeaderHit, bool)
+	HitPane             func(x, y int) (PaneHit, bool)
+	ApplySelection      func(selection Selection) bool
+	SelectDashboardTab  func() bool
+	SelectProjectTab    func(projectID string) bool
+	OpenProjectPicker   func()
+	SelectionCmd        func() tea.Cmd
+	SelectionRefreshCmd func() tea.Cmd
+	RefreshPaneViewsCmd func() tea.Cmd
+	ForwardMouseEvent   func(hit PaneHit, msg tea.MouseMsg) tea.Cmd
 }
 
 // UpdateDashboard handles mouse input while on the dashboard view.
 func (h *Handler) UpdateDashboard(msg tea.MouseMsg, cb DashboardCallbacks) tea.Cmd {
-	if cmd, handled := h.handleTerminalDrag(msg, cb); handled {
+	if cmd, handled := h.handleDrag(msg, cb); handled {
 		return cmd
 	}
 	if cmd, handled := h.handleHeaderClick(msg, cb); handled {
@@ -49,10 +35,6 @@ func (h *Handler) UpdateDashboard(msg tea.MouseMsg, cb DashboardCallbacks) tea.C
 	}
 	if cmd, handled := h.handlePanePressPassthrough(msg, cb); handled {
 		return cmd
-	}
-	if cb.TerminalFocus != nil && cb.TerminalFocus() {
-		hit, ok := cb.HitPane(msg.X, msg.Y)
-		return h.handleTerminalFocusMouse(msg, cb, hit, ok)
 	}
 	h.dragActive = false
 
@@ -75,9 +57,6 @@ func (h *Handler) handleHeaderClick(msg tea.MouseMsg, cb DashboardCallbacks) (te
 	if !ok {
 		return nil, false
 	}
-	if cb.TerminalFocus != nil && cb.TerminalFocus() {
-		cb.SetTerminalFocus(false)
-	}
 	switch hit.Kind {
 	case HeaderDashboard:
 		if cb.SelectDashboardTab != nil && cb.SelectDashboardTab() {
@@ -99,27 +78,7 @@ func (h *Handler) handleHeaderClick(msg tea.MouseMsg, cb DashboardCallbacks) (te
 	}
 }
 
-func (h *Handler) handleTerminalFocusMouse(msg tea.MouseMsg, cb DashboardCallbacks, hit PaneHit, ok bool) tea.Cmd {
-	if ok && cb.HitIsSelected(hit) && hit.Content.Contains(msg.X, msg.Y) {
-		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-			h.dragActive = true
-			h.dragHit = hit
-		}
-		return cb.ForwardMouseEvent(hit, msg)
-	}
-	if isPrimaryClick(msg) && ok && !cb.HitIsSelected(hit) {
-		cb.SetTerminalFocus(false)
-		changed := cb.ApplySelection(hit.Selection)
-		h.recordClick(hit, msg)
-		if changed {
-			return tea.Batch(cb.SelectionCmd(), cb.RefreshPaneViewsCmd())
-		}
-		return cb.RefreshPaneViewsCmd()
-	}
-	return nil
-}
-
-func (h *Handler) handleTerminalDrag(msg tea.MouseMsg, cb DashboardCallbacks) (tea.Cmd, bool) {
+func (h *Handler) handleDrag(msg tea.MouseMsg, cb DashboardCallbacks) (tea.Cmd, bool) {
 	if !h.dragActive {
 		return nil, false
 	}
@@ -151,9 +110,6 @@ func (h *Handler) handleWheel(msg tea.MouseMsg, cb DashboardCallbacks) tea.Cmd {
 }
 
 func (h *Handler) handlePanePressPassthrough(msg tea.MouseMsg, cb DashboardCallbacks) (tea.Cmd, bool) {
-	if cb.TerminalFocus != nil && cb.TerminalFocus() {
-		return nil, false
-	}
 	if !isPrimaryClick(msg) {
 		return nil, false
 	}
@@ -181,26 +137,6 @@ func (h *Handler) handlePanePressPassthrough(msg tea.MouseMsg, cb DashboardCallb
 }
 
 func (h *Handler) handlePaneClick(msg tea.MouseMsg, cb DashboardCallbacks, hit PaneHit) tea.Cmd {
-	if h.isDoubleClick(hit, msg) {
-		h.clearLastClick()
-		changed := cb.ApplySelection(hit.Selection)
-		if cb.SupportsTerminalFocus != nil && !cb.SupportsTerminalFocus() {
-			if cb.FocusUnavailable != nil {
-				cb.FocusUnavailable()
-			}
-			if changed {
-				return cb.SelectionCmd()
-			}
-			return nil
-		}
-		cb.SetTerminalFocus(true)
-		cmds := []tea.Cmd{cb.RefreshPaneViewsCmd()}
-		if changed {
-			cmds = append(cmds, cb.SelectionCmd())
-		}
-		return tea.Batch(cmds...)
-	}
-	h.recordClick(hit, msg)
 	if cb.ApplySelection(hit.Selection) {
 		return tea.Batch(cb.SelectionCmd(), cb.RefreshPaneViewsCmd())
 	}
@@ -218,34 +154,6 @@ func isWheelEvent(msg tea.MouseMsg) bool {
 	default:
 		return false
 	}
-}
-
-func (h *Handler) recordClick(hit PaneHit, msg tea.MouseMsg) {
-	h.lastClickAt = time.Now()
-	h.lastClickPaneID = hit.PaneID
-	h.lastClickButton = msg.Button
-}
-
-func (h *Handler) clearLastClick() {
-	h.lastClickAt = time.Time{}
-	h.lastClickPaneID = ""
-	h.lastClickButton = tea.MouseButtonNone
-}
-
-func (h *Handler) isDoubleClick(hit PaneHit, msg tea.MouseMsg) bool {
-	if hit.PaneID == "" {
-		return false
-	}
-	if h.lastClickPaneID != hit.PaneID {
-		return false
-	}
-	if h.lastClickButton != msg.Button {
-		return false
-	}
-	if time.Since(h.lastClickAt) > doubleClickThreshold {
-		return false
-	}
-	return true
 }
 
 func clampMouseMsg(msg tea.MouseMsg, rect Rect) tea.MouseMsg {

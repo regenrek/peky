@@ -117,7 +117,7 @@ func TestRenderDashboardPaneTileAndPreviewLines(t *testing.T) {
 		t.Fatalf("expected summary preview, got %#v", lines)
 	}
 
-	out := renderDashboardPaneTile(pane, 24, 6, 2, true, false, paneIconContext{set: icons.Active(), size: icons.ActiveSize()})
+	out := renderDashboardPaneTile(pane, 24, 6, 2, true, paneIconContext{set: icons.Active(), size: icons.ActiveSize()})
 	if !strings.Contains(out, "sess") && !strings.Contains(out, "vim") {
 		t.Fatalf("expected pane tile content, got %q", out)
 	}

@@ -1,0 +1,95 @@
+# Action Line + Terminal-First Input (Plan)
+
+Goal: keep current dashboard layout (already good). Clarify input model + labels. Make “Action Line” the control plane for orchestration. Make terminal the default destination for normal typing.
+
+Key shift (product intent)
+- UI remains “control plane” (targets/actions/context), but keyboard input is terminal-first by default (no “why can’t I type?” brainfuck).
+- Quick Reply becomes “Action Line” (renames/labels only; no big layout changes).
+
+## Input model (two states)
+
+Default state: Terminal-first “RAW” (Soft RAW)
+- Normal typing goes to selected pane.
+- UI intercept is limited to a reserved set of `Ctrl+Shift` chords + the Hard RAW toggle.
+- Action Line is still visible, but not stealing raw terminal editing keys like `Ctrl+A`/`Ctrl+E`/`Ctrl+U`.
+
+Hard RAW (pure terminal)
+- Toggle with `Ctrl+Shift+K`.
+- In Hard RAW: no UI intercept except `Ctrl+Shift+K` itself.
+- Purpose: vim/lazygit/fullscreen TUIs; zero surprises.
+
+Global “escape” rule
+- `Ctrl+Shift+K` is always reserved (even in Hard RAW) and toggles Hard RAW.
+- `Esc` is never reserved for UI (terminal needs it constantly).
+
+Status indicator (must be obvious)
+- Show `SOFT` vs `RAW` badge in footer, right next to where “restored” appears today.
+- Keep focus-pane highlight (green) as the “where input goes” anchor.
+
+## Keymap defaults (configurable)
+
+Change defaults (Mac)
+- Default to `Ctrl+Shift` chords for all dashboard UI actions.
+- Config remains override-able.
+
+Reserved set (V1)
+- Project nav: `Ctrl+Shift+A/D`
+- Session nav (incl panes): `Ctrl+Shift+W/S`
+- Session-only nav: `Ctrl+Shift+Up/Down`
+- Pane nav: `Ctrl+Shift+Left/Right`
+- Pane quick toggle: `Ctrl+Shift+Space` (toggle to last pane)
+- Focus action line: `Ctrl+Shift+/`
+- Hard RAW toggle: `Ctrl+Shift+K`
+
+## Action Line (control plane)
+
+Purpose
+- Orchestration actions: capture/handoff/broadcast/open/split/rename/etc.
+- Not a second shell. No promise of “full line editor mirroring.”
+
+Action line
+- Action Line should not block raw typing; it’s a control surface for slash/@ and pane orchestration.
+
+## Kitty keyboard protocol considerations
+
+Reality: `Ctrl+Shift+<letter>` is not representable via classic terminal key encodings (and Bubble Tea can’t distinguish it from `Ctrl+<letter>`).
+- Peky enables the Kitty keyboard protocol (CSI-u) on startup and decodes input via Ultraviolet for full-fidelity key events.
+- Supported terminals: Ghostty/kitty/WezTerm (recommended). Other terminals may not deliver distinct Ctrl+Shift chords.
+
+Upgrade path (V2)
+- (Already in V1) future work is capability detection + better user-facing errors if the terminal can’t supply needed key fidelity.
+
+## V1 (ship)
+
+1) Remove “terminal focus mode” concept
+   - Replace with the Soft RAW / Hard RAW model (Hard RAW via `Ctrl+Shift+K`).
+
+2) Key routing
+   - Default: send everything to pane.
+   - Intercept only reserved `Ctrl+Shift` chords + `Ctrl+Shift+K` (and only when not in Hard RAW).
+
+3) Keymap migration defaults
+   - Switch dashboard defaults to `Ctrl+Shift+…` (with config overrides).
+
+4) Status badge
+   - Footer shows `SOFT` vs `RAW` next to “restored”.
+
+5) Tests
+   - Routing: default-to-pane, reserved chords intercepted, no leakage in Hard RAW except `Ctrl+Shift+K`.
+   - Toggle: `Ctrl+Shift+K` works in both states.
+   - Optional: auto-detection guardrails if we decide on alt-screen behavior.
+
+6) Docs
+   - `docs/dashboard.md`: input model explanation (Soft RAW vs Hard RAW), reserved chords table.
+   - `docs/configuration.md`: keymap overrides + input model toggles (if any).
+   - Onboarding section: macOS Option/Meta behavior + how to configure terminal if needed.
+
+## V2 (defer / more complex)
+
+Alt-screen auto policy
+- Open decision: should Hard RAW auto-enable when a pane enters alt-screen (full-screen apps)?
+- If yes: needs detection + state transitions + robust integration tests.
+
+Terminal line mirroring (history up/down, prompt edits, multiline)
+- Only if we want Action Line to behave like a true line editor.
+- Requires a real terminal line model (PTY/readback) to keep Action Line in sync.

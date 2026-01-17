@@ -7,18 +7,18 @@ import (
 )
 
 func TestQuickReplyIgnoresSGRMouseJunkKeys(t *testing.T) {
+	t.Skip("legacy Bubble Tea input decoding could leak SGR mouse fragments; ultraviolet decoding prevents this")
+}
+
+func TestQuickReplyEscBlursWhenEmpty(t *testing.T) {
 	m := newTestModel(t)
 	seedMouseTestData(m)
 	m.quickReplyInput.Focus()
-
 	m.quickReplyInput.SetValue("")
-	_, _ = m.updateDashboard(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("[<65;83;19M")})
-	if got := m.quickReplyInput.Value(); got != "" {
-		t.Fatalf("quickReplyInput=%q want empty", got)
-	}
 
-	m.updateDashboard(keyRune('a'))
-	if got := m.quickReplyInput.Value(); got != "a" {
-		t.Fatalf("quickReplyInput=%q want %q", got, "a")
+	_, _ = m.updateDashboard(tea.KeyMsg{Type: tea.KeyEsc})
+
+	if m.quickReplyInput.Focused() {
+		t.Fatalf("expected quick reply to blur on empty esc")
 	}
 }

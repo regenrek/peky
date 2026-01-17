@@ -75,7 +75,7 @@ func TestResizeDragEscCancelsLayoutChange(t *testing.T) {
 	moveX := startX + 10
 	_, _ = m.handleResizeMouse(tea.MouseMsg{Action: tea.MouseActionMotion, X: moveX, Y: startY})
 
-	_, _ = m.handleResizeKey(tea.KeyMsg{Type: tea.KeyEsc})
+	_, _ = m.handleResizeKey(keyMsgFromTea(tea.KeyMsg{Type: tea.KeyEsc}))
 	if m.resize.drag.active {
 		t.Fatalf("expected resize drag canceled")
 	}

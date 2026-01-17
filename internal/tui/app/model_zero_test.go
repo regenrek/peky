@@ -66,12 +66,12 @@ func TestAttachOrStart(t *testing.T) {
 	}
 
 	m.data.Projects[0].Sessions[0].Status = StatusRunning
-	m.terminalFocus = false
+	m.hardRaw = false
 	if cmd := m.attachOrStart(); cmd != nil {
 		t.Fatalf("attachOrStart() for running session should not return cmd")
 	}
-	if m.terminalFocus {
-		t.Fatalf("attachOrStart() should not enable terminal focus")
+	if m.hardRaw {
+		t.Fatalf("attachOrStart() should not enable hard raw")
 	}
 }
 

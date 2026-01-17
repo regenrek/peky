@@ -52,7 +52,7 @@ func (m *Model) quickReplyModeLabel() string {
 		}
 		return "agent"
 	default:
-		return "quick reply"
+		return "action"
 	}
 }
 

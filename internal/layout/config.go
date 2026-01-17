@@ -141,9 +141,11 @@ type DashboardKeymapConfig struct {
 	SessionOnlyDown []string `yaml:"session_only_down,omitempty"`
 	PaneNext        []string `yaml:"pane_next,omitempty"`
 	PanePrev        []string `yaml:"pane_prev,omitempty"`
+	ToggleLastPane  []string `yaml:"toggle_last_pane,omitempty"`
+	FocusAction     []string `yaml:"focus_action,omitempty"`
 	Attach          []string `yaml:"attach,omitempty"`
 	NewSession      []string `yaml:"new_session,omitempty"`
-	TerminalFocus   []string `yaml:"terminal_focus,omitempty"`
+	HardRaw         []string `yaml:"hard_raw,omitempty"`
 	ResizeMode      []string `yaml:"resize_mode,omitempty"`
 	TogglePanes     []string `yaml:"toggle_panes,omitempty"`
 	ToggleSidebar   []string `yaml:"toggle_sidebar,omitempty"`

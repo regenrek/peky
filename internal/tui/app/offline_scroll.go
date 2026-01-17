@@ -3,19 +3,20 @@ package app
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+
+	tuiinput "github.com/regenrek/peakypanes/internal/tui/input"
 )
 
 const offlineScrollFallbackPage = 10
 const offlineScrollWheelLines = 3
 
-func (m *Model) handleOfflineScrollInput(msg tea.KeyMsg) (tea.Cmd, bool) {
+func (m *Model) handleOfflineScrollInput(msg tuiinput.KeyMsg) (tea.Cmd, bool) {
 	pane := m.selectedPane()
 	if pane == nil || !pane.Disconnected {
 		return nil, false
 	}
-	if key.Matches(msg, m.keys.scrollback) {
+	if matchesBinding(msg, m.keys.scrollback) {
 		if m.offlineScrollActiveFor(pane.ID) {
 			m.clearOfflineScroll()
 		} else {
@@ -27,7 +28,8 @@ func (m *Model) handleOfflineScrollInput(msg tea.KeyMsg) (tea.Cmd, bool) {
 	if !m.offlineScrollActiveFor(pane.ID) {
 		return nil, false
 	}
-	switch msg.String() {
+	teaMsg := msg.Tea()
+	switch teaMsg.String() {
 	case "esc", "q":
 		m.clearOfflineScroll()
 		return nil, true

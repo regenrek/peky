@@ -27,6 +27,9 @@ func paneViewEffectiveSeq(win paneViewWindow) uint64 {
 	if win == nil {
 		return 0
 	}
+	// Prefer the cached frame's seq. When the cache is dirty FrameCacheSeq returns
+	// 0, so fall back to UpdateSeq to keep the protocol monotonic and avoid
+	// request storms.
 	if seq := win.FrameCacheSeq(); seq != 0 {
 		return seq
 	}
@@ -440,29 +443,28 @@ func (d *Daemon) paneViewContext(client *clientConn, paneID string, req PaneView
 }
 
 func (d *Daemon) paneViewResponse(ctx context.Context, client *clientConn, paneID string, req PaneViewRequest) (PaneViewResponse, error) {
-	manager, err := d.requireManager()
+	win, offline, ok, err := d.paneViewWindow(paneID, req)
 	if err != nil {
 		return PaneViewResponse{}, err
 	}
-	win := manager.Window(paneID)
-	if win == nil {
-		if d.restore != nil {
-			if snap, ok := d.restore.Snapshot(paneID); ok {
-				return offlinePaneView(req, snap), nil
-			}
-		}
-		return PaneViewResponse{}, fmt.Errorf("sessiond: pane %q not found", paneID)
+	if ok {
+		return offline, nil
 	}
-	info := buildPaneViewRenderInfo(win, paneID, req)
 
-	if err := ctx.Err(); err != nil {
+	info := buildPaneViewRenderInfo(win, paneID, req)
+	if err := paneViewResize(ctx, win, info.cols, info.rows); err != nil {
 		return PaneViewResponse{}, err
 	}
-	if err := win.Resize(info.cols, info.rows); err != nil {
-		return PaneViewResponse{}, err
+
+	unstable := win.FrameCacheSeq() == 0
+	if unstable && req.Priority != PaneViewPriorityBackground {
+		info.renderReq.DirectRender = true
 	}
 
 	currentSeq, knownSeq := paneViewSeqs(win, req)
+	if unstable {
+		knownSeq = 0
+	}
 	if resp, ok := paneViewNotModified(win, paneID, info, currentSeq, knownSeq); ok {
 		return resp, nil
 	}
@@ -473,36 +475,13 @@ func (d *Daemon) paneViewResponse(ctx context.Context, client *clientConn, paneI
 		return resp, err
 	}
 
-	var frame termframe.Frame
-	perf := slog.Default().Enabled(context.Background(), slog.LevelDebug)
-	if perf {
-		start := time.Now()
-		frame, err = paneViewFrame(ctx, win, info.renderReq)
-		dur := time.Since(start)
-		if dur > paneViewSlowThreshold {
-			logging.LogEvery(
-				context.Background(),
-				"sessiond.paneview.render",
-				2*time.Second,
-				slog.LevelDebug,
-				"sessiond: pane view render slow",
-				slog.String("pane_id", paneID),
-				slog.Duration("dur", dur),
-				slog.Int("cols", info.cols),
-				slog.Int("rows", info.rows),
-			)
-		}
-	} else {
-		frame, err = paneViewFrame(ctx, win, info.renderReq)
-	}
+	frame, err := d.renderPaneViewFrame(ctx, paneID, win, info)
 	if err != nil {
 		return paneViewRenderError(err, client, info.key)
 	}
 	d.logPaneViewFirst(win, paneID, info.cols, info.rows, frame)
 
-	// Refresh seq after render. If output happened concurrently, the next request will pick it up.
 	currentSeq = paneViewEffectiveSeq(win)
-
 	resp := PaneViewResponse{
 		PaneID:      paneID,
 		Cols:        info.cols,
@@ -513,10 +492,58 @@ func (d *Daemon) paneViewResponse(ctx context.Context, client *clientConn, paneI
 		HasMouse:    win.HasMouseMode(),
 		AllowMotion: win.AllowsMouseMotion(),
 	}
-	if client != nil {
+	if client != nil && win.FrameCacheSeq() != 0 {
 		client.paneViewCachePut(info.key, resp)
 	}
 	return resp, nil
+}
+
+func (d *Daemon) paneViewWindow(paneID string, req PaneViewRequest) (paneWindow, PaneViewResponse, bool, error) {
+	manager, err := d.requireManager()
+	if err != nil {
+		return nil, PaneViewResponse{}, false, err
+	}
+	win := manager.Window(paneID)
+	if win != nil {
+		return win, PaneViewResponse{}, false, nil
+	}
+	if d.restore != nil {
+		if snap, ok := d.restore.Snapshot(paneID); ok {
+			return nil, offlinePaneView(req, snap), true, nil
+		}
+	}
+	return nil, PaneViewResponse{}, false, fmt.Errorf("sessiond: pane %q not found", paneID)
+}
+
+func paneViewResize(ctx context.Context, win paneWindow, cols int, rows int) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return win.Resize(cols, rows)
+}
+
+func (d *Daemon) renderPaneViewFrame(ctx context.Context, paneID string, win paneViewWindow, info paneViewRenderInfo) (termframe.Frame, error) {
+	perf := slog.Default().Enabled(context.Background(), slog.LevelDebug)
+	if !perf {
+		return paneViewFrame(ctx, win, info.renderReq)
+	}
+	start := time.Now()
+	frame, err := paneViewFrame(ctx, win, info.renderReq)
+	dur := time.Since(start)
+	if dur > paneViewSlowThreshold {
+		logging.LogEvery(
+			context.Background(),
+			"sessiond.paneview.render",
+			2*time.Second,
+			slog.LevelDebug,
+			"sessiond: pane view render slow",
+			slog.String("pane_id", paneID),
+			slog.Duration("dur", dur),
+			slog.Int("cols", info.cols),
+			slog.Int("rows", info.rows),
+		)
+	}
+	return frame, err
 }
 
 type paneViewRenderInfo struct {
@@ -573,6 +600,9 @@ func paneViewCachedHit(
 	currentSeq uint64,
 ) (PaneViewResponse, bool) {
 	if client == nil {
+		return PaneViewResponse{}, false
+	}
+	if currentSeq == 0 {
 		return PaneViewResponse{}, false
 	}
 	entry, ok := client.paneViewCacheGetEntry(info.key)

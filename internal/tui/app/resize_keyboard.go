@@ -5,11 +5,11 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/sessiond"
+	tuiinput "github.com/regenrek/peakypanes/internal/tui/input"
 )
 
 const (
@@ -18,19 +18,20 @@ const (
 	resizeNudgeStepMax  = 50
 )
 
-func (m *Model) handleResizeKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+func (m *Model) handleResizeKey(msg tuiinput.KeyMsg) (tea.Cmd, bool) {
 	if m == nil || m.state != StateDashboard {
 		return nil, false
 	}
-	if m.resize.drag.active && msg.String() == "esc" {
+	teaMsg := msg.Tea()
+	if m.resize.drag.active && teaMsg.String() == "esc" {
 		return m.cancelResizeDrag(), true
 	}
 	if m.resize.mode {
-		return m.handleResizeModeKey(msg)
+		return m.handleResizeModeKey(teaMsg)
 	}
-	if m.keys != nil && key.Matches(msg, m.keys.resizeMode) {
-		if m.terminalFocus {
-			m.setToast("Keyboard resize needs terminal focus off (mouse drag works)", toastInfo)
+	if m.keys != nil && matchesBinding(msg, m.keys.resizeMode) {
+		if m.hardRaw {
+			m.setToast("Keyboard resize needs RAW off (mouse drag works)", toastInfo)
 			return nil, true
 		}
 		m.enterResizeMode()

@@ -155,6 +155,9 @@ func (w *Window) refreshFrameCache() {
 	if w == nil {
 		return
 	}
+	if w.closed.Load() {
+		return
+	}
 
 	startSeq := w.UpdateSeq()
 
@@ -189,13 +192,25 @@ func (w *Window) refreshFrameCache() {
 	}
 
 	w.cacheMu.Lock()
+	wasDirty := w.cacheDirty
 	w.cacheFrame = frame
 	w.cacheSeq = startSeq
 	w.cacheCols = cols
 	w.cacheRows = rows
 	w.cacheAltScreen = alt
 	w.cacheDirty = endSeq != startSeq
+	nowDirty := w.cacheDirty
 	w.cacheMu.Unlock()
+
+	// When the cache transitions from dirty -> clean, publish an update even if no
+	// new output arrived. This lets pane view consumers pull the settled frame and
+	// avoids "cut off" snapshots after resizes.
+	if wasDirty && !nowDirty && w.frameDemandActive() {
+		select {
+		case w.updates <- struct{}{}:
+		default:
+		}
+	}
 
 	if endSeq != startSeq && w.frameDemandActive() {
 		w.RequestFrameRender()

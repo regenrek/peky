@@ -213,7 +213,7 @@ peky nl plan "list sessions"
 peky nl run "start a session named demo in ~/code"
 ```
 
-## Slash commands (TUI quick reply)
+## Slash commands (TUI action line)
 
 Slash commands are generated from the CLI spec and accept standard CLI flags:
 
@@ -224,6 +224,8 @@ Slash commands are generated from the CLI spec and accept standard CLI flags:
 ```
 
 You can extend or change slash shortcuts in `internal/cli/spec/commands.yaml`.
+
+Note: slash commands run from the dashboard action line (click the action line to focus it first).
 
 ## JSON output
 

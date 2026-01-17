@@ -10,10 +10,10 @@ func TestNormalizeKeyString(t *testing.T) {
 	if _, err := normalizeKeyString(" "); err == nil {
 		t.Fatalf("expected error for empty key")
 	}
-	if got, err := normalizeKeyString("space"); err != nil || got != " " {
+	if got, err := normalizeKeyString("space"); err != nil || got != "space" {
 		t.Fatalf("expected space normalized, got %q err=%v", got, err)
 	}
-	if got, err := normalizeKeyString("alt+K"); err != nil || got != "alt+K" {
+	if got, err := normalizeKeyString("alt+K"); err != nil || got != "alt+shift+k" {
 		t.Fatalf("expected alt+K preserved, got %q err=%v", got, err)
 	}
 	if got, err := normalizeKeyString("Enter"); err != nil || got != "enter" {
@@ -31,7 +31,7 @@ func TestKeyLabelHelpers(t *testing.T) {
 	if prettyKeyLabel("shift+tab") != "⇧tab" {
 		t.Fatalf("expected pretty shift+tab")
 	}
-	if prettyKeyLabel(" ") != "space" {
+	if prettyKeyLabel("space") != "space" {
 		t.Fatalf("expected pretty space")
 	}
 

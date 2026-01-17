@@ -34,41 +34,8 @@ func TestMouseSingleClickSelectsPane(t *testing.T) {
 	if m.selection != selectionFromMouse(hit.Selection) {
 		t.Fatalf("selection=%#v want %#v", m.selection, hit.Selection)
 	}
-	if m.terminalFocus {
-		t.Fatalf("terminalFocus should remain false after single click")
-	}
-}
-
-func TestMouseDoubleClickEntersFocus(t *testing.T) {
-	m := newTestModel(t)
-	seedMouseTestData(m)
-
-	hits := m.dashboardPaneHits()
-	if len(hits) == 0 {
-		t.Fatalf("expected dashboard pane hits")
-	}
-	hit := hits[0]
-	msg := tea.MouseMsg{X: hit.Outer.X + 1, Y: hit.Outer.Y + 1, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft}
-
-	_, _ = m.updateDashboardMouse(msg)
-	if m.terminalFocus {
-		t.Fatalf("terminalFocus should remain false after first click")
-	}
-
-	_, _ = m.updateDashboardMouse(msg)
-	if !m.terminalFocus {
-		t.Fatalf("terminalFocus should be true after double click")
-	}
-}
-
-func TestEscKeepsTerminalFocus(t *testing.T) {
-	m := newTestModel(t)
-	seedMouseTestData(m)
-	m.setTerminalFocus(true)
-
-	_, _ = m.updateDashboard(tea.KeyMsg{Type: tea.KeyEsc})
-	if !m.terminalFocus {
-		t.Fatalf("terminalFocus should remain true after esc")
+	if m.hardRaw {
+		t.Fatalf("hardRaw should remain false after single click")
 	}
 }
 
@@ -212,10 +179,9 @@ func TestMouseReleaseClearsTerminalDrag(t *testing.T) {
 	}
 }
 
-func TestMouseDragStartsWithoutTerminalFocus(t *testing.T) {
+func TestMouseDragStarts(t *testing.T) {
 	m := newTestModelLite()
 	m.client = &sessiond.Client{}
-	m.terminalFocus = false
 
 	hits := m.paneHits()
 	if len(hits) == 0 {
@@ -235,7 +201,7 @@ func TestMouseDragStartsWithoutTerminalFocus(t *testing.T) {
 	m.updateTerminalMouseDrag(msg)
 
 	if !m.terminalMouseDrag {
-		t.Fatalf("expected terminalMouseDrag true when press starts without focus")
+		t.Fatalf("expected terminalMouseDrag true when press starts")
 	}
 }
 
@@ -350,10 +316,10 @@ func findHeaderRect(t *testing.T, m *Model, kind headerPartKind, projectID strin
 	return mouse.Rect{}, false
 }
 
-func TestMouseQuickReplyClickExitsTerminalFocus(t *testing.T) {
+func TestMouseQuickReplyClickExitsHardRaw(t *testing.T) {
 	m := newTestModel(t)
 	seedMouseTestData(m)
-	m.setTerminalFocus(true)
+	m.setHardRaw(true)
 
 	rect, ok := m.quickReplyRect()
 	if !ok {
@@ -363,8 +329,8 @@ func TestMouseQuickReplyClickExitsTerminalFocus(t *testing.T) {
 
 	_, _ = m.updateDashboardMouse(msg)
 
-	if m.terminalFocus {
-		t.Fatalf("terminalFocus should be false after quick reply click")
+	if m.hardRaw {
+		t.Fatalf("hardRaw should be false after quick reply click")
 	}
 	m.quickReplyInput.SetValue("")
 	m.updateDashboard(keyRune('x'))
@@ -563,7 +529,6 @@ func TestMouseMotionSetsCursorShapeColResizeOverDivider(t *testing.T) {
 	m.client = &sessiond.Client{}
 	m.tab = TabProject
 	m.state = StateDashboard
-	m.terminalFocus = false
 
 	session := findSessionByName(m.data.Projects, "alpha-1")
 	if session == nil {
@@ -617,7 +582,6 @@ func TestMouseMotionSetsCursorShapeRowResizeOverDivider(t *testing.T) {
 	m.client = &sessiond.Client{}
 	m.tab = TabProject
 	m.state = StateDashboard
-	m.terminalFocus = false
 
 	session := findSessionByName(m.data.Projects, "alpha-1")
 	if session == nil {

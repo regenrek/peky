@@ -8,22 +8,22 @@ import (
 	"github.com/regenrek/peakypanes/internal/sessiond"
 )
 
-func TestResizeModeBlockedByTerminalFocus(t *testing.T) {
+func TestResizeModeBlockedByHardRaw(t *testing.T) {
 	m := newTestModelLite()
-	m.terminalFocus = true
-	msg := tea.KeyMsg{Type: tea.KeyCtrlR}
+	m.hardRaw = true
+	msg := keyMsgFromTea(tea.KeyMsg{Type: tea.KeyCtrlR})
 	_, handled := m.handleResizeKey(msg)
 	if !handled {
 		t.Fatalf("expected resize key handled")
 	}
 	if m.resize.mode {
-		t.Fatalf("expected resize mode disabled while terminal focus on")
+		t.Fatalf("expected resize mode disabled while hard raw on")
 	}
 }
 
 func TestResizeModeToggle(t *testing.T) {
 	m := newTestModelLite()
-	msg := tea.KeyMsg{Type: tea.KeyCtrlR}
+	msg := keyMsgFromTea(tea.KeyMsg{Type: tea.KeyCtrlR})
 	_, handled := m.handleResizeKey(msg)
 	if !handled {
 		t.Fatalf("expected resize key handled")

@@ -45,7 +45,7 @@ func TestWheelRoutesToTerminalScrollWhenNotInMouseMode(t *testing.T) {
 func TestWheelRoutesToSendMouseWhenPaneHasMouse(t *testing.T) {
 	m := newTestModelLite()
 	m.client = &sessiond.Client{}
-	m.terminalFocus = true
+	m.hardRaw = true
 	m.paneHasMouse = map[string]bool{"p1": true}
 
 	hit := mouse.PaneHit{

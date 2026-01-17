@@ -118,7 +118,7 @@ Use this for personal layouts and multi-project management:
 #     - daemon.*
 #     - pane.send
 
-# Quick reply settings (for @file picker)
+# Action line settings (quick reply; for @file picker)
 # quick_reply:
 #   files:
 #     show_hidden: false

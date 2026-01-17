@@ -16,9 +16,8 @@ import (
 )
 
 type layoutPreviewContext struct {
-	freezeContent bool
 	targetPane    string
-	terminalFocus bool
+	paneCursor    bool
 	guides        []ResizeGuide
 	paneView      func(id string, width, height int, showCursor bool) string
 	paneTopbar    bool
@@ -127,7 +126,7 @@ func highlightTargetPaneBorder(buf *cellbuf.Buffer, geom layoutgeom.Geometry, pa
 	if buf == nil || ctx.targetPane == "" || len(paneByID) == 0 || len(dividerMap) == 0 {
 		return
 	}
-	highlight := paneHighlightStyle(ctx.terminalFocus)
+	highlight := paneHighlightStyle(false)
 	for _, paneGeom := range geom.Panes {
 		if paneGeom.ID == "" {
 			continue
@@ -146,7 +145,7 @@ func layoutPaneContent(pane Pane, width, height int, ctx layoutPreviewContext) s
 		return ""
 	}
 	if ctx.paneView != nil && strings.TrimSpace(pane.ID) != "" {
-		showCursor := pane.Index == ctx.targetPane && ctx.terminalFocus
+		showCursor := pane.Index == ctx.targetPane && ctx.paneCursor
 		if content := ctx.paneView(pane.ID, width, height, showCursor); strings.TrimSpace(content) != "" {
 			return content
 		}

@@ -2,7 +2,7 @@
 
 ## Highlights
 - UI-mode drag resize with snapping, hover/active guides, size labels, and cursor shapes.
-- Keyboard resize mode (ctrl+r) with nudges, edge cycling, snap toggle, reset sizes, zoom.
+- Keyboard resize mode (ctrl+shift+r by default; configurable) with nudges, edge cycling, snap toggle, reset sizes, zoom.
 - Right-click context menu (Add Pane, Split Right/Down, Close, Zoom/Unzoom, Reset Sizes).
 - CLI layout ops output can include `--json --after/--diff` layout trees.
 

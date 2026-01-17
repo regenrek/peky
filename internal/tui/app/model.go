@@ -39,9 +39,11 @@ type dashboardKeyMap struct {
 	sessionOnlyDown key.Binding
 	paneNext        key.Binding
 	panePrev        key.Binding
+	toggleLastPane  key.Binding
+	focusAction     key.Binding
 	attach          key.Binding
 	newSession      key.Binding
-	terminalFocus   key.Binding
+	hardRaw         key.Binding
 	resizeMode      key.Binding
 	togglePanes     key.Binding
 	toggleSidebar   key.Binding
@@ -78,6 +80,7 @@ type Model struct {
 	data               DashboardData
 	selection          selectionState
 	selectionByProject map[string]selectionState
+	lastPaneToggleID   string
 	focusPending       bool
 	focusSelection     selectionState
 	settings           DashboardConfig
@@ -167,8 +170,8 @@ type Model struct {
 	lastAppliedSeq   uint64
 	refreshStarted   map[uint64]time.Time
 
-	terminalFocus bool
-	// terminalMouseDrag tracks an in-progress drag selection in terminal focus.
+	hardRaw bool
+	// terminalMouseDrag tracks an in-progress drag selection while in hard raw.
 	terminalMouseDrag    bool
 	mouseSendQueue       []queuedMouseEvent
 	mouseSendInFlight    bool
@@ -291,7 +294,7 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 	m.filterInput.Width = 28
 
 	m.quickReplyInput = textinput.New()
-	m.quickReplyInput.Placeholder = "talk to your panes"
+	m.quickReplyInput.Placeholder = "action…  (/ slash, @ files)"
 	m.quickReplyInput.CharLimit = 400
 	m.quickReplyInput.Prompt = ""
 	qrStyle := lipgloss.NewStyle().
@@ -303,7 +306,7 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 		Background(theme.QuickReplyBg)
 	m.quickReplyInput.PromptStyle = qrStyle
 	m.quickReplyInput.Cursor.Style = qrStyle.Reverse(true)
-	m.quickReplyInput.Focus()
+	m.quickReplyInput.Blur()
 	m.quickReplyHistoryIndex = -1
 	m.quickReplyMenuIndex = -1
 	m.quickReplyMode = quickReplyModePane
