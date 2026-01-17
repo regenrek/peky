@@ -18,13 +18,15 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    environment: npm
     if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository && startsWith(github.event.workflow_run.head_branch, 'v')) }}
     permissions:
       contents: read
       id-token: write
     env:
       TAG: ${{ inputs.tag || github.event.workflow_run.head_branch }}
+      NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/npmrc
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,7 +39,33 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          registry-url: "https://registry.npmjs.org"
+
+      - name: Prepare npm config (OIDC-only)
+        run: |
+          set -euo pipefail
+
+          cat >"${NPM_CONFIG_USERCONFIG}" <<'EOF'
+          registry=https://registry.npmjs.org/
+          always-auth=false
+          EOF
+
+          echo "node: $(node --version)"
+          echo "npm: $(npm --version)"
+
+          if [[ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]]; then
+            echo "missing GitHub OIDC token endpoint (permissions: id-token: write required)" >&2
+            exit 1
+          fi
+
+          if [[ -n "${NODE_AUTH_TOKEN:-}" ]] || [[ -n "${NPM_TOKEN:-}" ]]; then
+            echo "refusing to publish with npm auth tokens; remove npm token secrets and use npm Trusted Publishing (OIDC)" >&2
+            exit 1
+          fi
+
+          if grep -q "_authToken" "${NPM_CONFIG_USERCONFIG}"; then
+            echo "refusing to publish with _authToken in npm config; expected OIDC-only" >&2
+            exit 1
+          fi
 
       - name: Build npm packages from GitHub release assets
         env:

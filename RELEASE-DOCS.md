@@ -7,6 +7,7 @@ This document is the single source of truth for releasing peky.
 - You are on `main` with a clean working tree.
 - You have push access to the GitHub repo.
 - Releases, Homebrew tap updates, and npm publishing are done by GitHub Actions; no local npm login required.
+- npm publishing uses npm Trusted Publishing (OIDC). This must be enabled once per package on npmjs.com.
 
 ## Required Tests (must pass)
 
@@ -68,6 +69,26 @@ brew test regenrek/tap/peky
 
 - Creating/publishing the GitHub Release triggers the `npm Release` workflow, which builds the npm packages from the GitHub release assets and publishes all 5 packages using OIDC.
 - Monitor the run under GitHub Actions → `npm Release`.
+- If `npm Release` fails with token/404 errors, verify Trusted Publishing is enabled for all packages listed below.
+
+### npm Trusted Publishing setup (one-time)
+
+Packages (published for every release):
+- `peakypanes`
+- `peakypanes-darwin-amd64`
+- `peakypanes-darwin-arm64`
+- `peakypanes-linux-amd64`
+- `peakypanes-linux-arm64`
+
+For each package on npmjs.com:
+1) Open package settings → Trusted Publishing
+2) Add a GitHub Actions trusted publisher:
+   - Repository: `regenrek/peky`
+   - Workflow file: `.github/workflows/npm-release.yml`
+   - Environment: leave empty
+
+Then re-run publishing:
+- GitHub Actions → workflow `npm Release` → Run workflow → `tag: vX.Y.Z`
 
 ## Release Helper (recommended)
 
