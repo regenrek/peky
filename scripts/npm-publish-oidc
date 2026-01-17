@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if (( $# == 0 )); then
+  echo "usage: $0 <package-dir> [package-dir...]" >&2
+  exit 2
+fi
+
+for dir in "$@"; do
+  if [[ ! -d "$dir" ]]; then
+    echo "missing package dir: $dir" >&2
+    exit 2
+  fi
+
+  echo "Publishing $dir"
+  out=""
+  if ! out="$(cd "$dir" && npm publish --access public --provenance 2>&1)"; then
+    printf "%s\n" "$out" >&2
+    if printf "%s\n" "$out" | grep -q "ENEEDAUTH"; then
+      echo "" >&2
+      echo "Publish failed: npm Trusted Publishing (OIDC) not configured for this package." >&2
+      echo "Fix: enable Trusted Publishing on npmjs.com (see RELEASE-DOCS.md) and re-run the 'npm Release' workflow." >&2
+    fi
+    exit 1
+  fi
+  printf "%s\n" "$out"
+done

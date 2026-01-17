@@ -48,7 +48,6 @@ jobs:
 
           cat >"$npmrc" <<'EOF'
           registry=https://registry.npmjs.org/
-          always-auth=false
           EOF
 
           echo "node: $(node --version)"
@@ -129,12 +128,9 @@ jobs:
           fi
 
           IFS=$'\n' platform_dirs=($(printf "%s\n" "${platform_dirs[@]}" | LC_ALL=C sort))
-          for dir in "${platform_dirs[@]}"; do
-            echo "Publishing $dir"
-            (cd "$dir" && npm publish --access public --provenance)
-          done
+          scripts/npm-publish-oidc "${platform_dirs[@]}"
 
       - name: Publish meta package (OIDC)
         run: |
           set -euo pipefail
-          (cd packages/peakypanes && npm publish --access public --provenance)
+          scripts/npm-publish-oidc packages/peakypanes
