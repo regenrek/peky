@@ -121,7 +121,7 @@ jobs:
           set -euo pipefail
 
           shopt -s nullglob
-          platform_dirs=(packages/peakypanes-*)
+          platform_dirs=(packages/peky-*)
           if (( ${#platform_dirs[@]} == 0 )); then
             echo "no platform packages found under packages/" >&2
             exit 1
@@ -133,4 +133,4 @@ jobs:
       - name: Publish meta package (OIDC)
         run: |
           set -euo pipefail
-          scripts/npm-publish-oidc packages/peakypanes
+          scripts/npm-publish-oidc packages/peky
