@@ -9,6 +9,20 @@ This format is based on Keep a Changelog.
 
 ### Fixed
 
+## 0.0.32 - 2026-01-18
+
+### Added
+- Quick commands in command palette: Add Pane, Close Pane, Add Session.
+
+### Changed
+- Action pane (quick reply) is now disabled by default in global config.
+- Command palette groups Panes/Sessions/Project as nested categories.
+- Command palette footer hints simplified; “Exit” label replaces “Quit”.
+- Removed Broadcast /all command from the palette.
+
+### Fixed
+- Command palette search now matches child commands inside categories.
+
 ## 0.0.31 - 2026-01-18
 
 ### Changed
