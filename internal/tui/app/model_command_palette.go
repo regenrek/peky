@@ -78,90 +78,109 @@ func (m *Model) commandPaletteItems() []list.Item {
 		m.setToast("Command registry error: "+err.Error(), toastError)
 		return nil
 	}
-	var paneItems []picker.CommandItem
-	var sessionItems []picker.CommandItem
-	var projectItems []picker.CommandItem
-	var menuItems []picker.CommandItem
-	otherItems := make([]picker.CommandItem, 0, 16)
-	var agentItems []picker.CommandItem
-	var exitItem *picker.CommandItem
-	specIndex := make(map[commandID]commandSpec)
-
-	for _, group := range registry.Groups {
-		switch group.Name {
-		case "pane":
-			paneItems = append(paneItems, commandSpecsToItems(m, group.Commands)...)
-			for _, cmd := range group.Commands {
-				specIndex[cmd.ID] = cmd
-			}
-		case "session":
-			sessionItems = append(sessionItems, commandSpecsToItems(m, group.Commands)...)
-			for _, cmd := range group.Commands {
-				specIndex[cmd.ID] = cmd
-			}
-		case "project":
-			projectItems = append(projectItems, commandSpecsToItems(m, group.Commands)...)
-			for _, cmd := range group.Commands {
-				specIndex[cmd.ID] = cmd
-			}
-		case "menu":
-			menuItems = append(menuItems, commandSpecsToItems(m, group.Commands)...)
-			for _, cmd := range group.Commands {
-				specIndex[cmd.ID] = cmd
-			}
-		case "other":
-			for _, cmd := range group.Commands {
-				specIndex[cmd.ID] = cmd
-				if cmd.ID == "other_quit" {
-					item := commandItemWithLabel(m, cmd, cmd.Label)
-					exitItem = &item
-					continue
-				}
-				otherItems = append(otherItems, commandSpecsToItems(m, []commandSpec{cmd})...)
-			}
-		case "agent":
-			agentItems = append(agentItems, commandSpecsToItems(m, group.Commands)...)
-			for _, cmd := range group.Commands {
-				specIndex[cmd.ID] = cmd
-			}
-		default:
-			otherItems = append(otherItems, commandSpecsToItems(m, group.Commands)...)
-			for _, cmd := range group.Commands {
-				specIndex[cmd.ID] = cmd
-			}
-		}
-	}
+	groups := buildCommandPaletteGroups(m, registry)
 
 	root := make([]picker.CommandItem, 0, 8)
-	root = append(root, quickCommandItems(m, specIndex)...)
-	if len(paneItems) > 0 {
+	root = append(root, quickCommandItems(m, groups.specIndex)...)
+	if len(groups.paneItems) > 0 {
 		root = append(root, picker.CommandItem{
 			Label:    "Panes",
 			Desc:     "Pane commands",
-			Children: paneItems,
+			Children: groups.paneItems,
 		})
 	}
-	if len(sessionItems) > 0 {
+	if len(groups.sessionItems) > 0 {
 		root = append(root, picker.CommandItem{
 			Label:    "Sessions",
 			Desc:     "Session commands",
-			Children: sessionItems,
+			Children: groups.sessionItems,
 		})
 	}
-	if len(projectItems) > 0 {
+	if len(groups.projectItems) > 0 {
 		root = append(root, picker.CommandItem{
 			Label:    "Project",
 			Desc:     "Project commands",
-			Children: projectItems,
+			Children: groups.projectItems,
 		})
 	}
-	root = append(root, menuItems...)
-	root = append(root, agentItems...)
-	root = append(root, otherItems...)
-	if exitItem != nil {
-		root = append(root, *exitItem)
+	root = append(root, groups.menuItems...)
+	root = append(root, groups.agentItems...)
+	root = append(root, groups.otherItems...)
+	if groups.exitItem != nil {
+		root = append(root, *groups.exitItem)
 	}
 	return commandItemsToList(root)
+}
+
+type commandPaletteGroups struct {
+	paneItems    []picker.CommandItem
+	sessionItems []picker.CommandItem
+	projectItems []picker.CommandItem
+	menuItems    []picker.CommandItem
+	agentItems   []picker.CommandItem
+	otherItems   []picker.CommandItem
+	exitItem     *picker.CommandItem
+	specIndex    map[commandID]commandSpec
+}
+
+func buildCommandPaletteGroups(m *Model, registry commandRegistry) commandPaletteGroups {
+	groups := commandPaletteGroups{
+		otherItems: make([]picker.CommandItem, 0, 16),
+		specIndex:  make(map[commandID]commandSpec),
+	}
+	for _, group := range registry.Groups {
+		addCommandPaletteGroup(&groups, m, group)
+	}
+	return groups
+}
+
+func addCommandPaletteGroup(groups *commandPaletteGroups, m *Model, group commandGroup) {
+	if groups == nil {
+		return
+	}
+	switch group.Name {
+	case "pane":
+		groups.paneItems = append(groups.paneItems, commandSpecsToItems(m, group.Commands)...)
+		addSpecIndex(groups.specIndex, group.Commands)
+	case "session":
+		groups.sessionItems = append(groups.sessionItems, commandSpecsToItems(m, group.Commands)...)
+		addSpecIndex(groups.specIndex, group.Commands)
+	case "project":
+		groups.projectItems = append(groups.projectItems, commandSpecsToItems(m, group.Commands)...)
+		addSpecIndex(groups.specIndex, group.Commands)
+	case "menu":
+		groups.menuItems = append(groups.menuItems, commandSpecsToItems(m, group.Commands)...)
+		addSpecIndex(groups.specIndex, group.Commands)
+	case "other":
+		addOtherCommandPaletteItems(groups, m, group.Commands)
+	case "agent":
+		groups.agentItems = append(groups.agentItems, commandSpecsToItems(m, group.Commands)...)
+		addSpecIndex(groups.specIndex, group.Commands)
+	default:
+		groups.otherItems = append(groups.otherItems, commandSpecsToItems(m, group.Commands)...)
+		addSpecIndex(groups.specIndex, group.Commands)
+	}
+}
+
+func addOtherCommandPaletteItems(groups *commandPaletteGroups, m *Model, commands []commandSpec) {
+	if groups == nil {
+		return
+	}
+	for _, cmd := range commands {
+		addSpecIndex(groups.specIndex, []commandSpec{cmd})
+		if cmd.ID == "other_quit" {
+			item := commandItemWithLabel(m, cmd, cmd.Label)
+			groups.exitItem = &item
+			continue
+		}
+		groups.otherItems = append(groups.otherItems, commandSpecsToItems(m, []commandSpec{cmd})...)
+	}
+}
+
+func addSpecIndex(index map[commandID]commandSpec, commands []commandSpec) {
+	for _, cmd := range commands {
+		index[cmd.ID] = cmd
+	}
 }
 
 func (m *Model) commandPaletteFlatItems() []list.Item {
@@ -173,9 +192,7 @@ func (m *Model) commandPaletteFlatItems() []list.Item {
 	items := make([]picker.CommandItem, 0, 32)
 	specIndex := make(map[commandID]commandSpec)
 	for _, group := range registry.Groups {
-		for _, cmd := range group.Commands {
-			specIndex[cmd.ID] = cmd
-		}
+		addSpecIndex(specIndex, group.Commands)
 		items = append(items, commandSpecsToItems(m, group.Commands)...)
 	}
 	items = append(quickCommandItems(m, specIndex), items...)

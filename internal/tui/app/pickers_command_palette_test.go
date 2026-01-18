@@ -51,35 +51,9 @@ func scanPaletteItems(t *testing.T, items []list.Item) paletteScan {
 			continue
 		}
 		assertPaletteLabel(t, cmdItem.Label)
-		if cmdItem.Label == "Settings" {
-			scan.foundSettings = true
-		}
-		if cmdItem.Label == "Debug" {
-			scan.foundDebug = true
-		}
-		if cmdItem.Label == "Add Pane" {
-			scan.foundQuickAddPane = true
-		}
-		if cmdItem.Label == "Close Pane" {
-			scan.foundQuickClosePane = true
-		}
-		if cmdItem.Label == "Add Session" {
-			scan.foundQuickAddSession = true
-		}
-		if cmdItem.Label == "Exit" {
-			scan.foundExit = true
-		}
+		applyPaletteLabel(&scan, cmdItem.Label)
 		if cmdItem.Run != nil {
 			_ = cmdItem.Run()
-		}
-		if cmdItem.Label == "Panes" {
-			scan.foundPane = true
-		}
-		if cmdItem.Label == "Sessions" {
-			scan.foundSession = true
-		}
-		if cmdItem.Label == "Project" {
-			scan.foundProject = true
 		}
 	}
 	for i, item := range items {
@@ -87,19 +61,56 @@ func scanPaletteItems(t *testing.T, items []list.Item) paletteScan {
 		if !ok {
 			continue
 		}
-		if cmdItem.Label == "Panes" && scan.paneIndex == -1 {
-			scan.paneIndex = i
-		}
-		if cmdItem.Label == "Sessions" && scan.sessionIndex == -1 {
-			scan.sessionIndex = i
-		}
-		if cmdItem.Label == "Project" && scan.projectIndex == -1 {
-			scan.projectIndex = i
-		}
+		applyPaletteIndex(&scan, cmdItem.Label, i)
 	}
 	return scan
 }
 
+func applyPaletteLabel(scan *paletteScan, label string) {
+	if scan == nil {
+		return
+	}
+	switch label {
+	case "Settings":
+		scan.foundSettings = true
+	case "Debug":
+		scan.foundDebug = true
+	case "Add Pane":
+		scan.foundQuickAddPane = true
+	case "Close Pane":
+		scan.foundQuickClosePane = true
+	case "Add Session":
+		scan.foundQuickAddSession = true
+	case "Exit":
+		scan.foundExit = true
+	case "Panes":
+		scan.foundPane = true
+	case "Sessions":
+		scan.foundSession = true
+	case "Project":
+		scan.foundProject = true
+	}
+}
+
+func applyPaletteIndex(scan *paletteScan, label string, idx int) {
+	if scan == nil {
+		return
+	}
+	switch label {
+	case "Panes":
+		if scan.paneIndex == -1 {
+			scan.paneIndex = idx
+		}
+	case "Sessions":
+		if scan.sessionIndex == -1 {
+			scan.sessionIndex = idx
+		}
+	case "Project":
+		if scan.projectIndex == -1 {
+			scan.projectIndex = idx
+		}
+	}
+}
 func assertPaletteLabel(t *testing.T, label string) {
 	t.Helper()
 	if strings.Contains(label, "Reopen") {
