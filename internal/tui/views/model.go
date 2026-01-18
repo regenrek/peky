@@ -37,6 +37,7 @@ type Model struct {
 	QuickReplySelectionEnd    int
 	QuickReplySuggestions     []QuickReplySuggestion
 	QuickReplySelected        int
+	QuickReplyEnabled         bool
 	HardRaw                   bool
 	PaneCursor                bool
 	ProjectPicker             list.Model

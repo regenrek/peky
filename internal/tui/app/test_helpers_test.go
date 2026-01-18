@@ -36,6 +36,10 @@ func newTestModel(t *testing.T) *Model {
 	model.width = 80
 	model.height = 24
 	model.state = StateDashboard
+	if model.config == nil {
+		model.config = &layout.Config{}
+	}
+	model.config.QuickReply.Enabled = true
 	return model
 }
 

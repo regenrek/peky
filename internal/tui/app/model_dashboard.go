@@ -12,6 +12,12 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *Model) updateDashboardInput(msg tuiinput.KeyMsg) (tea.Model, tea.Cmd) {
 	teaMsg := msg.Tea()
+	if !m.quickReplyEnabled() && m.quickReplyInput.Focused() {
+		m.quickReplyMouseSel.clear()
+		m.resetQuickReplyHistory()
+		m.resetQuickReplyMenu()
+		m.quickReplyInput.Blur()
+	}
 	if cmd, handled := m.handleHardRawToggle(msg); handled {
 		return m, cmd
 	}
@@ -62,6 +68,9 @@ func (m *Model) handleFocusAction(msg tuiinput.KeyMsg) (tea.Cmd, bool) {
 	}
 	if !matchesBinding(msg, m.keys.focusAction) {
 		return nil, false
+	}
+	if !m.quickReplyEnabled() {
+		return nil, true
 	}
 	if m.quickReplyInput.Focused() {
 		m.quickReplyMouseSel.clear()

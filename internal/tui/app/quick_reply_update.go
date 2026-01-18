@@ -9,6 +9,9 @@ import (
 )
 
 func (m *Model) updateQuickReplyInput(msg tuiinput.KeyMsg) (tea.Model, tea.Cmd) {
+	if m == nil || !m.quickReplyEnabled() {
+		return m, nil
+	}
 	teaMsg := msg.Tea()
 	if teaMsg.Type == tea.KeySpace {
 		teaMsg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}

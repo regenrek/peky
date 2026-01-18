@@ -182,6 +182,7 @@ ghostty:
 
 # Action line settings (quick reply; for @file picker)
 # quick_reply:
+#   enabled: false
 #   files:
 #     show_hidden: false
 #     max_depth: 4

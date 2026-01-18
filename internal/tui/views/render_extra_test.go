@@ -25,6 +25,7 @@ func TestViewDashboardContentRenders(t *testing.T) {
 		HeaderLine:               "peky",
 		EmptyStateMessage:        "empty",
 		QuickReplyInput:          input,
+		QuickReplyEnabled:        true,
 		DashboardColumns:         []DashboardColumn{{ProjectID: "proj", ProjectName: "Proj", ProjectPath: "", Panes: []DashboardPane{{ProjectID: "proj", ProjectName: "Proj", SessionName: "sess", Pane: Pane{Index: "0"}}}}},
 		DashboardSelectedProject: "proj",
 		Projects: []Project{{

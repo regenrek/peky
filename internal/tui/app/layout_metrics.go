@@ -33,7 +33,7 @@ func (m *Model) dashboardLayoutInternal(logCtx string) (dashboardLayout, bool) {
 	contentWidth := m.width - h
 	contentHeight := m.height - v
 	hasPekyPrompt := strings.TrimSpace(m.pekyPromptLine) != ""
-	layout, ok := viewlayout.Dashboard(contentWidth, contentHeight, hasPekyPrompt)
+	layout, ok := viewlayout.Dashboard(contentWidth, contentHeight, hasPekyPrompt, m.quickReplyEnabled())
 	if !ok {
 		if log {
 			m.logPaneViewSkipGlobal("dashboard_too_small", logCtx)
@@ -76,6 +76,9 @@ func (m *Model) headerRect() (mouse.Rect, bool) {
 }
 
 func (m *Model) quickReplyRect() (mouse.Rect, bool) {
+	if !m.quickReplyEnabled() {
+		return mouse.Rect{}, false
+	}
 	layout, ok := m.dashboardLayoutInternal("quickReplyRect")
 	if !ok {
 		return mouse.Rect{}, false

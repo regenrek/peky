@@ -341,6 +341,9 @@ func (m *Model) setQuickReplySize() {
 }
 
 func (m *Model) openQuickReply() tea.Cmd {
+	if m == nil || !m.quickReplyEnabled() {
+		return nil
+	}
 	if m.selectedPane() == nil {
 		m.setToast("No pane selected", toastWarning)
 		return nil

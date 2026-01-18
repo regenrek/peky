@@ -80,3 +80,4 @@ docs/internal
 docs/tasks
 docs/other
 .bench/
+.plan/

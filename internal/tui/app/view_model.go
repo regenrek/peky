@@ -53,6 +53,7 @@ func (m *Model) viewModel() views.Model {
 		QuickReplySelectionEnd:    m.quickReplyMouseSel.end,
 		QuickReplySuggestions:     toViewQuickReplySuggestions(menu.suggestions),
 		QuickReplySelected:        m.quickReplyMenuIndex,
+		QuickReplyEnabled:         m.quickReplyEnabled(),
 		HardRaw:                   m.hardRaw,
 		PaneCursor:                m.shouldShowPaneCursor(),
 		ProjectPicker:             m.projectPicker,
@@ -101,7 +102,7 @@ func (m *Model) viewModel() views.Model {
 			Input:     m.renameInput,
 		},
 		ProjectRootInput:      m.projectRootInput,
-		Keys:                  buildKeyHints(m.keys),
+		Keys:                  buildKeyHints(m.keys, m.quickReplyEnabled()),
 		Toast:                 m.toastText(),
 		PreviewCompact:        m.settings.PreviewCompact,
 		DashboardPreviewLines: dashboardPreviewLines(m.settings),
@@ -226,9 +227,13 @@ func runningSessionsCount(projects []ProjectGroup) int {
 	return running
 }
 
-func buildKeyHints(keys *dashboardKeyMap) views.KeyHints {
+func buildKeyHints(keys *dashboardKeyMap, quickReplyEnabled bool) views.KeyHints {
 	if keys == nil {
 		return views.KeyHints{}
+	}
+	focusAction := ""
+	if quickReplyEnabled {
+		focusAction = keyLabel(keys.focusAction)
 	}
 	return views.KeyHints{
 		ProjectKeys:     joinKeyLabels(keys.projectLeft, keys.projectRight),
@@ -236,7 +241,7 @@ func buildKeyHints(keys *dashboardKeyMap) views.KeyHints {
 		SessionOnlyKeys: joinKeyLabels(keys.sessionOnlyUp, keys.sessionOnlyDown),
 		PaneKeys:        joinKeyLabels(keys.panePrev, keys.paneNext),
 		ToggleLastPane:  keyLabel(keys.toggleLastPane),
-		FocusAction:     keyLabel(keys.focusAction),
+		FocusAction:     focusAction,
 		OpenProject:     keyLabel(keys.openProject),
 		CloseProject:    keyLabel(keys.closeProject),
 		NewSession:      keyLabel(keys.newSession),
