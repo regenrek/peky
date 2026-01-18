@@ -35,8 +35,6 @@ window layouts and better-organized projects.
 - ⌘ **Command palette** - Quick actions, including renaming sessions/panes
 - 🧠 **Native live previews** - Full TUI support (vim/htop) with live panes
 - 📁 **Project-local config** - Commit `.peky.yml` to git for team sharing
-- 🧠 **Action line** - Dashboard control plane for slash commands, file picker, and broadcasts
-- 🤖 **Peky Agent (Experimental)** - Temporarily disabled while stabilizing
 
 <br />
 <br />
