@@ -2,7 +2,6 @@ package entry
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -22,9 +21,13 @@ func Run(args []string, version string) int {
 	mode := logging.ModeFromArgs(args)
 	logCfg := logging.Config{}
 	if configPath, err := layout.DefaultConfigPath(); err == nil && configPath != "" {
+		if err := layout.EnsureDefaultGlobalConfig(configPath); err != nil {
+			fmt.Fprintf(os.Stderr, "%s: init config: %v\n", appName, err)
+			return 1
+		}
 		if cfg, err := layout.LoadConfig(configPath); err == nil && cfg != nil {
 			logCfg = cfg.Logging
-		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		} else if err != nil {
 			fmt.Fprintf(os.Stderr, "%s: load config: %v\n", appName, err)
 			return 1
 		}
