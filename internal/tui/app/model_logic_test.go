@@ -229,21 +229,32 @@ func TestProjectRootsSetup(t *testing.T) {
 	}
 }
 
-func TestScanGitProjects(t *testing.T) {
+func TestScanProjects(t *testing.T) {
 	m := newTestModel(t)
 	root := t.TempDir()
 	project := filepath.Join(root, "repo")
 	if err := os.MkdirAll(filepath.Join(project, ".git"), 0o755); err != nil {
 		t.Fatalf("mkdir .git: %v", err)
 	}
-	m.settings.ProjectRoots = []string{root}
-	m.scanGitProjects()
-	if len(m.gitProjects) != 1 {
-		t.Fatalf("gitProjects = %#v", m.gitProjects)
+	nonGit := filepath.Join(root, "notes")
+	if err := os.MkdirAll(nonGit, 0o755); err != nil {
+		t.Fatalf("mkdir non-git: %v", err)
 	}
-	items := m.gitProjectsToItems()
+	m.settings.ProjectRoots = []string{root}
+	m.settings.ProjectRootsAllowNonGit = false
+	m.scanProjects()
+	if len(m.projectPickerProjects) != 1 {
+		t.Fatalf("projectPickerProjects = %#v", m.projectPickerProjects)
+	}
+	items := m.projectPickerItems()
 	if len(items) != 1 {
-		t.Fatalf("gitProjectsToItems() = %#v", items)
+		t.Fatalf("projectPickerItems() = %#v", items)
+	}
+
+	m.settings.ProjectRootsAllowNonGit = true
+	m.scanProjects()
+	if len(m.projectPickerProjects) != 2 {
+		t.Fatalf("projectPickerProjects = %#v", m.projectPickerProjects)
 	}
 }
 

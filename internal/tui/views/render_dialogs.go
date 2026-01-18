@@ -184,7 +184,7 @@ func (m Model) viewProjectRootSetup() string {
 		inputWidth = clamp(m.Width-30, 24, 80)
 	}
 	m.ProjectRootInput.Width = inputWidth
-	note := theme.DialogNote.Render("Comma-separated list of folders to scan for git projects.")
+	note := theme.DialogNote.Render("Comma-separated list of folders to scan for projects.")
 	inputLine := theme.DialogLabel.Render("Roots: ") + m.ProjectRootInput.View()
 	choices := renderDialogChoices([]dialogChoice{
 		{Key: "enter", Label: "save"},

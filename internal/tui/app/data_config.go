@@ -144,6 +144,7 @@ func defaultDashboardConfig(cfg layout.DashboardConfig) (DashboardConfig, error)
 		return DashboardConfig{}, err
 	}
 	projectRoots := resolveProjectRoots(cfg.ProjectRoots)
+	projectRootsAllowNonGit := boolOrDefault(cfg.ProjectRootsAllowNonGit, true)
 	hiddenProjects := hiddenProjectKeySet(cfg.HiddenProjects)
 	matcher, err := compileStatusMatcher(cfg.StatusRegex)
 	if err != nil {
@@ -158,21 +159,22 @@ func defaultDashboardConfig(cfg layout.DashboardConfig) (DashboardConfig, error)
 		return DashboardConfig{}, err
 	}
 	return DashboardConfig{
-		RefreshInterval:    time.Duration(refreshMS) * time.Millisecond,
-		PreviewLines:       previewLines,
-		PreviewCompact:     previewCompact,
-		IdleThreshold:      time.Duration(idleSeconds) * time.Second,
-		StatusMatcher:      matcher,
-		SidebarHidden:      sidebarHidden,
-		Resize:             resizeSettings,
-		ProjectRoots:       projectRoots,
-		AgentDetection:     agentDetection,
-		PaneTopbar:         PaneTopbarSettings{Enabled: paneTopbarEnabled},
-		AttachBehavior:     attachBehavior,
-		PaneNavigationMode: paneNavigationMode,
-		QuitBehavior:       quitBehavior,
-		HiddenProjects:     hiddenProjects,
-		Performance:        performance,
+		RefreshInterval:         time.Duration(refreshMS) * time.Millisecond,
+		PreviewLines:            previewLines,
+		PreviewCompact:          previewCompact,
+		IdleThreshold:           time.Duration(idleSeconds) * time.Second,
+		StatusMatcher:           matcher,
+		SidebarHidden:           sidebarHidden,
+		Resize:                  resizeSettings,
+		ProjectRoots:            projectRoots,
+		ProjectRootsAllowNonGit: projectRootsAllowNonGit,
+		AgentDetection:          agentDetection,
+		PaneTopbar:              PaneTopbarSettings{Enabled: paneTopbarEnabled},
+		AttachBehavior:          attachBehavior,
+		PaneNavigationMode:      paneNavigationMode,
+		QuitBehavior:            quitBehavior,
+		HiddenProjects:          hiddenProjects,
+		Performance:             performance,
 	}, nil
 }
 

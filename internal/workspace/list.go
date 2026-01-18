@@ -16,6 +16,10 @@ func ListWorkspace(configPath string) (Workspace, error) {
 		return Workspace{}, err
 	}
 	roots := ResolveProjectRoots(cfg.Dashboard.ProjectRoots)
+	allowNonGit := true
+	if cfg.Dashboard.ProjectRootsAllowNonGit != nil {
+		allowNonGit = *cfg.Dashboard.ProjectRootsAllowNonGit
+	}
 	hidden := HiddenProjectKeySet(cfg.Dashboard.HiddenProjects)
 	projects := make(map[string]Project)
 	for _, projectCfg := range cfg.Projects {
@@ -25,7 +29,7 @@ func ListWorkspace(configPath string) (Workspace, error) {
 		}
 		projects[project.ID] = project
 	}
-	for _, scanned := range ScanGitProjects(roots) {
+	for _, scanned := range ScanProjects(roots, allowNonGit) {
 		if scanned.ID == "" {
 			continue
 		}
@@ -85,10 +89,15 @@ func projectFromConfig(cfg layout.ProjectConfig) Project {
 		}
 	}
 	id := ProjectID(path, name)
+	isGit := false
+	if path != "" {
+		isGit = IsGitProjectPath(path)
+	}
 	return Project{
 		ID:     id,
 		Name:   name,
 		Path:   path,
+		IsGit:  isGit,
 		Source: "config",
 	}
 }

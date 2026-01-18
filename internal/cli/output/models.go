@@ -86,6 +86,7 @@ type ProjectSummary struct {
 	ID           string    `json:"id"`
 	Name         string    `json:"name"`
 	Path         string    `json:"path"`
+	IsGit        bool      `json:"is_git"`
 	Hidden       bool      `json:"hidden"`
 	LastOpened   time.Time `json:"last_opened,omitempty"`
 	SessionCount int       `json:"session_count,omitempty"`

@@ -229,3 +229,19 @@ func mkdirGit(t *testing.T, path string) {
 		t.Fatalf("mkdir .git error: %v", err)
 	}
 }
+
+func TestScanProjectsAllowNonGit(t *testing.T) {
+	root := t.TempDir()
+	gitPath := filepath.Join(root, "repo")
+	mkdirGit(t, gitPath)
+	nonGit := filepath.Join(root, "notes")
+	if err := os.MkdirAll(nonGit, 0o755); err != nil {
+		t.Fatalf("mkdir non-git error: %v", err)
+	}
+	if got := ScanProjects([]string{root}, false); len(got) != 1 {
+		t.Fatalf("ScanProjects(git-only) = %#v", got)
+	}
+	if got := ScanProjects([]string{root}, true); len(got) != 2 {
+		t.Fatalf("ScanProjects(allow-non-git) = %#v", got)
+	}
+}

@@ -80,6 +80,7 @@ Use this for personal layouts and multi-project management:
 #   project_roots:
 #     - ~/projects
 #     - ~/code
+#   project_roots_allow_nongit: true
 #
 #   performance:
 #     preset: max          # low | medium | high | max | custom

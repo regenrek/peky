@@ -32,6 +32,7 @@ func TestDefaultDashboardConfigDefaults(t *testing.T) {
 	assertString(t, "PaneNavigationMode", cfg.PaneNavigationMode, PaneNavigationSpatial)
 	assertString(t, "QuitBehavior", cfg.QuitBehavior, QuitBehaviorPrompt)
 	assertStringSlice(t, "ProjectRoots", cfg.ProjectRoots, []string{filepath.Join(home, "projects")})
+	assertBool(t, "ProjectRootsAllowNonGit", cfg.ProjectRootsAllowNonGit, true)
 	assertString(t, "Performance.Preset", cfg.Performance.Preset, PerfPresetMax)
 	assertString(t, "Performance.RenderPolicy", cfg.Performance.RenderPolicy, RenderPolicyVisible)
 	assertString(t, "Performance.PreviewRender.Mode", cfg.Performance.PreviewRender.Mode, PreviewRenderDirect)
@@ -41,17 +42,19 @@ func TestDefaultDashboardConfigDefaults(t *testing.T) {
 func TestDefaultDashboardConfigOverrides(t *testing.T) {
 	compact := false
 	sidebarHidden := true
+	allowNonGit := false
 	cfg, err := defaultDashboardConfig(layout.DashboardConfig{
-		RefreshMS:          500,
-		PreviewLines:       5,
-		IdleSeconds:        3,
-		PreviewCompact:     &compact,
-		Sidebar:            layout.DashboardSidebarConfig{Hidden: &sidebarHidden},
-		Resize:             layout.DashboardResizeConfig{MouseApply: "commit", MouseThrottleMS: 40, FreezeContentDuringDrag: boolPtr(false)},
-		AttachBehavior:     "detached",
-		PaneNavigationMode: "memory",
-		QuitBehavior:       "keep",
-		ProjectRoots:       []string{"/tmp", "/tmp"},
+		RefreshMS:               500,
+		PreviewLines:            5,
+		IdleSeconds:             3,
+		PreviewCompact:          &compact,
+		Sidebar:                 layout.DashboardSidebarConfig{Hidden: &sidebarHidden},
+		Resize:                  layout.DashboardResizeConfig{MouseApply: "commit", MouseThrottleMS: 40, FreezeContentDuringDrag: boolPtr(false)},
+		AttachBehavior:          "detached",
+		PaneNavigationMode:      "memory",
+		QuitBehavior:            "keep",
+		ProjectRoots:            []string{"/tmp", "/tmp"},
+		ProjectRootsAllowNonGit: &allowNonGit,
 		Performance: layout.PerformanceConfig{
 			Preset:       PerfPresetCustom,
 			RenderPolicy: RenderPolicyAll,
@@ -79,6 +82,7 @@ func TestDefaultDashboardConfigOverrides(t *testing.T) {
 	assertString(t, "PaneNavigationMode", cfg.PaneNavigationMode, PaneNavigationMemory)
 	assertString(t, "QuitBehavior", cfg.QuitBehavior, QuitBehaviorKeep)
 	assertStringSlice(t, "ProjectRoots", cfg.ProjectRoots, []string{"/tmp"})
+	assertBool(t, "ProjectRootsAllowNonGit", cfg.ProjectRootsAllowNonGit, false)
 	assertString(t, "Performance.Preset", cfg.Performance.Preset, PerfPresetCustom)
 	assertString(t, "Performance.RenderPolicy", cfg.Performance.RenderPolicy, RenderPolicyAll)
 	assertString(t, "Performance.PreviewRender.Mode", cfg.Performance.PreviewRender.Mode, PreviewRenderDirect)

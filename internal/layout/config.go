@@ -205,22 +205,23 @@ type PaneTopbarConfig struct {
 
 // DashboardConfig configures the peky dashboard UI.
 type DashboardConfig struct {
-	RefreshMS          int                    `yaml:"refresh_ms,omitempty"`
-	PreviewLines       int                    `yaml:"preview_lines,omitempty"`
-	PreviewCompact     *bool                  `yaml:"preview_compact,omitempty"`
-	IdleSeconds        int                    `yaml:"idle_seconds,omitempty"`
-	StatusRegex        StatusRegexConfig      `yaml:"status_regex,omitempty"`
-	Sidebar            DashboardSidebarConfig `yaml:"sidebar,omitempty"`
-	Resize             DashboardResizeConfig  `yaml:"resize,omitempty"`
-	ProjectRoots       []string               `yaml:"project_roots,omitempty"`
-	AgentDetection     AgentDetectionConfig   `yaml:"agent_detection,omitempty"`
-	PaneTopbar         PaneTopbarConfig       `yaml:"pane_topbar,omitempty"`
-	AttachBehavior     string                 `yaml:"attach_behavior,omitempty"`      // current | detached
-	PaneNavigationMode string                 `yaml:"pane_navigation_mode,omitempty"` // spatial | memory
-	QuitBehavior       string                 `yaml:"quit_behavior,omitempty"`        // prompt | keep | stop
-	HiddenProjects     []HiddenProjectConfig  `yaml:"hidden_projects,omitempty"`
-	Keymap             DashboardKeymapConfig  `yaml:"keymap,omitempty"`
-	Performance        PerformanceConfig      `yaml:"performance,omitempty"`
+	RefreshMS               int                    `yaml:"refresh_ms,omitempty"`
+	PreviewLines            int                    `yaml:"preview_lines,omitempty"`
+	PreviewCompact          *bool                  `yaml:"preview_compact,omitempty"`
+	IdleSeconds             int                    `yaml:"idle_seconds,omitempty"`
+	StatusRegex             StatusRegexConfig      `yaml:"status_regex,omitempty"`
+	Sidebar                 DashboardSidebarConfig `yaml:"sidebar,omitempty"`
+	Resize                  DashboardResizeConfig  `yaml:"resize,omitempty"`
+	ProjectRoots            []string               `yaml:"project_roots,omitempty"`
+	ProjectRootsAllowNonGit *bool                  `yaml:"project_roots_allow_nongit,omitempty"`
+	AgentDetection          AgentDetectionConfig   `yaml:"agent_detection,omitempty"`
+	PaneTopbar              PaneTopbarConfig       `yaml:"pane_topbar,omitempty"`
+	AttachBehavior          string                 `yaml:"attach_behavior,omitempty"`      // current | detached
+	PaneNavigationMode      string                 `yaml:"pane_navigation_mode,omitempty"` // spatial | memory
+	QuitBehavior            string                 `yaml:"quit_behavior,omitempty"`        // prompt | keep | stop
+	HiddenProjects          []HiddenProjectConfig  `yaml:"hidden_projects,omitempty"`
+	Keymap                  DashboardKeymapConfig  `yaml:"keymap,omitempty"`
+	Performance             PerformanceConfig      `yaml:"performance,omitempty"`
 }
 
 // AgentConfig configures the peky agent.

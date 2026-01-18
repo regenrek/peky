@@ -20,28 +20,57 @@ func (m *Model) setupProjectPicker() {
 }
 
 func (m *Model) openProjectPicker() {
-	m.scanGitProjects()
+	m.scanProjects()
 	m.projectPicker.ResetFilter()
-	m.projectPicker.SetItems(m.gitProjectsToItems())
+	m.projectPicker.SetItems(m.projectPickerItems())
 	m.setState(StateProjectPicker)
 }
 
-func (m *Model) scanGitProjects() {
-	m.gitProjects = nil
+func (m *Model) scanProjects() {
+	m.projectPickerProjects = nil
 
 	roots := resolveProjectRoots(m.settings.ProjectRoots)
-	for _, project := range workspace.ScanGitProjects(roots) {
-		m.gitProjects = append(m.gitProjects, picker.ProjectItem{
+	allowNonGit := m.settings.ProjectRootsAllowNonGit
+	seen := make(map[string]struct{})
+	for _, project := range workspace.ScanProjects(roots, allowNonGit) {
+		key := workspace.ProjectID(project.Path, project.Name)
+		if key != "" {
+			seen[key] = struct{}{}
+		}
+		m.projectPickerProjects = append(m.projectPickerProjects, picker.ProjectItem{
 			Name:        project.Name,
 			Path:        project.Path,
 			DisplayPath: userpath.ShortenUser(project.Path),
+			IsGit:       project.IsGit,
+		})
+	}
+	if m.config == nil {
+		return
+	}
+	for i := range m.config.Projects {
+		name, _, path := normalizeProjectConfig(&m.config.Projects[i])
+		if path == "" {
+			continue
+		}
+		key := workspace.ProjectID(path, name)
+		if key != "" {
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+		}
+		m.projectPickerProjects = append(m.projectPickerProjects, picker.ProjectItem{
+			Name:        name,
+			Path:        path,
+			DisplayPath: userpath.ShortenUser(path),
+			IsGit:       workspace.IsGitProjectPath(path),
 		})
 	}
 }
 
-func (m *Model) gitProjectsToItems() []list.Item {
-	items := make([]list.Item, len(m.gitProjects))
-	for i, p := range m.gitProjects {
+func (m *Model) projectPickerItems() []list.Item {
+	items := make([]list.Item, len(m.projectPickerProjects))
+	for i, p := range m.projectPickerProjects {
 		items[i] = p
 	}
 	return items

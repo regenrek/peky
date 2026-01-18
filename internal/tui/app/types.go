@@ -231,21 +231,22 @@ type DashboardResizeSettings struct {
 
 // DashboardConfig wraps dashboard settings after defaults applied.
 type DashboardConfig struct {
-	RefreshInterval    time.Duration
-	PreviewLines       int
-	PreviewCompact     bool
-	IdleThreshold      time.Duration
-	StatusMatcher      statusMatcher
-	SidebarHidden      bool
-	Resize             DashboardResizeSettings
-	ProjectRoots       []string
-	AgentDetection     AgentDetectionConfig
-	PaneTopbar         PaneTopbarSettings
-	AttachBehavior     string
-	PaneNavigationMode string
-	QuitBehavior       string
-	HiddenProjects     map[string]struct{}
-	Performance        DashboardPerformance
+	RefreshInterval         time.Duration
+	PreviewLines            int
+	PreviewCompact          bool
+	IdleThreshold           time.Duration
+	StatusMatcher           statusMatcher
+	SidebarHidden           bool
+	Resize                  DashboardResizeSettings
+	ProjectRoots            []string
+	ProjectRootsAllowNonGit bool
+	AgentDetection          AgentDetectionConfig
+	PaneTopbar              PaneTopbarSettings
+	AttachBehavior          string
+	PaneNavigationMode      string
+	QuitBehavior            string
+	HiddenProjects          map[string]struct{}
+	Performance             DashboardPerformance
 }
 
 type PaneTopbarSettings struct {

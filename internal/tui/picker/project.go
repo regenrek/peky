@@ -5,9 +5,15 @@ type ProjectItem struct {
 	Name        string
 	Path        string
 	DisplayPath string
+	IsGit       bool
 }
 
-func (p ProjectItem) Title() string { return "📁 " + p.Name }
+func (p ProjectItem) Title() string {
+	if p.IsGit {
+		return "📁 " + p.Name
+	}
+	return "📁 " + p.Name + " (no git)"
+}
 func (p ProjectItem) Description() string {
 	if p.DisplayPath != "" {
 		return p.DisplayPath
