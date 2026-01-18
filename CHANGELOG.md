@@ -9,6 +9,13 @@ This format is based on Keep a Changelog.
 
 ### Fixed
 
+## 0.0.31 - 2026-01-18
+
+### Changed
+- npm release flow now uses OIDC trusted publishing and supports the new `peky-*` packages.
+- README links/assets and CLI schema now point at `peky` + `peky.ai`.
+- Removed obsolete `run-dev` skill file from the repo.
+
 ## 0.0.29 - 2026-01-13
 
 ### Changed
