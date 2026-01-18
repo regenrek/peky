@@ -9,6 +9,17 @@ This format is based on Keep a Changelog.
 
 ### Fixed
 
+## 0.0.34 - 2026-01-18
+
+### Added
+- Allow non-git folders in project picker and workspace scans (configurable).
+
+### Changed
+- Project picker labels non-git entries and includes config-defined projects.
+
+### Fixed
+- Workspace list JSON now includes `is_git` for projects.
+
 ## 0.0.33 - 2026-01-18
 
 ### Fixed
