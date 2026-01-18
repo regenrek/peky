@@ -126,6 +126,7 @@ type Model struct {
 	paneSwapPicker      list.Model
 	commandPalette      list.Model
 	commandPaletteStack []commandPaletteState
+	commandPaletteFlat  bool
 	settingsMenu        list.Model
 	perfMenu            list.Model
 	debugMenu           list.Model
