@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://peakypanes.dev/schemas/cli/1.0.0.json",
+  "$id": "https://peky.ai/schemas/cli/1.0.0.json",
   "title": "peky CLI JSON Output Schema",
   "description": "Canonical JSON output schema for peky CLI commands.",
   "type": "object",
