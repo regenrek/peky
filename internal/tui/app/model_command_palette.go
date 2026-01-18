@@ -81,7 +81,10 @@ func (m *Model) commandPaletteItems() []list.Item {
 	var paneItems []picker.CommandItem
 	var sessionItems []picker.CommandItem
 	var projectItems []picker.CommandItem
+	var menuItems []picker.CommandItem
 	otherItems := make([]picker.CommandItem, 0, 16)
+	var agentItems []picker.CommandItem
+	var exitItem *picker.CommandItem
 	specIndex := make(map[commandID]commandSpec)
 
 	for _, group := range registry.Groups {
@@ -98,6 +101,26 @@ func (m *Model) commandPaletteItems() []list.Item {
 			}
 		case "project":
 			projectItems = append(projectItems, commandSpecsToItems(m, group.Commands)...)
+			for _, cmd := range group.Commands {
+				specIndex[cmd.ID] = cmd
+			}
+		case "menu":
+			menuItems = append(menuItems, commandSpecsToItems(m, group.Commands)...)
+			for _, cmd := range group.Commands {
+				specIndex[cmd.ID] = cmd
+			}
+		case "other":
+			for _, cmd := range group.Commands {
+				specIndex[cmd.ID] = cmd
+				if cmd.ID == "other_quit" {
+					item := commandItemWithLabel(m, cmd, cmd.Label)
+					exitItem = &item
+					continue
+				}
+				otherItems = append(otherItems, commandSpecsToItems(m, []commandSpec{cmd})...)
+			}
+		case "agent":
+			agentItems = append(agentItems, commandSpecsToItems(m, group.Commands)...)
 			for _, cmd := range group.Commands {
 				specIndex[cmd.ID] = cmd
 			}
@@ -132,7 +155,12 @@ func (m *Model) commandPaletteItems() []list.Item {
 			Children: projectItems,
 		})
 	}
+	root = append(root, menuItems...)
+	root = append(root, agentItems...)
 	root = append(root, otherItems...)
+	if exitItem != nil {
+		root = append(root, *exitItem)
+	}
 	return commandItemsToList(root)
 }
 
