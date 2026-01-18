@@ -24,15 +24,15 @@ func TestCommandPaletteItemsAndRun(t *testing.T) {
 }
 
 type paletteScan struct {
-	foundSettings  bool
-	foundDebug     bool
-	foundPane      bool
-	foundSession   bool
-	foundProject   bool
-	foundBroadcast bool
-	paneIndex      int
-	sessionIndex   int
-	projectIndex   int
+	foundSettings bool
+	foundDebug    bool
+	foundPane     bool
+	foundSession  bool
+	foundProject  bool
+	foundExit     bool
+	paneIndex     int
+	sessionIndex  int
+	projectIndex  int
 }
 
 func scanPaletteItems(t *testing.T, items []list.Item) paletteScan {
@@ -54,11 +54,20 @@ func scanPaletteItems(t *testing.T, items []list.Item) paletteScan {
 		if cmdItem.Label == "Debug" {
 			scan.foundDebug = true
 		}
-		if cmdItem.Label == "Broadcast: /all" {
-			scan.foundBroadcast = true
+		if cmdItem.Label == "Exit" {
+			scan.foundExit = true
 		}
 		if cmdItem.Run != nil {
 			_ = cmdItem.Run()
+		}
+		if cmdItem.Label == "Pane" {
+			scan.foundPane = true
+		}
+		if cmdItem.Label == "Session" {
+			scan.foundSession = true
+		}
+		if cmdItem.Label == "Project" {
+			scan.foundProject = true
 		}
 	}
 	for i, item := range items {
@@ -66,17 +75,14 @@ func scanPaletteItems(t *testing.T, items []list.Item) paletteScan {
 		if !ok {
 			continue
 		}
-		if strings.HasPrefix(cmdItem.Label, "Pane:") && scan.paneIndex == -1 {
+		if cmdItem.Label == "Pane" && scan.paneIndex == -1 {
 			scan.paneIndex = i
-			scan.foundPane = true
 		}
-		if strings.HasPrefix(cmdItem.Label, "Session:") && scan.sessionIndex == -1 {
+		if cmdItem.Label == "Session" && scan.sessionIndex == -1 {
 			scan.sessionIndex = i
-			scan.foundSession = true
 		}
-		if strings.HasPrefix(cmdItem.Label, "Project:") && scan.projectIndex == -1 {
+		if cmdItem.Label == "Project" && scan.projectIndex == -1 {
 			scan.projectIndex = i
-			scan.foundProject = true
 		}
 	}
 	return scan
@@ -100,8 +106,8 @@ func assertPaletteEntries(t *testing.T, scan paletteScan) {
 	if !scan.foundSettings || !scan.foundDebug {
 		t.Fatalf("expected settings and debug entries")
 	}
-	if !scan.foundBroadcast {
-		t.Fatalf("expected broadcast entry")
+	if !scan.foundExit {
+		t.Fatalf("expected exit entry")
 	}
 	if !scan.foundPane || !scan.foundSession || !scan.foundProject {
 		t.Fatalf("expected pane, session, and project groups")

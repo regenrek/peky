@@ -12,9 +12,6 @@ import (
 func (m Model) viewFooter(width int) string {
 	projectKeys := m.Keys.ProjectKeys
 	sessionKeys := m.Keys.SessionKeys
-	paneKeys := m.Keys.PaneKeys
-	lastKey := m.Keys.ToggleLastPane
-	actionKey := m.Keys.FocusAction
 	commandsKey := m.Keys.CommandPalette
 	rawKey := m.Keys.HardRaw
 	helpKey := m.Keys.Help
@@ -23,9 +20,6 @@ func (m Model) viewFooter(width int) string {
 	commonMods := commonChordMods([]string{
 		projectKeys,
 		sessionKeys,
-		paneKeys,
-		lastKey,
-		actionKey,
 		commandsKey,
 		rawKey,
 		helpKey,
@@ -37,9 +31,6 @@ func (m Model) viewFooter(width int) string {
 		modPrefix = strings.Join(commonMods, "+")
 		projectKeys = stripChordMods(projectKeys, commonMods)
 		sessionKeys = stripChordMods(sessionKeys, commonMods)
-		paneKeys = stripChordMods(paneKeys, commonMods)
-		lastKey = stripChordMods(lastKey, commonMods)
-		actionKey = stripChordMods(actionKey, commonMods)
 		commandsKey = stripChordMods(commandsKey, commonMods)
 		rawKey = stripChordMods(rawKey, commonMods)
 		helpKey = stripChordMods(helpKey, commonMods)
@@ -52,13 +43,10 @@ func (m Model) viewFooter(width int) string {
 	}
 
 	base := fmt.Sprintf(
-		"%s%s project · %s session/pane · %s pane · %s last · %s action · %s commands · %s raw · %s help · %s quit",
+		"%s%s project · %s session/pane · %s commands · %s raw · %s help · %s quit",
 		prefix,
 		projectKeys,
 		sessionKeys,
-		paneKeys,
-		lastKey,
-		actionKey,
 		commandsKey,
 		rawKey,
 		helpKey,

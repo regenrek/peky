@@ -13,6 +13,10 @@ import (
 
 const commandPaletteHeading = "⌘ Command Palette"
 
+type commandPaletteState struct {
+	items []list.Item
+}
+
 func (m *Model) setupCommandPalette() {
 	m.commandPalette = picker.NewCommandPalette()
 }
@@ -21,6 +25,7 @@ func (m *Model) openCommandPalette() tea.Cmd {
 	m.setCommandPaletteSize()
 	m.commandPalette.ResetFilter()
 	m.commandPalette.SetFilterState(list.Filtering)
+	m.commandPaletteStack = nil
 	cmd := m.commandPalette.SetItems(m.commandPaletteItems())
 	m.setState(StateCommandPalette)
 	return cmd
@@ -70,24 +75,48 @@ func (m *Model) commandPaletteItems() []list.Item {
 		m.setToast("Command registry error: "+err.Error(), toastError)
 		return nil
 	}
-	items := make([]list.Item, 0, 16)
+	var paneItems []picker.CommandItem
+	var sessionItems []picker.CommandItem
+	var projectItems []picker.CommandItem
+	otherItems := make([]picker.CommandItem, 0, 16)
+
 	for _, group := range registry.Groups {
-		for _, cmd := range group.Commands {
-			cmd := cmd
-			items = append(items, picker.CommandItem{
-				Label:    cmd.Label,
-				Desc:     cmd.Desc,
-				Shortcut: cmd.Shortcut,
-				Run: func() tea.Cmd {
-					if cmd.Run == nil {
-						return nil
-					}
-					return cmd.Run(m, commandArgs{})
-				},
-			})
+		switch group.Name {
+		case "pane":
+			paneItems = append(paneItems, commandSpecsToItems(m, group.Commands)...)
+		case "session":
+			sessionItems = append(sessionItems, commandSpecsToItems(m, group.Commands)...)
+		case "project":
+			projectItems = append(projectItems, commandSpecsToItems(m, group.Commands)...)
+		default:
+			otherItems = append(otherItems, commandSpecsToItems(m, group.Commands)...)
 		}
 	}
-	return items
+
+	root := make([]picker.CommandItem, 0, 8)
+	if len(paneItems) > 0 {
+		root = append(root, picker.CommandItem{
+			Label:    "Pane",
+			Desc:     "Pane commands",
+			Children: paneItems,
+		})
+	}
+	if len(sessionItems) > 0 {
+		root = append(root, picker.CommandItem{
+			Label:    "Session",
+			Desc:     "Session commands",
+			Children: sessionItems,
+		})
+	}
+	if len(projectItems) > 0 {
+		root = append(root, picker.CommandItem{
+			Label:    "Project",
+			Desc:     "Project commands",
+			Children: projectItems,
+		})
+	}
+	root = append(root, otherItems...)
+	return commandItemsToList(root)
 }
 
 func commandItemsToList(items []picker.CommandItem) []list.Item {
@@ -105,6 +134,9 @@ func (m *Model) updateCommandPalette(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.runCommandPaletteSelection()
 		case "esc":
 			m.commandPalette.ResetFilter()
+			if m.commandPaletteHasParent() {
+				return m, m.closeCommandPaletteCategory()
+			}
 			m.setState(StateDashboard)
 			return m, nil
 		}
@@ -119,6 +151,9 @@ func (m *Model) updateCommandPalette(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q":
 		m.commandPalette.ResetFilter()
+		if m.commandPaletteHasParent() {
+			return m, m.closeCommandPaletteCategory()
+		}
 		m.setState(StateDashboard)
 		return m, nil
 	case "enter":
@@ -132,12 +167,69 @@ func (m *Model) updateCommandPalette(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *Model) runCommandPaletteSelection() tea.Cmd {
 	item, ok := m.commandPalette.SelectedItem().(picker.CommandItem)
-	m.commandPalette.ResetFilter()
-	m.setState(StateDashboard)
 	if !ok || item.Run == nil {
+		m.commandPalette.ResetFilter()
+		m.setState(StateDashboard)
 		return nil
 	}
+	if item.Back {
+		return m.closeCommandPaletteCategory()
+	}
+	if len(item.Children) > 0 {
+		return m.openCommandPaletteCategory(item)
+	}
+	m.commandPalette.ResetFilter()
+	m.setState(StateDashboard)
 	return item.Run()
+}
+
+func commandSpecsToItems(m *Model, specs []commandSpec) []picker.CommandItem {
+	items := make([]picker.CommandItem, 0, len(specs))
+	for _, cmd := range specs {
+		cmd := cmd
+		items = append(items, picker.CommandItem{
+			Label:    cmd.Label,
+			Desc:     cmd.Desc,
+			Shortcut: cmd.Shortcut,
+			Run: func() tea.Cmd {
+				if cmd.Run == nil {
+					return nil
+				}
+				return cmd.Run(m, commandArgs{})
+			},
+		})
+	}
+	return items
+}
+
+func (m *Model) commandPaletteHasParent() bool {
+	return m != nil && len(m.commandPaletteStack) > 0
+}
+
+func (m *Model) openCommandPaletteCategory(item picker.CommandItem) tea.Cmd {
+	if m == nil || len(item.Children) == 0 {
+		return nil
+	}
+	m.commandPaletteStack = append(m.commandPaletteStack, commandPaletteState{items: m.commandPalette.Items()})
+	children := append([]picker.CommandItem{{
+		Label: "← Back",
+		Desc:  "Command categories",
+		Back:  true,
+	}}, item.Children...)
+	m.commandPalette.ResetFilter()
+	m.commandPalette.SetFilterState(list.Filtering)
+	return m.commandPalette.SetItems(commandItemsToList(children))
+}
+
+func (m *Model) closeCommandPaletteCategory() tea.Cmd {
+	if m == nil || len(m.commandPaletteStack) == 0 {
+		return nil
+	}
+	last := m.commandPaletteStack[len(m.commandPaletteStack)-1]
+	m.commandPaletteStack = m.commandPaletteStack[:len(m.commandPaletteStack)-1]
+	m.commandPalette.ResetFilter()
+	m.commandPalette.SetFilterState(list.Filtering)
+	return m.commandPalette.SetItems(last.items)
 }
 
 func (m *Model) handleCommandPaletteFilterNavigation(msg tea.KeyMsg) bool {
