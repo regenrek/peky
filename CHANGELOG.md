@@ -9,6 +9,11 @@ This format is based on Keep a Changelog.
 
 ### Fixed
 
+## 0.0.33 - 2026-01-18
+
+### Fixed
+- Automatically create the global config + layouts dir if missing to avoid startup failures.
+
 ## 0.0.32 - 2026-01-18
 
 ### Added
