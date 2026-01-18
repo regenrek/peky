@@ -117,6 +117,9 @@ func (m *Model) handleQuickReplyMouse(msg tea.MouseMsg) (tea.Cmd, bool) {
 	if m == nil {
 		return nil, false
 	}
+	if !m.quickReplyEnabled() {
+		return nil, false
+	}
 
 	rect, ok := m.quickReplyRect()
 	if !ok || rect.Empty() {

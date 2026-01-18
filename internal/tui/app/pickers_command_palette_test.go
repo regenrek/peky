@@ -24,15 +24,18 @@ func TestCommandPaletteItemsAndRun(t *testing.T) {
 }
 
 type paletteScan struct {
-	foundSettings  bool
-	foundDebug     bool
-	foundPane      bool
-	foundSession   bool
-	foundProject   bool
-	foundBroadcast bool
-	paneIndex      int
-	sessionIndex   int
-	projectIndex   int
+	foundQuickAddPane    bool
+	foundQuickClosePane  bool
+	foundQuickAddSession bool
+	foundSettings        bool
+	foundDebug           bool
+	foundPane            bool
+	foundSession         bool
+	foundProject         bool
+	foundExit            bool
+	paneIndex            int
+	sessionIndex         int
+	projectIndex         int
 }
 
 func scanPaletteItems(t *testing.T, items []list.Item) paletteScan {
@@ -48,15 +51,7 @@ func scanPaletteItems(t *testing.T, items []list.Item) paletteScan {
 			continue
 		}
 		assertPaletteLabel(t, cmdItem.Label)
-		if cmdItem.Label == "Settings" {
-			scan.foundSettings = true
-		}
-		if cmdItem.Label == "Debug" {
-			scan.foundDebug = true
-		}
-		if cmdItem.Label == "Broadcast: /all" {
-			scan.foundBroadcast = true
-		}
+		applyPaletteLabel(&scan, cmdItem.Label)
 		if cmdItem.Run != nil {
 			_ = cmdItem.Run()
 		}
@@ -66,22 +61,56 @@ func scanPaletteItems(t *testing.T, items []list.Item) paletteScan {
 		if !ok {
 			continue
 		}
-		if strings.HasPrefix(cmdItem.Label, "Pane:") && scan.paneIndex == -1 {
-			scan.paneIndex = i
-			scan.foundPane = true
-		}
-		if strings.HasPrefix(cmdItem.Label, "Session:") && scan.sessionIndex == -1 {
-			scan.sessionIndex = i
-			scan.foundSession = true
-		}
-		if strings.HasPrefix(cmdItem.Label, "Project:") && scan.projectIndex == -1 {
-			scan.projectIndex = i
-			scan.foundProject = true
-		}
+		applyPaletteIndex(&scan, cmdItem.Label, i)
 	}
 	return scan
 }
 
+func applyPaletteLabel(scan *paletteScan, label string) {
+	if scan == nil {
+		return
+	}
+	switch label {
+	case "Settings":
+		scan.foundSettings = true
+	case "Debug":
+		scan.foundDebug = true
+	case "Add Pane":
+		scan.foundQuickAddPane = true
+	case "Close Pane":
+		scan.foundQuickClosePane = true
+	case "Add Session":
+		scan.foundQuickAddSession = true
+	case "Exit":
+		scan.foundExit = true
+	case "Panes":
+		scan.foundPane = true
+	case "Sessions":
+		scan.foundSession = true
+	case "Project":
+		scan.foundProject = true
+	}
+}
+
+func applyPaletteIndex(scan *paletteScan, label string, idx int) {
+	if scan == nil {
+		return
+	}
+	switch label {
+	case "Panes":
+		if scan.paneIndex == -1 {
+			scan.paneIndex = idx
+		}
+	case "Sessions":
+		if scan.sessionIndex == -1 {
+			scan.sessionIndex = idx
+		}
+	case "Project":
+		if scan.projectIndex == -1 {
+			scan.projectIndex = idx
+		}
+	}
+}
 func assertPaletteLabel(t *testing.T, label string) {
 	t.Helper()
 	if strings.Contains(label, "Reopen") {
@@ -100,8 +129,11 @@ func assertPaletteEntries(t *testing.T, scan paletteScan) {
 	if !scan.foundSettings || !scan.foundDebug {
 		t.Fatalf("expected settings and debug entries")
 	}
-	if !scan.foundBroadcast {
-		t.Fatalf("expected broadcast entry")
+	if !scan.foundQuickAddPane || !scan.foundQuickClosePane || !scan.foundQuickAddSession {
+		t.Fatalf("expected quick add/close commands")
+	}
+	if !scan.foundExit {
+		t.Fatalf("expected exit entry")
 	}
 	if !scan.foundPane || !scan.foundSession || !scan.foundProject {
 		t.Fatalf("expected pane, session, and project groups")
@@ -110,6 +142,9 @@ func assertPaletteEntries(t *testing.T, scan paletteScan) {
 
 func assertPaletteOrder(t *testing.T, scan paletteScan) {
 	t.Helper()
+	if scan.paneIndex == -1 || scan.sessionIndex == -1 || scan.projectIndex == -1 {
+		t.Fatalf("expected pane, session, and project positions")
+	}
 	if scan.paneIndex >= scan.sessionIndex || scan.sessionIndex >= scan.projectIndex {
 		t.Fatalf("expected pane items before session and project items")
 	}
@@ -148,7 +183,19 @@ func TestUpdateCommandPaletteFilteringAndQuit(t *testing.T) {
 	m := newTestModelLite()
 	m.setState(StateCommandPalette)
 	m.commandPalette.SetFilterState(list.Filtering)
-	m.updateCommandPalette(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	_, updateCmd := m.updateCommandPalette(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	if updateCmd != nil {
+		msg := updateCmd()
+		if msg != nil {
+			if batch, ok := msg.(tea.BatchMsg); ok {
+				for _, part := range batch {
+					m.commandPalette, _ = m.commandPalette.Update(part)
+				}
+			} else {
+				m.commandPalette, _ = m.commandPalette.Update(msg)
+			}
+		}
+	}
 	if m.state != StateCommandPalette {
 		t.Fatalf("expected command palette to stay open while filtering")
 	}
@@ -229,6 +276,37 @@ func TestCommandPaletteEscWhileFilteringCloses(t *testing.T) {
 	m.updateCommandPalette(tea.KeyMsg{Type: tea.KeyEsc})
 	if m.state != StateDashboard {
 		t.Fatalf("expected dashboard state after esc while filtering")
+	}
+}
+
+func TestCommandPaletteFilteringShowsChildCommands(t *testing.T) {
+	m := newTestModelLite()
+	m.setState(StateCommandPalette)
+	m.commandPalette.SetFilterState(list.Filtering)
+	cmd := m.commandPalette.SetItems(m.commandPaletteItems())
+	if cmd != nil {
+		msg := cmd()
+		m.commandPalette, _ = m.commandPalette.Update(msg)
+	}
+
+	m.updateCommandPalette(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	items := m.commandPalette.VisibleItems()
+	if len(items) == 0 {
+		t.Fatalf("expected filtered items")
+	}
+	found := false
+	for _, item := range items {
+		cmdItem, ok := item.(picker.CommandItem)
+		if !ok {
+			continue
+		}
+		if strings.Contains(strings.ToLower(cmdItem.Label), "add") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected add command in filtered results")
 	}
 }
 

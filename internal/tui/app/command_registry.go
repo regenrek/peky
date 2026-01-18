@@ -219,19 +219,6 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 			},
 		},
 		{
-			Name: "broadcast",
-			Commands: []commandSpec{
-				{
-					ID:    "broadcast_all",
-					Label: "Broadcast: /all",
-					Desc:  "Send to session/project/all panes",
-					Run: func(m *Model, _ commandArgs) tea.Cmd {
-						return m.prefillQuickReplyInput("/all ")
-					},
-				},
-			},
-		},
-		{
 			Name: "menu",
 			Commands: []commandSpec{
 				{
@@ -270,9 +257,9 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 				},
 				{
 					ID:       "other_quit",
-					Label:    "Quit",
+					Label:    "Exit",
 					Desc:     "Exit peky",
-					Aliases:  []string{"quit"},
+					Aliases:  []string{"quit", "exit"},
 					Shortcut: shortcutQuit,
 					Run: func(m *Model, _ commandArgs) tea.Cmd {
 						return m.requestQuit()

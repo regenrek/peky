@@ -246,7 +246,9 @@ func (m Model) viewHelp() string {
 	left.WriteString("\nPane\n")
 	left.WriteString("  type  Send input to selected pane (default)\n")
 	left.WriteString(fmt.Sprintf("  %s Toggle last pane\n", m.Keys.ToggleLastPane))
-	left.WriteString(fmt.Sprintf("  %s Focus action line\n", m.Keys.FocusAction))
+	if m.QuickReplyEnabled && strings.TrimSpace(m.Keys.FocusAction) != "" {
+		left.WriteString(fmt.Sprintf("  %s Focus action line\n", m.Keys.FocusAction))
+	}
 	left.WriteString(fmt.Sprintf("  %s Toggle HARD RAW\n", m.Keys.HardRaw))
 	if m.Keys.ResizeMode != "" {
 		left.WriteString(fmt.Sprintf("  %s Resize mode\n", m.Keys.ResizeMode))

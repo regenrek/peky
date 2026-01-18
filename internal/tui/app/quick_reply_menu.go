@@ -25,7 +25,7 @@ type quickReplyFileCache struct {
 }
 
 func (m *Model) quickReplyMenuState() quickReplyMenu {
-	if m == nil || m.state != StateDashboard || m.filterActive || m.hardRaw || !m.quickReplyInput.Focused() {
+	if m == nil || !m.quickReplyEnabled() || m.state != StateDashboard || m.filterActive || m.hardRaw || !m.quickReplyInput.Focused() {
 		return quickReplyMenu{}
 	}
 	if menu := m.authMenuState(); menu.kind != quickReplyMenuNone {
@@ -138,6 +138,13 @@ func (m *Model) pekyConfig() layout.Config {
 	cfg := *m.config
 	layout.ApplyDefaults(&cfg)
 	return cfg
+}
+
+func (m *Model) quickReplyEnabled() bool {
+	if m == nil {
+		return false
+	}
+	return m.pekyConfig().QuickReply.Enabled
 }
 
 func quickReplyFilesConfig(cfg layout.QuickReplyConfig) filelist.Config {

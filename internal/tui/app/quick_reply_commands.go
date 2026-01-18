@@ -55,6 +55,9 @@ func (m *Model) applySessionFilter(value string) tea.Cmd {
 }
 
 func (m *Model) prepareQuickReplyInput() tea.Cmd {
+	if m == nil || !m.quickReplyEnabled() {
+		return nil
+	}
 	var cmd tea.Cmd
 	if m.hardRaw {
 		cmd = m.setHardRaw(false)
@@ -68,6 +71,9 @@ func (m *Model) prepareQuickReplyInput() tea.Cmd {
 }
 
 func (m *Model) prefillQuickReplyInput(value string) tea.Cmd {
+	if m == nil || !m.quickReplyEnabled() {
+		return nil
+	}
 	cmd := m.prepareQuickReplyInput()
 	m.quickReplyInput.SetValue(value)
 	m.quickReplyInput.CursorEnd()

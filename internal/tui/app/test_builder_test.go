@@ -6,6 +6,8 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/colorprofile"
+
+	"github.com/regenrek/peakypanes/internal/layout"
 )
 
 func newTestModelLite() *Model {
@@ -41,6 +43,9 @@ func newTestModelLite() *Model {
 		},
 		width:  120,
 		height: 40,
+		config: &layout.Config{
+			QuickReply: layout.QuickReplyConfig{Enabled: true},
+		},
 	}
 	m.resize.snap = true
 	m.filterInput = textinput.New()

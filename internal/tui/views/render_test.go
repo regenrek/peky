@@ -149,9 +149,10 @@ func TestViewDashboardQuickReplyMenuOverlay(t *testing.T) {
 	input := textinput.New()
 	input.SetValue("/")
 	m := Model{
-		Width:           60,
-		Height:          16,
-		QuickReplyInput: input,
+		Width:             60,
+		Height:            16,
+		QuickReplyInput:   input,
+		QuickReplyEnabled: true,
 		QuickReplySuggestions: []QuickReplySuggestion{
 			{Text: "/kill", MatchLen: 2, Desc: "Close pane"},
 			{Text: "/rename", MatchLen: 2, Desc: "Rename pane"},

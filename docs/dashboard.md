@@ -6,13 +6,14 @@ The dashboard shows:
 - Projects on top (tabs)
 - Sessions on the left (with pane counts and expandable panes)
 - Live pane layout canvas on the right (native panes are fully interactive)
-- Action line (always visible) and target pane highlight for follow-ups
+- Optional action line (disabled by default) and target pane highlight for follow-ups
 
 Action line details:
 - Default typing goes to the selected pane (`SOFT`).
 - Click the action line to focus it (for `/` slash commands, `@` file picker, and structured actions).
 - `enter` submits the action line (pane mode). `esc` clears the action line input.
 - Focus shortcut: `ctrl+shift+/` (default; configurable via `dashboard.keymap.focus_action`).
+To enable: set `quick_reply.enabled: true` in the global config.
 
 Hard RAW:
 - `ctrl+shift+k` toggles `RAW` (pure terminal).

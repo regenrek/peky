@@ -25,14 +25,17 @@ func (m Model) viewDashboardContent() string {
 	contentWidth := m.Width - h
 	contentHeight := m.Height - v
 	hasPekyPrompt := strings.TrimSpace(m.PekyPromptLine) != ""
-	layout, ok := viewlayout.Dashboard(contentWidth, contentHeight, hasPekyPrompt)
+	layout, ok := viewlayout.Dashboard(contentWidth, contentHeight, hasPekyPrompt, m.QuickReplyEnabled)
 	if !ok {
 		return "Terminal too small"
 	}
 
 	header := m.viewHeader(contentWidth)
 	footer := m.viewFooter(contentWidth)
-	quickReply := m.viewQuickReply(contentWidth)
+	quickReply := ""
+	if m.QuickReplyEnabled {
+		quickReply = m.viewQuickReply(contentWidth)
+	}
 	pekyPrompt := ""
 	if hasPekyPrompt {
 		pekyPrompt = m.viewPekyPromptLine(contentWidth)
@@ -43,13 +46,18 @@ func (m Model) viewDashboardContent() string {
 	if layout.HeaderGap > 0 {
 		sections = append(sections, fitLine("", contentWidth))
 	}
-	sections = append(sections, body, quickReply)
+	sections = append(sections, body)
+	if m.QuickReplyEnabled {
+		sections = append(sections, quickReply)
+	}
 	if hasPekyPrompt {
 		sections = append(sections, pekyPrompt)
 	}
 	sections = append(sections, footer)
 	view := lipgloss.JoinVertical(lipgloss.Top, sections...)
-	view = m.overlayQuickReplyMenu(view, contentWidth, contentHeight, layout.HeaderHeight, layout.HeaderGap, layout.BodyHeight)
+	if m.QuickReplyEnabled {
+		view = m.overlayQuickReplyMenu(view, contentWidth, contentHeight, layout.HeaderHeight, layout.HeaderGap, layout.BodyHeight)
+	}
 	view = m.overlayResizeOverlay(view, contentWidth, contentHeight, layout.HeaderHeight, layout.HeaderGap, layout.BodyHeight)
 	return m.overlayContextMenu(view, contentWidth, contentHeight)
 }

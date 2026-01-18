@@ -12,48 +12,81 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *Model) updateDashboardInput(msg tuiinput.KeyMsg) (tea.Model, tea.Cmd) {
 	teaMsg := msg.Tea()
-	if cmd, handled := m.handleHardRawToggle(msg); handled {
-		return m, cmd
-	}
-	if cmd, handled := m.handleDashboardFilter(teaMsg); handled {
-		return m, cmd
-	}
-	if cmd, handled := m.handleOfflineScrollInput(msg); handled {
-		return m, cmd
-	}
-	if cmd, handled := m.handleFocusAction(msg); handled {
+	m.ensureQuickReplyBlur()
+	if cmd, handled := m.handleDashboardPreInput(msg, teaMsg); handled {
 		return m, cmd
 	}
 	if m.hardRaw {
 		return m, m.sendDashboardKeyToPane(msg)
 	}
-	if cmd, handled := m.handleContextMenuKey(teaMsg); handled {
+	if cmd, handled := m.handleDashboardPostInput(msg, teaMsg); handled {
 		return m, cmd
 	}
-	if cmd, handled := m.handleResizeKey(msg); handled {
-		return m, cmd
-	}
-	if cmd, handled := m.handleProjectNav(msg); handled {
-		return m, cmd
-	}
-	if cmd, handled := m.handleSessionNav(msg); handled {
-		return m, cmd
-	}
-	if cmd, handled := m.handlePaneNav(msg); handled {
-		return m, cmd
-	}
-	m.applyTogglePanes(msg)
-	if cmd, handled := m.handleSidebarToggle(msg); handled {
-		return m, cmd
-	}
-	if cmd, handled := m.handleDashboardActions(msg); handled {
-		return m, cmd
-	}
-
 	if m.quickReplyInput.Focused() {
 		return m.updateQuickReplyInput(msg)
 	}
 	return m, m.sendDashboardKeyToPane(msg)
+}
+
+func (m *Model) ensureQuickReplyBlur() {
+	if m == nil {
+		return
+	}
+	if !m.quickReplyEnabled() && m.quickReplyInput.Focused() {
+		m.quickReplyMouseSel.clear()
+		m.resetQuickReplyHistory()
+		m.resetQuickReplyMenu()
+		m.quickReplyInput.Blur()
+	}
+}
+
+func (m *Model) handleDashboardPreInput(msg tuiinput.KeyMsg, teaMsg tea.KeyMsg) (tea.Cmd, bool) {
+	if cmd, handled := m.handleHardRawToggle(msg); handled {
+		return cmd, true
+	}
+	if cmd, handled := m.handleDashboardFilter(teaMsg); handled {
+		return cmd, true
+	}
+	if cmd, handled := m.handleOfflineScrollInput(msg); handled {
+		return cmd, true
+	}
+	if cmd, handled := m.handleFocusAction(msg); handled {
+		return cmd, true
+	}
+	return nil, false
+}
+
+func (m *Model) handleDashboardPostInput(msg tuiinput.KeyMsg, teaMsg tea.KeyMsg) (tea.Cmd, bool) {
+	if cmd, handled := m.handleContextMenuKey(teaMsg); handled {
+		return cmd, true
+	}
+	if cmd, handled := m.handleResizeKey(msg); handled {
+		return cmd, true
+	}
+	if cmd, handled := m.handleDashboardNavigation(msg); handled {
+		return cmd, true
+	}
+	if cmd, handled := m.handleSidebarToggle(msg); handled {
+		return cmd, true
+	}
+	if cmd, handled := m.handleDashboardActions(msg); handled {
+		return cmd, true
+	}
+	return nil, false
+}
+
+func (m *Model) handleDashboardNavigation(msg tuiinput.KeyMsg) (tea.Cmd, bool) {
+	if cmd, handled := m.handleProjectNav(msg); handled {
+		return cmd, true
+	}
+	if cmd, handled := m.handleSessionNav(msg); handled {
+		return cmd, true
+	}
+	if cmd, handled := m.handlePaneNav(msg); handled {
+		return cmd, true
+	}
+	m.applyTogglePanes(msg)
+	return nil, false
 }
 
 func (m *Model) handleFocusAction(msg tuiinput.KeyMsg) (tea.Cmd, bool) {
@@ -62,6 +95,9 @@ func (m *Model) handleFocusAction(msg tuiinput.KeyMsg) (tea.Cmd, bool) {
 	}
 	if !matchesBinding(msg, m.keys.focusAction) {
 		return nil, false
+	}
+	if !m.quickReplyEnabled() {
+		return nil, true
 	}
 	if m.quickReplyInput.Focused() {
 		m.quickReplyMouseSel.clear()

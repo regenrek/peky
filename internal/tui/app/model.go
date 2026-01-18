@@ -121,21 +121,23 @@ type Model struct {
 	cursorShapeFlushScheduled bool
 	cursorShapeNow            func() time.Time
 
-	projectPicker    list.Model
-	layoutPicker     list.Model
-	paneSwapPicker   list.Model
-	commandPalette   list.Model
-	settingsMenu     list.Model
-	perfMenu         list.Model
-	debugMenu        list.Model
-	authFlow         authFlowState
-	authDialogInput  textinput.Model
-	authDialogTitle  string
-	authDialogBody   string
-	authDialogFooter string
-	authDialogKind   authDialogKind
-	gitProjects      []picker.ProjectItem
-	dialogHelpOpen   bool
+	projectPicker       list.Model
+	layoutPicker        list.Model
+	paneSwapPicker      list.Model
+	commandPalette      list.Model
+	commandPaletteStack []commandPaletteState
+	commandPaletteFlat  bool
+	settingsMenu        list.Model
+	perfMenu            list.Model
+	debugMenu           list.Model
+	authFlow            authFlowState
+	authDialogInput     textinput.Model
+	authDialogTitle     string
+	authDialogBody      string
+	authDialogFooter    string
+	authDialogKind      authDialogKind
+	gitProjects         []picker.ProjectItem
+	dialogHelpOpen      bool
 
 	confirmSession     string
 	confirmProject     string
