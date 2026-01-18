@@ -6,8 +6,12 @@ import (
 )
 
 func TestProjectItem(t *testing.T) {
-	item := ProjectItem{Name: "repo", Path: "/tmp/repo", DisplayPath: "/tmp/repo"}
+	item := ProjectItem{Name: "repo", Path: "/tmp/repo", DisplayPath: "/tmp/repo", IsGit: true}
 	if item.Title() != "📁 repo" {
+		t.Fatalf("ProjectItem.Title() = %q", item.Title())
+	}
+	item.IsGit = false
+	if item.Title() != "📁 repo (no git)" {
 		t.Fatalf("ProjectItem.Title() = %q", item.Title())
 	}
 	if item.Description() == "" {
