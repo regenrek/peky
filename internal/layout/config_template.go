@@ -35,6 +35,7 @@ ghostty:
 #   attach_behavior: current  # current | detached
 #   project_roots:
 #     - ~/projects
+#   project_roots_allow_nongit: true
 #   status_regex:
 #     success: "(?i)done|finished|success|completed|✅"
 #     error: "(?i)error|failed|panic|❌"

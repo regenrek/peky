@@ -38,6 +38,7 @@ func runList(ctx root.CommandContext) error {
 			ID:           project.ID,
 			Name:         project.Name,
 			Path:         project.Path,
+			IsGit:        project.IsGit,
 			Hidden:       project.Hidden,
 			SessionCount: counts[project.ID],
 		})

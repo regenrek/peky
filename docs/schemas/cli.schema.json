@@ -311,6 +311,7 @@
         "id": {"$ref": "#/$defs/ID"},
         "name": {"type": "string"},
         "path": {"type": "string"},
+        "is_git": {"type": "boolean"},
         "hidden": {"type": "boolean"},
         "last_opened": {"$ref": "#/$defs/Timestamp"},
         "session_count": {"type": "integer", "minimum": 0}

@@ -5,6 +5,7 @@ type Project struct {
 	ID     string
 	Name   string
 	Path   string
+	IsGit  bool
 	Hidden bool
 	Source string
 }
