@@ -8,6 +8,10 @@ This format is based on Keep a Changelog.
 ### Changed
 
 ### Fixed
+
+## 0.0.35 - 2026-01-19
+
+### Fixed
 - Pane topbar now renders agent status using agent-state metadata (Codex/Claude/etc).
 
 ## 0.0.34 - 2026-01-18
