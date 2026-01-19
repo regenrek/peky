@@ -72,7 +72,10 @@ func paneTopbarGit(pane Pane) string {
 }
 
 func paneTopbarAgent(pane Pane, spinner string) string {
-	tool := strings.TrimSpace(pane.Tool)
+	tool := strings.TrimSpace(pane.AgentTool)
+	if tool == "" {
+		tool = strings.TrimSpace(pane.Tool)
+	}
 	if !isAgentTool(tool) {
 		return ""
 	}
