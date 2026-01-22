@@ -23,6 +23,22 @@ func TestApplyShorthandLayout(t *testing.T) {
 	}
 }
 
+func TestApplyShorthandDotPath(t *testing.T) {
+	specDoc := minimalSpec()
+	args := applyShorthand(specDoc, []string{identity.CLIName, "."})
+	if len(args) != 4 || args[1] != "start" || args[2] != "--path" || args[3] != "." {
+		t.Fatalf("unexpected shorthand args: %v", args)
+	}
+}
+
+func TestApplyShorthandDotSlashPath(t *testing.T) {
+	specDoc := minimalSpec()
+	args := applyShorthand(specDoc, []string{identity.CLIName, "./"})
+	if len(args) != 4 || args[1] != "start" || args[2] != "--path" || args[3] != "." {
+		t.Fatalf("unexpected shorthand args: %v", args)
+	}
+}
+
 func TestApplyShorthandSkipsKnownCommand(t *testing.T) {
 	specDoc := minimalSpec()
 	args := applyShorthand(specDoc, []string{identity.CLIName, "daemon"})
