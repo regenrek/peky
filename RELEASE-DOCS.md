@@ -72,14 +72,14 @@ gh run list -w "npm Release" -L 3
 gh run view --log --web
 ```
 
-5) Verify installs (recommended):
+4) Verify installs (recommended):
 
 ```bash
 brew install --build-from-source regenrek/tap/peky
 brew test regenrek/tap/peky
 ```
 
-6) Publish npm packages (GitHub Actions, Trusted Publishing):
+5) Publish npm packages (GitHub Actions, Trusted Publishing):
 
 - Creating/publishing the GitHub Release triggers the `npm Release` workflow, which builds the npm packages from the GitHub release assets and publishes all 5 packages using OIDC.
 - Monitor the run under GitHub Actions → `npm Release`.
