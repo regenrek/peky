@@ -6,6 +6,15 @@ This format is based on Keep a Changelog.
 ## Unreleased
 
 ### Added
+
+
+### Changed
+
+### Fixed
+
+## 0.0.38 - 2026-01-22
+
+### Added
 - Pane background palette with picker dialog (command palette + pane context menu).
 
 ### Changed
