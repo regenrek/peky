@@ -109,7 +109,12 @@ The helper requires a clean working tree and push access to the repo.
 ## Post-Release Verification
 
 ```bash
+brew info regenrek/tap/peky
 npm view peky
+npm view peky-darwin-x64
+npm view peky-darwin-arm64
+npm view peky-linux-x64
+npm view peky-linux-arm64
 npx -y -p peky peky
 ```
 
