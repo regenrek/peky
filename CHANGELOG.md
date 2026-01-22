@@ -9,6 +9,18 @@ This format is based on Keep a Changelog.
 
 ### Fixed
 
+## 0.0.36 - 2026-01-22
+
+### Added
+- `peky debug paths` command (text + JSON) to show effective runtime/data/config paths.
+
+### Changed
+- `just uninstall-dev` now clears runtime + config dirs to avoid stale state.
+- Docs clarify runtime vs config paths on macOS/Linux.
+
+### Fixed
+- “restored” banner persists after uninstall due to a leftover restart notice flag.
+
 ## 0.0.35 - 2026-01-19
 
 ### Fixed
