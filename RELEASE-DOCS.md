@@ -58,6 +58,20 @@ gh run list -w "npm Release" -L 3
 gh run view --log --web
 ```
 
+## Cut Next Release (Homebrew + npm)
+
+Use this when you need to cut the next release and ensure Homebrew + npm publishing completes.
+
+1) Confirm the `release` workflow succeeded (Homebrew tap update is part of it).
+2) Confirm the `npm Release` workflow succeeded (all 5 npm packages).
+3) If either fails, fix and re-run the exact workflow for the same tag:
+
+```bash
+gh run list -w release -L 3
+gh run list -w "npm Release" -L 3
+gh run view --log --web
+```
+
 5) Verify installs (recommended):
 
 ```bash
