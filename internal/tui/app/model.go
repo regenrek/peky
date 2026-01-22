@@ -156,6 +156,12 @@ type Model struct {
 	renamePane      string
 	renamePaneIndex string
 
+	paneColorSession   string
+	paneColorPaneID    string
+	paneColorPaneIndex string
+	paneColorTitle     string
+	paneColorCurrent   int
+
 	swapSourceSession string
 	swapSourcePane    string
 	swapSourcePaneID  string

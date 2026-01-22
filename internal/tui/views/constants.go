@@ -17,6 +17,7 @@ const (
 	viewCommandPalette
 	viewRenameSession
 	viewRenamePane
+	viewPaneColor
 	viewProjectRootSetup
 	viewSettingsMenu
 	viewPerformanceMenu

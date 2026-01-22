@@ -148,6 +148,7 @@ var keyHandlers = map[ViewState]keyHandler{
 	StateDebugMenu:        func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateDebugMenu(msg) },
 	StateRenameSession:    func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateRename(msg) },
 	StateRenamePane:       func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateRename(msg) },
+	StatePaneColor:        func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updatePaneColor(msg) },
 	StateProjectRootSetup: func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateProjectRootSetup(msg) },
 	StatePekyDialog:       func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updatePekyDialog(msg) },
 	StateAuthDialog:       func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateAuthDialog(msg) },

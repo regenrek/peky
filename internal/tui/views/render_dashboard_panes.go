@@ -173,6 +173,9 @@ func renderDashboardPaneTile(pane DashboardPane, width, height, previewLines int
 		return ""
 	}
 	layout := buildPaneTileLayout(width, height, previewLines, selected)
+	if bg, ok := paneBackgroundTint(pane.Pane.Background); ok {
+		layout.style = layout.style.Background(bg)
+	}
 	lines := paneTileBaseLines(pane, selected, iconCtx, layout.contentWidth)
 	lines = append(lines, panePreviewLinesWithWidth(pane, layout.availablePreview, layout.contentWidth, false)...)
 	return layout.style.Render(strings.Join(trimLines(lines, layout.contentHeight), "\n"))
@@ -183,6 +186,9 @@ func (m Model) renderDashboardPaneTileLive(pane DashboardPane, width, height, pr
 		return ""
 	}
 	layout := buildPaneTileLayout(width, height, previewLines, selected)
+	if bg, ok := paneBackgroundTint(pane.Pane.Background); ok {
+		layout.style = layout.style.Background(bg)
+	}
 	lines := paneTileBaseLines(pane, selected, iconCtx, layout.contentWidth)
 	lines = append(lines, paneLivePreviewLines(m, pane, layout, selected)...)
 	return layout.style.Render(strings.Join(trimLines(lines, layout.contentHeight), "\n"))

@@ -120,3 +120,19 @@ func TestValidatePaneCount(t *testing.T) {
 		t.Fatalf("expected max count to pass, got count=%d err=%v", count, err)
 	}
 }
+
+func TestValidatePaneBackground(t *testing.T) {
+	value, err := ValidatePaneBackground(limits.PaneBackgroundDefault)
+	if err != nil {
+		t.Fatalf("expected valid background: %v", err)
+	}
+	if value != limits.PaneBackgroundDefault {
+		t.Fatalf("expected default background %d, got %d", limits.PaneBackgroundDefault, value)
+	}
+	if _, err := ValidatePaneBackground(limits.PaneBackgroundMin - 1); err == nil {
+		t.Fatalf("expected error below min")
+	}
+	if _, err := ValidatePaneBackground(limits.PaneBackgroundMax + 1); err == nil {
+		t.Fatalf("expected error above max")
+	}
+}

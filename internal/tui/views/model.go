@@ -59,6 +59,7 @@ type Model struct {
 	ConfirmCloseAllProjects   ConfirmCloseAllProjects
 	ConfirmClosePane          ConfirmClosePane
 	Rename                    Rename
+	PaneColor                 PaneColorDialog
 	ProjectRootInput          textinput.Model
 	Keys                      KeyHints
 	Toast                     string
@@ -144,6 +145,7 @@ type Pane struct {
 	AgentUpdated time.Time
 	AgentUnread  bool
 	Active       bool
+	Background   int
 	Left         int
 	Top          int
 	Width        int
@@ -231,6 +233,13 @@ type Rename struct {
 	Pane      string
 	PaneIndex string
 	Input     textinput.Model
+}
+
+type PaneColorDialog struct {
+	Open      bool
+	Session   string
+	PaneLabel string
+	Current   int
 }
 
 type AuthDialog struct {

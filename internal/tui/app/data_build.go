@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/limits"
 	"github.com/regenrek/peakypanes/internal/native"
 	"github.com/regenrek/peakypanes/internal/sessiond"
 	"github.com/regenrek/peakypanes/internal/tui/agent"
@@ -331,6 +332,7 @@ func panesFromNative(panes []native.PaneSnapshot, paneGit map[string]sessiond.Pa
 			Tool:          p.Tool,
 			PID:           p.PID,
 			Active:        p.Active,
+			Background:    normalizePaneBackground(p.Background),
 			Left:          p.Left,
 			Top:           p.Top,
 			Width:         p.Width,
@@ -367,6 +369,13 @@ func panesFromNative(panes []native.PaneSnapshot, paneGit map[string]sessiond.Pa
 		items[i] = item
 	}
 	return items
+}
+
+func normalizePaneBackground(value int) int {
+	if value < limits.PaneBackgroundMin || value > limits.PaneBackgroundMax {
+		return limits.PaneBackgroundDefault
+	}
+	return value
 }
 
 func paneExists(panes []PaneItem, index string) bool {

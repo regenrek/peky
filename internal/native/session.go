@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/limits"
 	"github.com/regenrek/peakypanes/internal/sessionrestore"
 	"github.com/regenrek/peakypanes/internal/terminal"
 )
@@ -327,6 +328,7 @@ func (m *Manager) snapshotSessions() ([]SessionSnapshot, []panePreviewRef, []str
 				Tool:          pane.Tool,
 				PID:           pane.PID,
 				Active:        pane.Active,
+				Background:    normalizePaneBackground(pane.Background),
 				Left:          pane.Left,
 				Top:           pane.Top,
 				Width:         pane.Width,
@@ -508,6 +510,7 @@ type PaneSnapshot struct {
 	Tool          string
 	PID           int
 	Active        bool
+	Background    int
 	Left          int
 	Top           int
 	Width         int
@@ -524,4 +527,11 @@ type PaneSnapshot struct {
 	Tags          []string
 	BytesIn       uint64
 	BytesOut      uint64
+}
+
+func normalizePaneBackground(value int) int {
+	if value < limits.PaneBackgroundMin || value > limits.PaneBackgroundMax {
+		return limits.PaneBackgroundDefault
+	}
+	return value
 }

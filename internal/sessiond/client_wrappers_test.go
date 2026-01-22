@@ -93,6 +93,7 @@ func assertClientWrapperMissingTargetErrors(t *testing.T, tc daemonTestClient) {
 		{name: "FocusSession", fn: func() error { return tc.client.FocusSession(tc.ctx, "") }},
 		{name: "FocusPane", fn: func() error { return tc.client.FocusPane(tc.ctx, "") }},
 		{name: "SignalPane", fn: func() error { return tc.client.SignalPane(tc.ctx, "", "TERM") }},
+		{name: "SetPaneBackground", fn: func() error { return tc.client.SetPaneBackground(tc.ctx, "missing", 2) }},
 		{name: "RelayCreate", fn: func() error { _, err := tc.client.RelayCreate(tc.ctx, RelayConfig{}); return err }},
 		{name: "RelayStop", fn: func() error { return tc.client.RelayStop(tc.ctx, "") }},
 	}

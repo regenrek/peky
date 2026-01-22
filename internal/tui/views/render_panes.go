@@ -103,6 +103,9 @@ func renderPaneLayoutContent(buf *cellbuf.Buffer, geom layoutgeom.Geometry, pane
 		content := strings.TrimSpace(layoutPaneContent(pane, contentRect.W, contentRect.H, ctx))
 		content = padLines(content, contentRect.W, contentRect.H)
 		cellbuf.SetContentRect(buf, content, cellbuf.Rect(contentRect.X, contentRect.Y, contentRect.W, contentRect.H))
+		if bg, ok := paneBackgroundAnsiTint(pane.Background); ok {
+			applyPaneBackground(buf, contentRect, bg)
+		}
 	}
 }
 
@@ -230,6 +233,28 @@ func resizeGuideStyle(active bool) cellbuf.Style {
 		color = xansi.XParseColor(string(theme.AccentFocus))
 	}
 	return cellbuf.Style{Fg: color}
+}
+
+func applyPaneBackground(buf *cellbuf.Buffer, rect mouse.Rect, bg xansi.Color) {
+	if buf == nil || rect.Empty() || bg == nil {
+		return
+	}
+	for y := rect.Y; y < rect.Y+rect.H; y++ {
+		for x := rect.X; x < rect.X+rect.W; x++ {
+			cell := buf.Cell(x, y)
+			if cell == nil {
+				blank := cellbuf.BlankCell
+				blank.Style.Bg = bg
+				buf.SetCell(x, y, &blank)
+				continue
+			}
+			if cell.Style.Bg != nil {
+				continue
+			}
+			cell.Style.Bg = bg
+			buf.SetCell(x, y, cell)
+		}
+	}
 }
 
 func applyResizeGuideStyles(buf *cellbuf.Buffer, dividerMap map[[2]int]rune, guides []ResizeGuide) {

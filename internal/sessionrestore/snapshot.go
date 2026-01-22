@@ -24,6 +24,7 @@ type PaneSnapshot struct {
 	PaneTool          string    `json:"paneTool,omitempty"`
 	PaneCwd           string    `json:"paneCwd,omitempty"`
 	PaneActive        bool      `json:"paneActive,omitempty"`
+	PaneBackground    int       `json:"paneBackground,omitempty"`
 	PaneLeft          int       `json:"paneLeft,omitempty"`
 	PaneTop           int       `json:"paneTop,omitempty"`
 	PaneWidth         int       `json:"paneWidth,omitempty"`

@@ -182,6 +182,7 @@ func (r *restoreService) snapshotPane(ctx context.Context, mgr sessionManager, s
 		PaneTool:          pane.Tool,
 		PaneCwd:           pane.Cwd,
 		PaneActive:        pane.Active,
+		PaneBackground:    pane.Background,
 		PaneLeft:          pane.Left,
 		PaneTop:           pane.Top,
 		PaneWidth:         pane.Width,

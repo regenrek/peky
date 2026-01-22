@@ -444,6 +444,19 @@ func (c *Client) SetPaneTool(ctx context.Context, paneID, tool string) error {
 	return err
 }
 
+// SetPaneBackground updates the background palette index for a pane.
+func (c *Client) SetPaneBackground(ctx context.Context, paneID string, background int) error {
+	_, err := c.call(ctx, OpSetPaneBackground, SetPaneBackgroundRequest{PaneID: paneID, Background: background}, nil)
+	return err
+}
+
+// SetPaneBackgroundByIndex updates the background palette index for a pane by session and index.
+func (c *Client) SetPaneBackgroundByIndex(ctx context.Context, sessionName, paneIndex string, background int) error {
+	req := SetPaneBackgroundRequest{SessionName: sessionName, PaneIndex: paneIndex, Background: background}
+	_, err := c.call(ctx, OpSetPaneBackground, req, nil)
+	return err
+}
+
 // SendInput forwards raw input to a pane.
 func (c *Client) SendInput(ctx context.Context, paneID string, input []byte) error {
 	_, err := c.call(ctx, OpSendInput, SendInputRequest{PaneID: paneID, Input: input}, nil)

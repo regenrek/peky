@@ -42,6 +42,7 @@ func (m *focusManager) ZoomPane(string, string, bool) (layout.ApplyResult, error
 	return layout.ApplyResult{}, nil
 }
 func (m *focusManager) SetPaneTool(string, string) error                { return nil }
+func (m *focusManager) SetPaneBackground(string, int) error             { return nil }
 func (m *focusManager) SendInput(context.Context, string, []byte) error { return nil }
 func (m *focusManager) SendMouse(string, uv.MouseEvent, terminal.MouseRoute) error {
 	return nil
