@@ -5,6 +5,9 @@ This format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Added
+- Pane background palette with picker dialog (command palette + pane context menu).
+
 ### Changed
 
 ### Fixed
