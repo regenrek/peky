@@ -33,55 +33,18 @@ func (m *Model) openPaneColorDialogFor(sessionName, paneID, paneIndex string) {
 	if m == nil {
 		return
 	}
-	sessionName = strings.TrimSpace(sessionName)
-	paneID = strings.TrimSpace(paneID)
-	paneIndex = strings.TrimSpace(paneIndex)
-
-	var pane *PaneItem
-	if paneID != "" {
-		pane = m.paneByID(paneID)
-	}
-	if pane == nil && sessionName != "" {
-		session := findSessionByName(m.data.Projects, sessionName)
-		if session != nil {
-			if paneID != "" {
-				pane = findPaneByID(session.Panes, paneID)
-			}
-			if pane == nil && paneIndex != "" {
-				pane = findPaneByIndex(session.Panes, paneIndex)
-			}
-		}
-	}
+	sessionName, paneID, paneIndex = trimPaneColorArgs(sessionName, paneID, paneIndex)
+	pane := m.resolvePaneForColor(sessionName, paneID, paneIndex)
 	if pane == nil {
 		m.setToast("No pane selected", toastWarning)
 		return
 	}
-	if sessionName == "" {
-		if sel, ok := m.selectionForPaneID(pane.ID); ok {
-			sessionName = sel.Session
-			if paneIndex == "" {
-				paneIndex = sel.Pane
-			}
-		}
-	}
-	if sessionName == "" {
-		if session := m.selectedSession(); session != nil {
-			sessionName = session.Name
-		}
-	}
-	if sessionName != "" && !m.sessionRunning(sessionName, pane.ID) {
-		m.setToast("Session not running", toastWarning)
+	sessionName, paneIndex = m.resolvePaneColorSession(sessionName, paneIndex, pane)
+	if !m.ensurePaneColorSessionRunning(sessionName, pane.ID) {
 		return
 	}
-	if paneIndex == "" {
-		paneIndex = pane.Index
-	}
-	m.paneColorSession = sessionName
-	m.paneColorPaneID = pane.ID
-	m.paneColorPaneIndex = paneIndex
-	m.paneColorTitle = paneColorLabel(pane)
-	m.paneColorCurrent = normalizePaneBackground(pane.Background)
-	m.setState(StatePaneColor)
+	paneIndex = normalizePaneColorIndex(paneIndex, pane)
+	m.setPaneColorDialogState(sessionName, pane.ID, paneIndex, pane)
 }
 
 func (m *Model) updatePaneColor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -137,6 +100,78 @@ func (m *Model) applyPaneColor(value int) tea.Cmd {
 	m.setState(StateDashboard)
 	m.setToast("Pane color set to "+strconv.Itoa(value), toastSuccess)
 	return m.requestRefreshCmd()
+}
+
+func trimPaneColorArgs(sessionName, paneID, paneIndex string) (string, string, string) {
+	return strings.TrimSpace(sessionName), strings.TrimSpace(paneID), strings.TrimSpace(paneIndex)
+}
+
+func (m *Model) resolvePaneForColor(sessionName, paneID, paneIndex string) *PaneItem {
+	if paneID != "" {
+		if pane := m.paneByID(paneID); pane != nil {
+			return pane
+		}
+	}
+	if sessionName == "" {
+		return nil
+	}
+	session := findSessionByName(m.data.Projects, sessionName)
+	if session == nil {
+		return nil
+	}
+	if paneID != "" {
+		if pane := findPaneByID(session.Panes, paneID); pane != nil {
+			return pane
+		}
+	}
+	if paneIndex != "" {
+		return findPaneByIndex(session.Panes, paneIndex)
+	}
+	return nil
+}
+
+func (m *Model) resolvePaneColorSession(sessionName, paneIndex string, pane *PaneItem) (string, string) {
+	if sessionName == "" && pane != nil {
+		if sel, ok := m.selectionForPaneID(pane.ID); ok {
+			sessionName = sel.Session
+			if paneIndex == "" {
+				paneIndex = sel.Pane
+			}
+		}
+	}
+	if sessionName == "" {
+		if session := m.selectedSession(); session != nil {
+			sessionName = session.Name
+		}
+	}
+	return sessionName, paneIndex
+}
+
+func (m *Model) ensurePaneColorSessionRunning(sessionName, paneID string) bool {
+	if sessionName == "" {
+		return true
+	}
+	if m.sessionRunning(sessionName, paneID) {
+		return true
+	}
+	m.setToast("Session not running", toastWarning)
+	return false
+}
+
+func normalizePaneColorIndex(paneIndex string, pane *PaneItem) string {
+	if paneIndex != "" || pane == nil {
+		return paneIndex
+	}
+	return pane.Index
+}
+
+func (m *Model) setPaneColorDialogState(sessionName, paneID, paneIndex string, pane *PaneItem) {
+	m.paneColorSession = sessionName
+	m.paneColorPaneID = paneID
+	m.paneColorPaneIndex = paneIndex
+	m.paneColorTitle = paneColorLabel(pane)
+	m.paneColorCurrent = normalizePaneBackground(pane.Background)
+	m.setState(StatePaneColor)
 }
 
 func paneColorLabel(pane *PaneItem) string {
