@@ -24,6 +24,7 @@
     {"$ref": "#/$defs/WorkspaceListResponse"},
     {"$ref": "#/$defs/LayoutListResponse"},
     {"$ref": "#/$defs/LayoutExportResponse"},
+    {"$ref": "#/$defs/DebugPathsResponse"},
     {"$ref": "#/$defs/NLPlanResponse"},
     {"$ref": "#/$defs/NLRunResponse"}
   ],
@@ -890,6 +891,49 @@
               "allOf": [
                 {"$ref": "#/$defs/Meta"},
                 {"type": "object", "properties": {"command": {"const": "layouts.export"}}}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "DebugPaths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtime_dir",
+        "data_dir",
+        "config_dir",
+        "config_path",
+        "layouts_dir",
+        "daemon_socket_path",
+        "daemon_pid_path",
+        "restart_notice_path",
+        "fresh_config"
+      ],
+      "properties": {
+        "runtime_dir": {"type": "string"},
+        "data_dir": {"type": "string"},
+        "config_dir": {"type": "string"},
+        "config_path": {"type": "string"},
+        "layouts_dir": {"type": "string"},
+        "daemon_socket_path": {"type": "string"},
+        "daemon_pid_path": {"type": "string"},
+        "restart_notice_path": {"type": "string"},
+        "fresh_config": {"type": "boolean"}
+      }
+    },
+    "DebugPathsResponse": {
+      "allOf": [
+        {"$ref": "#/$defs/SuccessEnvelope"},
+        {
+          "type": "object",
+          "properties": {
+            "data": {"$ref": "#/$defs/DebugPaths"},
+            "meta": {
+              "allOf": [
+                {"$ref": "#/$defs/Meta"},
+                {"type": "object", "properties": {"command": {"const": "debug.paths"}}}
               ]
             }
           }

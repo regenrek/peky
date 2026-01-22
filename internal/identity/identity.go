@@ -14,8 +14,9 @@ const (
 	ProjectConfigFileYML  = ".peky.yml"
 	ProjectConfigFileYAML = ".peky.yaml"
 
-	GlobalConfigFile = "config.yml"
-	GlobalLayoutsDir = "layouts"
+	GlobalConfigFile      = "config.yml"
+	GlobalLayoutsDir      = "layouts"
+	RestartNoticeFlagFile = ".pp-restart-notice"
 )
 
 var (

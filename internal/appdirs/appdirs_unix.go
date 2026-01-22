@@ -19,42 +19,64 @@ import (
 var runtimePermsWarnOnce sync.Once
 var dataPermsWarnOnce sync.Once
 
+// RuntimeDirPath returns the runtime directory path without creating it.
+func RuntimeDirPath() (string, error) {
+	return runtimeDirPath()
+}
+
 // RuntimeDir returns the directory used for runtime state (socket/pid/logs).
 func RuntimeDir() (string, error) {
+	dir, err := runtimeDirPath()
+	if err != nil {
+		return "", err
+	}
+	return ensureRuntimeDir(dir, runenv.RuntimeDir() != "")
+}
+
+func runtimeDirPath() (string, error) {
 	if override := runenv.RuntimeDir(); override != "" {
-		return ensureRuntimeDir(override, true)
+		return override, nil
 	}
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("resolve config dir: %w", err)
 	}
-	dir = filepath.Join(dir, identity.AppSlug)
-	return ensureRuntimeDir(dir, false)
+	return filepath.Join(dir, identity.AppSlug), nil
+}
+
+// DataDirPath returns the data directory path without creating it.
+func DataDirPath() (string, error) {
+	return dataDirPath()
 }
 
 // DataDir returns the directory used for persistent data (snapshots, caches).
 func DataDir() (string, error) {
+	dir, err := dataDirPath()
+	if err != nil {
+		return "", err
+	}
+	return ensureDataDir(dir, runenv.DataDir() != "")
+}
+
+func dataDirPath() (string, error) {
 	if override := runenv.DataDir(); override != "" {
-		return ensureDataDir(override, true)
+		return override, nil
 	}
 	if runtime.GOOS == "darwin" {
 		dir, err := os.UserConfigDir()
 		if err != nil {
 			return "", fmt.Errorf("resolve config dir: %w", err)
 		}
-		dir = filepath.Join(dir, identity.AppSlug)
-		return ensureDataDir(dir, false)
+		return filepath.Join(dir, identity.AppSlug), nil
 	}
 	if xdg := strings.TrimSpace(os.Getenv("XDG_DATA_HOME")); xdg != "" {
-		dir := filepath.Join(xdg, identity.AppSlug)
-		return ensureDataDir(dir, false)
+		return filepath.Join(xdg, identity.AppSlug), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("resolve home dir: %w", err)
 	}
-	dir := filepath.Join(home, ".local", "share", identity.AppSlug)
-	return ensureDataDir(dir, false)
+	return filepath.Join(home, ".local", "share", identity.AppSlug), nil
 }
 
 func ensureRuntimeDir(dir string, isOverride bool) (string, error) {

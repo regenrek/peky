@@ -114,6 +114,18 @@ type LayoutSummary struct {
 	Source string `json:"source,omitempty"`
 }
 
+type DebugPaths struct {
+	RuntimeDir        string `json:"runtime_dir"`
+	DataDir           string `json:"data_dir"`
+	ConfigDir         string `json:"config_dir"`
+	ConfigPath        string `json:"config_path"`
+	LayoutsDir        string `json:"layouts_dir"`
+	DaemonSocketPath  string `json:"daemon_socket_path"`
+	DaemonPidPath     string `json:"daemon_pid_path"`
+	RestartNoticePath string `json:"restart_notice_path"`
+	FreshConfig       bool   `json:"fresh_config"`
+}
+
 type PaneView struct {
 	PaneID    string `json:"pane_id"`
 	Mode      string `json:"mode"`

@@ -16,6 +16,7 @@ func TestRegisterAllRegistersHandlers(t *testing.T) {
 		"layouts.list",
 		"layouts.export",
 		"clone",
+		"debug.paths",
 		"session.list",
 		"pane.list",
 		"relay.list",
