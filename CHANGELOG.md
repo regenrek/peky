@@ -9,6 +9,11 @@ This format is based on Keep a Changelog.
 
 ### Fixed
 
+## 0.0.37 - 2026-01-22
+
+### Fixed
+- `peky` now opens dashboard only; `peky .`/`peky ./` required to start current project.
+
 ## 0.0.36 - 2026-01-22
 
 ### Added
