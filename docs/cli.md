@@ -8,6 +8,7 @@ The CLI command is `peky`.
 peky                     # Open dashboard (direct)
 peky dashboard|ui        # Open dashboard (direct)
 peky open|start|o         # Start session and open dashboard
+peky .                   # Shorthand: start --path .
 peky <layout>             # Shorthand: start --layout <layout>
 peky init                 # Create global config
 peky init --local         # Create .peky.yml in cwd

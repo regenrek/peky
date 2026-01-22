@@ -47,6 +47,12 @@ func applyShorthand(specDoc *spec.Spec, args []string) []string {
 	if len(args) == 1 && strings.TrimSpace(specDoc.App.DefaultCommand) != "" {
 		return []string{args[0], specDoc.App.DefaultCommand}
 	}
+	if len(args) == 2 {
+		arg := strings.TrimSpace(args[1])
+		if arg == "." || arg == "./" {
+			return []string{args[0], "start", "--path", "."}
+		}
+	}
 	if !specDoc.App.AllowLayoutShorthand {
 		return args
 	}
