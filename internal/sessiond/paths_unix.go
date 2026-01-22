@@ -5,37 +5,51 @@ package sessiond
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/regenrek/peakypanes/internal/appdirs"
 )
 
-const (
-	socketEnv = "PEKY_DAEMON_SOCKET"
-	pidEnv    = "PEKY_DAEMON_PID"
-)
-
 // DefaultSocketPath returns the default unix socket path.
 func DefaultSocketPath() (string, error) {
-	if path := os.Getenv(socketEnv); path != "" {
-		return path, nil
-	}
 	dir, err := runtimeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "daemon.sock"), nil
+	return ResolveSocketPath(dir), nil
 }
 
 // DefaultPidPath returns the default pid file path.
 func DefaultPidPath() (string, error) {
-	if path := os.Getenv(pidEnv); path != "" {
-		return path, nil
-	}
 	dir, err := runtimeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "daemon.pid"), nil
+	return ResolvePidPath(dir), nil
+}
+
+// ResolveSocketPath returns the effective socket path for the provided runtime dir.
+func ResolveSocketPath(runtimeDir string) string {
+	if path := strings.TrimSpace(os.Getenv(socketEnv)); path != "" {
+		return path
+	}
+	runtimeDir = strings.TrimSpace(runtimeDir)
+	if runtimeDir == "" {
+		return ""
+	}
+	return filepath.Join(runtimeDir, "daemon.sock")
+}
+
+// ResolvePidPath returns the effective pid path for the provided runtime dir.
+func ResolvePidPath(runtimeDir string) string {
+	if path := strings.TrimSpace(os.Getenv(pidEnv)); path != "" {
+		return path
+	}
+	runtimeDir = strings.TrimSpace(runtimeDir)
+	if runtimeDir == "" {
+		return ""
+	}
+	return filepath.Join(runtimeDir, "daemon.pid")
 }
 
 func runtimeDir() (string, error) {

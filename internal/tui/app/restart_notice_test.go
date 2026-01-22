@@ -3,10 +3,13 @@ package app
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/regenrek/peakypanes/internal/identity"
 )
 
 func TestServerStatusClickOpensRestartNotice(t *testing.T) {
@@ -55,7 +58,7 @@ func TestDaemonReconnectSetsRestartNoticePending(t *testing.T) {
 
 func TestRestartNoticeFlagActive(t *testing.T) {
 	dir := t.TempDir()
-	flag := dir + "/" + restartNoticeFlagFile
+	flag := filepath.Join(dir, identity.RestartNoticeFlagFile)
 	if restartNoticeFlagActive(flag) {
 		t.Fatalf("expected inactive for missing flag")
 	}
@@ -70,5 +73,16 @@ func TestRestartNoticeFlagActive(t *testing.T) {
 	}
 	if restartNoticeFlagActive(flag) {
 		t.Fatalf("expected inactive for flag=0")
+	}
+}
+
+func TestRestartNoticeFlagPathUsesConfigDir(t *testing.T) {
+	m := newTestModelLite()
+	m.configPath = filepath.Join(t.TempDir(), "config.yml")
+
+	got := m.restartNoticeFlagPath()
+	want := filepath.Join(filepath.Dir(m.configPath), identity.RestartNoticeFlagFile)
+	if got != want {
+		t.Fatalf("restartNoticeFlagPath() = %q, want %q", got, want)
 	}
 }

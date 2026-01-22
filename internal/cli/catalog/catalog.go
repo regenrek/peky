@@ -5,6 +5,7 @@ import (
 	"github.com/regenrek/peakypanes/internal/cli/contextpack"
 	"github.com/regenrek/peakypanes/internal/cli/daemon"
 	"github.com/regenrek/peakypanes/internal/cli/dashboard"
+	"github.com/regenrek/peakypanes/internal/cli/debug"
 	"github.com/regenrek/peakypanes/internal/cli/events"
 	"github.com/regenrek/peakypanes/internal/cli/help"
 	"github.com/regenrek/peakypanes/internal/cli/initcfg"
@@ -34,6 +35,7 @@ func RegisterAll(reg *root.Registry) {
 	relay.Register(reg)
 	events.Register(reg)
 	contextpack.Register(reg)
+	debug.Register(reg)
 	workspace.Register(reg)
 	version.Register(reg)
 	help.Register(reg)

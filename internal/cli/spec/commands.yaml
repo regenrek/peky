@@ -252,6 +252,18 @@ commands:
     summary: Show version
     json:
       supported: false
+  - name: debug
+    id: debug
+    summary: Debug helpers
+    json:
+      supported: false
+    subcommands:
+      - name: paths
+        id: debug.paths
+        summary: Show resolved paths
+        json:
+          supported: true
+          schema_ref: "#/$defs/DebugPathsResponse"
   - name: help
     id: help
     aliases: [--help, -h]

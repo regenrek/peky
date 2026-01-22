@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-)
 
-const restartNoticeFlagFile = ".pp-restart-notice"
+	"github.com/regenrek/peakypanes/internal/identity"
+)
 
 func (m *Model) updateRestartNotice(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch strings.ToLower(strings.TrimSpace(msg.String())) {
@@ -35,7 +35,7 @@ func (m *Model) restartNoticeFlagPath() string {
 	if configPath == "" {
 		return ""
 	}
-	return filepath.Join(filepath.Dir(configPath), restartNoticeFlagFile)
+	return filepath.Join(filepath.Dir(configPath), identity.RestartNoticeFlagFile)
 }
 
 func restartNoticeFlagActive(path string) bool {

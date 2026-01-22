@@ -31,6 +31,12 @@ Stop the daemon (kills sessions):
 peky daemon stop --yes
 ```
 
+Show effective paths:
+
+```bash
+peky debug paths
+```
+
 Then delete state dirs.
 
 macOS:
@@ -41,6 +47,15 @@ trash "$HOME/Library/Application Support/peky" "$HOME/.config/peky"
 Linux:
 ```bash
 trash "$HOME/.local/share/peky" "$HOME/.config/peky"
+```
+
+## “restored” banner won’t clear
+
+The banner is driven by the restart notice flag stored next to the global config.
+Clear it directly:
+
+```bash
+trash "$HOME/.config/peky/.pp-restart-notice"
 ```
 
 ## Daemon stuck or restart
@@ -60,4 +75,4 @@ Manual restart (Linux default path):
 kill "$(cat "$HOME/.config/peky/daemon.pid")"
 ```
 
-You can also set PEKY_DAEMON_PID to control the pid file location.
+If you set custom runtime paths or env overrides, use `peky debug paths` to find the active pid file.

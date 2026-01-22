@@ -20,9 +20,14 @@ This ensures only the current user can connect.
 
 ## Platform notes
 
-macOS / Linux
+macOS
 
-- Use a per-user runtime path (for example `~/.config/peky/sessiond/`).
+- Runtime dir: `~/Library/Application Support/peky` (socket/pid/logs live here).
+- Ensure `mkdir` uses `0700` and apply restrictive perms to the socket.
+
+Linux
+
+- Runtime dir: `$XDG_CONFIG_HOME/peky` (default `~/.config/peky`).
 - Ensure `mkdir` uses `0700` and apply restrictive perms to the socket.
 
 Windows
