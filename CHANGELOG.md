@@ -6,16 +6,13 @@ This format is based on Keep a Changelog.
 ## Unreleased
 
 ### Added
-
+- Pane background palette with picker dialog (command palette + pane context menu).
 
 ### Changed
 
 ### Fixed
 
 ## 0.0.37 - 2026-01-22
-
-### Added
-- Pane background palette with picker dialog (command palette + pane context menu).
 
 ### Fixed
 - `peky` now opens dashboard only; `peky .`/`peky ./` required to start current project.
