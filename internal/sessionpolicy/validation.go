@@ -41,6 +41,13 @@ func ValidatePaneIndex(index string) (string, error) {
 	return index, nil
 }
 
+func ValidatePaneBackground(value int) (int, error) {
+	if value < limits.PaneBackgroundMin || value > limits.PaneBackgroundMax {
+		return 0, fmt.Errorf("pane background must be %d-%d", limits.PaneBackgroundMin, limits.PaneBackgroundMax)
+	}
+	return value, nil
+}
+
 func ValidatePath(path string) (string, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {

@@ -290,6 +290,43 @@ func (d *Daemon) handleSetPaneTool(payload []byte) ([]byte, error) {
 	return nil, nil
 }
 
+func (d *Daemon) handleSetPaneBackground(payload []byte) ([]byte, error) {
+	var req SetPaneBackgroundRequest
+	if err := decodePayload(payload, &req); err != nil {
+		return nil, err
+	}
+	background, err := sessionpolicy.ValidatePaneBackground(req.Background)
+	if err != nil {
+		return nil, err
+	}
+	manager, err := d.requireManager()
+	if err != nil {
+		return nil, err
+	}
+	paneID := strings.TrimSpace(req.PaneID)
+	if paneID == "" {
+		sessionName, err := sessionpolicy.ValidateSessionName(req.SessionName)
+		if err != nil {
+			return nil, err
+		}
+		paneIndex, err := sessionpolicy.ValidatePaneIndex(req.PaneIndex)
+		if err != nil {
+			return nil, err
+		}
+		paneID, err = resolvePaneID(manager, sessionName, paneIndex)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := manager.SetPaneBackground(paneID, background); err != nil {
+		return nil, err
+	}
+	if d.restore != nil {
+		d.restore.MarkDirty(paneID)
+	}
+	return nil, nil
+}
+
 func (d *Daemon) handleSendInput(payload []byte) ([]byte, error) {
 	var req SendInputRequest
 	if err := decodePayload(payload, &req); err != nil {
@@ -645,6 +682,35 @@ func resolvePaneTargetByID(manager sessionManager, paneID string) (string, strin
 		}
 	}
 	return "", "", fmt.Errorf("sessiond: pane %q not found", paneID)
+}
+
+func resolvePaneID(manager sessionManager, sessionName, paneIndex string) (string, error) {
+	if manager == nil {
+		return "", errors.New("sessiond: manager unavailable")
+	}
+	sessionName = strings.TrimSpace(sessionName)
+	paneIndex = strings.TrimSpace(paneIndex)
+	if sessionName == "" || paneIndex == "" {
+		return "", errors.New("sessiond: session and pane index are required")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
+	defer cancel()
+	sessions := manager.Snapshot(ctx, 0)
+	for _, session := range sessions {
+		if session.Name != sessionName {
+			continue
+		}
+		for _, pane := range session.Panes {
+			if pane.Index == paneIndex {
+				if pane.ID == "" {
+					return "", fmt.Errorf("sessiond: pane %q id unavailable", paneIndex)
+				}
+				return pane.ID, nil
+			}
+		}
+		return "", fmt.Errorf("sessiond: pane %q not found in %q", paneIndex, sessionName)
+	}
+	return "", fmt.Errorf("sessiond: session %q not found", sessionName)
 }
 
 func (d *Daemon) startSession(req StartSessionRequest) (StartSessionResponse, error) {

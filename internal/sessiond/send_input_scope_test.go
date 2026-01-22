@@ -43,7 +43,8 @@ func (m *scopeSendManager) ResetPaneSizes(string, string) (layout.ApplyResult, e
 func (m *scopeSendManager) ZoomPane(string, string, bool) (layout.ApplyResult, error) {
 	return layout.ApplyResult{}, nil
 }
-func (m *scopeSendManager) SetPaneTool(string, string) error { return nil }
+func (m *scopeSendManager) SetPaneTool(string, string) error    { return nil }
+func (m *scopeSendManager) SetPaneBackground(string, int) error { return nil }
 func (m *scopeSendManager) SendInput(ctx context.Context, paneID string, input []byte) error {
 	if ch, ok := m.blockOn[paneID]; ok {
 		if ctx == nil {

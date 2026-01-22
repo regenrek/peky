@@ -64,6 +64,7 @@ type sessionManager interface {
 	ResetPaneSizes(sessionName, paneID string) (layout.ApplyResult, error)
 	ZoomPane(sessionName, paneID string, toggle bool) (layout.ApplyResult, error)
 	SetPaneTool(paneID, tool string) error
+	SetPaneBackground(paneID string, background int) error
 	SendInput(ctx context.Context, paneID string, input []byte) error
 	SendMouse(paneID string, event uv.MouseEvent, route terminal.MouseRoute) error
 	Window(paneID string) paneWindow

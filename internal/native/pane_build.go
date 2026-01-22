@@ -15,6 +15,7 @@ import (
 	"github.com/kballard/go-shellquote"
 
 	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/limits"
 	"github.com/regenrek/peakypanes/internal/sessionrestore"
 	"github.com/regenrek/peakypanes/internal/terminal"
 )
@@ -258,6 +259,7 @@ func (m *Manager) createPane(ctx context.Context, path, title, command string, e
 		Command:      startCommand,
 		StartCommand: startCommand,
 		Tool:         toolID,
+		Background:   limits.PaneBackgroundDefault,
 		window:       win,
 		output:       output,
 	}

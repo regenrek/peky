@@ -12,41 +12,42 @@ import (
 type Op string
 
 const (
-	OpHello          Op = "hello"
-	OpSessionNames   Op = "session_names"
-	OpSnapshot       Op = "snapshot"
-	OpStartSession   Op = "start_session"
-	OpKillSession    Op = "kill_session"
-	OpRenameSession  Op = "rename_session"
-	OpSessionFocus   Op = "session_focus"
-	OpRenamePane     Op = "rename_pane"
-	OpSplitPane      Op = "split_pane"
-	OpClosePane      Op = "close_pane"
-	OpSwapPanes      Op = "swap_panes"
-	OpSetPaneTool    Op = "set_pane_tool"
-	OpSendInput      Op = "send_input"
-	OpSendInputTool  Op = "send_input_tool"
-	OpSendMouse      Op = "send_mouse"
-	OpResizePane     Op = "resize_pane"
-	OpResetPaneSizes Op = "reset_pane_sizes"
-	OpZoomPane       Op = "zoom_pane"
-	OpPaneView       Op = "pane_view"
-	OpPaneOutput     Op = "pane_output"
-	OpPaneSnapshot   Op = "pane_snapshot"
-	OpPaneHistory    Op = "pane_history"
-	OpPaneWait       Op = "pane_wait"
-	OpPaneTagAdd     Op = "pane_tag_add"
-	OpPaneTagRemove  Op = "pane_tag_remove"
-	OpPaneTagList    Op = "pane_tag_list"
-	OpPaneFocus      Op = "pane_focus"
-	OpPaneSignal     Op = "pane_signal"
-	OpRelayCreate    Op = "relay_create"
-	OpRelayList      Op = "relay_list"
-	OpRelayStop      Op = "relay_stop"
-	OpRelayStopAll   Op = "relay_stop_all"
-	OpEventsReplay   Op = "events_replay"
-	OpTerminalAction Op = "terminal_action"
-	OpHandleKey      Op = "handle_key"
+	OpHello             Op = "hello"
+	OpSessionNames      Op = "session_names"
+	OpSnapshot          Op = "snapshot"
+	OpStartSession      Op = "start_session"
+	OpKillSession       Op = "kill_session"
+	OpRenameSession     Op = "rename_session"
+	OpSessionFocus      Op = "session_focus"
+	OpRenamePane        Op = "rename_pane"
+	OpSplitPane         Op = "split_pane"
+	OpClosePane         Op = "close_pane"
+	OpSwapPanes         Op = "swap_panes"
+	OpSetPaneTool       Op = "set_pane_tool"
+	OpSetPaneBackground Op = "set_pane_background"
+	OpSendInput         Op = "send_input"
+	OpSendInputTool     Op = "send_input_tool"
+	OpSendMouse         Op = "send_mouse"
+	OpResizePane        Op = "resize_pane"
+	OpResetPaneSizes    Op = "reset_pane_sizes"
+	OpZoomPane          Op = "zoom_pane"
+	OpPaneView          Op = "pane_view"
+	OpPaneOutput        Op = "pane_output"
+	OpPaneSnapshot      Op = "pane_snapshot"
+	OpPaneHistory       Op = "pane_history"
+	OpPaneWait          Op = "pane_wait"
+	OpPaneTagAdd        Op = "pane_tag_add"
+	OpPaneTagRemove     Op = "pane_tag_remove"
+	OpPaneTagList       Op = "pane_tag_list"
+	OpPaneFocus         Op = "pane_focus"
+	OpPaneSignal        Op = "pane_signal"
+	OpRelayCreate       Op = "relay_create"
+	OpRelayList         Op = "relay_list"
+	OpRelayStop         Op = "relay_stop"
+	OpRelayStopAll      Op = "relay_stop_all"
+	OpEventsReplay      Op = "events_replay"
+	OpTerminalAction    Op = "terminal_action"
+	OpHandleKey         Op = "handle_key"
 )
 
 // EventType identifies async daemon events.
@@ -191,6 +192,14 @@ type SwapPanesRequest struct {
 type SetPaneToolRequest struct {
 	PaneID string
 	Tool   string
+}
+
+// SetPaneBackgroundRequest updates the background palette index for a pane.
+type SetPaneBackgroundRequest struct {
+	PaneID      string
+	SessionName string
+	PaneIndex   string
+	Background  int
 }
 
 // SendInputRequest forwards raw input.

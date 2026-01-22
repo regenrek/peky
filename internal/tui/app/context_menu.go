@@ -33,6 +33,7 @@ const (
 	contextMenuClose      = "close_pane"
 	contextMenuZoom       = "zoom_pane"
 	contextMenuReset      = "reset_sizes"
+	contextMenuColor      = "pane_color"
 )
 
 func (m *Model) handleContextMenuMouse(msg tea.MouseMsg) (tea.Cmd, bool) {
@@ -276,6 +277,9 @@ func (m *Model) applyContextMenuItem(id, sessionName, paneID, paneIndex string) 
 		return m.addPaneSplitFor(sessionName, paneID, true)
 	case contextMenuClose:
 		return m.closePane(sessionName, paneIndex, paneID)
+	case contextMenuColor:
+		m.openPaneColorDialogFor(sessionName, paneID, paneIndex)
+		return nil
 	case contextMenuZoom:
 		return m.toggleZoomPaneFor(sessionName, paneID)
 	case contextMenuReset:
@@ -286,7 +290,7 @@ func (m *Model) applyContextMenuItem(id, sessionName, paneID, paneIndex string) 
 }
 
 func (m *Model) buildContextMenuItems(sessionName, paneID string) []contextMenuItem {
-	items := make([]contextMenuItem, 0, 6)
+	items := make([]contextMenuItem, 0, 7)
 	verticalLabel := "right"
 	if m.lastSplitSet && m.lastSplitVertical {
 		verticalLabel = "down"
@@ -310,6 +314,11 @@ func (m *Model) buildContextMenuItems(sessionName, paneID string) []contextMenuI
 	items = append(items, contextMenuItem{
 		ID:      contextMenuClose,
 		Label:   "Close pane",
+		Enabled: canModify,
+	})
+	items = append(items, contextMenuItem{
+		ID:      contextMenuColor,
+		Label:   "Set pane color",
 		Enabled: canModify,
 	})
 	zoomLabel := "Zoom pane"

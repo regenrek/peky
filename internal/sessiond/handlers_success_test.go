@@ -33,7 +33,11 @@ type fakeManager struct {
 	lastRename           [2]string
 	lastSwap             [3]string
 	lastTool             [2]string
-	lastResize           struct {
+	lastBackground       struct {
+		paneID     string
+		background int
+	}
+	lastResize struct {
 		sessionName string
 		paneID      string
 		edge        layout.ResizeEdge
@@ -109,6 +113,11 @@ func (m *fakeManager) ZoomPane(sessionName, paneID string, toggle bool) (layout.
 }
 func (m *fakeManager) SetPaneTool(paneID, tool string) error {
 	m.lastTool = [2]string{paneID, tool}
+	return nil
+}
+func (m *fakeManager) SetPaneBackground(paneID string, background int) error {
+	m.lastBackground.paneID = paneID
+	m.lastBackground.background = background
 	return nil
 }
 func (m *fakeManager) SendInput(_ context.Context, paneID string, input []byte) error {
