@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestProjectConfigStateForPath(t *testing.T) {
@@ -19,5 +20,28 @@ func TestProjectConfigStateForPath(t *testing.T) {
 
 	if state := projectConfigStateForPath(filepath.Join(dir, "missing")); state.exists {
 		t.Fatalf("expected missing state")
+	}
+}
+
+func TestProjectConfigStateEqual(t *testing.T) {
+	base := projectConfigState{
+		path:    "/tmp/app.yml",
+		modTime: time.Unix(10, 0),
+		size:    42,
+		exists:  true,
+	}
+	same := projectConfigState{
+		path:    "/tmp/app.yml",
+		modTime: time.Unix(10, 0),
+		size:    42,
+		exists:  true,
+	}
+	if !base.equal(same) {
+		t.Fatalf("expected states equal")
+	}
+	changed := base
+	changed.size = 7
+	if base.equal(changed) {
+		t.Fatalf("expected states not equal")
 	}
 }
