@@ -16,6 +16,7 @@ type DashboardCallbacks struct {
 	SelectDashboardTab  func() bool
 	SelectProjectTab    func(projectID string) bool
 	OpenProjectPicker   func()
+	OpenUpdateDialog    func()
 	SelectionCmd        func() tea.Cmd
 	SelectionRefreshCmd func() tea.Cmd
 	RefreshPaneViewsCmd func() tea.Cmd
@@ -71,6 +72,11 @@ func (h *Handler) handleHeaderClick(msg tea.MouseMsg, cb DashboardCallbacks) (te
 	case HeaderNew:
 		if cb.OpenProjectPicker != nil {
 			cb.OpenProjectPicker()
+		}
+		return nil, true
+	case HeaderUpdate:
+		if cb.OpenUpdateDialog != nil {
+			cb.OpenUpdateDialog()
 		}
 		return nil, true
 	default:

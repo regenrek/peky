@@ -35,6 +35,9 @@ const (
 	StatePekyDialog
 	StateAuthDialog
 	StateRestartNotice
+	StateUpdateDialog
+	StateUpdateProgress
+	StateUpdateRestart
 )
 
 // DashboardTab represents the active tab within the dashboard view.

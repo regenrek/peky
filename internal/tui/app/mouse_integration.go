@@ -46,6 +46,7 @@ func (m *Model) updateDashboardMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		SelectDashboardTab:  m.selectDashboardTab,
 		SelectProjectTab:    m.selectProjectTab,
 		OpenProjectPicker:   m.openProjectPicker,
+		OpenUpdateDialog:    func() { _ = m.openUpdateDialog() },
 		SelectionCmd:        m.selectionCmd,
 		SelectionRefreshCmd: m.selectionRefreshCmd,
 		RefreshPaneViewsCmd: m.refreshPaneViewsCmd,

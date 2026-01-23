@@ -13,6 +13,13 @@ func (m *Model) updateDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *Model) updateDashboardInput(msg tuiinput.KeyMsg) (tea.Model, tea.Cmd) {
 	teaMsg := msg.Tea()
 	m.ensureQuickReplyBlur()
+	if m.updatePromptPending {
+		m.updatePromptPending = false
+		return m, m.openUpdateDialog()
+	}
+	if cmd, handled := m.handleUpdateShortcut(teaMsg); handled {
+		return m, cmd
+	}
 	if cmd, handled := m.handleDashboardPreInput(msg, teaMsg); handled {
 		return m, cmd
 	}

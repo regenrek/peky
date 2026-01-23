@@ -14,6 +14,7 @@ import (
 	"github.com/regenrek/peakypanes/internal/agent"
 	"github.com/regenrek/peakypanes/internal/cli/contextpack"
 	"github.com/regenrek/peakypanes/internal/cli/daemon"
+	"github.com/regenrek/peakypanes/internal/cli/debug"
 	"github.com/regenrek/peakypanes/internal/cli/events"
 	"github.com/regenrek/peakypanes/internal/cli/help"
 	"github.com/regenrek/peakypanes/internal/cli/initcfg"
@@ -343,6 +344,7 @@ func registerPekyCommands(reg *root.Registry) {
 	relay.Register(reg)
 	events.Register(reg)
 	contextpack.Register(reg)
+	debug.Register(reg)
 	workspace.Register(reg)
 	version.Register(reg)
 	help.Register(reg)
@@ -456,7 +458,8 @@ func pekySuccessToast(text string) string {
 	trimmed = strings.Join(strings.Fields(trimmed), " ")
 	const limit = 120
 	if len(trimmed) > limit {
-		return trimmed[:limit-1] + "…"
+		const suffix = "..."
+		return trimmed[:limit-len(suffix)] + suffix
 	}
 	return trimmed
 }

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/regenrek/peakypanes/internal/tui/views"
@@ -25,12 +26,19 @@ func (m *Model) viewModel() views.Model {
 	}
 
 	menu := m.quickReplyMenuState()
+	bannerLabel, bannerHint, bannerVisible := m.updateBannerInfo()
+	updateDialog := m.updateDialogView()
+	logoLabel := "PEKY"
+	if updateDialog.CurrentVersion != "" {
+		logoLabel = fmt.Sprintf("PEKY v%s", updateDialog.CurrentVersion)
+	}
 	vm := views.Model{
 		Width:                     m.width,
 		Height:                    m.height,
 		ActiveView:                int(m.state),
 		Tab:                       int(m.tab),
 		HeaderLine:                singleLine(headerLine(m.headerParts())),
+		LogoLabel:                 logoLabel,
 		EmptyStateMessage:         m.emptyStateMessage(),
 		SplashInfo:                m.splashInfo(),
 		Projects:                  toViewProjects(m.data.Projects),
@@ -113,6 +121,23 @@ func (m *Model) viewModel() views.Model {
 		Resize:                m.resizeOverlayView(),
 		ContextMenu:           m.contextMenuView(),
 		ServerStatus:          m.serverStatus(),
+		UpdateBanner: views.UpdateBanner{
+			Visible: bannerVisible,
+			Label:   bannerLabel,
+			Hint:    bannerHint,
+		},
+		UpdateDialog: views.UpdateDialog{
+			CurrentVersion: updateDialog.CurrentVersion,
+			LatestVersion:  updateDialog.LatestVersion,
+			Channel:        string(updateDialog.Channel),
+			Command:        updateDialog.Command,
+			CanInstall:     updateDialog.CanInstall,
+			RemindLabel:    updateDialog.RemindLabel,
+		},
+		UpdateProgress: views.UpdateProgress{
+			Step:    m.updateProgress.Step,
+			Percent: m.updateProgress.Percent,
+		},
 	}
 
 	return vm

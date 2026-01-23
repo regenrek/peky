@@ -15,6 +15,7 @@ type Model struct {
 	ActiveView                int
 	Tab                       int
 	HeaderLine                string
+	LogoLabel                 string
 	EmptyStateMessage         string
 	SplashInfo                string
 	Projects                  []Project
@@ -71,6 +72,9 @@ type Model struct {
 	Resize                    ResizeOverlay
 	ContextMenu               ContextMenu
 	ServerStatus              string
+	UpdateBanner              UpdateBanner
+	UpdateDialog              UpdateDialog
+	UpdateProgress            UpdateProgress
 }
 
 type Project struct {
@@ -118,6 +122,26 @@ type ContextMenu struct {
 type ContextMenuItem struct {
 	Label   string
 	Enabled bool
+}
+
+type UpdateBanner struct {
+	Visible bool
+	Label   string
+	Hint    string
+}
+
+type UpdateDialog struct {
+	CurrentVersion string
+	LatestVersion  string
+	Channel        string
+	Command        string
+	CanInstall     bool
+	RemindLabel    string
+}
+
+type UpdateProgress struct {
+	Step    string
+	Percent int
 }
 
 type Session struct {

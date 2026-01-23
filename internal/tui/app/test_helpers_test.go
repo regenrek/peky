@@ -131,7 +131,6 @@ func sessionExists(t *testing.T, client *sessiond.Client, name string) bool {
 func writeProjectLayout(t *testing.T, path, session string) {
 	t.Helper()
 	layoutCfg := &layout.LayoutConfig{
-		Name: "test",
 		Panes: []layout.PaneDef{{
 			Title: "pane",
 			Cmd:   "cat",

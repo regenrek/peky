@@ -25,7 +25,7 @@ func (m Model) viewDashboardContent() string {
 	contentWidth := m.Width - h
 	contentHeight := m.Height - v
 	hasPekyPrompt := strings.TrimSpace(m.PekyPromptLine) != ""
-	layout, ok := viewlayout.Dashboard(contentWidth, contentHeight, hasPekyPrompt, m.QuickReplyEnabled)
+	layout, ok := viewlayout.Dashboard(contentWidth, contentHeight, hasPekyPrompt, m.QuickReplyEnabled, m.UpdateBanner.Visible)
 	if !ok {
 		return "Terminal too small"
 	}
@@ -72,7 +72,12 @@ func (m Model) viewHeader(width int) string {
 	if available < 1 {
 		return fitLine(left, width)
 	}
-	rightPlain := logo.SmallRender(available)
+	rightPlain := strings.TrimSpace(m.LogoLabel)
+	if rightPlain == "" {
+		rightPlain = logo.SmallRender(available)
+	} else {
+		rightPlain = ansi.Truncate(rightPlain, available, "")
+	}
 	if strings.TrimSpace(rightPlain) == "" {
 		return fitLine(left, width)
 	}
@@ -82,7 +87,16 @@ func (m Model) viewHeader(width int) string {
 	if spaces < 1 {
 		return fitLine(left, width)
 	}
-	return left + strings.Repeat(" ", spaces) + right
+	firstLine := left + strings.Repeat(" ", spaces) + right
+	if !m.UpdateBanner.Visible {
+		return firstLine
+	}
+	bannerText := theme.UpdateBanner.Render(m.UpdateBanner.Label)
+	if strings.TrimSpace(m.UpdateBanner.Hint) != "" {
+		bannerText += theme.UpdateBannerHint.Render(" " + m.UpdateBanner.Hint)
+	}
+	secondLine := rightAlignLine(bannerText, width)
+	return firstLine + "\n" + fitLine(secondLine, width)
 }
 
 func (m Model) viewBody(width, height int) string {
