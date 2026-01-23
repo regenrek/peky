@@ -27,6 +27,7 @@ func TestAllCommandsAndFindByID(t *testing.T) {
 	cmd := specDoc.FindByID("pane.send")
 	if cmd == nil {
 		t.Fatalf("expected pane.send command")
+		return
 	}
 	if cmd.Name == "" {
 		t.Fatalf("expected command name")

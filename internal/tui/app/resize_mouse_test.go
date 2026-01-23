@@ -15,6 +15,7 @@ func TestResizeDragCommitUpdatesLayout(t *testing.T) {
 	session := m.selectedSession()
 	if session == nil {
 		t.Fatalf("expected selected session")
+		return
 	}
 	engine := m.layoutEngines[session.Name]
 	if engine == nil || engine.Tree == nil {
@@ -53,6 +54,7 @@ func TestResizeDragEscCancelsLayoutChange(t *testing.T) {
 	session := m.selectedSession()
 	if session == nil {
 		t.Fatalf("expected selected session")
+		return
 	}
 	engine := m.layoutEngines[session.Name]
 	if engine == nil || engine.Tree == nil {
@@ -90,6 +92,7 @@ func TestResizeDragHorizontalEdgeUpdatesLayout(t *testing.T) {
 	session := m.selectedSession()
 	if session == nil {
 		t.Fatalf("expected selected session")
+		return
 	}
 	engine := m.layoutEngines[session.Name]
 	if engine == nil || engine.Tree == nil {
@@ -145,6 +148,7 @@ func newLayoutResizeTestModelWithGrid(t *testing.T, grid string) *Model {
 	session := m.selectedSession()
 	if session == nil {
 		t.Fatalf("expected selected session")
+		return m
 	}
 	paneIDs := make([]string, 0, len(session.Panes))
 	for _, pane := range session.Panes {

@@ -45,6 +45,7 @@ func (s *stubManager) ZoomPane(string, string, bool) (layout.ApplyResult, error)
 	return layout.ApplyResult{}, nil
 }
 func (s *stubManager) SetPaneTool(string, string) error                { return nil }
+func (s *stubManager) SetPaneBackground(string, int) error             { return nil }
 func (s *stubManager) SendInput(context.Context, string, []byte) error { return nil }
 func (s *stubManager) SendMouse(string, uv.MouseEvent, terminal.MouseRoute) error {
 	return nil

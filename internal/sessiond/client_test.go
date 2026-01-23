@@ -97,6 +97,7 @@ func TestClientCallCanceled(t *testing.T) {
 	}()
 
 	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 	go func() {
 		_, err := client.call(ctx, OpHello, HelloRequest{Version: "v"}, &HelloResponse{})
 		errCh <- err

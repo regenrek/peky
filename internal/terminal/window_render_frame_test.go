@@ -40,6 +40,7 @@ func TestViewFrameIncludesStyleAndCursor(t *testing.T) {
 	cell := frame.CellAt(1, 0)
 	if cell == nil {
 		t.Fatalf("expected cell at 1,0")
+		return
 	}
 	if cell.Style.Fg.Kind != termframe.ColorBasic || cell.Style.Fg.Value != 2 {
 		t.Fatalf("unexpected style: %#v", cell.Style)

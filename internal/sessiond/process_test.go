@@ -254,6 +254,7 @@ func waitForListener(t *testing.T, d *Daemon) {
 	t.Helper()
 	if d == nil {
 		t.Fatalf("daemon is nil")
+		return
 	}
 	deadline := time.Now().Add(2 * time.Second)
 	if d.started != nil {

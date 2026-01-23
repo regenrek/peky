@@ -7,6 +7,7 @@ import (
 
 	"github.com/regenrek/peakypanes/internal/agent"
 	"github.com/regenrek/peakypanes/internal/cli/spec"
+	"github.com/regenrek/peakypanes/internal/tui/icons"
 )
 
 func TestPekyPolicyAllowsPatterns(t *testing.T) {
@@ -32,6 +33,7 @@ func TestPekyContextAndWorkDir(t *testing.T) {
 	pane := m.selectedPane()
 	if pane == nil {
 		t.Fatalf("expected selected pane")
+		return
 	}
 	pane.Cwd = "/alpha/pane"
 	ctx := m.pekyContext()
@@ -56,9 +58,14 @@ func TestPekyContextAndWorkDir(t *testing.T) {
 }
 
 func TestPekySpinnerAndLabel(t *testing.T) {
+	t.Setenv("PEKY_ICON_SET", "ascii")
+	frames := icons.Active().Spinner
+	if len(frames) == 0 {
+		t.Fatalf("expected spinner frames")
+	}
 	m := newTestModelLite()
-	if frame := m.pekySpinnerFrame(); frame != "" {
-		// ok
+	if frame := m.pekySpinnerFrame(); frame == "" {
+		t.Fatalf("expected spinner frame")
 	}
 	if cmd := m.handlePekySpinnerTick(); cmd != nil {
 		t.Fatalf("expected nil cmd when not busy")
@@ -70,7 +77,7 @@ func TestPekySpinnerAndLabel(t *testing.T) {
 		t.Fatalf("expected spinner tick cmd")
 	}
 	if m.pekySpinnerIndex == prev {
-		// icon set could be empty; allow but ensure no panic
+		t.Fatalf("expected spinner index advance")
 	}
 }
 

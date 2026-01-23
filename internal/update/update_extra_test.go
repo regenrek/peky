@@ -335,8 +335,8 @@ func TestNewInstallerDefaults(t *testing.T) {
 	}
 	recorder := &execRecorder{}
 	installer = Installer{execCommand: recorder.cmd}
-	if err := installer.Install(nil, InstallSpec{Channel: ChannelHomebrew}); err != nil {
-		t.Fatalf("expected install success with nil ctx: %v", err)
+	if err := installer.Install(context.TODO(), InstallSpec{Channel: ChannelHomebrew}); err != nil {
+		t.Fatalf("expected install success: %v", err)
 	}
 }
 

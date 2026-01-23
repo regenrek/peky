@@ -23,16 +23,19 @@ func TestQuickReplyBroadcastSummary(t *testing.T) {
 func TestQuickReplyBroadcastNoClient(t *testing.T) {
 	m := newTestModelLite()
 	m.client = nil
-	if cmd := m.sendQuickReplyBroadcast(quickReplyScopeSession, "hi"); cmd == nil {
-		// ok
-	} else {
-		msg := cmd()
-		if msg == nil {
-			t.Fatalf("expected message")
-		}
+	cmd := m.sendQuickReplyBroadcast(quickReplyScopeSession, "hi")
+	if cmd == nil {
+		t.Fatalf("expected command for missing client")
 	}
-	if cmd := m.sendQuickReplyBroadcast(quickReplyScopeSession, " "); cmd == nil {
-		// ok
+	if msg := cmd(); msg == nil {
+		t.Fatalf("expected message")
+	}
+	cmd = m.sendQuickReplyBroadcast(quickReplyScopeSession, " ")
+	if cmd == nil {
+		t.Fatalf("expected command for empty input")
+	}
+	if msg := cmd(); msg == nil {
+		t.Fatalf("expected message")
 	}
 }
 
