@@ -7,7 +7,7 @@ import (
 	"github.com/regenrek/peakypanes/internal/sessiond"
 )
 
-func TestResizeKeyboardHelpers(t *testing.T) {
+func TestResizeNudgeForKey(t *testing.T) {
 	step, axis, ok := resizeNudgeForKey("left")
 	if !ok || step != resizeNudgeStep || axis != layout.AxisHorizontal {
 		t.Fatalf("unexpected nudge for left: step=%d axis=%v ok=%v", step, axis, ok)
@@ -19,14 +19,18 @@ func TestResizeKeyboardHelpers(t *testing.T) {
 	if _, _, ok := resizeNudgeForKey("unknown"); ok {
 		t.Fatalf("expected unknown nudge to be false")
 	}
+}
 
+func TestResizeEdgeMatchesAxis(t *testing.T) {
 	if !resizeEdgeMatchesAxis(sessiond.ResizeEdgeLeft, layout.AxisHorizontal) {
 		t.Fatalf("expected left edge to match horizontal")
 	}
 	if resizeEdgeMatchesAxis(sessiond.ResizeEdgeLeft, layout.AxisVertical) {
 		t.Fatalf("expected left edge to not match vertical")
 	}
+}
 
+func TestResizeDeltaForAxis(t *testing.T) {
 	if delta, ok := resizeDeltaForAxis(layout.AxisHorizontal, "left", 10); !ok || delta != -10 {
 		t.Fatalf("unexpected delta for left: %d ok=%v", delta, ok)
 	}
@@ -36,7 +40,9 @@ func TestResizeKeyboardHelpers(t *testing.T) {
 	if _, ok := resizeDeltaForAxis(layout.AxisVertical, "left", 5); ok {
 		t.Fatalf("expected invalid delta for mismatched axis")
 	}
+}
 
+func TestUniqueEdges(t *testing.T) {
 	edges := uniqueEdges([]resizeEdgeRef{
 		{PaneID: "p1", Edge: sessiond.ResizeEdgeLeft},
 		{PaneID: "p1", Edge: sessiond.ResizeEdgeLeft},
@@ -45,6 +51,9 @@ func TestResizeKeyboardHelpers(t *testing.T) {
 	if len(edges) != 2 {
 		t.Fatalf("expected unique edges, got %#v", edges)
 	}
+}
+
+func TestRangesOverlap(t *testing.T) {
 	if !rangesOverlap(0, 10, 5, 15) {
 		t.Fatalf("expected ranges to overlap")
 	}
