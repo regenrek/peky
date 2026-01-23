@@ -28,6 +28,7 @@ const (
 	StateCommandPalette
 	StateRenameSession
 	StateRenamePane
+	StatePaneColor
 	StateProjectRootSetup
 	StateSettingsMenu
 	StatePerformanceMenu
@@ -174,6 +175,7 @@ type PaneItem struct {
 	AgentUnread   bool
 	PID           int
 	Active        bool
+	Background    int
 	Left          int
 	Top           int
 	Width         int

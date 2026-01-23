@@ -208,6 +208,26 @@ func TestClientSetPaneTool(t *testing.T) {
 	})
 }
 
+func TestClientSetPaneBackground(t *testing.T) {
+	runClientCase(t, clientCase{
+		name: "SetPaneBackground",
+		op:   OpSetPaneBackground,
+		check: func(env Envelope) error {
+			var req SetPaneBackgroundRequest
+			if err := decodePayload(env.Payload, &req); err != nil {
+				return err
+			}
+			if req.PaneID != "pane-1" || req.Background != 3 {
+				return fmt.Errorf("unexpected set background request")
+			}
+			return nil
+		},
+		call: func(c *Client) error {
+			return c.SetPaneBackground(context.Background(), "pane-1", 3)
+		},
+	})
+}
+
 func TestClientSplitPane(t *testing.T) {
 	runClientCase(t, clientCase{
 		name: "SplitPane",

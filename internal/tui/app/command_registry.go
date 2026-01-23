@@ -143,6 +143,16 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 						return m.renamePaneDirect(args.Raw)
 					},
 				},
+				{
+					ID:      "pane_color",
+					Label:   "Pane: Set pane color",
+					Desc:    "Choose a background tint for the selected pane",
+					Aliases: []string{"pane color", "pane background", "color pane"},
+					Run: func(m *Model, _ commandArgs) tea.Cmd {
+						m.openPaneColorDialog()
+						return nil
+					},
+				},
 			},
 		},
 		{

@@ -71,6 +71,9 @@ func TestHandleKeyMsgAdditionalStates(t *testing.T) {
 
 		m.state = StateDebugMenu
 		assertHandledKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
+
+		m.state = StatePaneColor
+		assertHandledKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
 	})
 }
 

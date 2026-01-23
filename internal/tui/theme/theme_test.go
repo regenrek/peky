@@ -3,6 +3,8 @@ package theme
 import (
 	"strings"
 	"testing"
+
+	"github.com/regenrek/peakypanes/internal/limits"
 )
 
 // TestFormatSuccess tests success message formatting
@@ -112,6 +114,15 @@ func TestColorsAreDefined(t *testing.T) {
 		if color == nil {
 			t.Errorf("Color %s should not be nil", name)
 		}
+	}
+}
+
+func TestPaneBackgroundOptions(t *testing.T) {
+	if got := len(PaneBackgroundOptions); got != limits.PaneBackgroundMax {
+		t.Fatalf("expected %d pane background options, got %d", limits.PaneBackgroundMax, got)
+	}
+	if PaneBackgroundOptions[limits.PaneBackgroundDefault-1] == "" {
+		t.Fatalf("expected default pane background color")
 	}
 }
 

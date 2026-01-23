@@ -46,7 +46,8 @@ func (m *fakeRelayManager) ResetPaneSizes(string, string) (layout.ApplyResult, e
 func (m *fakeRelayManager) ZoomPane(string, string, bool) (layout.ApplyResult, error) {
 	return layout.ApplyResult{}, nil
 }
-func (m *fakeRelayManager) SetPaneTool(string, string) error { return nil }
+func (m *fakeRelayManager) SetPaneTool(string, string) error    { return nil }
+func (m *fakeRelayManager) SetPaneBackground(string, int) error { return nil }
 func (m *fakeRelayManager) SendInput(_ context.Context, paneID string, input []byte) error {
 	if m.sent == nil {
 		m.sent = make(map[string][][]byte)

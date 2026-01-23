@@ -40,6 +40,7 @@ func (m *fakeScopeManager) ZoomPane(string, string, bool) (layout.ApplyResult, e
 	return layout.ApplyResult{}, nil
 }
 func (m *fakeScopeManager) SetPaneTool(string, string) error                { return nil }
+func (m *fakeScopeManager) SetPaneBackground(string, int) error             { return nil }
 func (m *fakeScopeManager) SendInput(context.Context, string, []byte) error { return nil }
 func (m *fakeScopeManager) SendMouse(string, uv.MouseEvent, terminal.MouseRoute) error {
 	return nil

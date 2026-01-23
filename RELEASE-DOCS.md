@@ -58,14 +58,28 @@ gh run list -w "npm Release" -L 3
 gh run view --log --web
 ```
 
-5) Verify installs (recommended):
+## Cut Next Release (Homebrew + npm)
+
+Use this when you need to cut the next release and ensure Homebrew + npm publishing completes.
+
+1) Confirm the `release` workflow succeeded (Homebrew tap update is part of it).
+2) Confirm the `npm Release` workflow succeeded (all 5 npm packages).
+3) If either fails, fix and re-run the exact workflow for the same tag:
+
+```bash
+gh run list -w release -L 3
+gh run list -w "npm Release" -L 3
+gh run view --log --web
+```
+
+4) Verify installs (recommended):
 
 ```bash
 brew install --build-from-source regenrek/tap/peky
 brew test regenrek/tap/peky
 ```
 
-6) Publish npm packages (GitHub Actions, Trusted Publishing):
+5) Publish npm packages (GitHub Actions, Trusted Publishing):
 
 - Creating/publishing the GitHub Release triggers the `npm Release` workflow, which builds the npm packages from the GitHub release assets and publishes all 5 packages using OIDC.
 - Monitor the run under GitHub Actions → `npm Release`.
@@ -109,7 +123,12 @@ The helper requires a clean working tree and push access to the repo.
 ## Post-Release Verification
 
 ```bash
+brew info regenrek/tap/peky
 npm view peky
+npm view peky-darwin-x64
+npm view peky-darwin-arm64
+npm view peky-linux-x64
+npm view peky-linux-arm64
 npx -y -p peky peky
 ```
 

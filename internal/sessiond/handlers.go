@@ -64,6 +64,9 @@ var requestHandlers = map[Op]requestHandler{
 	OpSetPaneTool: func(d *Daemon, payload []byte) ([]byte, error) {
 		return d.handleSetPaneTool(payload)
 	},
+	OpSetPaneBackground: func(d *Daemon, payload []byte) ([]byte, error) {
+		return d.handleSetPaneBackground(payload)
+	},
 	OpSendInput: func(d *Daemon, payload []byte) ([]byte, error) {
 		return d.handleSendInput(payload)
 	},

@@ -58,6 +58,22 @@ func TestHandlerErrorPaths(t *testing.T) {
 			},
 		},
 		{
+			name: "handleSetPaneBackground invalid background",
+			call: func() error {
+				payload, _ := encodePayload(SetPaneBackgroundRequest{PaneID: "pane", Background: 0})
+				_, err := d.handleSetPaneBackground(payload)
+				return err
+			},
+		},
+		{
+			name: "handleSetPaneBackground manager missing",
+			call: func() error {
+				payload, _ := encodePayload(SetPaneBackgroundRequest{PaneID: "pane", Background: 2})
+				_, err := d.handleSetPaneBackground(payload)
+				return err
+			},
+		},
+		{
 			name: "handleSplitPane invalid pane",
 			call: func() error {
 				payload, _ := encodePayload(SplitPaneRequest{SessionName: "session", PaneIndex: ""})

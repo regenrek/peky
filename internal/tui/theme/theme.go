@@ -41,6 +41,15 @@ var (
 	QuickReplyTag = SurfaceInset
 	QuickReplyAcc = SurfaceInset
 
+	// Pane background tint palette (1 = default).
+	PaneBackgroundOptions = []lipgloss.Color{
+		Background,
+		lipgloss.Color("#1F2A33"),
+		lipgloss.Color("#1F2F27"),
+		lipgloss.Color("#33271F"),
+		lipgloss.Color("#2C1F33"),
+	}
+
 	// Dialog colors
 	DialogBorderColor = Accent
 	DialogLabelColor  = TextMuted

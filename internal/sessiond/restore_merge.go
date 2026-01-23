@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/regenrek/peakypanes/internal/limits"
 	"github.com/regenrek/peakypanes/internal/native"
 	"github.com/regenrek/peakypanes/internal/sessionrestore"
 )
@@ -102,6 +103,7 @@ func buildOfflinePaneSnapshot(snap sessionrestore.PaneSnapshot) native.PaneSnaps
 		Tool:          snap.PaneTool,
 		Cwd:           snap.PaneCwd,
 		Active:        snap.PaneActive,
+		Background:    normalizePaneBackground(snap.PaneBackground),
 		Left:          snap.PaneLeft,
 		Top:           snap.PaneTop,
 		Width:         snap.PaneWidth,
@@ -119,6 +121,13 @@ func buildOfflinePaneSnapshot(snap sessionrestore.PaneSnapshot) native.PaneSnaps
 		BytesOut:      snap.PaneBytesOut,
 		Preview:       preview,
 	}
+}
+
+func normalizePaneBackground(value int) int {
+	if value < limits.PaneBackgroundMin || value > limits.PaneBackgroundMax {
+		return limits.PaneBackgroundDefault
+	}
+	return value
 }
 
 func appendOfflineSessions(live []native.SessionSnapshot, grouped map[string]*native.SessionSnapshot) []native.SessionSnapshot {

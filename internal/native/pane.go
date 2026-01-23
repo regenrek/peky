@@ -13,6 +13,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 
 	"github.com/regenrek/peakypanes/internal/layout"
+	"github.com/regenrek/peakypanes/internal/limits"
 	"github.com/regenrek/peakypanes/internal/sessionrestore"
 	"github.com/regenrek/peakypanes/internal/terminal"
 )
@@ -27,6 +28,7 @@ type Pane struct {
 	Tool          string
 	PID           int
 	Active        bool
+	Background    int
 	Left          int
 	Top           int
 	Width         int
@@ -153,6 +155,38 @@ func (m *Manager) SetPaneTool(paneID string, tool string) error {
 	if changed {
 		// notifyMeta bumps the snapshot version and emits a metadata update event.
 		// Do not call notifyPane while holding Manager.mu (it takes an RLock).
+		m.notifyMeta(paneID)
+	}
+	return nil
+}
+
+// SetPaneBackground updates the recorded background palette index for a pane.
+func (m *Manager) SetPaneBackground(paneID string, background int) error {
+	if m == nil {
+		return errors.New("native: manager is nil")
+	}
+	paneID = strings.TrimSpace(paneID)
+	if paneID == "" {
+		return errors.New("native: pane id is required")
+	}
+	if background < limits.PaneBackgroundMin || background > limits.PaneBackgroundMax {
+		return fmt.Errorf("native: pane background must be %d-%d", limits.PaneBackgroundMin, limits.PaneBackgroundMax)
+	}
+	var changed bool
+
+	m.mu.Lock()
+	pane := m.panes[paneID]
+	if pane == nil {
+		m.mu.Unlock()
+		return fmt.Errorf("native: pane %q not found", paneID)
+	}
+	if pane.Background != background {
+		pane.Background = background
+		changed = true
+	}
+	m.mu.Unlock()
+
+	if changed {
 		m.notifyMeta(paneID)
 	}
 	return nil
