@@ -12,6 +12,17 @@ This format is based on Keep a Changelog.
 
 ### Fixed
 
+## 0.0.39 - 2026-01-24
+
+### Added
+- Auto-update checks with an install dialog (install/skip/remind later).
+- npm-based auto-updater plumbing for release installs.
+
+### Changed
+- Dashboard header now shows `PEKY v<version>`.
+
+### Fixed
+
 ## 0.0.38 - 2026-01-22
 
 ### Added
