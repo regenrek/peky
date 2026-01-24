@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/lipgloss"
 	"os"
@@ -19,6 +20,7 @@ import (
 	"github.com/regenrek/peakypanes/internal/tui/mouse"
 	"github.com/regenrek/peakypanes/internal/tui/picker"
 	"github.com/regenrek/peakypanes/internal/tui/theme"
+	"github.com/regenrek/peakypanes/internal/update"
 )
 
 // Styles - using centralized theme for consistency
@@ -138,6 +140,17 @@ type Model struct {
 	authDialogKind        authDialogKind
 	projectPickerProjects []picker.ProjectItem
 	dialogHelpOpen        bool
+
+	updatePolicy         update.Policy
+	updateState          update.State
+	updateStore          update.Store
+	updateClient         update.RegistryClient
+	updateSpec           update.InstallSpec
+	updateCheckInFlight  bool
+	updatePromptPending  bool
+	updatePendingRestart bool
+	updateProgress       updateProgress
+	updateRunCh          <-chan tea.Msg
 
 	confirmSession     string
 	confirmProject     string
@@ -353,6 +366,7 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 		return nil, err
 	}
 	m.keys = keys
+	m.initUpdateState()
 
 	if needsProjectRootSetup(cfg, configExists) {
 		m.openProjectRootSetup()

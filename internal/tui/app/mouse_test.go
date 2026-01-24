@@ -533,6 +533,7 @@ func TestMouseMotionSetsCursorShapeColResizeOverDivider(t *testing.T) {
 	session := findSessionByName(m.data.Projects, "alpha-1")
 	if session == nil {
 		t.Fatalf("expected session alpha-1")
+		return
 	}
 	session.LayoutTree = &layout.TreeSnapshot{
 		Root: layout.NodeSnapshot{
@@ -586,6 +587,7 @@ func TestMouseMotionSetsCursorShapeRowResizeOverDivider(t *testing.T) {
 	session := findSessionByName(m.data.Projects, "alpha-1")
 	if session == nil {
 		t.Fatalf("expected session alpha-1")
+		return
 	}
 	session.LayoutTree = &layout.TreeSnapshot{
 		Root: layout.NodeSnapshot{

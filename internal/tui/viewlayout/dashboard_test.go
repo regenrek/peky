@@ -3,11 +3,11 @@ package viewlayout
 import "testing"
 
 func TestDashboardLayoutStandardPromptDelta(t *testing.T) {
-	withPrompt, ok := Dashboard(40, 20, true, true)
+	withPrompt, ok := Dashboard(40, 20, true, true, false)
 	if !ok {
 		t.Fatalf("expected layout with prompt")
 	}
-	withoutPrompt, ok := Dashboard(40, 20, false, true)
+	withoutPrompt, ok := Dashboard(40, 20, false, true, false)
 	if !ok {
 		t.Fatalf("expected layout without prompt")
 	}
@@ -23,11 +23,11 @@ func TestDashboardLayoutStandardPromptDelta(t *testing.T) {
 }
 
 func TestDashboardLayoutPromptHeaderGapFlip(t *testing.T) {
-	withPrompt, ok := Dashboard(40, 10, true, true)
+	withPrompt, ok := Dashboard(40, 10, true, true, false)
 	if !ok {
 		t.Fatalf("expected layout with prompt")
 	}
-	withoutPrompt, ok := Dashboard(40, 10, false, true)
+	withoutPrompt, ok := Dashboard(40, 10, false, true, false)
 	if !ok {
 		t.Fatalf("expected layout without prompt")
 	}

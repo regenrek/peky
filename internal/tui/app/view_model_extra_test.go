@@ -37,6 +37,7 @@ func TestPreviewSessionForViewHidesNonZoomedPanes(t *testing.T) {
 	session := findSessionByName(m.data.Projects, "alpha-1")
 	if session == nil {
 		t.Fatalf("expected session alpha-1")
+		return
 	}
 	if len(session.Panes) < 2 {
 		t.Fatalf("expected at least 2 panes")
@@ -60,6 +61,7 @@ func TestPreviewSessionForViewHidesNonZoomedPanes(t *testing.T) {
 	preview := m.previewSessionForView(session)
 	if preview == nil {
 		t.Fatalf("expected preview session")
+		return
 	}
 	if len(preview.Panes) != len(session.Panes) {
 		t.Fatalf("pane count mismatch")

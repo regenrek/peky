@@ -2,7 +2,10 @@ package app
 
 import (
 	"fmt"
+	"strings"
 	"time"
+
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/regenrek/peakypanes/internal/layout"
 	"github.com/regenrek/peakypanes/internal/tui/layoutgeom"
@@ -55,7 +58,15 @@ func (m *Model) headerHitRects() []headerHitRect {
 	if len(parts) == 0 {
 		return nil
 	}
+	hits := headerPartHits(header, parts)
+	return m.appendUpdateBannerHit(hits, header)
+}
 
+func headerPartHits(header mouse.Rect, parts []headerPart) []headerHitRect {
+	lineHeight := 1
+	if header.H < lineHeight {
+		lineHeight = header.H
+	}
 	hits := make([]headerHitRect, 0, len(parts))
 	cursor := header.X
 	maxX := header.X + header.W
@@ -72,28 +83,69 @@ func (m *Model) headerHitRects() []headerHitRect {
 		if visibleEnd > maxX {
 			visibleEnd = maxX
 		}
-		if part.Kind.clickable() && visibleEnd > start {
-			kind, ok := headerHitKind(part.Kind)
-			if !ok {
-				cursor = end
-				continue
-			}
-			hits = append(hits, headerHitRect{
-				Hit: mouse.HeaderHit{
-					Kind:      kind,
-					ProjectID: part.ProjectID,
-				},
-				Rect: mouse.Rect{
-					X: start,
-					Y: header.Y,
-					W: visibleEnd - start,
-					H: header.H,
-				},
-			})
-		}
 		cursor = end
+		hit, ok := headerHitRectForPart(header, part, start, visibleEnd, lineHeight)
+		if !ok {
+			continue
+		}
+		hits = append(hits, hit)
 	}
 	return hits
+}
+
+func headerHitRectForPart(header mouse.Rect, part headerPart, start, end, lineHeight int) (headerHitRect, bool) {
+	if !part.Kind.clickable() || end <= start {
+		return headerHitRect{}, false
+	}
+	kind, ok := headerHitKind(part.Kind)
+	if !ok {
+		return headerHitRect{}, false
+	}
+	return headerHitRect{
+		Hit: mouse.HeaderHit{
+			Kind:      kind,
+			ProjectID: part.ProjectID,
+		},
+		Rect: mouse.Rect{
+			X: start,
+			Y: header.Y,
+			W: end - start,
+			H: lineHeight,
+		},
+	}, true
+}
+
+func (m *Model) appendUpdateBannerHit(hits []headerHitRect, header mouse.Rect) []headerHitRect {
+	label, hint, ok := m.updateBannerInfo()
+	if !ok {
+		return hits
+	}
+	text := label
+	if strings.TrimSpace(hint) != "" {
+		text = text + " " + hint
+	}
+	textWidth := lipgloss.Width(text)
+	if textWidth <= 0 {
+		return hits
+	}
+	start := header.X + header.W - textWidth
+	if start < header.X {
+		start = header.X
+		textWidth = header.W
+	}
+	updateY := header.Y + 1
+	if updateY >= header.Y+header.H {
+		return hits
+	}
+	return append(hits, headerHitRect{
+		Hit: mouse.HeaderHit{Kind: mouse.HeaderUpdate},
+		Rect: mouse.Rect{
+			X: start,
+			Y: updateY,
+			W: textWidth,
+			H: 1,
+		},
+	})
 }
 
 func (m *Model) paneHits() []mouse.PaneHit {

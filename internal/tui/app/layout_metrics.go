@@ -33,10 +33,14 @@ func (m *Model) dashboardLayoutInternal(logCtx string) (dashboardLayout, bool) {
 	contentWidth := m.width - h
 	contentHeight := m.height - v
 	hasPekyPrompt := strings.TrimSpace(m.pekyPromptLine) != ""
-	layout, ok := viewlayout.Dashboard(contentWidth, contentHeight, hasPekyPrompt, m.quickReplyEnabled())
+	hasUpdateBanner := false
+	if _, _, ok := m.updateBannerInfo(); ok {
+		hasUpdateBanner = true
+	}
+	layout, ok := viewlayout.Dashboard(contentWidth, contentHeight, hasPekyPrompt, m.quickReplyEnabled(), hasUpdateBanner)
 	if !ok {
 		if log {
-			m.logPaneViewSkipGlobal("dashboard_too_small", logCtx)
+			m.logPaneViewSkipGlobal("content_too_small", logCtx)
 		}
 		return dashboardLayout{}, false
 	}

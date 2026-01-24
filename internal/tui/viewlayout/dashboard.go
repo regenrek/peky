@@ -24,11 +24,14 @@ func DashboardOk(contentWidth, contentHeight int) bool {
 	return contentWidth > dashboardMinContentWidth && contentHeight > dashboardMinContentHeight
 }
 
-func Dashboard(contentWidth, contentHeight int, hasPekyPrompt, showQuickReply bool) (DashboardLayout, bool) {
+func Dashboard(contentWidth, contentHeight int, hasPekyPrompt, showQuickReply, showUpdateBanner bool) (DashboardLayout, bool) {
 	if !DashboardOk(contentWidth, contentHeight) {
 		return DashboardLayout{}, false
 	}
 	headerHeight := dashboardHeaderHeight
+	if showUpdateBanner {
+		headerHeight++
+	}
 	footerHeight := dashboardFooterHeight
 	quickReplyHeight := 0
 	if showQuickReply {

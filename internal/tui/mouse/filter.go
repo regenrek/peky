@@ -44,6 +44,7 @@ const (
 	HeaderDashboard HeaderKind = iota
 	HeaderProject
 	HeaderNew
+	HeaderUpdate
 )
 
 // HeaderHit captures a header hit-test match.

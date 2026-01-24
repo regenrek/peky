@@ -33,6 +33,7 @@ func TestReconcilePaneInputDisabled(t *testing.T) {
 	pane := m.paneByID("p1")
 	if pane == nil {
 		t.Fatalf("expected pane p1")
+		return
 	}
 	pane.Dead = true
 

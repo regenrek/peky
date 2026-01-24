@@ -5,7 +5,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"unicode/utf8"
 
 	"github.com/regenrek/peakypanes/internal/agent"
 	"github.com/regenrek/peakypanes/internal/cli/spec"
@@ -146,7 +145,7 @@ func TestPekySuccessToast(t *testing.T) {
 	}
 	long := strings.Repeat("a", 140)
 	got := pekySuccessToast(long)
-	if utf8.RuneCountInString(got) != 120 || !strings.HasSuffix(got, "\u2026") {
+	if len(got) != 120 || !strings.HasSuffix(got, "...") {
 		t.Fatalf("long toast = %q", got)
 	}
 }
