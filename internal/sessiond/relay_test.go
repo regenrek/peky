@@ -32,8 +32,8 @@ func (m *fakeRelayManager) StartSession(context.Context, native.SessionSpec) (*n
 func (m *fakeRelayManager) KillSession(string) error                { return nil }
 func (m *fakeRelayManager) RenameSession(string, string) error      { return nil }
 func (m *fakeRelayManager) RenamePane(string, string, string) error { return nil }
-func (m *fakeRelayManager) SplitPane(context.Context, string, string, bool, int) (string, error) {
-	return "", nil
+func (m *fakeRelayManager) SplitPane(context.Context, string, string, bool, int) (string, string, error) {
+	return "", "", nil
 }
 func (m *fakeRelayManager) ClosePane(context.Context, string, string) error { return nil }
 func (m *fakeRelayManager) SwapPanes(string, string, string) error          { return nil }

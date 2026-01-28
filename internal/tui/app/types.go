@@ -18,6 +18,7 @@ const (
 	StateLayoutPicker
 	StatePaneSplitPicker
 	StatePaneSwapPicker
+	StateSkillsTargetPicker
 	StateConfirmKill
 	StateConfirmCloseProject
 	StateConfirmCloseAllProjects

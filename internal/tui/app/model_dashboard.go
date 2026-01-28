@@ -30,7 +30,16 @@ func (m *Model) updateDashboardInput(msg tuiinput.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 	if m.quickReplyInput.Focused() {
-		return m.updateQuickReplyInput(msg)
+		switch teaMsg.String() {
+		case "esc", "shift+tab":
+			m.quickReplyMouseSel.clear()
+			m.resetQuickReplyHistory()
+			m.resetQuickReplyMenu()
+			m.quickReplyInput.Blur()
+			return m, m.sendDashboardKeyToPane(msg)
+		default:
+			return m.updateQuickReplyInput(msg)
+		}
 	}
 	return m, m.sendDashboardKeyToPane(msg)
 }

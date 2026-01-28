@@ -120,7 +120,7 @@ func splitPaneCount(ctx context.Context, client *sessiond.Client, sessionName, p
 	newIndexes := make([]string, 0, opts.count)
 	currentIndex := paneIndex
 	for i := 0; i < opts.count; i++ {
-		newIndex, err := client.SplitPane(ctx, sessionName, currentIndex, opts.vertical, opts.percent)
+		newIndex, _, err := client.SplitPane(ctx, sessionName, currentIndex, opts.vertical, opts.percent)
 		if err != nil {
 			return nil, err
 		}

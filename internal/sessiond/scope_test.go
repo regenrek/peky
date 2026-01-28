@@ -25,8 +25,8 @@ func (m *fakeScopeManager) StartSession(context.Context, native.SessionSpec) (*n
 func (m *fakeScopeManager) KillSession(string) error                { return nil }
 func (m *fakeScopeManager) RenameSession(string, string) error      { return nil }
 func (m *fakeScopeManager) RenamePane(string, string, string) error { return nil }
-func (m *fakeScopeManager) SplitPane(context.Context, string, string, bool, int) (string, error) {
-	return "", nil
+func (m *fakeScopeManager) SplitPane(context.Context, string, string, bool, int) (string, string, error) {
+	return "", "", nil
 }
 func (m *fakeScopeManager) ClosePane(context.Context, string, string) error { return nil }
 func (m *fakeScopeManager) SwapPanes(string, string, string) error          { return nil }

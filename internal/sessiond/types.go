@@ -169,9 +169,10 @@ type SplitPaneRequest struct {
 	Percent     int
 }
 
-// SplitPaneResponse returns the new pane index.
+// SplitPaneResponse returns the new pane index and ID.
 type SplitPaneResponse struct {
-	NewIndex string
+	NewIndex  string
+	NewPaneID string
 }
 
 // ClosePaneRequest closes a pane.

@@ -53,6 +53,7 @@ func newTestModelLite() *Model {
 	m.setupProjectPicker()
 	m.setupLayoutPicker()
 	m.setupPaneSwapPicker()
+	m.setupSkillsTargetPicker()
 	m.setupCommandPalette()
 	m.setupSettingsMenu()
 	m.setupPerformanceMenu()

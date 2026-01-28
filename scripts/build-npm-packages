@@ -311,6 +311,9 @@ function build() {
     const binDst = path.join(binDir, exeName);
     fs.copyFileSync(binSrc, binDst);
     if (t.goos !== 'windows') chmodExec(binDst);
+    const skillsSrc = path.join(ROOT, 'skills');
+    const skillsDst = path.join(pkgDir, 'skills');
+    copyDir(skillsSrc, skillsDst);
 
     const os = [t.npmPlatform];
     const cpu = [t.npmArch];
@@ -338,7 +341,8 @@ function build() {
       cpu,
       files: [
         'bin/' + exeName,
-        'README.md'
+        'README.md',
+        'skills/'
       ],
       publishConfig: {
         access: 'public'

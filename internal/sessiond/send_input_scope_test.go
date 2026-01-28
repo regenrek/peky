@@ -29,8 +29,8 @@ func (m *scopeSendManager) StartSession(context.Context, native.SessionSpec) (*n
 func (m *scopeSendManager) KillSession(string) error                { return nil }
 func (m *scopeSendManager) RenameSession(string, string) error      { return nil }
 func (m *scopeSendManager) RenamePane(string, string, string) error { return nil }
-func (m *scopeSendManager) SplitPane(context.Context, string, string, bool, int) (string, error) {
-	return "", nil
+func (m *scopeSendManager) SplitPane(context.Context, string, string, bool, int) (string, string, error) {
+	return "", "", nil
 }
 func (m *scopeSendManager) ClosePane(context.Context, string, string) error { return nil }
 func (m *scopeSendManager) SwapPanes(string, string, string) error          { return nil }

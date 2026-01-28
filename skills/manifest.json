@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "skills": [
+    {
+      "id": "peky-peky",
+      "name": "peky-peky",
+      "description": "Use when operating peky from the CLI or TUI, especially for AI agents who need reliable, low-error procedures. Covers how to target sessions/panes correctly, use scopes, avoid confirmation prompts, and keep CLI/TUI/daemon in sync.",
+      "targets": ["codex", "claude", "cursor"],
+      "path": "codex/peky-peky"
+    },
+    {
+      "id": "peky-session-handoff",
+      "name": "peky-session-handoff",
+      "description": "Creates comprehensive handoff documents for seamless AI agent session transfers. Triggered when: (1) user requests handoff/memory/context save, (2) context window approaches capacity, (3) major task milestone completed, (4) work session ending, (5) user says 'save state', 'create handoff', 'I need to pause', 'context is getting full', (6) resuming work with 'load handoff', 'resume from', 'continue where we left off'. Proactively suggests handoffs after substantial work (multiple file edits, complex debugging, architecture decisions). Solves long-running agent context exhaustion by enabling fresh agents to continue with zero ambiguity.",
+      "targets": ["codex", "claude", "cursor"],
+      "path": "codex/peky-session-handoff"
+    }
+  ]
+}

@@ -81,8 +81,8 @@ func (m *fakeManager) RenameSession(oldName, newName string) error {
 func (m *fakeManager) RenamePane(sessionName, paneIndex, newTitle string) error {
 	return nil
 }
-func (m *fakeManager) SplitPane(context.Context, string, string, bool, int) (string, error) {
-	return "2", nil
+func (m *fakeManager) SplitPane(context.Context, string, string, bool, int) (string, string, error) {
+	return "2", "pane-2", nil
 }
 func (m *fakeManager) ClosePane(context.Context, string, string) error {
 	return nil
@@ -367,6 +367,9 @@ func TestHandleKillSplitCloseSwap(t *testing.T) {
 	}
 	if splitResp.NewIndex == "" {
 		t.Fatalf("expected split response index")
+	}
+	if splitResp.NewPaneID == "" {
+		t.Fatalf("expected split response pane id")
 	}
 
 	payload, err = encodePayload(ClosePaneRequest{SessionName: "alpha", PaneIndex: "1"})

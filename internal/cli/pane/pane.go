@@ -164,7 +164,7 @@ func runSplit(ctx root.CommandContext) error {
 	}
 	ctxTimeout, cancel := context.WithTimeout(ctx.Context, commandTimeout(ctx))
 	defer cancel()
-	newIndex, err := client.SplitPane(ctxTimeout, sessionName, paneIndex, vertical, percent)
+	newIndex, _, err := client.SplitPane(ctxTimeout, sessionName, paneIndex, vertical, percent)
 	if err != nil {
 		return err
 	}

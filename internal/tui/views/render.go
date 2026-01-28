@@ -23,6 +23,7 @@ var viewRenderers = map[int]func(Model) string{
 	viewLayoutPicker:            func(m Model) string { return m.viewLayoutPicker() },
 	viewPaneSplitPicker:         func(m Model) string { return m.viewPaneSplitPicker() },
 	viewPaneSwapPicker:          func(m Model) string { return m.viewPaneSwapPicker() },
+	viewSkillsTargetPicker:      func(m Model) string { return m.viewSkillsTargetPicker() },
 	viewConfirmKill:             func(m Model) string { return m.viewConfirmKill() },
 	viewConfirmQuit:             func(m Model) string { return m.viewConfirmQuit() },
 	viewConfirmCloseProject:     func(m Model) string { return m.viewConfirmCloseProject() },

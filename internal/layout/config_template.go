@@ -87,11 +87,17 @@ layout_dirs:
 #       - cmd: ""
 
 tools:
-  cursor_agent:
-    pane_title: cursor
-    cmd: ""
-  codex_new:
+  codex_cli:
     pane_title: codex
+    cmd: ""
+  claude_code:
+    pane_title: claude
+    cmd: ""
+  pi:
+    pane_title: pi
+    cmd: ""
+  opencode:
+    pane_title: opencode
     cmd: ""
 
 # Tool detection + input profiles for CLI/TUI sends

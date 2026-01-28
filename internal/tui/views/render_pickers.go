@@ -39,6 +39,38 @@ func (m Model) viewPaneSwapPicker() string {
 	})
 }
 
+func (m Model) viewSkillsTargetPicker() string {
+	listW := m.SkillsTargetPicker.Width()
+	listH := m.SkillsTargetPicker.Height()
+	header := theme.HelpTitle.Render("Install Skills")
+	listView := lipgloss.NewStyle().
+		Width(listW).
+		Height(listH).
+		Background(theme.Background).
+		Render(m.SkillsTargetPicker.View())
+	choices := renderDialogChoices([]dialogChoice{
+		{Key: "space", Label: "toggle"},
+		{Key: "enter", Label: "install"},
+		{Key: "esc", Label: "cancel"},
+	})
+	content := dialogContent(header, listView, choices)
+	contentW := listW
+	if w := lipgloss.Width(header); w > contentW {
+		contentW = w
+	}
+	if w := lipgloss.Width(choices); w > contentW {
+		contentW = w
+	}
+	contentH := lipgloss.Height(header) + listH + lipgloss.Height(choices) + 2
+	return m.renderDialog(dialogSpec{
+		Content:         content,
+		Size:            dialogSizeForContentWithStyle(dialogStyleCompact, contentW, contentH),
+		RequireViewport: true,
+		Style:           dialogStyleCompact,
+		UseStyle:        true,
+	})
+}
+
 const commandPaletteHeading = "⌘ Command Palette"
 const settingsMenuHeading = "Settings"
 const performanceMenuHeading = "Performance"

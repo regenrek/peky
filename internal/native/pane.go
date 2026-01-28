@@ -275,30 +275,30 @@ func findPaneByIndexAndPosition(panes []*Pane, paneIndex string) (int, *Pane) {
 	return -1, nil
 }
 
-// SplitPane splits a pane inside a session and returns the new pane index.
-func (m *Manager) SplitPane(ctx context.Context, sessionName, paneIndex string, vertical bool, percent int) (string, error) {
+// SplitPane splits a pane inside a session and returns the new pane index and ID.
+func (m *Manager) SplitPane(ctx context.Context, sessionName, paneIndex string, vertical bool, percent int) (string, string, error) {
 	if m == nil {
-		return "", errors.New("native: manager is nil")
+		return "", "", errors.New("native: manager is nil")
 	}
 	sessionName = strings.TrimSpace(sessionName)
 	paneIndex = strings.TrimSpace(paneIndex)
 	if sessionName == "" || paneIndex == "" {
-		return "", errors.New("native: session and pane are required")
+		return "", "", errors.New("native: session and pane are required")
 	}
 
 	targetRestore, startDir, env, err := m.splitPanePreflight(sessionName, paneIndex)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	if strings.TrimSpace(startDir) != "" {
 		if err := validatePath(startDir); err != nil {
-			return "", err
+			return "", "", err
 		}
 	}
 	pane, err := m.createPane(ctx, startDir, "", "", env)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	pane.RestoreMode = targetRestore
 
@@ -309,7 +309,7 @@ func (m *Manager) SplitPane(ctx context.Context, sessionName, paneIndex string, 
 	result, newIndex, err := m.splitPaneCommit(sessionName, paneIndex, pane, axis, percent)
 	if err != nil {
 		_ = pane.window.Close()
-		return "", err
+		return "", "", err
 	}
 
 	m.applyScrollbackBudgets()
@@ -318,7 +318,7 @@ func (m *Manager) SplitPane(ctx context.Context, sessionName, paneIndex string, 
 	for _, id := range result.Affected {
 		m.notifyPane(id)
 	}
-	return newIndex, nil
+	return newIndex, pane.ID, nil
 }
 
 func (m *Manager) splitPanePreflight(sessionName, paneIndex string) (sessionrestore.Mode, string, []string, error) {

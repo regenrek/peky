@@ -87,7 +87,7 @@ func TestClientSessionMutations(t *testing.T) {
 		t.Fatalf("RenamePane: %v", err)
 	}
 
-	if _, err := client.SplitPane(ctx, "alpha", "1", true, 50); err != nil {
+	if _, _, err := client.SplitPane(ctx, "alpha", "1", true, 50); err != nil {
 		t.Fatalf("SplitPane: %v", err)
 	}
 
@@ -164,7 +164,7 @@ func serveClientTestConn(t *testing.T, conn net.Conn) {
 		case OpRenameSession:
 			payload = encodeMust(t, RenameSessionResponse{NewName: "beta"})
 		case OpSplitPane:
-			payload = encodeMust(t, SplitPaneResponse{NewIndex: "2"})
+			payload = encodeMust(t, SplitPaneResponse{NewIndex: "2", NewPaneID: "pane-2"})
 		case OpPaneView:
 			payload = encodeMust(t, PaneViewResponse{PaneID: "pane-1", Cols: 10, Rows: 2, Frame: termframe.Frame{Cols: 1, Rows: 1, Cells: []termframe.Cell{{Content: "ok", Width: 1}}}})
 		case OpTerminalAction:

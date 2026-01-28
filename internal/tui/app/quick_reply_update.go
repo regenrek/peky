@@ -19,9 +19,6 @@ func (m *Model) updateQuickReplyInput(msg tuiinput.KeyMsg) (tea.Model, tea.Cmd) 
 	if !agentFeaturesEnabled && m.quickReplyMode == quickReplyModePeky {
 		m.setQuickReplyMode(quickReplyModePane)
 	}
-	if m.handleQuickReplyModeToggle(teaMsg) {
-		return m, nil
-	}
 	if m.applyQuickReplyCompletionOnTab(teaMsg) {
 		return m, nil
 	}
@@ -45,19 +42,6 @@ func (m *Model) updateQuickReplyInput(msg tuiinput.KeyMsg) (tea.Model, tea.Cmd) 
 	m.quickReplyInput, cmd = m.quickReplyInput.Update(teaMsg)
 	m.updateQuickReplyMenuSelection()
 	return m, cmd
-}
-
-func (m *Model) handleQuickReplyModeToggle(msg tea.KeyMsg) bool {
-	if msg.String() != "shift+tab" {
-		return false
-	}
-	if !agentFeaturesEnabled {
-		m.setQuickReplyMode(quickReplyModePane)
-		m.setToast("Agent mode disabled", toastWarning)
-		return true
-	}
-	m.toggleQuickReplyMode()
-	return true
 }
 
 func (m *Model) applyQuickReplyCompletionOnTab(msg tea.KeyMsg) bool {

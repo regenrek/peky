@@ -30,12 +30,12 @@ func TestSplitPaneWithStubWindow(t *testing.T) {
 	m.panes[pane.ID] = pane
 	m.nextID.Store(1)
 
-	newIndex, err := m.SplitPane(context.Background(), session.Name, pane.Index, true, 50)
+	newIndex, newPaneID, err := m.SplitPane(context.Background(), session.Name, pane.Index, true, 50)
 	if err != nil {
 		t.Fatalf("SplitPane() error: %v", err)
 	}
-	if newIndex == "" || len(session.Panes) != 2 {
-		t.Fatalf("expected new pane added, got index=%q panes=%d", newIndex, len(session.Panes))
+	if newIndex == "" || newPaneID == "" || len(session.Panes) != 2 {
+		t.Fatalf("expected new pane added, got index=%q id=%q panes=%d", newIndex, newPaneID, len(session.Panes))
 	}
 	if !session.Panes[1].Active {
 		t.Fatalf("expected new pane active")

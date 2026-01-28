@@ -7,6 +7,7 @@ const (
 	viewLayoutPicker
 	viewPaneSplitPicker
 	viewPaneSwapPicker
+	viewSkillsTargetPicker
 	viewConfirmKill
 	viewConfirmCloseProject
 	viewConfirmCloseAllProjects

@@ -23,10 +23,46 @@ func TestCommandPaletteItemsAndRun(t *testing.T) {
 	assertPaletteOrder(t, scan)
 }
 
+func TestCommandPaletteAddAgentChildren(t *testing.T) {
+	m := newTestModelLite()
+
+	items := m.commandPaletteItems()
+	found := false
+	var addAgent picker.CommandItem
+	for _, item := range items {
+		cmdItem, ok := item.(picker.CommandItem)
+		if !ok {
+			continue
+		}
+		if cmdItem.Label == "Add Agent" {
+			addAgent = cmdItem
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected add agent entry")
+	}
+	if len(addAgent.Children) != 4 {
+		t.Fatalf("expected 4 add agent children, got %d", len(addAgent.Children))
+	}
+	labels := make(map[string]struct{}, len(addAgent.Children))
+	for _, child := range addAgent.Children {
+		labels[child.Label] = struct{}{}
+	}
+	for _, label := range []string{"Codex CLI", "Claude Code", "Pi", "Opencode"} {
+		if _, ok := labels[label]; !ok {
+			t.Fatalf("missing add agent child %q", label)
+		}
+	}
+}
+
 type paletteScan struct {
 	foundQuickAddPane    bool
 	foundQuickClosePane  bool
 	foundQuickAddSession bool
+	foundAddAgent        bool
+	foundSkills          bool
 	foundSettings        bool
 	foundDebug           bool
 	foundPane            bool
@@ -81,6 +117,10 @@ func applyPaletteLabel(scan *paletteScan, label string) {
 		scan.foundQuickClosePane = true
 	case "Add Session":
 		scan.foundQuickAddSession = true
+	case "Add Agent":
+		scan.foundAddAgent = true
+	case "Skills: Install peky skills":
+		scan.foundSkills = true
 	case "Exit":
 		scan.foundExit = true
 	case "Panes":
@@ -131,6 +171,12 @@ func assertPaletteEntries(t *testing.T, scan paletteScan) {
 	}
 	if !scan.foundQuickAddPane || !scan.foundQuickClosePane || !scan.foundQuickAddSession {
 		t.Fatalf("expected quick add/close commands")
+	}
+	if !scan.foundAddAgent {
+		t.Fatalf("expected add agent entry")
+	}
+	if !scan.foundSkills {
+		t.Fatalf("expected skills entry")
 	}
 	if !scan.foundExit {
 		t.Fatalf("expected exit entry")

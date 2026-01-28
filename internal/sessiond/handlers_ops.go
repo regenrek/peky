@@ -188,14 +188,14 @@ func (d *Daemon) handleSplitPane(payload []byte) ([]byte, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultOpTimeout)
 	defer cancel()
-	newIndex, err := manager.SplitPane(ctx, sessionName, paneIndex, req.Vertical, req.Percent)
+	newIndex, newPaneID, err := manager.SplitPane(ctx, sessionName, paneIndex, req.Vertical, req.Percent)
 	if err != nil {
 		return nil, err
 	}
 	if d.restore != nil {
 		d.restore.MarkSessionDirty(context.Background(), manager, sessionName)
 	}
-	return encodePayload(SplitPaneResponse{NewIndex: newIndex})
+	return encodePayload(SplitPaneResponse{NewIndex: newIndex, NewPaneID: newPaneID})
 }
 
 func (d *Daemon) handleClosePane(payload []byte) ([]byte, error) {
