@@ -126,6 +126,7 @@ type Model struct {
 	projectPicker         list.Model
 	layoutPicker          list.Model
 	paneSwapPicker        list.Model
+	skillsTargetPicker    list.Model
 	commandPalette        list.Model
 	commandPaletteStack   []commandPaletteState
 	commandPaletteFlat    bool
@@ -139,18 +140,20 @@ type Model struct {
 	authDialogFooter      string
 	authDialogKind        authDialogKind
 	projectPickerProjects []picker.ProjectItem
+	skillsTargetItems     []*picker.MultiSelectItem
 	dialogHelpOpen        bool
 
-	updatePolicy         update.Policy
-	updateState          update.State
-	updateStore          update.Store
-	updateClient         update.RegistryClient
-	updateSpec           update.InstallSpec
-	updateCheckInFlight  bool
-	updatePromptPending  bool
-	updatePendingRestart bool
-	updateProgress       updateProgress
-	updateRunCh          <-chan tea.Msg
+	updatePolicy          update.Policy
+	updateState           update.State
+	updateStore           update.Store
+	updateClient          update.RegistryClient
+	updateSpec            update.InstallSpec
+	updateCheckInFlight   bool
+	updatePromptPending   bool
+	updatePendingRestart  bool
+	updateProgress        updateProgress
+	updateRunCh           <-chan tea.Msg
+	skillsInstallInFlight bool
 
 	confirmSession     string
 	confirmProject     string
@@ -335,6 +338,7 @@ func NewModel(client *sessiond.Client) (*Model, error) {
 	m.setupProjectPicker()
 	m.setupLayoutPicker()
 	m.setupPaneSwapPicker()
+	m.setupSkillsTargetPicker()
 	m.setupCommandPalette()
 	m.setupSettingsMenu()
 	m.setupPerformanceMenu()

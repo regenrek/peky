@@ -44,6 +44,7 @@ type Model struct {
 	ProjectPicker             list.Model
 	LayoutPicker              list.Model
 	PaneSwapPicker            list.Model
+	SkillsTargetPicker        list.Model
 	CommandPalette            list.Model
 	SettingsMenu              list.Model
 	PerformanceMenu           list.Model

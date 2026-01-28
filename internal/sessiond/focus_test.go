@@ -27,8 +27,8 @@ func (m *focusManager) StartSession(context.Context, native.SessionSpec) (*nativ
 func (m *focusManager) KillSession(string) error                { return nil }
 func (m *focusManager) RenameSession(string, string) error      { return nil }
 func (m *focusManager) RenamePane(string, string, string) error { return nil }
-func (m *focusManager) SplitPane(context.Context, string, string, bool, int) (string, error) {
-	return "", nil
+func (m *focusManager) SplitPane(context.Context, string, string, bool, int) (string, string, error) {
+	return "", "", nil
 }
 func (m *focusManager) ClosePane(context.Context, string, string) error { return nil }
 func (m *focusManager) SwapPanes(string, string, string) error          { return nil }

@@ -82,6 +82,13 @@ func (m *Model) commandPaletteItems() []list.Item {
 
 	root := make([]picker.CommandItem, 0, 8)
 	root = append(root, quickCommandItems(m, groups.specIndex)...)
+	if len(groups.agentLaunchItems) > 0 {
+		root = append(root, picker.CommandItem{
+			Label:    "Add Agent",
+			Desc:     "Launch agent workflows",
+			Children: groups.agentLaunchItems,
+		})
+	}
 	if len(groups.paneItems) > 0 {
 		root = append(root, picker.CommandItem{
 			Label:    "Panes",
@@ -113,14 +120,15 @@ func (m *Model) commandPaletteItems() []list.Item {
 }
 
 type commandPaletteGroups struct {
-	paneItems    []picker.CommandItem
-	sessionItems []picker.CommandItem
-	projectItems []picker.CommandItem
-	menuItems    []picker.CommandItem
-	agentItems   []picker.CommandItem
-	otherItems   []picker.CommandItem
-	exitItem     *picker.CommandItem
-	specIndex    map[commandID]commandSpec
+	paneItems        []picker.CommandItem
+	sessionItems     []picker.CommandItem
+	projectItems     []picker.CommandItem
+	menuItems        []picker.CommandItem
+	agentItems       []picker.CommandItem
+	agentLaunchItems []picker.CommandItem
+	otherItems       []picker.CommandItem
+	exitItem         *picker.CommandItem
+	specIndex        map[commandID]commandSpec
 }
 
 func buildCommandPaletteGroups(m *Model, registry commandRegistry) commandPaletteGroups {
@@ -155,6 +163,9 @@ func addCommandPaletteGroup(groups *commandPaletteGroups, m *Model, group comman
 		addOtherCommandPaletteItems(groups, m, group.Commands)
 	case "agent":
 		groups.agentItems = append(groups.agentItems, commandSpecsToItems(m, group.Commands)...)
+		addSpecIndex(groups.specIndex, group.Commands)
+	case "agent_launch":
+		groups.agentLaunchItems = append(groups.agentLaunchItems, commandSpecsToItems(m, group.Commands)...)
 		addSpecIndex(groups.specIndex, group.Commands)
 	default:
 		groups.otherItems = append(groups.otherItems, commandSpecsToItems(m, group.Commands)...)

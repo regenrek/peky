@@ -30,8 +30,8 @@ func (s *stubManager) StartSession(context.Context, native.SessionSpec) (*native
 func (s *stubManager) KillSession(string) error                { return nil }
 func (s *stubManager) RenameSession(string, string) error      { return nil }
 func (s *stubManager) RenamePane(string, string, string) error { return nil }
-func (s *stubManager) SplitPane(context.Context, string, string, bool, int) (string, error) {
-	return "", nil
+func (s *stubManager) SplitPane(context.Context, string, string, bool, int) (string, string, error) {
+	return "", "", nil
 }
 func (s *stubManager) ClosePane(context.Context, string, string) error { return nil }
 func (s *stubManager) SwapPanes(string, string, string) error          { return nil }
