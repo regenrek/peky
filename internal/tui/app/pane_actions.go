@@ -75,42 +75,73 @@ func (m *Model) splitPaneFor(sessionName, paneID string, vertical bool) (splitPa
 	if m == nil {
 		return splitPaneResult{}, splitPaneErr(toastError, "session client unavailable")
 	}
-	sessionName = strings.TrimSpace(sessionName)
-	paneID = strings.TrimSpace(paneID)
-	if sessionName == "" || paneID == "" {
-		return splitPaneResult{}, splitPaneErr(toastWarning, "No pane selected")
+	session, pane, err := m.splitPaneSelection(sessionName, paneID)
+	if err != nil {
+		return splitPaneResult{}, err
 	}
-	session := m.selectedSession()
-	if session == nil || session.Name != sessionName {
-		session = findSessionByName(m.data.Projects, sessionName)
-	}
-	if session == nil {
-		return splitPaneResult{}, splitPaneErr(toastWarning, "Session not found")
-	}
-	if session.Status == StatusStopped {
-		return splitPaneResult{}, splitPaneErr(toastWarning, "Session not running")
-	}
-	startDir := strings.TrimSpace(session.Path)
-	if startDir == "" {
-		if project := m.selectedProject(); project != nil {
-			startDir = strings.TrimSpace(project.Path)
-		}
-	}
-	if startDir != "" {
-		if err := validateProjectPath(startDir); err != nil {
-			return splitPaneResult{}, splitPaneErr(toastError, "Start failed: "+err.Error())
-		}
+	if err := m.validateSplitPaneStartDir(session); err != nil {
+		return splitPaneResult{}, err
 	}
 	if m.client == nil {
 		return splitPaneResult{}, splitPaneErr(toastError, "session client unavailable")
 	}
+	return m.splitPaneRequest(session.Name, pane.Index, vertical)
+}
+
+func (m *Model) splitPaneSelection(sessionName, paneID string) (*SessionItem, *PaneItem, error) {
+	sessionName = strings.TrimSpace(sessionName)
+	paneID = strings.TrimSpace(paneID)
+	if sessionName == "" || paneID == "" {
+		return nil, nil, splitPaneErr(toastWarning, "No pane selected")
+	}
+	session := m.lookupSplitPaneSession(sessionName)
+	if session == nil {
+		return nil, nil, splitPaneErr(toastWarning, "Session not found")
+	}
+	if session.Status == StatusStopped {
+		return nil, nil, splitPaneErr(toastWarning, "Session not running")
+	}
 	pane := findPaneByID(session.Panes, paneID)
 	if pane == nil {
-		return splitPaneResult{}, splitPaneErr(toastWarning, "No pane selected")
+		return nil, nil, splitPaneErr(toastWarning, "No pane selected")
 	}
+	return session, pane, nil
+}
+
+func (m *Model) lookupSplitPaneSession(sessionName string) *SessionItem {
+	session := m.selectedSession()
+	if session != nil && session.Name == sessionName {
+		return session
+	}
+	return findSessionByName(m.data.Projects, sessionName)
+}
+
+func (m *Model) validateSplitPaneStartDir(session *SessionItem) error {
+	startDir := splitPaneStartDir(session, m.selectedProject())
+	if startDir == "" {
+		return nil
+	}
+	if err := validateProjectPath(startDir); err != nil {
+		return splitPaneErr(toastError, "Start failed: "+err.Error())
+	}
+	return nil
+}
+
+func splitPaneStartDir(session *SessionItem, project *ProjectGroup) string {
+	if session == nil {
+		return ""
+	}
+	startDir := strings.TrimSpace(session.Path)
+	if startDir == "" && project != nil {
+		startDir = strings.TrimSpace(project.Path)
+	}
+	return startDir
+}
+
+func (m *Model) splitPaneRequest(sessionName, paneIndex string, vertical bool) (splitPaneResult, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	newIndex, newPaneID, err := m.client.SplitPane(ctx, session.Name, pane.Index, vertical, 0)
+	newIndex, newPaneID, err := m.client.SplitPane(ctx, sessionName, paneIndex, vertical, 0)
 	if err != nil {
 		return splitPaneResult{}, splitPaneErr(toastError, err.Error())
 	}
@@ -120,7 +151,7 @@ func (m *Model) splitPaneFor(sessionName, paneID string, vertical bool) (splitPa
 	if strings.TrimSpace(newPaneID) == "" {
 		return splitPaneResult{}, splitPaneErr(toastError, "new pane id unavailable")
 	}
-	return splitPaneResult{sessionName: session.Name, newIndex: newIndex, newPaneID: newPaneID}, nil
+	return splitPaneResult{sessionName: sessionName, newIndex: newIndex, newPaneID: newPaneID}, nil
 }
 
 func (m *Model) swapPaneWith(target PaneSwapChoice) tea.Cmd {
