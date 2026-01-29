@@ -20,7 +20,7 @@ func TestClientMethodErrorsWithoutConnection(t *testing.T) {
 	if _, err := client.RenameSession(context.Background(), "old", "new"); err == nil {
 		t.Fatalf("expected RenameSession error without connection")
 	}
-	if _, err := client.SplitPane(context.Background(), "session", "1", true, 10); err == nil {
+	if _, _, err := client.SplitPane(context.Background(), "session", "1", true, 10); err == nil {
 		t.Fatalf("expected SplitPane error without connection")
 	}
 	if _, err := client.GetPaneView(context.Background(), PaneViewRequest{PaneID: "pane", Cols: 1, Rows: 1}); err == nil {

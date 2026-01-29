@@ -264,6 +264,93 @@ commands:
         json:
           supported: true
           schema_ref: "#/$defs/DebugPathsResponse"
+  - name: skills
+    id: skills
+    summary: Manage skills
+    json:
+      supported: true
+      schema_ref: "#/$defs/SkillsListResponse"
+    flags:
+      - name: target
+        type: string
+        repeatable: true
+        description: Target tool (codex, claude, cursor).
+    subcommands:
+      - name: list
+        id: skills.list
+        summary: List bundled skills
+        flags:
+          - name: target
+            type: string
+            repeatable: true
+            description: "Target tool (default: all)."
+        json:
+          supported: true
+          schema_ref: "#/$defs/SkillsListResponse"
+      - name: install
+        id: skills.install
+        summary: Install skills
+        side_effects: true
+        confirm: true
+        flags:
+          - name: target
+            type: string
+            repeatable: true
+            required: true
+            description: Target tool (codex, claude, cursor).
+          - name: skill
+            type: string
+            repeatable: true
+            description: "Skill id to install (default: all)."
+          - name: mode
+            type: string
+            enum: [copy, symlink]
+            default: copy
+            description: Install mode.
+          - name: dest
+            type: path
+            description: Override target root (single target only).
+          - name: overwrite
+            type: bool
+            description: Replace an existing installed skill.
+        json:
+          supported: true
+          schema_ref: "#/$defs/SkillsInstallResponse"
+      - name: status
+        id: skills.status
+        summary: Show installed skill status
+        flags:
+          - name: target
+            type: string
+            repeatable: true
+            description: "Target tool (default: all)."
+          - name: dest
+            type: path
+            description: Override target root (single target only).
+        json:
+          supported: true
+          schema_ref: "#/$defs/SkillsListResponse"
+      - name: uninstall
+        id: skills.uninstall
+        summary: Uninstall skills
+        side_effects: true
+        confirm: true
+        flags:
+          - name: target
+            type: string
+            repeatable: true
+            required: true
+            description: Target tool (codex, claude, cursor).
+          - name: skill
+            type: string
+            repeatable: true
+            description: "Skill id to uninstall (default: all)."
+          - name: dest
+            type: path
+            description: Override target root (single target only).
+        json:
+          supported: true
+          schema_ref: "#/$defs/SkillsUninstallResponse"
   - name: help
     id: help
     aliases: [--help, -h]

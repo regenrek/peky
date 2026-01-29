@@ -156,6 +156,10 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 			},
 		},
 		{
+			Name:     "agent_launch",
+			Commands: m.agentLaunchCommandSpecs(),
+		},
+		{
 			Name: "session",
 			Commands: []commandSpec{
 				{
@@ -282,6 +286,16 @@ func (m *Model) commandRegistry() (commandRegistry, error) {
 		{
 			Name: "menu",
 			Commands: []commandSpec{
+				{
+					ID:      "menu_skills_install",
+					Label:   "Skills: Install peky skills",
+					Desc:    "Install bundled skills for your CLI",
+					Aliases: []string{"skills", "install skills", "skills install"},
+					Run: func(m *Model, _ commandArgs) tea.Cmd {
+						m.openSkillsInstall()
+						return nil
+					},
+				},
 				{
 					ID:      "menu_settings",
 					Label:   "Settings",

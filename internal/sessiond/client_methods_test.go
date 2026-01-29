@@ -242,13 +242,13 @@ func TestClientSplitPane(t *testing.T) {
 			}
 			return nil
 		},
-		respond: SplitPaneResponse{NewIndex: "2"},
+		respond: SplitPaneResponse{NewIndex: "2", NewPaneID: "pane-2"},
 		call: func(c *Client) error {
-			newIndex, err := c.SplitPane(context.Background(), "session", "1", true, 40)
+			newIndex, newPaneID, err := c.SplitPane(context.Background(), "session", "1", true, 40)
 			if err != nil {
 				return err
 			}
-			if newIndex != "2" {
+			if newIndex != "2" || newPaneID != "pane-2" {
 				return fmt.Errorf("unexpected split response")
 			}
 			return nil

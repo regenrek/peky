@@ -117,7 +117,7 @@ func (m *Model) cleanupPanesRun(sessionName, anchorIndex string, vertical bool, 
 	target := len(dead)
 	for i := 0; i < target; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), paneCleanupTimeout)
-		_, err := m.client.SplitPane(ctx, sessionName, anchorIndex, vertical, 0)
+		_, _, err := m.client.SplitPane(ctx, sessionName, anchorIndex, vertical, 0)
 		cancel()
 		if err != nil {
 			result.Failed++

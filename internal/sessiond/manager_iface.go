@@ -57,7 +57,7 @@ type sessionManager interface {
 	KillSession(name string) error
 	RenameSession(oldName, newName string) error
 	RenamePane(sessionName, paneIndex, newTitle string) error
-	SplitPane(ctx context.Context, sessionName, paneIndex string, vertical bool, percent int) (string, error)
+	SplitPane(ctx context.Context, sessionName, paneIndex string, vertical bool, percent int) (string, string, error)
 	ClosePane(ctx context.Context, sessionName, paneIndex string) error
 	SwapPanes(sessionName, paneA, paneB string) error
 	ResizePaneEdge(sessionName, paneID string, edge layout.ResizeEdge, delta int, snap bool, snapState layout.SnapState) (layout.ApplyResult, error)

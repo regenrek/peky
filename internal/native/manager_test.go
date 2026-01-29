@@ -212,7 +212,7 @@ func TestSendInputMouseErrors(t *testing.T) {
 
 func TestSplitPaneErrors(t *testing.T) {
 	m := newTestManager(t)
-	if _, err := m.SplitPane(context.Background(), "missing", "0", true, 50); err == nil {
+	if _, _, err := m.SplitPane(context.Background(), "missing", "0", true, 50); err == nil {
 		t.Fatalf("SplitPane() should fail on missing session")
 	}
 
@@ -224,10 +224,10 @@ func TestSplitPaneErrors(t *testing.T) {
 	pane := &Pane{ID: "p-1", Index: "0"}
 	session := &Session{Name: "sess", Path: file, Panes: []*Pane{pane}}
 	m.sessions["sess"] = session
-	if _, err := m.SplitPane(context.Background(), "sess", "0", true, 50); err == nil {
+	if _, _, err := m.SplitPane(context.Background(), "sess", "0", true, 50); err == nil {
 		t.Fatalf("SplitPane() should fail on invalid path")
 	}
-	if _, err := m.SplitPane(context.Background(), "sess", "missing", true, 50); err == nil {
+	if _, _, err := m.SplitPane(context.Background(), "sess", "missing", true, 50); err == nil {
 		t.Fatalf("SplitPane() should fail on missing pane")
 	}
 }

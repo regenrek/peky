@@ -75,9 +75,10 @@ type ToolConfig struct {
 
 // ToolsConfig groups tool definitions.
 type ToolsConfig struct {
-	CursorAgent ToolConfig `yaml:"cursor_agent,omitempty"`
-	CodexNew    ToolConfig `yaml:"codex_new,omitempty"`
-	CodexResume ToolConfig `yaml:"codex_resume,omitempty"`
+	CodexCLI   ToolConfig `yaml:"codex_cli,omitempty"`
+	ClaudeCode ToolConfig `yaml:"claude_code,omitempty"`
+	Pi         ToolConfig `yaml:"pi,omitempty"`
+	Opencode   ToolConfig `yaml:"opencode,omitempty"`
 }
 
 // ToolInputConfig configures tool-specific input handling.

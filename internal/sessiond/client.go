@@ -412,12 +412,12 @@ func (c *Client) RenamePaneByID(ctx context.Context, paneID, newTitle string) er
 }
 
 // SplitPane splits a pane.
-func (c *Client) SplitPane(ctx context.Context, sessionName, paneIndex string, vertical bool, percent int) (string, error) {
+func (c *Client) SplitPane(ctx context.Context, sessionName, paneIndex string, vertical bool, percent int) (string, string, error) {
 	var resp SplitPaneResponse
 	if _, err := c.call(ctx, OpSplitPane, SplitPaneRequest{SessionName: sessionName, PaneIndex: paneIndex, Vertical: vertical, Percent: percent}, &resp); err != nil {
-		return "", err
+		return "", "", err
 	}
-	return resp.NewIndex, nil
+	return resp.NewIndex, resp.NewPaneID, nil
 }
 
 // ClosePane closes a pane.

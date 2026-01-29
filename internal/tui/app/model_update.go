@@ -131,7 +131,10 @@ var keyHandlers = map[ViewState]keyHandler{
 	StateLayoutPicker:    func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateLayoutPicker(msg) },
 	StatePaneSplitPicker: func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updatePaneSplitPicker(msg) },
 	StatePaneSwapPicker:  func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updatePaneSwapPicker(msg) },
-	StateConfirmKill:     func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateConfirmKill(msg) },
+	StateSkillsTargetPicker: func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+		return m.updateSkillsTargetPicker(msg)
+	},
+	StateConfirmKill: func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) { return m.updateConfirmKill(msg) },
 	StateConfirmCloseProject: func(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.updateConfirmCloseProject(msg)
 	},
@@ -182,6 +185,9 @@ var updateHandlers = map[reflect.Type]updateHandler{
 	},
 	reflect.TypeOf(updateRestartMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleUpdateRestart(msg.(updateRestartMsg))
+	},
+	reflect.TypeOf(skillsInstallResultMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+		return m, m.handleSkillsInstallResult(msg.(skillsInstallResultMsg))
 	},
 	reflect.TypeOf(cursorShapeFlushMsg{}): func(m *Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleCursorShapeFlush(msg.(cursorShapeFlushMsg))
@@ -332,6 +338,7 @@ func (m *Model) applyWindowSize(msg tea.WindowSizeMsg) {
 	m.projectPicker.SetSize(msg.Width-4, msg.Height-4)
 	m.setLayoutPickerSize()
 	m.setPaneSwapPickerSize()
+	m.setSkillsTargetPickerSize()
 	m.setCommandPaletteSize()
 	m.setSettingsMenuSize()
 	m.setPerformanceMenuSize()

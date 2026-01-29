@@ -23,6 +23,7 @@ import (
 	"github.com/regenrek/peakypanes/internal/cli/relay"
 	"github.com/regenrek/peakypanes/internal/cli/root"
 	"github.com/regenrek/peakypanes/internal/cli/session"
+	"github.com/regenrek/peakypanes/internal/cli/skills"
 	"github.com/regenrek/peakypanes/internal/cli/spec"
 	"github.com/regenrek/peakypanes/internal/cli/version"
 	"github.com/regenrek/peakypanes/internal/cli/workspace"
@@ -345,6 +346,7 @@ func registerPekyCommands(reg *root.Registry) {
 	events.Register(reg)
 	contextpack.Register(reg)
 	debug.Register(reg)
+	skills.Register(reg)
 	workspace.Register(reg)
 	version.Register(reg)
 	help.Register(reg)

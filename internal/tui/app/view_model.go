@@ -67,6 +67,7 @@ func (m *Model) viewModel() views.Model {
 		ProjectPicker:             m.projectPicker,
 		LayoutPicker:              m.layoutPicker,
 		PaneSwapPicker:            m.paneSwapPicker,
+		SkillsTargetPicker:        m.skillsTargetPicker,
 		CommandPalette:            m.commandPalette,
 		SettingsMenu:              m.settingsMenu,
 		PerformanceMenu:           m.perfMenu,
