@@ -73,17 +73,26 @@ func copyFile(src, dest string, perm fs.FileMode) error {
 	if err != nil {
 		return fmt.Errorf("open src: %w", err)
 	}
-	defer in.Close()
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		_ = in.Close()
 		return fmt.Errorf("mkdir dest: %w", err)
 	}
 	out, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, perm)
 	if err != nil {
+		_ = in.Close()
 		return fmt.Errorf("open dest: %w", err)
 	}
-	defer out.Close()
 	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
+		_ = in.Close()
 		return fmt.Errorf("copy file: %w", err)
+	}
+	if err := out.Close(); err != nil {
+		_ = in.Close()
+		return fmt.Errorf("close dest: %w", err)
+	}
+	if err := in.Close(); err != nil {
+		return fmt.Errorf("close src: %w", err)
 	}
 	return nil
 }
